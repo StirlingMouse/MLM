@@ -1,16 +1,22 @@
 use std::{
     fs::{File, create_dir_all, hard_link},
     io::{BufWriter, Write},
-    path::PathBuf,
+    path::{Component, PathBuf},
 };
 
 use anyhow::{Context, Result};
+use native_db::Database;
 use qbit::{models::TorrentContent, parameters::TorrentListParams};
 use serde_json::{Value, json};
 
-use crate::{config::Config, mam::MaM, qbittorrent::QbitError};
+use crate::{config::Config, data, mam::MaM, qbittorrent::QbitError};
 
-pub async fn link_torrents_to_library(config: &Config, qbit: qbit::Api, mam: MaM) -> Result<()> {
+pub async fn link_torrents_to_library(
+    config: &Config,
+    db: &Database<'_>,
+    qbit: qbit::Api,
+    mam: MaM,
+) -> Result<()> {
     let torrents = qbit
         .torrents(TorrentListParams::deafult())
         .await
@@ -21,6 +27,13 @@ pub async fn link_torrents_to_library(config: &Config, qbit: qbit::Api, mam: MaM
         let Some(hash) = torrent.hash else {
             continue;
         };
+        {
+            let r = db.r_transaction()?;
+            let torrent: Option<data::Torrent> = r.get().primary(hash.clone())?;
+            if torrent.is_some() {
+                continue;
+            }
+        }
         if torrent.progress < 1.0 {
             continue;
         }
@@ -122,7 +135,28 @@ pub async fn link_torrents_to_library(config: &Config, qbit: qbit::Api, mam: MaM
                 eprintln!("Skiping \"{}\"", file.name);
                 continue;
             }
-            let library_path = dir.join(PathBuf::from(&file.name).file_name().unwrap());
+            let torrent_path = PathBuf::from(&file.name);
+            let mut path_components = torrent_path.components();
+            let file_name = path_components.next_back().unwrap();
+            let dir_name = path_components.next_back().and_then(|dir_name| {
+                if let Component::Normal(dir_name) = dir_name {
+                    let dir_name = dir_name.to_string_lossy().to_string();
+                    if dir_name.starts_with("CD")
+                        || dir_name.starts_with("Disc")
+                        || dir_name.starts_with("Disk")
+                    {
+                        return Some(dir_name);
+                    }
+                }
+                None
+            });
+            let library_path = if let Some(dir_name) = dir_name {
+                let sub_dir = dir.join(&dir_name);
+                create_dir_all(&sub_dir)?;
+                sub_dir.join(file_name)
+            } else {
+                dir.join(file_name)
+            };
             let download_path = PathBuf::from(&torrent.save_path).join(&file.name);
             println!("linking: {:?} -> {:?}", download_path, library_path);
             hard_link(download_path, library_path)?;
@@ -132,7 +166,15 @@ pub async fn link_torrents_to_library(config: &Config, qbit: qbit::Api, mam: MaM
         let mut writer = BufWriter::new(file);
         serde_json::to_writer(&mut writer, &metadata)?;
         writer.flush()?;
-        break;
+
+        {
+            let rw = db.rw_transaction()?;
+            rw.insert(data::Torrent {
+                hash,
+                library_path: dir,
+            })?;
+            rw.commit()?;
+        }
     }
 
     Ok(())

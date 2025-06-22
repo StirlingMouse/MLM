@@ -1,4 +1,5 @@
 mod config;
+mod data;
 mod linker;
 mod mam;
 mod qbittorrent;
@@ -18,6 +19,8 @@ async fn main() -> Result<()> {
         .merge(Env::prefixed("MLM_"))
         .extract()?;
 
+    let db = native_db::Builder::new().create(&data::MODELS, "data.db")?;
+
     let mam = MaM::new(&config)?;
     let qbit = qbit::Api::login(
         &config.qbittorrent.url,
@@ -27,7 +30,7 @@ async fn main() -> Result<()> {
     .await
     .map_err(QbitError)?;
 
-    link_torrents_to_library(&config, qbit, mam)
+    link_torrents_to_library(&config, &db, qbit, mam)
         .await
         .context("link_torrents_to_library")?;
 
