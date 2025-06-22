@@ -5,21 +5,22 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use qbit::models::TorrentContent;
+use qbit::{models::TorrentContent, parameters::TorrentListParams};
 use serde_json::{Value, json};
 
 use crate::{config::Config, mam::MaM, qbittorrent::QbitError};
 
 pub async fn link_torrents_to_library(config: &Config, qbit: qbit::Api, mam: MaM) -> Result<()> {
-    let main_data = qbit
-        .main_data(None)
+    let torrents = qbit
+        .torrents(TorrentListParams::deafult())
         .await
         .map_err(QbitError)
         .context("qbit main data")?;
 
-    let torrents = main_data.torrents.iter().flatten();
-
-    for (hash, torrent) in torrents {
+    for torrent in torrents {
+        let Some(hash) = torrent.hash else {
+            continue;
+        };
         if torrent.progress < 1.0 {
             continue;
         }
@@ -41,7 +42,7 @@ pub async fn link_torrents_to_library(config: &Config, qbit: qbit::Api, mam: MaM
             );
             continue;
         };
-        let files = qbit.files(hash, None).await.map_err(QbitError)?;
+        let files = qbit.files(&hash, None).await.map_err(QbitError)?;
         let selected_audio_format = select_format(&config.audio_types, &files);
         let selected_ebook_format = select_format(&config.ebook_types, &files);
         println!("{selected_audio_format:?} {selected_ebook_format:?}");
@@ -54,7 +55,7 @@ pub async fn link_torrents_to_library(config: &Config, qbit: qbit::Api, mam: MaM
             continue;
         }
 
-        let Some(mam_torrent) = mam.get_torrent_info(hash).await.context("get_mam_info")? else {
+        let Some(mam_torrent) = mam.get_torrent_info(&hash).await.context("get_mam_info")? else {
             eprintln!(
                 "Could not find torrent \"{}\", hash {} on mam",
                 torrent.name, hash
