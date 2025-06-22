@@ -5,7 +5,7 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub mam_id: String,
-    pub qbittorrent: QbitConfig,
+    pub qbittorrent: Vec<QbitConfig>,
     #[serde(default = "default_audio_types")]
     pub audio_types: Vec<String>,
     #[serde(default = "default_ebook_types")]

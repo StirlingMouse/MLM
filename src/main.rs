@@ -22,17 +22,21 @@ async fn main() -> Result<()> {
     let db = native_db::Builder::new().create(&data::MODELS, "data.db")?;
 
     let mam = MaM::new(&config)?;
-    let qbit = qbit::Api::login(
-        &config.qbittorrent.url,
-        &config.qbittorrent.username,
-        &config.qbittorrent.password,
-    )
-    .await
-    .map_err(QbitError)?;
+    let mut qbits = vec![];
+    for qbit_conf in &config.qbittorrent {
+        qbits.push((
+            qbit_conf,
+            qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
+                .await
+                .map_err(QbitError)?,
+        ));
+    }
 
-    link_torrents_to_library(&config, &db, qbit, mam)
-        .await
-        .context("link_torrents_to_library")?;
+    for qbit in qbits {
+        link_torrents_to_library(&config, &db, qbit, &mam)
+            .await
+            .context("link_torrents_to_library")?;
+    }
 
     Ok(())
 }

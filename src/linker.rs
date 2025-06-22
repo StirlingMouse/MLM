@@ -5,22 +5,29 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use htmlentity::entity::{self, ICodedDataTrait as _};
 use native_db::Database;
 use qbit::{models::TorrentContent, parameters::TorrentListParams};
 use regex::Regex;
 use serde_json::{Value, json};
 
-use crate::{config::Config, data, mam::MaM, qbittorrent::QbitError};
+use crate::{
+    config::{Config, QbitConfig},
+    data,
+    mam::MaM,
+    qbittorrent::QbitError,
+};
 
 pub async fn link_torrents_to_library(
     config: &Config,
     db: &Database<'_>,
-    qbit: qbit::Api,
-    mam: MaM,
+    qbit: (&QbitConfig, qbit::Api),
+    mam: &MaM,
 ) -> Result<()> {
     let disk_pattern = Regex::new(r"(?:CD|Disc|Disk)\s*(\d+)").unwrap();
 
     let torrents = qbit
+        .1
         .torrents(TorrentListParams::deafult())
         .await
         .map_err(QbitError)
@@ -40,7 +47,7 @@ pub async fn link_torrents_to_library(
         if torrent.progress < 1.0 {
             continue;
         }
-        if let Some(ref wanted_tags) = config.qbittorrent.tags {
+        if let Some(ref wanted_tags) = qbit.0.tags {
             let mut torrent_tags = torrent.tags.split(", ");
             let wanted = torrent_tags.any(|ttag| wanted_tags.iter().any(|wtag| ttag == wtag));
             if !wanted {
@@ -58,7 +65,7 @@ pub async fn link_torrents_to_library(
             );
             continue;
         };
-        let files = qbit.files(&hash, None).await.map_err(QbitError)?;
+        let files = qbit.1.files(&hash, None).await.map_err(QbitError)?;
         let selected_audio_format = select_format(&config.audio_types, &files);
         let selected_ebook_format = select_format(&config.ebook_types, &files);
         println!("{selected_audio_format:?} {selected_ebook_format:?}");
@@ -82,19 +89,22 @@ pub async fn link_torrents_to_library(
             eprintln!("Torrent \"{}\" has no author", torrent.name);
             continue;
         };
+        let author = clean_value(author)?;
 
         let series = mam_torrent.series_info.first_key_value();
-        let dir =
-            match series {
-                Some((_, (series_name, series_num))) => PathBuf::from(author)
-                    .join(series_name)
+        let dir = match series {
+            Some((_, (series_name, series_num))) => {
+                let series_name = clean_value(series_name)?;
+                PathBuf::from(author)
+                    .join(&series_name)
                     .join(if series_num.is_empty() {
                         mam_torrent.title.clone()
                     } else {
                         format!("{series_name} #{series_num} - {}", mam_torrent.title)
-                    }),
-                None => PathBuf::from(author).join(&mam_torrent.title),
-            };
+                    })
+            }
+            None => PathBuf::from(author).join(&mam_torrent.title),
+        };
         let dir = library.library_dir.join(dir);
         println!("out_dir: {:?}", dir);
         let mut titles = mam_torrent.title.splitn(2, ":");
@@ -112,11 +122,12 @@ pub async fn link_torrents_to_library(
         };
         let asin = isbn_raw.strip_prefix("ASIN:");
         let metadata = json!({
-            "authors": mam_torrent.author_info.values().collect::<Vec<_>>(),
-            "narrators": mam_torrent.narrator_info.values().collect::<Vec<_>>(),
-            "series": mam_torrent.series_info.values().map(|(series_name, series_num)|
-                if series_num.is_empty() { series_name.clone() } else { format!("{series_name} #{series_num}") }
-            ).collect::<Vec<_>>(),
+            "authors": mam_torrent.author_info.values().map(|a| clean_value(a)).collect::<Result<Vec<_>>>()?,
+            "narrators": mam_torrent.narrator_info.values().map(|n| clean_value(n)).collect::<Result<Vec<_>>>()?,
+            "series": mam_torrent.series_info.values().map(|(series_name, series_num)| {
+                let series_name = clean_value(series_name)?;
+                Ok(if series_num.is_empty() { series_name.clone() } else { format!("{series_name} #{series_num}") })
+            }).collect::<Result<Vec<_>>>()?,
             "title": title,
             "subtitle": subtitle,
             "description": mam_torrent.description,
@@ -178,6 +189,10 @@ pub async fn link_torrents_to_library(
     }
 
     Ok(())
+}
+
+fn clean_value(value: &str) -> Result<String> {
+    entity::decode(value.as_bytes()).to_string()
 }
 
 fn select_format(wanted_formats: &[String], files: &[TorrentContent]) -> Option<String> {

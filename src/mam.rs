@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Error, Result};
 use reqwest::{Url, cookie::Jar};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
@@ -14,6 +14,11 @@ pub struct SearchResult {
     pub data: Vec<MaMTorrent>,
     pub total: i64,
     pub found: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SearchError {
+    pub error: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -104,6 +109,13 @@ impl MaM {
             .text()
             .await?;
         println!("resp: {resp:?}");
+        if let Ok(resp) = serde_json::from_str::<SearchError>(&resp) {
+            if resp.error == "Nothing returned, out of 0" {
+                return Ok(None);
+            } else {
+                return Err(Error::msg(resp.error));
+            }
+        };
         let mut resp: SearchResult = serde_json::from_str(&resp).context("parse mam response")?;
         println!("resp2: {resp:?}");
         Ok(resp.data.pop())
