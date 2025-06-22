@@ -7,6 +7,7 @@ use std::{
 use anyhow::{Context, Result};
 use native_db::Database;
 use qbit::{models::TorrentContent, parameters::TorrentListParams};
+use regex::Regex;
 use serde_json::{Value, json};
 
 use crate::{config::Config, data, mam::MaM, qbittorrent::QbitError};
@@ -17,6 +18,8 @@ pub async fn link_torrents_to_library(
     qbit: qbit::Api,
     mam: MaM,
 ) -> Result<()> {
+    let disk_pattern = Regex::new(r"(?:CD|Disc|Disk)\s*(\d+)").unwrap();
+
     let torrents = qbit
         .torrents(TorrentListParams::deafult())
         .await
@@ -141,11 +144,8 @@ pub async fn link_torrents_to_library(
             let dir_name = path_components.next_back().and_then(|dir_name| {
                 if let Component::Normal(dir_name) = dir_name {
                     let dir_name = dir_name.to_string_lossy().to_string();
-                    if dir_name.starts_with("CD")
-                        || dir_name.starts_with("Disc")
-                        || dir_name.starts_with("Disk")
-                    {
-                        return Some(dir_name);
+                    if let Some(disc) = disk_pattern.captures(&dir_name).and_then(|c| c.get(1)) {
+                        return Some(format!("Disc {}", disc.as_str()));
                     }
                 }
                 None

@@ -42,7 +42,8 @@ pub struct MaMTorrent {
     pub narrator_info: BTreeMap<u64, String>,
     pub numfiles: u64,
     pub owner: u64,
-    pub owner_name: String,
+    // number if name is only digits
+    pub owner_name: Value,
     pub personal_freeleech: u64,
     pub seeders: u64,
     #[serde(deserialize_with = "json_or_default")]
