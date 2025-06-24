@@ -793,6 +793,7 @@ name = "mlm"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cookie",
  "figment",
  "htmlentity",
  "native_db",

@@ -22,7 +22,7 @@ pub async fn link_torrents_to_library(
     config: &Config,
     db: &Database<'_>,
     qbit: (&QbitConfig, qbit::Api),
-    mam: &MaM,
+    mam: &MaM<'_>,
 ) -> Result<()> {
     let disk_pattern = Regex::new(r"(?:CD|Disc|Disk)\s*(\d+)").unwrap();
 

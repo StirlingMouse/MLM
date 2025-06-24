@@ -21,7 +21,8 @@ async fn main() -> Result<()> {
 
     let db = native_db::Builder::new().create(&data::MODELS, "data.db")?;
 
-    let mam = MaM::new(&config)?;
+    let mam = MaM::new(&config, &db).await?;
+
     let mut qbits = vec![];
     for qbit_conf in &config.qbittorrent {
         qbits.push((

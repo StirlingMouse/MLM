@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.98"
+cookie = "0.18.1"
 figment = { version = "0.10", features = ["toml", "env"] }
 native_db = "0.8.1"
 native_model = "0.4.20"

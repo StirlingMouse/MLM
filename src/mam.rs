@@ -1,11 +1,14 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{Context, Error, Result};
-use reqwest::{Url, cookie::Jar};
+use cookie::Cookie;
+use native_db::Database;
+use reqwest::Url;
+use reqwest_cookie_store::CookieStoreRwLock;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 
-use crate::config::Config;
+use crate::{config::Config, data};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SearchResult {
@@ -73,25 +76,71 @@ where
     Ok(T::deserialize(v).unwrap_or_default())
 }
 
-pub struct MaM {
-    jar: Arc<Jar>,
+pub struct MaM<'a> {
+    jar: Arc<CookieStoreRwLock>,
     client: reqwest::Client,
+    db: &'a Database<'a>,
 }
 
-impl MaM {
-    pub fn new(config: &Config) -> Result<MaM> {
-        let cookie = format!("mam_id={}; Domain=.myanonamouse.net", config.mam_id);
+impl<'a> MaM<'a> {
+    pub async fn new(config: &Config, db: &'a Database<'a>) -> Result<MaM<'a>> {
+        let jar: CookieStoreRwLock = Default::default();
         let url = "https://www.myanonamouse.net".parse::<Url>().unwrap();
 
-        let jar = Jar::default();
-        jar.add_cookie_str(&cookie, &url);
+        let stored_mam_id = db
+            .r_transaction()
+            .and_then(|r| r.get().primary::<data::Config>("mam_id"))
+            .ok()
+            .flatten()
+            .map(|c| c.value);
+        if let Some(stored_mam_id) = &stored_mam_id {
+            println!("Restoring mam_id: {}", stored_mam_id);
+        } else {
+            println!("Using mam_id from config");
+        }
+        let has_stored_mam_id = stored_mam_id.is_some();
+        let cookie =
+            Cookie::build(("mam_id", stored_mam_id.unwrap_or(config.mam_id.clone()))).build();
+        jar.write()
+            .unwrap()
+            .store_response_cookies([cookie].into_iter(), &url);
+
         let jar = Arc::new(jar);
         let client = reqwest::Client::builder()
             .cookie_provider(jar.clone())
             .user_agent("MLM")
             .build()?;
 
-        Ok(MaM { jar, client })
+        let mam = MaM { jar, client, db };
+        if let Err(err) = mam.check_mam_id().await {
+            if has_stored_mam_id {
+                eprintln!("Stored mam_id failed with {err}, falling back to config value");
+                let cookie = Cookie::build(("mam_id", config.mam_id.clone())).build();
+                mam.jar
+                    .write()
+                    .unwrap()
+                    .store_response_cookies([cookie].into_iter(), &url);
+                mam.check_mam_id().await?;
+            } else {
+                return Err(err);
+            }
+        }
+
+        Ok(mam)
+    }
+
+    pub async fn check_mam_id(&self) -> Result<()> {
+        let resp = self
+            .client
+            .get("https://www.myanonamouse.net/json/checkCookie.php")
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+        println!("checked mam_id: {resp:?}");
+        self.store_cookies();
+        Ok(())
     }
 
     pub async fn get_torrent_info(&self, hash: &str) -> Result<Option<MaMTorrent>> {
@@ -118,6 +167,31 @@ impl MaM {
         };
         let mut resp: SearchResult = serde_json::from_str(&resp).context("parse mam response")?;
         println!("resp2: {resp:?}");
+        self.store_cookies();
         Ok(resp.data.pop())
+    }
+
+    fn store_cookies(&self) {
+        let url = "https://www.myanonamouse.net".parse::<Url>().unwrap();
+        if let Some(cookie) = self
+            .jar
+            .read()
+            .unwrap()
+            .get("www.myanonamouse.net", "/", "mam_id")
+        {
+            if let Ok(rw) = self.db.rw_transaction() {
+                let ok = rw
+                    .upsert(data::Config {
+                        key: "mam_id".to_string(),
+                        value: cookie.value().to_string(),
+                    })
+                    .and_then(|_| rw.commit())
+                    .is_ok();
+
+                if ok {
+                    println!("stored new mam_id: {}", cookie.value());
+                }
+            }
+        }
     }
 }
