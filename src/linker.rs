@@ -111,8 +111,8 @@ pub async fn link_torrents_to_library(
         let title = titles.next().unwrap();
         let subtitle = titles.next().map(|t| t.trim());
         let isbn_raw = match mam_torrent.isbn {
-            Value::String(isbn) => isbn,
-            Value::Number(isbn) => isbn.to_string(),
+            Some(Value::String(isbn)) => isbn,
+            Some(Value::Number(isbn)) => isbn.to_string(),
             _ => "".to_string(),
         };
         let isbn = if isbn_raw.is_empty() || isbn_raw.starts_with("ASIN:") {

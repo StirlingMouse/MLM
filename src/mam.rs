@@ -6,11 +6,236 @@ use native_db::Database;
 use reqwest::Url;
 use reqwest_cookie_store::CookieStoreRwLock;
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::{Value, json};
+use serde_json::Value;
 
-use crate::{config::Config, data};
+use crate::{
+    config::Config,
+    data,
+    mam_enums::{Categories, Language, SearchIn, UserClass},
+};
+
+fn is_false(value: &bool) -> bool {
+    !value
+}
+
+fn is_zero(value: &u64) -> bool {
+    *value == 0
+}
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct UserResponse {
+    pub classname: UserClass,
+    pub connectable: String,
+    pub country_code: String,
+    pub country_name: String,
+    pub created: u64,
+    pub downloaded: String,
+    pub downloaded_bytes: u64,
+    pub duplicates: Duplicates,
+    #[serde(rename = "inactHnr")]
+    pub inact_hnr: InactHnr,
+    #[serde(rename = "inactSat")]
+    pub inact_sat: InactHnr,
+    #[serde(rename = "inactUnsat")]
+    pub inact_unsat: InactHnr,
+    pub ipv6_mac: bool,
+    pub ite: Ite,
+    pub last_access: String,
+    pub last_access_ago: String,
+    pub leeching: InactHnr,
+    pub partial: bool,
+    pub ratio: f64,
+    pub recently_deleted: u64,
+    pub reseed: Reseed,
+    #[serde(rename = "sSat")]
+    pub s_sat: InactHnr,
+    #[serde(rename = "seedHnr")]
+    pub seed_hnr: InactHnr,
+    #[serde(rename = "seedUnsat")]
+    pub seed_unsat: InactHnr,
+    pub seedbonus: i64,
+    pub uid: u64,
+    pub unsat: InactHnr,
+    #[serde(rename = "upAct")]
+    pub up_act: InactHnr,
+    #[serde(rename = "upInact")]
+    pub up_inact: InactHnr,
+    pub update: u64,
+    pub uploaded: String,
+    pub uploaded_bytes: u64,
+    pub username: String,
+    pub v6_connectable: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Duplicates {
+    pub count: u64,
+    pub red: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InactHnr {
+    pub count: u64,
+    pub red: bool,
+    pub size: Option<u64>,
+    pub limit: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Ite {
+    pub count: u64,
+    pub latest: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Reseed {
+    pub count: u64,
+    pub inactive: u64,
+    pub red: bool,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct SearchQuery<'a> {
+    /// If this parameter is set, it will display the full description field for the torrent.
+    #[serde(skip_serializing_if = "is_false")]
+    pub description: bool,
+    /// show hash for dl link (prepend https://www.myanonamouse.net/tor/download.php/ to use) for downloading on something without a session cookie. Alternatively use session cookie and just hit https://www.myanonamouse.net/tor/download.php?tid=# replacing # with the id number.
+    #[serde(skip_serializing_if = "is_false")]
+    #[serde(rename = "dlLink")]
+    pub dl_link: bool,
+    /// If this value is set, will return the isbn field (though often blank).
+    #[serde(skip_serializing_if = "is_false")]
+    pub isbn: bool,
+    /// int in range of 5 to 100, telling how many results to return
+    pub perpage: u8,
+
+    #[serde(borrow)]
+    pub tor: Tor<'a>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Tor<'a> {
+    #[serde(rename = "searchIn")]
+    pub target: Option<SearchTarget>,
+    #[serde(rename = "searchType")]
+    pub kind: Option<SearchKind>,
+
+    /// Text to search for
+    #[serde(skip_serializing_if = "str::is_empty")]
+    pub text: &'a str,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(rename = "srchIn")]
+    pub srch_in: Vec<SearchIn>,
+
+    /// List of integers for the languages you wish to view in results
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub browse_lang: Vec<u8>,
+    /// Array of ID(s) of the main category to include
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub main_cat: Vec<u8>,
+    /// List of integers for the categories you wish to view in results
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub cat: Vec<u8>,
+
+    /// Date in format YYYY-MM-DD or unix timestamp of earliest torrent(s) to show. Inclusive of the provided value
+    #[serde(skip_serializing_if = "str::is_empty")]
+    #[serde(rename = "startDate")]
+    pub start_date: &'a str,
+    /// Date in format YYYY-MM-DD or unix timestamp torrents should have been created before. Exclusive of value provided
+    #[serde(skip_serializing_if = "str::is_empty")]
+    #[serde(rename = "endDate")]
+    pub end_date: &'a str,
+
+    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(rename = "minSize")]
+    pub min_size: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(rename = "maxSize")]
+    pub max_size: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub unit: u64,
+
+    #[serde(rename = "browseFlagsHideVsShow")]
+    pub browse_flags_hide_vs_show: Option<u8>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(rename = "browseFlags")]
+    pub browse_flags: Vec<u8>,
+
+    /// Hexadecimal encoded hash from a torrent
+    #[serde(skip_serializing_if = "str::is_empty")]
+    pub hash: &'a str,
+
+    // sortType	enum	'titleAsc': By the Title, Descending order
+    // 'titleDesc': By the Title, Ascending order
+    // 'fileAsc': By number of files, Ascending Order
+    // 'fileDesc': By number of files, Descending Order
+    // 'sizeAsc': By size of the torrent, Ascending Order
+    // 'sizeDesc': By size of the torrent, Descending Order
+    // 'seedersAsc': By number of Seeders, Ascending Order
+    // 'seedersDesc': By number of Seeders, Descending Order
+    // 'leechersAsc': By number of Leechers, Ascending Order
+    // 'leechersDesc': By number of Leechers, Descending Order
+    // 'snatchedAsc': By number of times snatched, Ascending Order
+    // 'snatchedDesc': By number of times snatched, Descending Order
+    // 'dateAsc': By Date Added, Ascending Order
+    // 'dateDesc': By Date Added, Descending Order
+    // 'bmkaAsc': By date bookmarked, Ascending Order (Note: may return odd results if not bookmarked)
+    // 'bmkaDesc': By date bookmarked, Descending Order (Note: may return odd results if not bookmarked)
+    // 'reseedAsc': Date Reseed Request Added, Ascending Order (Note: may return odd results if no reseed request)
+    // 'reseedDesc': Date Reseed Request Added, Descending Order (Note: may return odd results if no reseed request)
+    // 'categoryAsc': Sorted by category (number) Ascending, followed by title Ascending
+    // 'categoryDesc': Sorted by category (number) Descending, followed by title Ascending
+    // 'random': random, duh
+    // 'default':
+    // If text search present: by weight DESC, then ID desceding,
+    // else if instead searchIn is 'myReseed' or 'allReseed': same as reseedAsc
+    // else if searchIn is Bookmarks: same as 'bmkaDesc'
+    // else same as 'dateDesc'
+    #[serde(rename = "sortType")]
+    #[serde(skip_serializing_if = "str::is_empty")]
+    pub sort_type: &'a str,
+
+    /// Number of entries to skip. Used in pagination.
+    #[serde(rename = "startNumber")]
+    pub start_number: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SearchTarget {
+    Bookmarks,
+    New,
+    Mine,
+    AllReseed,
+    MyReseed,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum SearchKind {
+    /// Last update had 1+ seeders
+    #[serde(rename = "active")]
+    Active,
+    /// Last update has 0 seeders
+    #[serde(rename = "inactive")]
+    Inactive,
+    /// Freeleech torrents
+    #[serde(rename = "fl")]
+    Freeleech,
+    /// Freeleech or VIP torrents
+    #[serde(rename = "fl-VIP")]
+    Free,
+    /// VIP torrents
+    #[serde(rename = "VIP")]
+    Vip,
+    /// Torrents not VIP
+    #[serde(rename = "nVIP")]
+    NotVip,
+    /// Torrents missing meta data (old torrents)
+    #[serde(rename = "nMeta")]
+    NoMeta,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct SearchResult {
     pub perpage: i64,
     pub start: i64,
@@ -36,11 +261,12 @@ pub struct MaMTorrent {
     pub catname: String,
     pub cat: String,
     pub comments: u64,
-    pub description: String,
+    pub description: Option<String>,
+    pub dl: Option<String>,
     pub filetype: String,
     pub fl_vip: i64,
     pub free: i64,
-    pub isbn: Value,
+    pub isbn: Option<Value>,
     pub lang_code: String,
     pub language: u64,
     pub leechers: u64,
@@ -143,36 +369,83 @@ impl<'a> MaM<'a> {
         Ok(())
     }
 
+    pub async fn user_info(&self) -> Result<UserResponse> {
+        let resp = self
+            .client
+            .get("https://www.myanonamouse.net/jsonLoad.php?snatch_summary=true")
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        self.store_cookies();
+        Ok(resp)
+    }
+
     pub async fn get_torrent_info(&self, hash: &str) -> Result<Option<MaMTorrent>> {
+        // let resp = self
+        //     .client
+        //     .post("https://www.myanonamouse.net/tor/js/loadSearchJSONbasic.php")
+        //     .json(&json!({
+        //         "description": true,
+        //         "isbn": true,
+        //         "tor": { "hash": hash }
+        //     }))
+        //     .send()
+        //     .await?
+        //     .error_for_status()?
+        //     .text()
+        //     .await?;
+        // println!("resp: {resp:?}");
+        // if let Ok(resp) = serde_json::from_str::<SearchError>(&resp) {
+        //     if resp.error == "Nothing returned, out of 0" {
+        //         return Ok(None);
+        //     } else {
+        //         return Err(Error::msg(resp.error));
+        //     }
+        // };
+        // let mut resp: SearchResult = serde_json::from_str(&resp).context("parse mam response")?;
+        // println!("resp2: {resp:?}");
+        // self.store_cookies();
+        let mut resp = self
+            .search(&SearchQuery {
+                description: true,
+                isbn: true,
+                tor: Tor {
+                    hash,
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .await?;
+        Ok(resp.data.pop())
+    }
+
+    pub async fn search(&self, query: &SearchQuery<'_>) -> Result<SearchResult> {
+        println!("search: {}", serde_json::to_string_pretty(query)?);
         let resp = self
             .client
             .post("https://www.myanonamouse.net/tor/js/loadSearchJSONbasic.php")
-            .json(&json!({
-                "description": true,
-                "isbn": true,
-                "tor": { "hash": hash }
-            }))
+            .json(query)
             .send()
             .await?
             .error_for_status()?
             .text()
             .await?;
-        println!("resp: {resp:?}");
         if let Ok(resp) = serde_json::from_str::<SearchError>(&resp) {
             if resp.error == "Nothing returned, out of 0" {
-                return Ok(None);
+                return Ok(SearchResult::default());
             } else {
+                println!("resp: {resp:?}");
                 return Err(Error::msg(resp.error));
             }
         };
-        let mut resp: SearchResult = serde_json::from_str(&resp).context("parse mam response")?;
-        println!("resp2: {resp:?}");
+        let resp: SearchResult = serde_json::from_str(&resp).context("parse mam response")?;
         self.store_cookies();
-        Ok(resp.data.pop())
+        Ok(resp)
     }
 
     fn store_cookies(&self) {
-        let url = "https://www.myanonamouse.net".parse::<Url>().unwrap();
         if let Some(cookie) = self
             .jar
             .read()

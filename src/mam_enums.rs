@@ -1,0 +1,904 @@
+use std::{fmt, marker::PhantomData};
+
+use regex::Regex;
+use serde::{
+    Deserialize, Deserializer, Serialize,
+    de::{self, SeqAccess, Visitor},
+};
+
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[serde(try_from = "String")]
+pub struct Size(u64);
+
+impl Size {
+    pub fn bytes(self) -> u64 {
+        self.0
+    }
+
+    pub fn unit(self) -> u64 {
+        if self.0 > 0 { 1 } else { 0 }
+    }
+}
+
+impl TryFrom<String> for Size {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let size_pattern = Regex::new(r"^(\d{1,6}) ([kKMG]?)(i)?B$").unwrap();
+
+        if let Some((Some(value), Some(unit), i)) = size_pattern
+            .captures(&value)
+            .map(|c| (c.get(1), c.get(2), c.get(3)))
+        {
+            let value: u64 = value.as_str().parse().unwrap();
+            let base: u64 = if i.is_some() { 1024 } else { 1000 };
+            let multiplier = match unit.as_str() {
+                "" => 1,
+                "k" | "K" => base,
+                "M" => base.pow(2),
+                "G" => base.pow(3),
+                _ => unreachable!("unknown unit: {}", unit.as_str()),
+            };
+            Ok(Size(value * multiplier))
+        } else {
+            Err(format!("invalid size value {value}"))
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SearchIn {
+    Author,
+    Description,
+    Filenames,
+    FileTypes,
+    Narrator,
+    Series,
+    Tags,
+    Title,
+}
+
+impl SearchIn {
+    pub fn as_str(&self) -> &str {
+        match self {
+            SearchIn::Author => "author",
+            SearchIn::Description => "description",
+            SearchIn::Filenames => "filenames",
+            SearchIn::FileTypes => "fileTypes",
+            SearchIn::Narrator => "narrator",
+            SearchIn::Series => "series",
+            SearchIn::Tags => "tags",
+            SearchIn::Title => "title",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Categories {
+    #[serde(deserialize_with = "categories_parser")]
+    audio: Option<Vec<AudiobookCategory>>,
+    #[serde(deserialize_with = "categories_parser")]
+    ebook: Option<Vec<EbookCategory>>,
+}
+
+impl Categories {
+    pub fn get_main_cats(&self) -> Vec<u8> {
+        [
+            self.audio
+                .as_ref()
+                .is_none_or(|c| !c.is_empty())
+                .then_some(13),
+            self.ebook
+                .as_ref()
+                .is_none_or(|c| !c.is_empty())
+                .then_some(14),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    }
+
+    pub fn get_cats(&self) -> Vec<u8> {
+        if self.audio.is_none() && self.ebook.is_none() {
+            return vec![];
+        }
+
+        self.audio
+            .clone()
+            .unwrap_or_else(AudiobookCategory::all)
+            .iter()
+            .map(|c| c.to_id())
+            .chain(
+                self.ebook
+                    .clone()
+                    .unwrap_or_else(EbookCategory::all)
+                    .iter()
+                    .map(|c| c.to_id()),
+            )
+            .collect()
+    }
+}
+//
+// impl Default for Categories {
+//     fn default() -> Self {
+//         Self {
+//             audio: AudiobookCategory::all(),
+//             ebook: EbookCategory::all(),
+//         }
+//     }
+// }
+
+fn categories_parser<'de, T, D>(deserializer: D) -> Result<Option<Vec<T>>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    // This is a Visitor that forwards string types to T's `FromStr` impl and
+    // forwards map types to T's `Deserialize` impl. The `PhantomData` is to
+    // keep the compiler from complaining about T being an unused generic type
+    // parameter. We need T in order to know the Value type for the Visitor
+    // impl.
+    struct CategoriesParser<T>(PhantomData<fn() -> T>);
+
+    impl<'de, T> Visitor<'de> for CategoriesParser<T>
+    where
+        T: Deserialize<'de>,
+    {
+        type Value = Option<Vec<T>>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("bool or array")
+        }
+
+        fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(if value { None } else { Some(vec![]) })
+        }
+
+        fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            Ok(Some(Deserialize::deserialize(
+                de::value::SeqAccessDeserializer::new(seq),
+            )?))
+        }
+    }
+
+    deserializer.deserialize_any(CategoriesParser(PhantomData))
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(try_from = "String")]
+pub enum AudiobookCategory {
+    ActionAdventure,
+    Art,
+    Biographical,
+    Business,
+    ComputerInternet,
+    Crafts,
+    CrimeThriller,
+    Fantasy,
+    Food,
+    GeneralFiction,
+    GeneralNonFic,
+    HistoricalFiction,
+    History,
+    HomeGarden,
+    Horror,
+    Humor,
+    Instructional,
+    Juvenile,
+    Language,
+    LiteraryClassics,
+    MathScienceTech,
+    Medical,
+    Mystery,
+    Nature,
+    Philosophy,
+    PolSocRelig,
+    Recreation,
+    Romance,
+    ScienceFiction,
+    SelfHelp,
+    TravelAdventure,
+    TrueCrime,
+    UrbanFantasy,
+    Western,
+    YoungAdult,
+}
+
+impl AudiobookCategory {
+    pub fn all() -> Vec<AudiobookCategory> {
+        vec![
+            AudiobookCategory::ActionAdventure,
+            AudiobookCategory::Art,
+            AudiobookCategory::Biographical,
+            AudiobookCategory::Business,
+            AudiobookCategory::ComputerInternet,
+            AudiobookCategory::Crafts,
+            AudiobookCategory::CrimeThriller,
+            AudiobookCategory::Fantasy,
+            AudiobookCategory::Food,
+            AudiobookCategory::GeneralFiction,
+            AudiobookCategory::GeneralNonFic,
+            AudiobookCategory::HistoricalFiction,
+            AudiobookCategory::History,
+            AudiobookCategory::HomeGarden,
+            AudiobookCategory::Horror,
+            AudiobookCategory::Humor,
+            AudiobookCategory::Instructional,
+            AudiobookCategory::Juvenile,
+            AudiobookCategory::Language,
+            AudiobookCategory::LiteraryClassics,
+            AudiobookCategory::MathScienceTech,
+            AudiobookCategory::Medical,
+            AudiobookCategory::Mystery,
+            AudiobookCategory::Nature,
+            AudiobookCategory::Philosophy,
+            AudiobookCategory::PolSocRelig,
+            AudiobookCategory::Recreation,
+            AudiobookCategory::Romance,
+            AudiobookCategory::ScienceFiction,
+            AudiobookCategory::SelfHelp,
+            AudiobookCategory::TravelAdventure,
+            AudiobookCategory::TrueCrime,
+            AudiobookCategory::UrbanFantasy,
+            AudiobookCategory::Western,
+            AudiobookCategory::YoungAdult,
+        ]
+    }
+
+    pub fn from_str(value: &str) -> Option<AudiobookCategory> {
+        match value.to_lowercase().as_str() {
+            "action" => Some(AudiobookCategory::ActionAdventure),
+            "action/adventure" => Some(AudiobookCategory::ActionAdventure),
+            "art" => Some(AudiobookCategory::Art),
+            "biographical" => Some(AudiobookCategory::Biographical),
+            "business" => Some(AudiobookCategory::Business),
+            "computer" => Some(AudiobookCategory::ComputerInternet),
+            "internet" => Some(AudiobookCategory::ComputerInternet),
+            "computer/internet" => Some(AudiobookCategory::ComputerInternet),
+            "crafts" => Some(AudiobookCategory::Crafts),
+            "crime/thriller" => Some(AudiobookCategory::CrimeThriller),
+            "fantasy" => Some(AudiobookCategory::Fantasy),
+            "food" => Some(AudiobookCategory::Food),
+            "general fiction" => Some(AudiobookCategory::GeneralFiction),
+            "general non-fic" => Some(AudiobookCategory::GeneralNonFic),
+            "general non fic" => Some(AudiobookCategory::GeneralNonFic),
+            "general nonfic" => Some(AudiobookCategory::GeneralNonFic),
+            "general non-fiction" => Some(AudiobookCategory::GeneralNonFic),
+            "general non fiction" => Some(AudiobookCategory::GeneralNonFic),
+            "general nonfiction" => Some(AudiobookCategory::GeneralNonFic),
+            "historical fiction" => Some(AudiobookCategory::HistoricalFiction),
+            "history" => Some(AudiobookCategory::History),
+            "home" => Some(AudiobookCategory::HomeGarden),
+            "garden" => Some(AudiobookCategory::HomeGarden),
+            "home/garden" => Some(AudiobookCategory::HomeGarden),
+            "horror" => Some(AudiobookCategory::Horror),
+            "humor" => Some(AudiobookCategory::Humor),
+            "instructional" => Some(AudiobookCategory::Instructional),
+            "juvenile" => Some(AudiobookCategory::Juvenile),
+            "language" => Some(AudiobookCategory::Language),
+            "classics" => Some(AudiobookCategory::LiteraryClassics),
+            "literary classics" => Some(AudiobookCategory::LiteraryClassics),
+            "math" => Some(AudiobookCategory::MathScienceTech),
+            "science" => Some(AudiobookCategory::MathScienceTech),
+            "tech" => Some(AudiobookCategory::MathScienceTech),
+            "math/science/tech" => Some(AudiobookCategory::MathScienceTech),
+            "medical" => Some(AudiobookCategory::Medical),
+            "mystery" => Some(AudiobookCategory::Mystery),
+            "nature" => Some(AudiobookCategory::Nature),
+            "philosophy" => Some(AudiobookCategory::Philosophy),
+            "pol" => Some(AudiobookCategory::PolSocRelig),
+            "soc" => Some(AudiobookCategory::PolSocRelig),
+            "relig" => Some(AudiobookCategory::PolSocRelig),
+            "pol/soc/relig" => Some(AudiobookCategory::PolSocRelig),
+            "recreation" => Some(AudiobookCategory::Recreation),
+            "romance" => Some(AudiobookCategory::Romance),
+            "sf" => Some(AudiobookCategory::ScienceFiction),
+            "science fiction" => Some(AudiobookCategory::ScienceFiction),
+            "self help" => Some(AudiobookCategory::SelfHelp),
+            "self-help" => Some(AudiobookCategory::SelfHelp),
+            "travel" => Some(AudiobookCategory::TravelAdventure),
+            "travel/adventure" => Some(AudiobookCategory::TravelAdventure),
+            "true crime" => Some(AudiobookCategory::TrueCrime),
+            "urban fantasy" => Some(AudiobookCategory::UrbanFantasy),
+            "western" => Some(AudiobookCategory::Western),
+            "ya" => Some(AudiobookCategory::YoungAdult),
+            "young adult" => Some(AudiobookCategory::YoungAdult),
+            _ => None,
+        }
+    }
+
+    pub fn to_id(self) -> u8 {
+        match self {
+            AudiobookCategory::ActionAdventure => 39,
+            AudiobookCategory::Art => 49,
+            AudiobookCategory::Biographical => 50,
+            AudiobookCategory::Business => 83,
+            AudiobookCategory::ComputerInternet => 51,
+            AudiobookCategory::Crafts => 97,
+            AudiobookCategory::CrimeThriller => 40,
+            AudiobookCategory::Fantasy => 41,
+            AudiobookCategory::Food => 106,
+            AudiobookCategory::GeneralFiction => 42,
+            AudiobookCategory::GeneralNonFic => 52,
+            AudiobookCategory::HistoricalFiction => 98,
+            AudiobookCategory::History => 54,
+            AudiobookCategory::HomeGarden => 55,
+            AudiobookCategory::Horror => 43,
+            AudiobookCategory::Humor => 99,
+            AudiobookCategory::Instructional => 84,
+            AudiobookCategory::Juvenile => 44,
+            AudiobookCategory::Language => 56,
+            AudiobookCategory::LiteraryClassics => 45,
+            AudiobookCategory::MathScienceTech => 57,
+            AudiobookCategory::Medical => 85,
+            AudiobookCategory::Mystery => 87,
+            AudiobookCategory::Nature => 119,
+            AudiobookCategory::Philosophy => 88,
+            AudiobookCategory::PolSocRelig => 58,
+            AudiobookCategory::Recreation => 59,
+            AudiobookCategory::Romance => 46,
+            AudiobookCategory::ScienceFiction => 47,
+            AudiobookCategory::SelfHelp => 53,
+            AudiobookCategory::TravelAdventure => 89,
+            AudiobookCategory::TrueCrime => 100,
+            AudiobookCategory::UrbanFantasy => 108,
+            AudiobookCategory::Western => 48,
+            AudiobookCategory::YoungAdult => 111,
+        }
+    }
+}
+
+impl TryFrom<String> for AudiobookCategory {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let l = Self::from_str(&value);
+        match l {
+            Some(l) => Ok(l),
+            None => Err(format!("invalid category {value}")),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(try_from = "String")]
+pub enum EbookCategory {
+    ActionAdventure,
+    Art,
+    Biographical,
+    Business,
+    ComicsGraphicnovels,
+    ComputerInternet,
+    Crafts,
+    CrimeThriller,
+    Fantasy,
+    Food,
+    GeneralFiction,
+    GeneralNonFiction,
+    HistoricalFiction,
+    History,
+    HomeGarden,
+    Horror,
+    Humor,
+    IllusionMagic,
+    Instructional,
+    Juvenile,
+    Language,
+    LiteraryClassics,
+    MagazinesNewspapers,
+    MathScienceTech,
+    Medical,
+    MixedCollections,
+    Mystery,
+    Nature,
+    Philosophy,
+    PolSocRelig,
+    Recreation,
+    Romance,
+    ScienceFiction,
+    SelfHelp,
+    TravelAdventure,
+    TrueCrime,
+    UrbanFantasy,
+    Western,
+    YoungAdult,
+}
+
+impl EbookCategory {
+    pub fn all() -> Vec<EbookCategory> {
+        vec![
+            EbookCategory::ActionAdventure,
+            EbookCategory::Art,
+            EbookCategory::Biographical,
+            EbookCategory::Business,
+            EbookCategory::ComicsGraphicnovels,
+            EbookCategory::ComputerInternet,
+            EbookCategory::Crafts,
+            EbookCategory::CrimeThriller,
+            EbookCategory::Fantasy,
+            EbookCategory::Food,
+            EbookCategory::GeneralFiction,
+            EbookCategory::GeneralNonFiction,
+            EbookCategory::HistoricalFiction,
+            EbookCategory::History,
+            EbookCategory::HomeGarden,
+            EbookCategory::Horror,
+            EbookCategory::Humor,
+            EbookCategory::IllusionMagic,
+            EbookCategory::Instructional,
+            EbookCategory::Juvenile,
+            EbookCategory::Language,
+            EbookCategory::LiteraryClassics,
+            EbookCategory::MagazinesNewspapers,
+            EbookCategory::MathScienceTech,
+            EbookCategory::Medical,
+            EbookCategory::MixedCollections,
+            EbookCategory::Mystery,
+            EbookCategory::Nature,
+            EbookCategory::Philosophy,
+            EbookCategory::PolSocRelig,
+            EbookCategory::Recreation,
+            EbookCategory::Romance,
+            EbookCategory::ScienceFiction,
+            EbookCategory::SelfHelp,
+            EbookCategory::TravelAdventure,
+            EbookCategory::TrueCrime,
+            EbookCategory::UrbanFantasy,
+            EbookCategory::Western,
+            EbookCategory::YoungAdult,
+        ]
+    }
+
+    pub fn from_str(value: &str) -> Option<EbookCategory> {
+        match value.to_lowercase().as_str() {
+            "action" => Some(EbookCategory::ActionAdventure),
+            "action/adventure" => Some(EbookCategory::ActionAdventure),
+            "art" => Some(EbookCategory::Art),
+            "biographical" => Some(EbookCategory::Biographical),
+            "business" => Some(EbookCategory::Business),
+            "comics" => Some(EbookCategory::ComicsGraphicnovels),
+            "graphic novels" => Some(EbookCategory::ComicsGraphicnovels),
+            "comics/graphic novels" => Some(EbookCategory::ComicsGraphicnovels),
+            "computer" => Some(EbookCategory::ComputerInternet),
+            "internet" => Some(EbookCategory::ComputerInternet),
+            "computer/internet" => Some(EbookCategory::ComputerInternet),
+            "crafts" => Some(EbookCategory::Crafts),
+            "crime" => Some(EbookCategory::CrimeThriller),
+            "thriller" => Some(EbookCategory::CrimeThriller),
+            "crime/thriller" => Some(EbookCategory::CrimeThriller),
+            "fantasy" => Some(EbookCategory::Fantasy),
+            "food" => Some(EbookCategory::Food),
+            "general fiction" => Some(EbookCategory::GeneralFiction),
+            "general non-fic" => Some(EbookCategory::GeneralNonFiction),
+            "general non fic" => Some(EbookCategory::GeneralNonFiction),
+            "general nonfic" => Some(EbookCategory::GeneralNonFiction),
+            "general non-fiction" => Some(EbookCategory::GeneralNonFiction),
+            "general non fiction" => Some(EbookCategory::GeneralNonFiction),
+            "general nonfiction" => Some(EbookCategory::GeneralNonFiction),
+            "historical fiction" => Some(EbookCategory::HistoricalFiction),
+            "history" => Some(EbookCategory::History),
+            "home" => Some(EbookCategory::HomeGarden),
+            "garden" => Some(EbookCategory::HomeGarden),
+            "home/garden" => Some(EbookCategory::HomeGarden),
+            "horror" => Some(EbookCategory::Horror),
+            "humor" => Some(EbookCategory::Humor),
+            "illusion" => Some(EbookCategory::IllusionMagic),
+            "magic" => Some(EbookCategory::IllusionMagic),
+            "illusion/magic" => Some(EbookCategory::IllusionMagic),
+            "instructional" => Some(EbookCategory::Instructional),
+            "juvenile" => Some(EbookCategory::Juvenile),
+            "language" => Some(EbookCategory::Language),
+            "literary classics" => Some(EbookCategory::LiteraryClassics),
+            "magazines" => Some(EbookCategory::MagazinesNewspapers),
+            "newspapers" => Some(EbookCategory::MagazinesNewspapers),
+            "magazines/newspapers" => Some(EbookCategory::MagazinesNewspapers),
+            "math" => Some(EbookCategory::MathScienceTech),
+            "science" => Some(EbookCategory::MathScienceTech),
+            "tech" => Some(EbookCategory::MathScienceTech),
+            "math/science/tech" => Some(EbookCategory::MathScienceTech),
+            "medical" => Some(EbookCategory::Medical),
+            "mixed collections" => Some(EbookCategory::MixedCollections),
+            "mystery" => Some(EbookCategory::Mystery),
+            "nature" => Some(EbookCategory::Nature),
+            "philosophy" => Some(EbookCategory::Philosophy),
+            "pol" => Some(EbookCategory::PolSocRelig),
+            "soc" => Some(EbookCategory::PolSocRelig),
+            "relig" => Some(EbookCategory::PolSocRelig),
+            "pol/soc/relig" => Some(EbookCategory::PolSocRelig),
+            "recreation" => Some(EbookCategory::Recreation),
+            "romance" => Some(EbookCategory::Romance),
+            "sf" => Some(EbookCategory::ScienceFiction),
+            "science fiction" => Some(EbookCategory::ScienceFiction),
+            "self help" => Some(EbookCategory::SelfHelp),
+            "self-help" => Some(EbookCategory::SelfHelp),
+            "travel" => Some(EbookCategory::TravelAdventure),
+            "travel/adventure" => Some(EbookCategory::TravelAdventure),
+            "true crime" => Some(EbookCategory::TrueCrime),
+            "urban fantasy" => Some(EbookCategory::UrbanFantasy),
+            "western" => Some(EbookCategory::Western),
+            "ya" => Some(EbookCategory::YoungAdult),
+            "young adult" => Some(EbookCategory::YoungAdult),
+            _ => None,
+        }
+    }
+
+    pub fn to_id(self) -> u8 {
+        match self {
+            EbookCategory::ActionAdventure => 60,
+            EbookCategory::Art => 71,
+            EbookCategory::Biographical => 72,
+            EbookCategory::Business => 90,
+            EbookCategory::ComicsGraphicnovels => 61,
+            EbookCategory::ComputerInternet => 73,
+            EbookCategory::Crafts => 101,
+            EbookCategory::CrimeThriller => 62,
+            EbookCategory::Fantasy => 63,
+            EbookCategory::Food => 107,
+            EbookCategory::GeneralFiction => 64,
+            EbookCategory::GeneralNonFiction => 74,
+            EbookCategory::HistoricalFiction => 102,
+            EbookCategory::History => 76,
+            EbookCategory::HomeGarden => 77,
+            EbookCategory::Horror => 65,
+            EbookCategory::Humor => 103,
+            EbookCategory::IllusionMagic => 115,
+            EbookCategory::Instructional => 91,
+            EbookCategory::Juvenile => 66,
+            EbookCategory::Language => 78,
+            EbookCategory::LiteraryClassics => 67,
+            EbookCategory::MagazinesNewspapers => 79,
+            EbookCategory::MathScienceTech => 80,
+            EbookCategory::Medical => 92,
+            EbookCategory::MixedCollections => 118,
+            EbookCategory::Mystery => 94,
+            EbookCategory::Nature => 120,
+            EbookCategory::Philosophy => 95,
+            EbookCategory::PolSocRelig => 81,
+            EbookCategory::Recreation => 82,
+            EbookCategory::Romance => 68,
+            EbookCategory::ScienceFiction => 69,
+            EbookCategory::SelfHelp => 75,
+            EbookCategory::TravelAdventure => 96,
+            EbookCategory::TrueCrime => 104,
+            EbookCategory::UrbanFantasy => 109,
+            EbookCategory::Western => 70,
+            EbookCategory::YoungAdult => 112,
+        }
+    }
+}
+
+impl TryFrom<String> for EbookCategory {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let l = Self::from_str(&value);
+        match l {
+            Some(l) => Ok(l),
+            None => Err(format!("invalid category {value}")),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(try_from = "String")]
+pub enum Language {
+    English,
+    Afrikaans,
+    Arabic,
+    Bengali,
+    Bosnian,
+    Bulgarian,
+    Burmese,
+    Cantonese,
+    Catalan,
+    Chinese,
+    Croatian,
+    Czech,
+    Danish,
+    Dutch,
+    Estonian,
+    Farsi,
+    Finnish,
+    French,
+    German,
+    Greek,
+    GreekAncient,
+    Gujarati,
+    Hebrew,
+    Hindi,
+    Hungarian,
+    Icelandic,
+    Indonesian,
+    Irish,
+    Italian,
+    Japanese,
+    Javanese,
+    Kannada,
+    Korean,
+    Lithuanian,
+    Latin,
+    Latvian,
+    Malay,
+    Malayalam,
+    Manx,
+    Marathi,
+    Norwegian,
+    Polish,
+    Portuguese,
+    BrazilianPortuguese,
+    Punjabi,
+    Romanian,
+    Russian,
+    ScottishGaelic,
+    Sanskrit,
+    Serbian,
+    Slovenian,
+    Spanish,
+    CastilianSpanish,
+    Swedish,
+    Tagalog,
+    Tamil,
+    Telugu,
+    Thai,
+    Turkish,
+    Ukrainian,
+    Urdu,
+    Vietnamese,
+    Other,
+}
+
+impl Language {
+    pub fn from_str(value: &str) -> Option<Language> {
+        match value.to_lowercase().as_str() {
+            "english" => Some(Language::English),
+            "afrikaans" => Some(Language::Afrikaans),
+            "arabic" => Some(Language::Arabic),
+            "bengali" => Some(Language::Bengali),
+            "bosnian" => Some(Language::Bosnian),
+            "bulgarian" => Some(Language::Bulgarian),
+            "burmese" => Some(Language::Burmese),
+            "cantonese" => Some(Language::Cantonese),
+            "catalan" => Some(Language::Catalan),
+            "chinese" => Some(Language::Chinese),
+            "croatian" => Some(Language::Croatian),
+            "czech" => Some(Language::Czech),
+            "danish" => Some(Language::Danish),
+            "dutch" => Some(Language::Dutch),
+            "estonian" => Some(Language::Estonian),
+            "farsi" => Some(Language::Farsi),
+            "finnish" => Some(Language::Finnish),
+            "french" => Some(Language::French),
+            "german" => Some(Language::German),
+            "greek" => Some(Language::Greek),
+            "ancient greek" => Some(Language::GreekAncient),
+            "greek ancient" => Some(Language::GreekAncient),
+            "greek, ancient" => Some(Language::GreekAncient),
+            "gujarati" => Some(Language::Gujarati),
+            "hebrew" => Some(Language::Hebrew),
+            "hindi" => Some(Language::Hindi),
+            "hungarian" => Some(Language::Hungarian),
+            "icelandic" => Some(Language::Icelandic),
+            "indonesian" => Some(Language::Indonesian),
+            "irish" => Some(Language::Irish),
+            "italian" => Some(Language::Italian),
+            "japanese" => Some(Language::Japanese),
+            "javanese" => Some(Language::Javanese),
+            "kannada" => Some(Language::Kannada),
+            "korean" => Some(Language::Korean),
+            "lithuanian" => Some(Language::Lithuanian),
+            "latin" => Some(Language::Latin),
+            "latvian" => Some(Language::Latvian),
+            "malay" => Some(Language::Malay),
+            "malayalam" => Some(Language::Malayalam),
+            "manx" => Some(Language::Manx),
+            "marathi" => Some(Language::Marathi),
+            "norwegian" => Some(Language::Norwegian),
+            "polish" => Some(Language::Polish),
+            "portuguese" => Some(Language::Portuguese),
+            "bp" => Some(Language::BrazilianPortuguese),
+            "brazilian" => Some(Language::BrazilianPortuguese),
+            "brazilian portuguese" => Some(Language::BrazilianPortuguese),
+            "brazilian portuguese (bp)" => Some(Language::BrazilianPortuguese),
+            "punjabi" => Some(Language::Punjabi),
+            "romanian" => Some(Language::Romanian),
+            "russian" => Some(Language::Russian),
+            "scottish" => Some(Language::ScottishGaelic),
+            "scottish gaelic" => Some(Language::ScottishGaelic),
+            "gaelic" => Some(Language::ScottishGaelic),
+            "sanskrit" => Some(Language::Sanskrit),
+            "serbian" => Some(Language::Serbian),
+            "slovenian" => Some(Language::Slovenian),
+            "spanish" => Some(Language::Spanish),
+            "castilian" => Some(Language::CastilianSpanish),
+            "castilian spanish" => Some(Language::CastilianSpanish),
+            "swedish" => Some(Language::Swedish),
+            "tagalog" => Some(Language::Tagalog),
+            "tamil" => Some(Language::Tamil),
+            "telugu" => Some(Language::Telugu),
+            "thai" => Some(Language::Thai),
+            "turkish" => Some(Language::Turkish),
+            "ukrainian" => Some(Language::Ukrainian),
+            "urdu" => Some(Language::Urdu),
+            "vietnamese" => Some(Language::Vietnamese),
+            "other" => Some(Language::Other),
+            _ => None,
+        }
+    }
+
+    pub fn to_id(self) -> u8 {
+        match self {
+            Language::English => 1,
+            Language::Afrikaans => 17,
+            Language::Arabic => 32,
+            Language::Bengali => 35,
+            Language::Bosnian => 51,
+            Language::Bulgarian => 18,
+            Language::Burmese => 6,
+            Language::Cantonese => 44,
+            Language::Catalan => 19,
+            Language::Chinese => 2,
+            Language::Croatian => 49,
+            Language::Czech => 20,
+            Language::Danish => 21,
+            Language::Dutch => 22,
+            Language::Estonian => 61,
+            Language::Farsi => 39,
+            Language::Finnish => 23,
+            Language::French => 36,
+            Language::German => 37,
+            Language::Greek => 26,
+            Language::GreekAncient => 59,
+            Language::Gujarati => 3,
+            Language::Hebrew => 27,
+            Language::Hindi => 8,
+            Language::Hungarian => 28,
+            Language::Icelandic => 63,
+            Language::Indonesian => 53,
+            Language::Irish => 56,
+            Language::Italian => 43,
+            Language::Japanese => 38,
+            Language::Javanese => 12,
+            Language::Kannada => 5,
+            Language::Korean => 41,
+            Language::Lithuanian => 50,
+            Language::Latin => 46,
+            Language::Latvian => 62,
+            Language::Malay => 33,
+            Language::Malayalam => 58,
+            Language::Manx => 57,
+            Language::Marathi => 9,
+            Language::Norwegian => 48,
+            Language::Polish => 45,
+            Language::Portuguese => 34,
+            Language::BrazilianPortuguese => 52,
+            Language::Punjabi => 14,
+            Language::Romanian => 30,
+            Language::Russian => 16,
+            Language::ScottishGaelic => 24,
+            Language::Sanskrit => 60,
+            Language::Serbian => 31,
+            Language::Slovenian => 54,
+            Language::Spanish => 4,
+            Language::CastilianSpanish => 55,
+            Language::Swedish => 40,
+            Language::Tagalog => 29,
+            Language::Tamil => 11,
+            Language::Telugu => 10,
+            Language::Thai => 7,
+            Language::Turkish => 42,
+            Language::Ukrainian => 25,
+            Language::Urdu => 15,
+            Language::Vietnamese => 13,
+            Language::Other => 47,
+        }
+    }
+}
+
+impl TryFrom<String> for Language {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let l = Language::from_str(&value);
+        match l {
+            Some(l) => Ok(l),
+            None => Err(format!("invalid language {value}")),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(try_from = "String")]
+pub enum UserClass {
+    Dev,
+    SysOp,
+    SrAdministrator,
+    Administrator,
+    UploaderCoordinator,
+    SrModerator,
+    Moderator,
+    TorrentMod,
+    ForumMod,
+    SupportStaff,
+    EntryLevelStaff,
+    Uploader,
+    Mouseketeer,
+    Supporter,
+    Elite,
+    EliteVip,
+    Vip,
+    PowerUser,
+    User,
+    Mouse,
+}
+
+impl UserClass {
+    pub fn from_str(class: &str) -> Option<UserClass> {
+        match class {
+            "Dev" => Some(UserClass::Dev),
+            "SysOp" => Some(UserClass::SysOp),
+            "SR Administrator" => Some(UserClass::SrAdministrator),
+            "Administrator" => Some(UserClass::Administrator),
+            "Uploader Coordinator" => Some(UserClass::UploaderCoordinator),
+            "SR Moderator" => Some(UserClass::SrModerator),
+            "Moderator" => Some(UserClass::Moderator),
+            "Torrent Mod" => Some(UserClass::TorrentMod),
+            "Forum Mod" => Some(UserClass::ForumMod),
+            "Support Staff" => Some(UserClass::SupportStaff),
+            "Entry Level Staff" => Some(UserClass::EntryLevelStaff),
+            "Uploader" => Some(UserClass::Uploader),
+            "Mouseketeer" => Some(UserClass::Mouseketeer),
+            "Supporter" => Some(UserClass::Supporter),
+            "Elite" => Some(UserClass::Elite),
+            "Elite VIP" => Some(UserClass::EliteVip),
+            "VIP" => Some(UserClass::Vip),
+            "Power User" => Some(UserClass::PowerUser),
+            "User" => Some(UserClass::User),
+            "Mous" => Some(UserClass::Mouse),
+            _ => None,
+        }
+    }
+
+    pub fn unsats(&self) -> u8 {
+        match self {
+            UserClass::Dev
+            | UserClass::SysOp
+            | UserClass::SrAdministrator
+            | UserClass::Administrator
+            | UserClass::UploaderCoordinator
+            | UserClass::SrModerator
+            | UserClass::Moderator
+            | UserClass::TorrentMod
+            | UserClass::ForumMod
+            | UserClass::SupportStaff
+            | UserClass::EntryLevelStaff
+            | UserClass::Uploader
+            | UserClass::Mouseketeer
+            | UserClass::Supporter
+            | UserClass::Elite
+            | UserClass::EliteVip => 200,
+            UserClass::Vip => 150,
+            UserClass::PowerUser => 100,
+            UserClass::User => 20,
+            UserClass::Mouse => 0,
+        }
+    }
+}
+
+impl TryFrom<String> for UserClass {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let v = Self::from_str(&value);
+        match v {
+            Some(v) => Ok(v),
+            None => Err(format!("invalid category {value}")),
+        }
+    }
+}
