@@ -11,7 +11,8 @@ native_db = "0.8.1"
 native_model = "0.4.20"
 once_cell = "1.21.3"
 openssl = { version = "0.10.35", features = ["vendored"] }
-qbit = "=0.1.1"
+# qbit = "=0.1.1"
+qbit = { path = "../qbittorrent-webui-api" }
 reqwest = "0.12.20"
 reqwest_cookie_store = "0.8.0"
 serde = "1.0.136"
@@ -22,3 +23,8 @@ tokio = { version = "1.45.1", features = ["full"] }
 toml = "0.8.23"
 regex = "1.11.1"
 htmlentity = "1.3.2"
+unidecode = "0.3.0"
+lava_torrent = "0.11.1"
+bytes = "1.10.1"
+log = "0.4.27"
+env_logger = "0.11.8"

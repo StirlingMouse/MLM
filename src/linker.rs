@@ -5,7 +5,6 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use htmlentity::entity::{self, ICodedDataTrait as _};
 use native_db::Database;
 use qbit::{models::TorrentContent, parameters::TorrentListParams};
 use regex::Regex;
@@ -13,8 +12,8 @@ use serde_json::{Value, json};
 
 use crate::{
     config::{Config, QbitConfig},
-    data,
-    mam::MaM,
+    data::{self},
+    mam::{MaM, clean_value, normalize_title},
     qbittorrent::QbitError,
 };
 
@@ -40,7 +39,7 @@ pub async fn link_torrents_to_library(
         {
             let r = db.r_transaction()?;
             let torrent: Option<data::Torrent> = r.get().primary(hash.clone())?;
-            if torrent.is_some() {
+            if torrent.and_then(|t| t.library_path).is_some() {
                 continue;
             }
         }
@@ -110,8 +109,8 @@ pub async fn link_torrents_to_library(
         let mut titles = mam_torrent.title.splitn(2, ":");
         let title = titles.next().unwrap();
         let subtitle = titles.next().map(|t| t.trim());
-        let isbn_raw = match mam_torrent.isbn {
-            Some(Value::String(isbn)) => isbn,
+        let isbn_raw = match &mam_torrent.isbn {
+            Some(Value::String(isbn)) => isbn.to_owned(),
             Some(Value::Number(isbn)) => isbn.to_string(),
             _ => "".to_string(),
         };
@@ -121,13 +120,14 @@ pub async fn link_torrents_to_library(
             Some(&isbn_raw[..])
         };
         let asin = isbn_raw.strip_prefix("ASIN:");
+        let meta = mam_torrent.as_meta()?;
+
         let metadata = json!({
-            "authors": mam_torrent.author_info.values().map(|a| clean_value(a)).collect::<Result<Vec<_>>>()?,
-            "narrators": mam_torrent.narrator_info.values().map(|n| clean_value(n)).collect::<Result<Vec<_>>>()?,
-            "series": mam_torrent.series_info.values().map(|(series_name, series_num)| {
-                let series_name = clean_value(series_name)?;
-                Ok(if series_num.is_empty() { series_name.clone() } else { format!("{series_name} #{series_num}") })
-            }).collect::<Result<Vec<_>>>()?,
+            "authors": &meta.authors,
+            "narrators": &meta.narrators,
+            "series": &meta.series.iter().map(|(series_name, series_num)| {
+                if series_num.is_empty() { series_name.clone() } else { format!("{series_name} #{series_num}") }
+            }).collect::<Vec<_>>(),
             "title": title,
             "subtitle": subtitle,
             "description": mam_torrent.description,
@@ -180,19 +180,17 @@ pub async fn link_torrents_to_library(
 
         {
             let rw = db.rw_transaction()?;
-            rw.insert(data::Torrent {
+            rw.upsert(data::Torrent {
                 hash,
-                library_path: dir,
+                library_path: Some(dir),
+                title_search: normalize_title(&mam_torrent.title),
+                meta,
             })?;
             rw.commit()?;
         }
     }
 
     Ok(())
-}
-
-fn clean_value(value: &str) -> Result<String> {
-    entity::decode(value.as_bytes()).to_string()
 }
 
 fn select_format(wanted_formats: &[String], files: &[TorrentContent]) -> Option<String> {

@@ -1,4 +1,4 @@
-use std::{fmt, marker::PhantomData};
+use std::{collections::HashMap, fmt, marker::PhantomData};
 
 use regex::Regex;
 use serde::{
@@ -6,7 +6,7 @@ use serde::{
     de::{self, SeqAccess, Visitor},
 };
 
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(try_from = "String")]
 pub struct Size(u64);
 
@@ -24,13 +24,13 @@ impl TryFrom<String> for Size {
     type Error = String;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let size_pattern = Regex::new(r"^(\d{1,6}) ([kKMG]?)(i)?B$").unwrap();
+        let size_pattern = Regex::new(r"^(\d{1,6}(?:\.\d{1,3})?) ([kKMG]?)(i)?B$").unwrap();
 
         if let Some((Some(value), Some(unit), i)) = size_pattern
             .captures(&value)
             .map(|c| (c.get(1), c.get(2), c.get(3)))
         {
-            let value: u64 = value.as_str().parse().unwrap();
+            let value: f64 = value.as_str().parse().unwrap();
             let base: u64 = if i.is_some() { 1024 } else { 1000 };
             let multiplier = match unit.as_str() {
                 "" => 1,
@@ -38,8 +38,8 @@ impl TryFrom<String> for Size {
                 "M" => base.pow(2),
                 "G" => base.pow(3),
                 _ => unreachable!("unknown unit: {}", unit.as_str()),
-            };
-            Ok(Size(value * multiplier))
+            } as f64;
+            Ok(Size((value * multiplier).round() as u64))
         } else {
             Err(format!("invalid size value {value}"))
         }
@@ -118,6 +118,16 @@ impl Categories {
             )
             .collect()
     }
+
+    pub fn matches(&self, category: u64) -> bool {
+        if let Some(cat) = AudiobookCategory::from_id(category) {
+            self.audio.as_ref().is_none_or(|cats| cats.contains(&cat))
+        } else if let Some(cat) = EbookCategory::from_id(category) {
+            self.ebook.as_ref().is_none_or(|cats| cats.contains(&cat))
+        } else {
+            false
+        }
+    }
 }
 //
 // impl Default for Categories {
@@ -171,7 +181,7 @@ where
     deserializer.deserialize_any(CategoriesParser(PhantomData))
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(try_from = "String")]
 pub enum AudiobookCategory {
     ActionAdventure,
@@ -314,6 +324,47 @@ impl AudiobookCategory {
         }
     }
 
+    fn from_id(category: u64) -> Option<AudiobookCategory> {
+        match category {
+            39 => Some(AudiobookCategory::ActionAdventure),
+            49 => Some(AudiobookCategory::Art),
+            50 => Some(AudiobookCategory::Biographical),
+            83 => Some(AudiobookCategory::Business),
+            51 => Some(AudiobookCategory::ComputerInternet),
+            97 => Some(AudiobookCategory::Crafts),
+            40 => Some(AudiobookCategory::CrimeThriller),
+            41 => Some(AudiobookCategory::Fantasy),
+            106 => Some(AudiobookCategory::Food),
+            42 => Some(AudiobookCategory::GeneralFiction),
+            52 => Some(AudiobookCategory::GeneralNonFic),
+            98 => Some(AudiobookCategory::HistoricalFiction),
+            54 => Some(AudiobookCategory::History),
+            55 => Some(AudiobookCategory::HomeGarden),
+            43 => Some(AudiobookCategory::Horror),
+            99 => Some(AudiobookCategory::Humor),
+            84 => Some(AudiobookCategory::Instructional),
+            44 => Some(AudiobookCategory::Juvenile),
+            56 => Some(AudiobookCategory::Language),
+            45 => Some(AudiobookCategory::LiteraryClassics),
+            57 => Some(AudiobookCategory::MathScienceTech),
+            85 => Some(AudiobookCategory::Medical),
+            87 => Some(AudiobookCategory::Mystery),
+            119 => Some(AudiobookCategory::Nature),
+            88 => Some(AudiobookCategory::Philosophy),
+            58 => Some(AudiobookCategory::PolSocRelig),
+            59 => Some(AudiobookCategory::Recreation),
+            46 => Some(AudiobookCategory::Romance),
+            47 => Some(AudiobookCategory::ScienceFiction),
+            53 => Some(AudiobookCategory::SelfHelp),
+            89 => Some(AudiobookCategory::TravelAdventure),
+            100 => Some(AudiobookCategory::TrueCrime),
+            108 => Some(AudiobookCategory::UrbanFantasy),
+            48 => Some(AudiobookCategory::Western),
+            111 => Some(AudiobookCategory::YoungAdult),
+            _ => None,
+        }
+    }
+
     pub fn to_id(self) -> u8 {
         match self {
             AudiobookCategory::ActionAdventure => 39,
@@ -367,7 +418,7 @@ impl TryFrom<String> for AudiobookCategory {
     }
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(try_from = "String")]
 pub enum EbookCategory {
     ActionAdventure,
@@ -529,6 +580,51 @@ impl EbookCategory {
         }
     }
 
+    fn from_id(category: u64) -> Option<EbookCategory> {
+        match category {
+            60 => Some(EbookCategory::ActionAdventure),
+            71 => Some(EbookCategory::Art),
+            72 => Some(EbookCategory::Biographical),
+            90 => Some(EbookCategory::Business),
+            61 => Some(EbookCategory::ComicsGraphicnovels),
+            73 => Some(EbookCategory::ComputerInternet),
+            101 => Some(EbookCategory::Crafts),
+            62 => Some(EbookCategory::CrimeThriller),
+            63 => Some(EbookCategory::Fantasy),
+            107 => Some(EbookCategory::Food),
+            64 => Some(EbookCategory::GeneralFiction),
+            74 => Some(EbookCategory::GeneralNonFiction),
+            102 => Some(EbookCategory::HistoricalFiction),
+            76 => Some(EbookCategory::History),
+            77 => Some(EbookCategory::HomeGarden),
+            65 => Some(EbookCategory::Horror),
+            103 => Some(EbookCategory::Humor),
+            115 => Some(EbookCategory::IllusionMagic),
+            91 => Some(EbookCategory::Instructional),
+            66 => Some(EbookCategory::Juvenile),
+            78 => Some(EbookCategory::Language),
+            67 => Some(EbookCategory::LiteraryClassics),
+            79 => Some(EbookCategory::MagazinesNewspapers),
+            80 => Some(EbookCategory::MathScienceTech),
+            92 => Some(EbookCategory::Medical),
+            118 => Some(EbookCategory::MixedCollections),
+            94 => Some(EbookCategory::Mystery),
+            120 => Some(EbookCategory::Nature),
+            95 => Some(EbookCategory::Philosophy),
+            81 => Some(EbookCategory::PolSocRelig),
+            82 => Some(EbookCategory::Recreation),
+            68 => Some(EbookCategory::Romance),
+            69 => Some(EbookCategory::ScienceFiction),
+            75 => Some(EbookCategory::SelfHelp),
+            96 => Some(EbookCategory::TravelAdventure),
+            104 => Some(EbookCategory::TrueCrime),
+            109 => Some(EbookCategory::UrbanFantasy),
+            70 => Some(EbookCategory::Western),
+            112 => Some(EbookCategory::YoungAdult),
+            _ => None,
+        }
+    }
+
     pub fn to_id(self) -> u8 {
         match self {
             EbookCategory::ActionAdventure => 60,
@@ -586,7 +682,7 @@ impl TryFrom<String> for EbookCategory {
     }
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(try_from = "String")]
 pub enum Language {
     English,
@@ -732,6 +828,75 @@ impl Language {
         }
     }
 
+    pub fn from_id(id: u8) -> Option<Language> {
+        match id {
+            1 => Some(Language::English),
+            17 => Some(Language::Afrikaans),
+            32 => Some(Language::Arabic),
+            35 => Some(Language::Bengali),
+            51 => Some(Language::Bosnian),
+            18 => Some(Language::Bulgarian),
+            6 => Some(Language::Burmese),
+            44 => Some(Language::Cantonese),
+            19 => Some(Language::Catalan),
+            2 => Some(Language::Chinese),
+            49 => Some(Language::Croatian),
+            20 => Some(Language::Czech),
+            21 => Some(Language::Danish),
+            22 => Some(Language::Dutch),
+            61 => Some(Language::Estonian),
+            39 => Some(Language::Farsi),
+            23 => Some(Language::Finnish),
+            36 => Some(Language::French),
+            37 => Some(Language::German),
+            26 => Some(Language::Greek),
+            59 => Some(Language::GreekAncient),
+            3 => Some(Language::Gujarati),
+            27 => Some(Language::Hebrew),
+            8 => Some(Language::Hindi),
+            28 => Some(Language::Hungarian),
+            63 => Some(Language::Icelandic),
+            53 => Some(Language::Indonesian),
+            56 => Some(Language::Irish),
+            43 => Some(Language::Italian),
+            38 => Some(Language::Japanese),
+            12 => Some(Language::Javanese),
+            5 => Some(Language::Kannada),
+            41 => Some(Language::Korean),
+            50 => Some(Language::Lithuanian),
+            46 => Some(Language::Latin),
+            62 => Some(Language::Latvian),
+            33 => Some(Language::Malay),
+            58 => Some(Language::Malayalam),
+            57 => Some(Language::Manx),
+            9 => Some(Language::Marathi),
+            48 => Some(Language::Norwegian),
+            45 => Some(Language::Polish),
+            34 => Some(Language::Portuguese),
+            52 => Some(Language::BrazilianPortuguese),
+            14 => Some(Language::Punjabi),
+            30 => Some(Language::Romanian),
+            16 => Some(Language::Russian),
+            24 => Some(Language::ScottishGaelic),
+            60 => Some(Language::Sanskrit),
+            31 => Some(Language::Serbian),
+            54 => Some(Language::Slovenian),
+            4 => Some(Language::Spanish),
+            55 => Some(Language::CastilianSpanish),
+            40 => Some(Language::Swedish),
+            29 => Some(Language::Tagalog),
+            11 => Some(Language::Tamil),
+            10 => Some(Language::Telugu),
+            7 => Some(Language::Thai),
+            42 => Some(Language::Turkish),
+            25 => Some(Language::Ukrainian),
+            15 => Some(Language::Urdu),
+            13 => Some(Language::Vietnamese),
+            47 => Some(Language::Other),
+            _ => None,
+        }
+    }
+
     pub fn to_id(self) -> u8 {
         match self {
             Language::English => 1,
@@ -810,6 +975,119 @@ impl TryFrom<String> for Language {
             Some(l) => Ok(l),
             None => Err(format!("invalid language {value}")),
         }
+    }
+}
+
+#[derive(Clone, Default, Debug, Deserialize)]
+#[serde(try_from = "HashMap<String, bool>")]
+pub struct Flags {
+    pub crude_language: Option<bool>,
+    pub violence: Option<bool>,
+    pub some_explicit: Option<bool>,
+    pub explicit: Option<bool>,
+    pub abridged: Option<bool>,
+    pub lgbt: Option<bool>,
+}
+
+impl Flags {
+    pub fn from_bitfield(field: u8) -> Flags {
+        Flags {
+            crude_language: Some(field & (1 << 1) > 0),
+            violence: Some(field & (1 << 2) > 0),
+            some_explicit: Some(field & (1 << 3) > 0),
+            explicit: Some(field & (1 << 4) > 0),
+            abridged: Some(field & (1 << 5) > 0),
+            lgbt: Some(field & (1 << 6) > 0),
+        }
+    }
+
+    pub fn as_search_bitfield(&self) -> (bool, Vec<u8>) {
+        let shows = self.fields().filter(|f| f.unwrap_or(false)).count();
+        let hides = self.fields().filter(|f| f.is_some_and(|f| !f)).count();
+        let is_hide = hides > shows;
+        let mut field = vec![];
+        if self.crude_language.is_some_and(|f| f != is_hide) {
+            field.push(1 << 1);
+        }
+        if self.violence.is_some_and(|f| f != is_hide) {
+            field.push(1 << 2);
+        }
+        if self.some_explicit.is_some_and(|f| f != is_hide) {
+            field.push(1 << 3);
+        }
+        if self.explicit.is_some_and(|f| f != is_hide) {
+            field.push(1 << 4);
+        }
+        if self.abridged.is_some_and(|f| f != is_hide) {
+            field.push(1 << 5);
+        }
+        if self.lgbt.is_some_and(|f| f != is_hide) {
+            field.push(1 << 6);
+        }
+        (is_hide, field)
+    }
+
+    pub fn as_bitfield(&self) -> u8 {
+        let mut field = 0;
+        if self.crude_language.unwrap_or_default() {
+            field += 1 << 1;
+        }
+        if self.violence.unwrap_or_default() {
+            field += 1 << 2;
+        }
+        if self.some_explicit.unwrap_or_default() {
+            field += 1 << 3;
+        }
+        if self.explicit.unwrap_or_default() {
+            field += 1 << 4;
+        }
+        if self.abridged.unwrap_or_default() {
+            field += 1 << 5;
+        }
+        if self.lgbt.unwrap_or_default() {
+            field += 1 << 6;
+        }
+        field
+    }
+
+    pub fn matches(&self, other: &Flags) -> bool {
+        self.fields()
+            .zip(other.fields())
+            .all(|(t, o)| t.is_none_or(|_| t == o))
+    }
+
+    fn fields(&self) -> impl Iterator<Item = Option<bool>> {
+        [
+            self.crude_language,
+            self.violence,
+            self.some_explicit,
+            self.explicit,
+            self.abridged,
+            self.lgbt,
+        ]
+        .into_iter()
+    }
+}
+
+impl TryFrom<HashMap<String, bool>> for Flags {
+    type Error = String;
+
+    fn try_from(value: HashMap<String, bool>) -> Result<Self, Self::Error> {
+        let mut flags = Flags::default();
+        for (key, value) in value.into_iter() {
+            match key.to_lowercase().as_str() {
+                "crude" => flags.crude_language = Some(value),
+                "language" => flags.crude_language = Some(value),
+                "crude language" => flags.crude_language = Some(value),
+                "violence" => flags.violence = Some(value),
+                "some explicit" => flags.some_explicit = Some(value),
+                "explicit" => flags.explicit = Some(value),
+                "abridged" => flags.abridged = Some(value),
+                "lgbt" => flags.lgbt = Some(value),
+                _ => return Err(format!("invalid flag {key}")),
+            }
+        }
+        Ok(flags)
     }
 }
 

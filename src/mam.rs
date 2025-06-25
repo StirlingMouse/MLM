@@ -1,17 +1,20 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{Context, Error, Result};
+use bytes::Bytes;
 use cookie::Cookie;
+use htmlentity::entity::{self, ICodedDataTrait as _};
 use native_db::Database;
 use reqwest::Url;
 use reqwest_cookie_store::CookieStoreRwLock;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
+use unidecode::unidecode;
 
 use crate::{
     config::Config,
     data,
-    mam_enums::{Categories, Language, SearchIn, UserClass},
+    mam_enums::{SearchIn, UserClass},
 };
 
 fn is_false(value: &bool) -> bool {
@@ -155,6 +158,7 @@ pub struct Tor<'a> {
     #[serde(skip_serializing_if = "is_zero")]
     pub unit: u64,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "browseFlagsHideVsShow")]
     pub browse_flags_hide_vs_show: Option<u8>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -251,12 +255,12 @@ pub struct SearchError {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MaMTorrent {
-    pub id: i64,
+    pub id: u64,
     pub added: String,
     #[serde(deserialize_with = "json_or_default")]
     pub author_info: BTreeMap<u64, String>,
     pub bookmarked: Option<u64>,
-    pub browseflags: u64,
+    pub browseflags: u8,
     pub category: u64,
     pub catname: String,
     pub cat: String,
@@ -268,7 +272,7 @@ pub struct MaMTorrent {
     pub free: i64,
     pub isbn: Option<Value>,
     pub lang_code: String,
-    pub language: u64,
+    pub language: u8,
     pub leechers: u64,
     pub main_cat: u64,
     pub my_snatched: u64,
@@ -276,8 +280,8 @@ pub struct MaMTorrent {
     pub narrator_info: BTreeMap<u64, String>,
     pub numfiles: u64,
     pub owner: u64,
-    // number if name is only digits
-    pub owner_name: Value,
+    #[serde(deserialize_with = "string_or_number")]
+    pub owner_name: String,
     pub personal_freeleech: u64,
     pub seeders: u64,
     #[serde(deserialize_with = "json_or_default")]
@@ -288,6 +292,64 @@ pub struct MaMTorrent {
     pub title: String,
     pub vip: u64,
     pub w: u64,
+}
+
+impl MaMTorrent {
+    pub fn as_meta(&self) -> Result<data::TorrentMeta> {
+        let authors = self
+            .author_info
+            .values()
+            .map(|a| clean_value(a))
+            .collect::<Result<Vec<_>>>()?;
+        let narrators = self
+            .narrator_info
+            .values()
+            .map(|n| clean_value(n))
+            .collect::<Result<Vec<_>>>()?;
+        let series = self
+            .series_info
+            .values()
+            .map(|(series_name, series_num)| {
+                let series_name = clean_value(series_name)?;
+                Ok((series_name, series_num.clone()))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(data::TorrentMeta {
+            mam_id: self.id,
+            main_cat: data::MainCat::from_id(self.main_cat).ok_or_else(|| {
+                Error::msg(format!(
+                    "Unknown main_cat {} for torrent {}",
+                    self.main_cat, self.id,
+                ))
+            })?,
+            filetype: self.filetype.to_owned(),
+            title: self.title.to_owned(),
+            authors,
+            narrators,
+            series,
+        })
+    }
+}
+
+pub fn clean_value(value: &str) -> Result<String> {
+    entity::decode(value.as_bytes()).to_string()
+}
+
+pub fn normalize_title(value: &str) -> String {
+    unidecode(value).to_lowercase()
+}
+
+fn string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v = Value::deserialize(deserializer)?;
+    match v {
+        Value::String(v) => Ok(v),
+        Value::Number(v) => Ok(v.to_string()),
+        _ => Err(serde::de::Error::custom("expected number or string")),
+    }
 }
 
 fn json_or_default<'de, T, D>(deserializer: D) -> Result<T, D::Error>
@@ -382,6 +444,20 @@ impl<'a> MaM<'a> {
         Ok(resp)
     }
 
+    pub async fn get_torrent_file(&self, dl_hash: &str) -> Result<Bytes> {
+        let resp = self
+            .client
+            .get(format!(
+                "https://www.myanonamouse.net/tor/download.php/{dl_hash}"
+            ))
+            .send()
+            .await?
+            .error_for_status()?
+            .bytes()
+            .await?;
+        Ok(resp)
+        // println!("response: {torrent_file}");
+    }
     pub async fn get_torrent_info(&self, hash: &str) -> Result<Option<MaMTorrent>> {
         // let resp = self
         //     .client
