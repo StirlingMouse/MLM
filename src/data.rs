@@ -52,7 +52,7 @@ pub mod v1 {
         #[primary_key]
         pub mam_id: u64,
         pub dl_link: String,
-        pub unsat_buffer: Option<u8>,
+        pub unsat_buffer: Option<u64>,
         pub category: Option<String>,
         pub tags: Vec<String>,
         #[secondary_key]
@@ -75,12 +75,14 @@ pub mod v1 {
     pub enum MainCat {
         Audio,
         Ebook,
+        Music,
     }
     impl MainCat {
         pub(crate) fn from_id(main_cat: u64) -> Option<MainCat> {
             match main_cat {
                 13 => Some(MainCat::Audio),
                 14 => Some(MainCat::Ebook),
+                15 => Some(MainCat::Music),
                 _ => None,
             }
         }

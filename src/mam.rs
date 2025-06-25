@@ -110,7 +110,8 @@ pub struct SearchQuery<'a> {
     #[serde(skip_serializing_if = "is_false")]
     pub isbn: bool,
     /// int in range of 5 to 100, telling how many results to return
-    pub perpage: u8,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub perpage: u64,
 
     #[serde(borrow)]
     pub tor: Tor<'a>,
@@ -119,8 +120,10 @@ pub struct SearchQuery<'a> {
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Tor<'a> {
     #[serde(rename = "searchIn")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub target: Option<SearchTarget>,
     #[serde(rename = "searchType")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<SearchKind>,
 
     /// Text to search for
@@ -201,6 +204,7 @@ pub struct Tor<'a> {
 
     /// Number of entries to skip. Used in pagination.
     #[serde(rename = "startNumber")]
+    #[serde(skip_serializing_if = "is_zero")]
     pub start_number: u64,
 }
 
@@ -265,12 +269,16 @@ pub struct MaMTorrent {
     pub catname: String,
     pub cat: String,
     pub comments: u64,
+    #[serde(default)]
+    #[serde(deserialize_with = "opt_string_or_number")]
     pub description: Option<String>,
     pub dl: Option<String>,
     pub filetype: String,
     pub fl_vip: i64,
     pub free: i64,
-    pub isbn: Option<Value>,
+    #[serde(default)]
+    #[serde(deserialize_with = "opt_string_or_number")]
+    pub isbn: Option<String>,
     pub lang_code: String,
     pub language: u8,
     pub leechers: u64,
@@ -287,8 +295,10 @@ pub struct MaMTorrent {
     #[serde(deserialize_with = "json_or_default")]
     pub series_info: BTreeMap<u64, (String, String)>,
     pub size: String,
+    #[serde(deserialize_with = "string_or_number")]
     pub tags: String,
     pub times_completed: u64,
+    #[serde(deserialize_with = "string_or_number")]
     pub title: String,
     pub vip: u64,
     pub w: u64,
@@ -340,6 +350,19 @@ pub fn normalize_title(value: &str) -> String {
     unidecode(value).to_lowercase()
 }
 
+fn opt_string_or_number<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v = Option::<Value>::deserialize(deserializer)?;
+    match v {
+        Some(Value::String(v)) => Ok(Some(v)),
+        Some(Value::Number(v)) => Ok(Some(v.to_string())),
+        None => Ok(None),
+        _ => Err(serde::de::Error::custom("expected number or string")),
+    }
+}
+
 fn string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: Deserializer<'de>,
@@ -367,11 +390,11 @@ where
 pub struct MaM<'a> {
     jar: Arc<CookieStoreRwLock>,
     client: reqwest::Client,
-    db: &'a Database<'a>,
+    db: Arc<Database<'a>>,
 }
 
 impl<'a> MaM<'a> {
-    pub async fn new(config: &Config, db: &'a Database<'a>) -> Result<MaM<'a>> {
+    pub async fn new(config: &Config, db: Arc<Database<'a>>) -> Result<MaM<'a>> {
         let jar: CookieStoreRwLock = Default::default();
         let url = "https://www.myanonamouse.net".parse::<Url>().unwrap();
 
@@ -512,11 +535,13 @@ impl<'a> MaM<'a> {
             if resp.error == "Nothing returned, out of 0" {
                 return Ok(SearchResult::default());
             } else {
-                println!("resp: {resp:?}");
                 return Err(Error::msg(resp.error));
             }
         };
-        let resp: SearchResult = serde_json::from_str(&resp).context("parse mam response")?;
+        let resp: SearchResult = serde_json::from_str(&resp).map_err(|err| {
+            eprintln!("Error parsing mam response: {err}\nResponse: {resp}");
+            err
+        })?;
         self.store_cookies();
         Ok(resp)
     }

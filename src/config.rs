@@ -12,7 +12,7 @@ use crate::{
 pub struct Config {
     pub mam_id: String,
     #[serde(default = "default_unsat_buffer")]
-    pub unsat_buffer: u8,
+    pub unsat_buffer: u64,
 
     #[serde(rename = "autograb")]
     pub autograbs: Vec<TorrentFilter>,
@@ -42,7 +42,7 @@ pub struct TorrentFilter {
     pub search_in: Vec<SearchIn>,
     #[serde(flatten)]
     pub filter: Filter,
-    pub unsat_buffer: Option<u8>,
+    pub unsat_buffer: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -137,7 +137,7 @@ pub enum Cost {
     All,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QbitConfig {
     pub url: String,
@@ -155,19 +155,19 @@ pub struct Library {
     pub library_dir: PathBuf,
 }
 
-fn default_unsat_buffer() -> u8 {
+fn default_unsat_buffer() -> u64 {
     10
 }
 
 fn default_audio_types() -> Vec<String> {
-    ["m4b", "mp3", "ogg"]
+    ["m4b", "m4a", "mp4", "mp3", "ogg"]
         .iter()
         .map(ToString::to_string)
         .collect()
 }
 
 fn default_ebook_types() -> Vec<String> {
-    ["cbz", "epub", "pdf", "mobi", "azw3", "cbr"]
+    ["cbz", "epub", "pdf", "mobi", "azw3", "azw", "cbr"]
         .iter()
         .map(ToString::to_string)
         .collect()

@@ -1,4 +1,4 @@
-use std::{ops::RangeInclusive, time::Duration};
+use std::{ops::RangeInclusive, sync::Arc, time::Duration};
 
 use crate::{
     config::{Config, Cost, TorrentFilter, Type},
@@ -8,28 +8,35 @@ use crate::{
 };
 use anyhow::{Error, Result};
 use lava_torrent::torrent::v1::Torrent;
-use native_db::Database;
+use native_db::{Database, db_type};
 use qbit::parameters::TorrentAddUrls;
 use tokio::time::sleep;
 
 pub async fn run_autograbbers(
-    config: &Config,
-    db: &Database<'_>,
+    config: Arc<Config>,
+    db: Arc<Database<'_>>,
     qbit: &qbit::Api,
-    mam: &MaM<'_>,
+    mam: Arc<MaM<'_>>,
 ) -> Result<()> {
     let user_info = mam.user_info().await?;
     let max_torrents = user_info
         .classname
         .unsats()
-        .saturating_sub(user_info.unsat.count as u8);
+        .saturating_sub(user_info.unsat.count);
     println!("user_info: {user_info:#?}; max_torrents: {max_torrents}");
 
     for autograb_config in &config.autograbs {
         let max_torrents = max_torrents
             .saturating_sub(autograb_config.unsat_buffer.unwrap_or(config.unsat_buffer));
         if max_torrents > 0 {
-            autograb(config, db, autograb_config, mam, max_torrents).await?;
+            autograb(
+                config.clone(),
+                db.clone(),
+                autograb_config,
+                mam.clone(),
+                max_torrents,
+            )
+            .await?;
         }
     }
 
@@ -59,6 +66,7 @@ pub async fn run_autograbbers(
         qbit.add_torrent(TorrentAddUrls {
             torrents: vec![torrent_file_bytes.iter().copied().collect()],
             stopped: true,
+            auto_tmm: Some(true),
             category: torrent.category.clone(),
             tags: if torrent.tags.is_empty() {
                 None
@@ -76,25 +84,30 @@ pub async fn run_autograbbers(
                 library_path: None,
                 title_search: torrent.title_search.clone(),
                 meta: torrent.meta.clone(),
+            })
+            .or_else(|err| {
+                if let db_type::Error::DuplicateKey { .. } = err {
+                    Ok(())
+                } else {
+                    Err(err)
+                }
             })?;
             rw.remove(torrent)?;
             rw.commit()?;
         }
-        println!("Added and should be deleted",);
         sleep(Duration::from_millis(1000)).await;
         snatched_torrents += 1;
-        // return Ok(());
     }
 
     Ok(())
 }
 
 pub async fn autograb(
-    config: &Config,
-    db: &Database<'_>,
+    config: Arc<Config>,
+    db: Arc<Database<'_>>,
     torrent_filter: &TorrentFilter,
-    mam: &MaM<'_>,
-    max_torrents: u8,
+    mam: Arc<MaM<'_>>,
+    max_torrents: u64,
 ) -> Result<()> {
     let target = match torrent_filter.kind {
         Type::Bookmarks => Some(SearchTarget::Bookmarks),
@@ -172,6 +185,7 @@ pub async fn autograb(
         let preferred_types = match meta.main_cat {
             data::MainCat::Audio => &config.audio_types,
             data::MainCat::Ebook => &config.ebook_types,
+            data::MainCat::Music => &config.ebook_types,
         };
         let preference = preferred_types.iter().position(|t| t == &meta.filetype);
         if preference.is_none() {

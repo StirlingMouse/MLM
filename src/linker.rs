@@ -2,13 +2,14 @@ use std::{
     fs::{File, create_dir_all, hard_link},
     io::{BufWriter, Write},
     path::{Component, PathBuf},
+    sync::Arc,
 };
 
 use anyhow::{Context, Result};
 use native_db::Database;
 use qbit::{models::TorrentContent, parameters::TorrentListParams};
 use regex::Regex;
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::{
     config::{Config, QbitConfig},
@@ -18,10 +19,10 @@ use crate::{
 };
 
 pub async fn link_torrents_to_library(
-    config: &Config,
-    db: &Database<'_>,
-    qbit: (&QbitConfig, qbit::Api),
-    mam: &MaM<'_>,
+    config: Arc<Config>,
+    db: Arc<Database<'_>>,
+    qbit: (&QbitConfig, &qbit::Api),
+    mam: Arc<MaM<'_>>,
 ) -> Result<()> {
     let disk_pattern = Regex::new(r"(?:CD|Disc|Disk)\s*(\d+)").unwrap();
 
@@ -109,15 +110,11 @@ pub async fn link_torrents_to_library(
         let mut titles = mam_torrent.title.splitn(2, ":");
         let title = titles.next().unwrap();
         let subtitle = titles.next().map(|t| t.trim());
-        let isbn_raw = match &mam_torrent.isbn {
-            Some(Value::String(isbn)) => isbn.to_owned(),
-            Some(Value::Number(isbn)) => isbn.to_string(),
-            _ => "".to_string(),
-        };
+        let isbn_raw: &str = mam_torrent.isbn.as_deref().unwrap_or("");
         let isbn = if isbn_raw.is_empty() || isbn_raw.starts_with("ASIN:") {
             None
         } else {
-            Some(&isbn_raw[..])
+            Some(isbn_raw)
         };
         let asin = isbn_raw.strip_prefix("ASIN:");
         let meta = mam_torrent.as_meta()?;

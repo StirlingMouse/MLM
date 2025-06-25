@@ -1143,7 +1143,7 @@ impl UserClass {
         }
     }
 
-    pub fn unsats(&self) -> u8 {
+    pub fn unsats(&self) -> u64 {
         match self {
             UserClass::Dev
             | UserClass::SysOp
