@@ -324,12 +324,18 @@ impl MaMTorrent {
                 Ok((series_name, series_num.clone()))
             })
             .collect::<Result<Vec<_>>>()?;
+        let main_cat = data::MainCat::from_id(self.main_cat)
+            .ok_or_else(|| MetaError::UnknownMainCat(self.main_cat))?;
+        let filetypes = self
+            .filetype
+            .split(" ")
+            .map(|t| t.to_owned())
+            .collect::<Vec<_>>();
 
         Ok(data::TorrentMeta {
             mam_id: self.id,
-            main_cat: data::MainCat::from_id(self.main_cat)
-                .ok_or_else(|| MetaError::UnknownMainCat(self.main_cat))?,
-            filetype: self.filetype.to_owned(),
+            main_cat,
+            filetypes,
             title: self.title.to_owned(),
             authors,
             narrators,
@@ -467,7 +473,7 @@ impl<'a> MaM<'a> {
             .error_for_status()?
             .json()
             .await?;
-        self.store_cookies();
+        // self.store_cookies();
         Ok(resp)
     }
 
@@ -546,7 +552,7 @@ impl<'a> MaM<'a> {
             eprintln!("Error parsing mam response: {err}\nResponse: {resp}");
             err
         })?;
-        self.store_cookies();
+        // self.store_cookies();
         Ok(resp)
     }
 

@@ -1,4 +1,4 @@
-use crate::data::{SelectedTorrent, Torrent, TorrentMeta};
+use crate::data::{Torrent, TorrentMeta};
 
 impl Torrent {
     pub fn matches(&self, other: &Torrent) -> bool {
@@ -14,6 +14,7 @@ impl TorrentMeta {
     pub(crate) fn matches(&self, other: &TorrentMeta) -> bool {
         self.main_cat == other.main_cat
             && self.authors.iter().any(|a| other.authors.contains(a))
-            && self.narrators.iter().any(|a| other.narrators.contains(a))
+            && ((self.narrators.is_empty() && other.narrators.is_empty())
+                || self.narrators.iter().any(|a| other.narrators.contains(a)))
     }
 }

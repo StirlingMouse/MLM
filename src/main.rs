@@ -3,6 +3,7 @@ mod cleaner;
 mod config;
 mod data;
 mod data_impl;
+mod exporter;
 mod linker;
 mod mam;
 mod mam_enums;
@@ -34,9 +35,6 @@ async fn main() -> Result<()> {
     println!("config: {config:#?}");
 
     let db = native_db::Builder::new().create(&data::MODELS, "data.db")?;
-    let rw = db.rw_transaction()?;
-    rw.migrate::<data::Torrent>()?;
-    rw.commit()?;
     let db = Arc::new(db);
 
     let mam = MaM::new(&config, db.clone()).await?;

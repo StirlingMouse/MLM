@@ -2,13 +2,13 @@ use std::{ops::RangeInclusive, sync::Arc, time::Duration};
 
 use crate::{
     config::{Config, Cost, TorrentFilter, Type},
-    data,
+    data::{self, ErroredTorrent, ErroredTorrentId, SelectedTorrent, TorrentMeta},
     mam::{MaM, MetaError, SearchKind, SearchQuery, SearchTarget, Tor, normalize_title},
     qbittorrent::QbitError,
 };
 use anyhow::{Error, Result};
 use lava_torrent::torrent::v1::Torrent;
-use native_db::{Database, db_type};
+use native_db::{Database, db_type, transaction::RwTransaction};
 use qbit::parameters::TorrentAddUrls;
 use tokio::time::sleep;
 
@@ -29,7 +29,7 @@ pub async fn run_autograbbers(
         let max_torrents = max_torrents
             .saturating_sub(autograb_config.unsat_buffer.unwrap_or(config.unsat_buffer));
         if max_torrents > 0 {
-            autograb(
+            select_torrents(
                 config.clone(),
                 db.clone(),
                 autograb_config,
@@ -56,45 +56,14 @@ pub async fn run_autograbbers(
             continue;
         }
 
-        println!(
-            "Grabbing torrent \"{}\" in format {}, with category {:?} and tags {:?}",
-            torrent.meta.title, torrent.meta.filetype, torrent.category, torrent.tags,
-        );
-        let torrent_file_bytes = mam.get_torrent_file(&torrent.dl_link).await?;
-        let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
-        let hash = torrent_file.info_hash();
-        qbit.add_torrent(TorrentAddUrls {
-            torrents: vec![torrent_file_bytes.iter().copied().collect()],
-            stopped: config.add_torrents_stopped,
-            category: torrent.category.clone(),
-            tags: if torrent.tags.is_empty() {
-                None
-            } else {
-                Some(torrent.tags.clone())
-            },
-            ..TorrentAddUrls::deafult(vec![])
-        })
-        .await
-        .map_err(QbitError)?;
-        {
-            let rw = db.rw_transaction()?;
-            rw.insert(data::Torrent {
-                hash,
-                library_path: None,
-                library_files: Default::default(),
-                title_search: torrent.title_search.clone(),
-                meta: torrent.meta.clone(),
-            })
-            .or_else(|err| {
-                if let db_type::Error::DuplicateKey { .. } = err {
-                    Ok(())
-                } else {
-                    Err(err)
-                }
-            })?;
-            rw.remove(torrent)?;
-            rw.commit()?;
+        let mam_id = torrent.mam_id;
+        let title = torrent.meta.title.clone();
+        if let Err(err) = grab_torrent(&config, &db, qbit, &mam, torrent).await {
+            if let Err(err) = add_errored_torrent(&db, mam_id, title, err) {
+                eprintln!("Error writing errored torrent: {err}");
+            }
         }
+
         sleep(Duration::from_millis(1000)).await;
         snatched_torrents += 1;
     }
@@ -102,7 +71,7 @@ pub async fn run_autograbbers(
     Ok(())
 }
 
-pub async fn autograb(
+pub async fn select_torrents(
     config: Arc<Config>,
     db: Arc<Database<'_>>,
     torrent_filter: &TorrentFilter,
@@ -194,9 +163,10 @@ pub async fn autograb(
         let preferred_types = match meta.main_cat {
             data::MainCat::Audio => &config.audio_types,
             data::MainCat::Ebook => &config.ebook_types,
-            data::MainCat::Music => &config.ebook_types,
         };
-        let preference = preferred_types.iter().position(|t| t == &meta.filetype);
+        let preference = preferred_types
+            .iter()
+            .position(|t| meta.filetypes.contains(t));
         if preference.is_none() {
             continue;
         }
@@ -209,18 +179,24 @@ pub async fn autograb(
             }?;
             for old in old_selected {
                 println!(
-                    "Checking old torrent {} with format {}",
-                    old.title_search, old.meta.filetype
+                    "Checking old torrent {} with formats {:?}",
+                    old.title_search, old.meta.filetypes
                 );
                 if meta.matches(&old.meta) {
-                    let old_preference =
-                        preferred_types.iter().position(|t| t == &old.meta.filetype);
+                    let old_preference = preferred_types
+                        .iter()
+                        .position(|t| old.meta.filetypes.contains(t));
                     if old_preference <= preference {
+                        if old_preference == preference {
+                            if let Err(err) = add_duplicate_torrent(&rw, None, title_search, meta) {
+                                eprintln!("Error writing duplicate torrent: {err}");
+                            }
+                        }
                         continue 'torrent;
                     } else {
                         println!(
-                            "Unselecting torrent \"{}\" in format {}",
-                            old.meta.title, old.meta.filetype
+                            "Unselecting torrent \"{}\" with formats {:?}",
+                            old.meta.title, old.meta.filetypes
                         );
                         rw.remove(old)?;
                     }
@@ -236,18 +212,26 @@ pub async fn autograb(
             }?;
             for old in old_library {
                 println!(
-                    "Checking old torrent {} with format {}",
-                    old.title_search, old.meta.filetype
+                    "Checking old torrent {} with formats {:?}",
+                    old.title_search, old.meta.filetypes
                 );
                 if meta.matches(&old.meta) {
-                    let old_preference =
-                        preferred_types.iter().position(|t| t == &old.meta.filetype);
+                    let old_preference = preferred_types
+                        .iter()
+                        .position(|t| old.meta.filetypes.contains(t));
                     if old_preference <= preference {
+                        if old_preference == preference {
+                            if let Err(err) =
+                                add_duplicate_torrent(&rw, Some(old.hash), title_search, meta)
+                            {
+                                eprintln!("Error writing duplicate torrent: {err}");
+                            }
+                        }
                         continue 'torrent;
                     } else {
                         println!(
-                            "Selecting replacement for library torrent \"{}\" in format {}",
-                            old.meta.title, old.meta.filetype
+                            "Selecting replacement for library torrent \"{}\" with formats {:?}",
+                            old.meta.title, old.meta.filetypes
                         );
                     }
                 }
@@ -286,5 +270,86 @@ pub async fn autograb(
         rw.commit()?;
     }
 
+    Ok(())
+}
+
+async fn grab_torrent(
+    config: &Config,
+    db: &Database<'_>,
+    qbit: &qbit::Api,
+    mam: &MaM<'_>,
+    torrent: SelectedTorrent,
+) -> Result<()> {
+    println!(
+        "Grabbing torrent \"{}\", with category {:?} and tags {:?}",
+        torrent.meta.title, torrent.category, torrent.tags,
+    );
+    let torrent_file_bytes = mam.get_torrent_file(&torrent.dl_link).await?;
+    let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
+    let hash = torrent_file.info_hash();
+    qbit.add_torrent(TorrentAddUrls {
+        torrents: vec![torrent_file_bytes.iter().copied().collect()],
+        stopped: config.add_torrents_stopped,
+        category: torrent.category.clone(),
+        tags: if torrent.tags.is_empty() {
+            None
+        } else {
+            Some(torrent.tags.clone())
+        },
+        ..TorrentAddUrls::deafult(vec![])
+    })
+    .await
+    .map_err(QbitError)?;
+
+    let rw = db.rw_transaction()?;
+    rw.insert(data::Torrent {
+        hash,
+        library_path: None,
+        library_files: Default::default(),
+        title_search: torrent.title_search.clone(),
+        meta: torrent.meta.clone(),
+        replaced_with: None,
+        request_matadata_update: false,
+    })
+    .or_else(|err| {
+        if let db_type::Error::DuplicateKey { .. } = err {
+            println!("Got dup key on {:?}", torrent);
+            Ok(())
+        } else {
+            Err(err)
+        }
+    })?;
+    rw.remove(torrent)?;
+    rw.commit()?;
+
+    Ok(())
+}
+
+fn add_duplicate_torrent(
+    rw: &RwTransaction<'_>,
+    duplicate_of: Option<String>,
+    title_search: String,
+    meta: TorrentMeta,
+) -> Result<()> {
+    rw.upsert(data::DuplicateTorrent {
+        mam_id: meta.mam_id,
+        title_search,
+        meta,
+        duplicate_of,
+        request_replace: false,
+    })?;
+    Ok(())
+}
+
+fn add_errored_torrent(db: &Database<'_>, mam_id: u64, torrent: String, err: Error) -> Result<()> {
+    println!("add_errored_torrent {torrent} - {err} - Grabber");
+    let rw = db.rw_transaction()?;
+    rw.upsert(ErroredTorrent {
+        id: ErroredTorrentId::Grabber(mam_id),
+        title: torrent,
+        error: format!("{err}"),
+        meta: None,
+    })?;
+    rw.commit()?;
     Ok(())
 }

@@ -1,20 +1,26 @@
 use std::{fs, io::ErrorKind, mem, ops::Deref, os::unix::fs::MetadataExt, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{Error, Result};
 use native_db::Database;
 
-use crate::{config::Config, data, qbittorrent::QbitError};
+use crate::{
+    config::Config,
+    data::{self, ErroredTorrent, ErroredTorrentId, Torrent},
+    qbittorrent::QbitError,
+};
 
 pub async fn run_library_cleaner(config: Arc<Config>, db: Arc<Database<'_>>) -> Result<()> {
-    let r = db.r_transaction()?;
-    let torrents = r
-        .scan()
-        .secondary::<data::Torrent>(data::TorrentKey::title_search)?;
-    let torrents: Vec<data::Torrent> = torrents
-        .all()?
-        .filter_map(|t| t.ok())
-        .filter(|t| t.library_path.is_some())
-        .collect();
+    let torrents: Vec<data::Torrent> = {
+        let r = db.r_transaction()?;
+        let torrents = r
+            .scan()
+            .secondary::<data::Torrent>(data::TorrentKey::title_search)?;
+        torrents
+            .all()?
+            .filter_map(|t| t.ok())
+            .filter(|t| t.library_path.is_some())
+            .collect()
+    };
     let mut batch: Vec<data::Torrent> = vec![];
     for torrent in torrents {
         if let Some(current) = batch.first() {
@@ -63,11 +69,10 @@ async fn process_batch(
                 let preferred_types = match torrent.meta.main_cat {
                     data::MainCat::Audio => &config.audio_types,
                     data::MainCat::Ebook => &config.ebook_types,
-                    data::MainCat::Music => &config.ebook_types,
                 };
                 let preference = preferred_types
                     .iter()
-                    .position(|t| t == &torrent.meta.filetype)
+                    .position(|t| torrent.meta.filetypes.contains(t))
                     .unwrap_or(usize::MAX);
                 (torrent, preference)
             })
@@ -100,73 +105,102 @@ async fn process_batch(
         }
         let (keep, _) = batch.remove(0);
         for (remove, _) in batch {
-            println!(
-                "Replacing library torrent \"{}\" in format {} with {}",
-                remove.meta.title, remove.meta.filetype, keep.meta.filetype
-            );
-            let mut updated = remove.clone();
-            let library_path = updated.library_path.take();
-            println!(
-                "keep files: {:?} {:?}",
-                keep.library_path, keep.library_files
-            );
-            println!("main_cat: {:?}", keep.meta.main_cat);
-            println!("authors: {:?}", keep.meta.authors);
-            println!("narrators: {:?}", keep.meta.narrators);
-            println!(
-                "remove files: {:?} {:?}",
-                remove.library_path, remove.library_files
-            );
-            println!("main_cat: {:?}", remove.meta.main_cat);
-            println!("authors: {:?}", remove.meta.authors);
-            println!("narrators: {:?}", remove.meta.narrators);
-            println!();
-
-            for qbit_conf in config.qbittorrent.iter() {
-                if let Some(on_cleaned) = &qbit_conf.on_cleaned {
-                    let qbit =
-                        qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
-                            .await
-                            .map_err(QbitError)?;
-
-                    if let Some(category) = &on_cleaned.category {
-                        qbit.set_category(Some(vec![&remove.hash]), category)
-                            .await
-                            .map_err(QbitError)?;
-                    }
-
-                    if !on_cleaned.tags.is_empty() {
-                        qbit.add_tags(
-                            Some(vec![&remove.hash]),
-                            on_cleaned.tags.iter().map(Deref::deref).collect(),
-                        )
-                        .await
-                        .map_err(QbitError)?;
-                    }
-                }
-                println!("qbit updated");
-            }
-
-            if let Some(library_path) = library_path {
-                for file in remove.library_files.iter() {
-                    let path = library_path.join(file);
-                    fs::remove_file(path).or_else(|err| {
-                        if err.kind() == ErrorKind::NotFound {
-                            println!("file already missing");
-                            Ok(())
-                        } else {
-                            Err(err)
-                        }
-                    })?;
+            let hash = remove.hash.clone();
+            let title = remove.meta.title.clone();
+            if let Err(err) = remove_torrent(&config, db, &keep, remove).await {
+                if let Err(err) = add_errored_torrent(db, hash, title, err) {
+                    eprintln!("Error writing errored torrent: {err}");
                 }
             }
-            println!("files removed");
-
-            let rw = db.rw_transaction()?;
-            rw.update(remove, updated)?;
-            rw.commit()?;
         }
     }
 
+    Ok(())
+}
+
+async fn remove_torrent(
+    config: &&Config,
+    db: &Database<'_>,
+    keep: &Torrent,
+    mut remove: Torrent,
+) -> Result<()> {
+    println!(
+        "Replacing library torrent \"{}\" with formats {:?} with {:?}",
+        remove.meta.title, remove.meta.filetypes, keep.meta.filetypes
+    );
+    remove.replaced_with = Some(keep.hash.clone());
+    let library_path = remove.library_path.take();
+    println!(
+        "keep files: {:?} {:?}",
+        keep.library_path, keep.library_files
+    );
+    println!("main_cat: {:?}", keep.meta.main_cat);
+    println!("authors: {:?}", keep.meta.authors);
+    println!("narrators: {:?}", keep.meta.narrators);
+    println!(
+        "remove files: {:?} {:?}",
+        remove.library_path, remove.library_files
+    );
+    println!("main_cat: {:?}", remove.meta.main_cat);
+    println!("authors: {:?}", remove.meta.authors);
+    println!("narrators: {:?}", remove.meta.narrators);
+    println!();
+
+    for qbit_conf in config.qbittorrent.iter() {
+        if let Some(on_cleaned) = &qbit_conf.on_cleaned {
+            let qbit = qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
+                .await
+                .map_err(QbitError)?;
+
+            if let Some(category) = &on_cleaned.category {
+                qbit.set_category(Some(vec![&remove.hash]), category)
+                    .await
+                    .map_err(QbitError)?;
+            }
+
+            if !on_cleaned.tags.is_empty() {
+                qbit.add_tags(
+                    Some(vec![&remove.hash]),
+                    on_cleaned.tags.iter().map(Deref::deref).collect(),
+                )
+                .await
+                .map_err(QbitError)?;
+            }
+        }
+        println!("qbit updated");
+    }
+
+    if let Some(library_path) = library_path {
+        for file in remove.library_files.iter() {
+            let path = library_path.join(file);
+            fs::remove_file(path).or_else(|err| {
+                if err.kind() == ErrorKind::NotFound {
+                    println!("file already missing");
+                    Ok(())
+                } else {
+                    Err(err)
+                }
+            })?;
+        }
+    }
+    println!("files removed");
+
+    let rw = db.rw_transaction()?;
+    rw.upsert(remove)?;
+    rw.commit()?;
+
+    Ok(())
+}
+
+fn add_errored_torrent(db: &Database<'_>, hash: String, torrent: String, err: Error) -> Result<()> {
+    println!("add_errored_torrent {torrent} - {err} - Cleaner");
+    let rw = db.rw_transaction()?;
+    rw.upsert(ErroredTorrent {
+        id: ErroredTorrentId::Cleaner(hash),
+        title: torrent,
+        error: format!("{err}"),
+        meta: None,
+    })?;
+    rw.commit()?;
     Ok(())
 }
