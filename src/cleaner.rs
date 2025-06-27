@@ -1,0 +1,172 @@
+use std::{fs, io::ErrorKind, mem, ops::Deref, os::unix::fs::MetadataExt, sync::Arc};
+
+use anyhow::Result;
+use native_db::Database;
+
+use crate::{config::Config, data, qbittorrent::QbitError};
+
+pub async fn run_library_cleaner(config: Arc<Config>, db: Arc<Database<'_>>) -> Result<()> {
+    let r = db.r_transaction()?;
+    let torrents = r
+        .scan()
+        .secondary::<data::Torrent>(data::TorrentKey::title_search)?;
+    let torrents: Vec<data::Torrent> = torrents
+        .all()?
+        .filter_map(|t| t.ok())
+        .filter(|t| t.library_path.is_some())
+        .collect();
+    let mut batch: Vec<data::Torrent> = vec![];
+    for torrent in torrents {
+        if let Some(current) = batch.first() {
+            if current.title_search == torrent.title_search {
+                batch.push(torrent);
+            } else {
+                process_batch(&config, &db, mem::take(&mut batch)).await?;
+            }
+        } else {
+            batch.push(torrent);
+        }
+    }
+    process_batch(&config, &db, batch).await?;
+
+    Ok(())
+}
+
+async fn process_batch(
+    config: &Config,
+    db: &Database<'_>,
+    batch: Vec<data::Torrent>,
+) -> Result<()> {
+    if batch.len() == 1 {
+        return Ok(());
+    };
+    let mut batches: Vec<Vec<data::Torrent>> = vec![];
+
+    for torrent in batch {
+        if let Some(sub_batch) = batches
+            .iter_mut()
+            .find(|b| b.iter().any(|t| t.matches(&torrent)))
+        {
+            sub_batch.push(torrent);
+        } else {
+            batches.push(vec![torrent]);
+        }
+    }
+
+    for batch in batches {
+        if batch.len() == 1 {
+            continue;
+        }
+        let mut batch = batch
+            .into_iter()
+            .map(|torrent| {
+                let preferred_types = match torrent.meta.main_cat {
+                    data::MainCat::Audio => &config.audio_types,
+                    data::MainCat::Ebook => &config.ebook_types,
+                    data::MainCat::Music => &config.ebook_types,
+                };
+                let preference = preferred_types
+                    .iter()
+                    .position(|t| t == &torrent.meta.filetype)
+                    .unwrap_or(usize::MAX);
+                (torrent, preference)
+            })
+            .collect::<Vec<_>>();
+        batch.sort_by_key(|(_, preference)| *preference);
+        if batch[0].1 == batch[1].1 {
+            println!(
+                "need to compare torrent \"{}\" and \"{}\" by size",
+                batch[0].0.meta.title, batch[1].0.meta.title
+            );
+            let mut new_batch = batch
+                .into_iter()
+                .map(|(torrent, preference)| {
+                    let mut size = 0;
+                    if let Some(library_path) = &torrent.library_path {
+                        for file in &torrent.library_files {
+                            let path = library_path.join(file);
+                            size += fs::metadata(path).map_or(0, |s| s.size());
+                        }
+                    }
+                    (torrent, preference, size)
+                })
+                .collect::<Vec<_>>();
+            new_batch.sort_by(|a, b| a.1.cmp(&b.1).then(b.2.cmp(&a.2)));
+            println!("new_batch {:?}", new_batch);
+            batch = new_batch
+                .into_iter()
+                .map(|(torrent, preference, _)| (torrent, preference))
+                .collect();
+        }
+        let (keep, _) = batch.remove(0);
+        for (remove, _) in batch {
+            println!(
+                "Replacing library torrent \"{}\" in format {} with {}",
+                remove.meta.title, remove.meta.filetype, keep.meta.filetype
+            );
+            let mut updated = remove.clone();
+            let library_path = updated.library_path.take();
+            println!(
+                "keep files: {:?} {:?}",
+                keep.library_path, keep.library_files
+            );
+            println!("main_cat: {:?}", keep.meta.main_cat);
+            println!("authors: {:?}", keep.meta.authors);
+            println!("narrators: {:?}", keep.meta.narrators);
+            println!(
+                "remove files: {:?} {:?}",
+                remove.library_path, remove.library_files
+            );
+            println!("main_cat: {:?}", remove.meta.main_cat);
+            println!("authors: {:?}", remove.meta.authors);
+            println!("narrators: {:?}", remove.meta.narrators);
+            println!();
+
+            for qbit_conf in config.qbittorrent.iter() {
+                if let Some(on_cleaned) = &qbit_conf.on_cleaned {
+                    let qbit =
+                        qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
+                            .await
+                            .map_err(QbitError)?;
+
+                    if let Some(category) = &on_cleaned.category {
+                        qbit.set_category(Some(vec![&remove.hash]), category)
+                            .await
+                            .map_err(QbitError)?;
+                    }
+
+                    if !on_cleaned.tags.is_empty() {
+                        qbit.add_tags(
+                            Some(vec![&remove.hash]),
+                            on_cleaned.tags.iter().map(Deref::deref).collect(),
+                        )
+                        .await
+                        .map_err(QbitError)?;
+                    }
+                }
+                println!("qbit updated");
+            }
+
+            if let Some(library_path) = library_path {
+                for file in remove.library_files.iter() {
+                    let path = library_path.join(file);
+                    fs::remove_file(path).or_else(|err| {
+                        if err.kind() == ErrorKind::NotFound {
+                            println!("file already missing");
+                            Ok(())
+                        } else {
+                            Err(err)
+                        }
+                    })?;
+                }
+            }
+            println!("files removed");
+
+            let rw = db.rw_transaction()?;
+            rw.update(remove, updated)?;
+            rw.commit()?;
+        }
+    }
+
+    Ok(())
+}

@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use anyhow::{Context, Error, Result};
+use anyhow::{Error, Result};
 use bytes::Bytes;
 use cookie::Cookie;
 use htmlentity::entity::{self, ICodedDataTrait as _};
@@ -305,7 +305,7 @@ pub struct MaMTorrent {
 }
 
 impl MaMTorrent {
-    pub fn as_meta(&self) -> Result<data::TorrentMeta> {
+    pub fn as_meta(&self) -> Result<data::TorrentMeta, MetaError> {
         let authors = self
             .author_info
             .values()
@@ -327,12 +327,8 @@ impl MaMTorrent {
 
         Ok(data::TorrentMeta {
             mam_id: self.id,
-            main_cat: data::MainCat::from_id(self.main_cat).ok_or_else(|| {
-                Error::msg(format!(
-                    "Unknown main_cat {} for torrent {}",
-                    self.main_cat, self.id,
-                ))
-            })?,
+            main_cat: data::MainCat::from_id(self.main_cat)
+                .ok_or_else(|| MetaError::UnknownMainCat(self.main_cat))?,
             filetype: self.filetype.to_owned(),
             title: self.title.to_owned(),
             authors,
@@ -340,6 +336,14 @@ impl MaMTorrent {
             series,
         })
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum MetaError {
+    #[error("Unknown main_cat {0}")]
+    UnknownMainCat(u64),
+    #[error("Unknown error: {0}")]
+    Other(#[from] Error),
 }
 
 pub fn clean_value(value: &str) -> Result<String> {

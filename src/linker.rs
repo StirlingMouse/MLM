@@ -134,6 +134,7 @@ pub async fn link_torrents_to_library(
         println!("metadata: {metadata:?}");
         create_dir_all(&dir)?;
 
+        let mut library_files = vec![];
         for file in files {
             println!("file: {:?}", file.name);
             if !(selected_audio_format
@@ -158,13 +159,15 @@ pub async fn link_torrents_to_library(
                 }
                 None
             });
-            let library_path = if let Some(dir_name) = dir_name {
-                let sub_dir = dir.join(&dir_name);
+            let file_path = if let Some(dir_name) = dir_name {
+                let sub_dir = PathBuf::from(dir_name);
                 create_dir_all(&sub_dir)?;
                 sub_dir.join(file_name)
             } else {
-                dir.join(file_name)
+                PathBuf::from(&file_name)
             };
+            let library_path = dir.join(&file_path);
+            library_files.push(file_path);
             let download_path = PathBuf::from(&torrent.save_path).join(&file.name);
             println!("linking: {:?} -> {:?}", download_path, library_path);
             hard_link(download_path, library_path)?;
@@ -180,6 +183,7 @@ pub async fn link_torrents_to_library(
             rw.upsert(data::Torrent {
                 hash,
                 library_path: Some(dir),
+                library_files,
                 title_search: normalize_title(&mam_torrent.title),
                 meta,
             })?;

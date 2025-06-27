@@ -2,26 +2,26 @@ use native_db::{Models, ToKey, native_db};
 use native_model::{Model, native_model};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 pub static MODELS: Lazy<Models> = Lazy::new(|| {
     let mut models = Models::new();
     models.define::<v1::Config>().unwrap();
     models.define::<v1::Torrent>().unwrap();
+    models.define::<v2::Torrent>().unwrap();
     models.define::<v1::SelectedTorrent>().unwrap();
     models
 });
 
 pub type Config = v1::Config;
-pub type Torrent = v1::Torrent;
-pub type TorrentKey = v1::TorrentKey;
+pub type Torrent = v2::Torrent;
+pub type TorrentKey = v2::TorrentKey;
 pub type SelectedTorrent = v1::SelectedTorrent;
 pub type SelectedTorrentKey = v1::SelectedTorrentKey;
 pub type TorrentMeta = v1::TorrentMeta;
 pub type MainCat = v1::MainCat;
 
-pub mod v1 {
-    use std::path::PathBuf;
-
+mod v1 {
     use super::*;
 
     #[derive(Serialize, Deserialize, Debug)]
@@ -33,7 +33,7 @@ pub mod v1 {
         pub value: String,
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Clone)]
     #[native_model(id = 2, version = 1)]
     #[native_db]
     pub struct Torrent {
@@ -43,6 +43,16 @@ pub mod v1 {
         #[secondary_key]
         pub title_search: String,
         pub meta: TorrentMeta,
+    }
+    impl From<v2::Torrent> for Torrent {
+        fn from(t: v2::Torrent) -> Self {
+            Self {
+                hash: t.hash,
+                library_path: t.library_path,
+                title_search: t.title_search,
+                meta: t.meta,
+            }
+        }
     }
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -82,8 +92,36 @@ pub mod v1 {
             match main_cat {
                 13 => Some(MainCat::Audio),
                 14 => Some(MainCat::Ebook),
-                15 => Some(MainCat::Music),
+                // 15 => Some(MainCat::Music),
                 _ => None,
+            }
+        }
+    }
+}
+
+mod v2 {
+    use super::*;
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 2, version = 2, from = v1::Torrent)]
+    #[native_db]
+    pub struct Torrent {
+        #[primary_key]
+        pub hash: String,
+        pub library_path: Option<PathBuf>,
+        pub library_files: Vec<PathBuf>,
+        #[secondary_key]
+        pub title_search: String,
+        pub meta: TorrentMeta,
+    }
+    impl From<v1::Torrent> for Torrent {
+        fn from(t: v1::Torrent) -> Self {
+            Self {
+                hash: t.hash,
+                library_path: t.library_path,
+                library_files: Default::default(),
+                title_search: t.title_search,
+                meta: t.meta,
             }
         }
     }

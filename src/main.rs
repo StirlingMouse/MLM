@@ -1,6 +1,8 @@
 mod autograbber;
+mod cleaner;
 mod config;
 mod data;
+mod data_impl;
 mod linker;
 mod mam;
 mod mam_enums;
@@ -10,6 +12,7 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use autograbber::run_autograbbers;
+use cleaner::run_library_cleaner;
 use figment::{
     Figment,
     providers::{Env, Format, Toml},
@@ -31,6 +34,9 @@ async fn main() -> Result<()> {
     println!("config: {config:#?}");
 
     let db = native_db::Builder::new().create(&data::MODELS, "data.db")?;
+    let rw = db.rw_transaction()?;
+    rw.migrate::<data::Torrent>()?;
+    rw.commit()?;
     let db = Arc::new(db);
 
     let mam = MaM::new(&config, db.clone()).await?;
@@ -83,6 +89,9 @@ async fn main() -> Result<()> {
                 // .context("link_torrents_to_library")
                 {
                     eprintln!("Error running linker: {err}");
+                }
+                if let Err(err) = run_library_cleaner(config.clone(), db.clone()).await {
+                    eprintln!("Error running library_cleaner: {err}");
                 }
                 sleep(Duration::from_secs(60 * 10)).await;
             }

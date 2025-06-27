@@ -148,6 +148,15 @@ pub struct QbitConfig {
     #[serde(default)]
     pub password: String,
     pub tags: Option<Vec<String>>,
+    pub on_cleaned: Option<QbitOnCleaned>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QbitOnCleaned {
+    pub category: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]

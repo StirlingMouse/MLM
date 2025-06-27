@@ -3,7 +3,7 @@ use std::{ops::RangeInclusive, sync::Arc, time::Duration};
 use crate::{
     config::{Config, Cost, TorrentFilter, Type},
     data,
-    mam::{MaM, SearchKind, SearchQuery, SearchTarget, Tor, normalize_title},
+    mam::{MaM, MetaError, SearchKind, SearchQuery, SearchTarget, Tor, normalize_title},
     qbittorrent::QbitError,
 };
 use anyhow::{Error, Result};
@@ -81,6 +81,7 @@ pub async fn run_autograbbers(
             rw.insert(data::Torrent {
                 hash,
                 library_path: None,
+                library_files: Default::default(),
                 title_search: torrent.title_search.clone(),
                 meta: torrent.meta.clone(),
             })
@@ -180,7 +181,16 @@ pub async fn autograb(
             continue;
         }
         let title_search = normalize_title(&torrent.title);
-        let meta = torrent.as_meta()?;
+        let meta = match torrent.as_meta() {
+            Ok(it) => it,
+            Err(err) => match err {
+                MetaError::UnknownMainCat(_) => {
+                    println!("{err} for torrent {} {}", torrent.id, torrent.title);
+                    continue;
+                }
+                _ => return Err(err.into()),
+            },
+        };
         let preferred_types = match meta.main_cat {
             data::MainCat::Audio => &config.audio_types,
             data::MainCat::Ebook => &config.ebook_types,
@@ -202,7 +212,7 @@ pub async fn autograb(
                     "Checking old torrent {} with format {}",
                     old.title_search, old.meta.filetype
                 );
-                if old.meta.main_cat == meta.main_cat {
+                if meta.matches(&old.meta) {
                     let old_preference =
                         preferred_types.iter().position(|t| t == &old.meta.filetype);
                     if old_preference <= preference {
@@ -229,14 +239,14 @@ pub async fn autograb(
                     "Checking old torrent {} with format {}",
                     old.title_search, old.meta.filetype
                 );
-                if old.meta.main_cat == meta.main_cat {
+                if meta.matches(&old.meta) {
                     let old_preference =
                         preferred_types.iter().position(|t| t == &old.meta.filetype);
                     if old_preference <= preference {
                         continue 'torrent;
                     } else {
                         println!(
-                            "Replacing library torrent \"{}\" in format {}",
+                            "Selecting replacement for library torrent \"{}\" in format {}",
                             old.meta.title, old.meta.filetype
                         );
                     }
