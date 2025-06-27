@@ -295,7 +295,7 @@ async fn grab_torrent(
         } else {
             Some(torrent.tags.clone())
         },
-        ..TorrentAddUrls::deafult(vec![])
+        ..TorrentAddUrls::default(vec![])
     })
     .await
     .map_err(QbitError)?;

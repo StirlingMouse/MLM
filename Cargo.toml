@@ -12,7 +12,8 @@ native_model = "0.4.20"
 once_cell = "1.21.3"
 openssl = { version = "0.10.35", features = ["vendored"] }
 # qbit = "=0.1.1"
-qbit = { path = "../qbittorrent-webui-api" }
+# qbit = { path = "../qbittorrent-webui-api" }
+qbit = { git = "https://github.com/StirlingMouse/qbittorrent-webui-api.git" }
 reqwest = "0.12.20"
 reqwest_cookie_store = "0.8.0"
 serde = "1.0.136"

@@ -34,7 +34,7 @@ pub async fn link_torrents_to_library(
 ) -> Result<()> {
     let torrents = qbit
         .1
-        .torrents(TorrentListParams::deafult())
+        .torrents(TorrentListParams::default())
         .await
         .map_err(QbitError)
         .context("qbit main data")?;
@@ -46,7 +46,7 @@ pub async fn link_torrents_to_library(
         {
             let r = db.r_transaction()?;
             let torrent: Option<data::Torrent> = r.get().primary(hash.clone())?;
-            if torrent.and_then(|t| t.library_path).is_some() {
+            if torrent.is_some_and(|t| t.library_path.is_some() || t.replaced_with.is_some()) {
                 continue;
             }
         }
@@ -112,14 +112,12 @@ async fn link_torrent(
     }
 
     let Some(mam_torrent) = mam.get_torrent_info(hash).await.context("get_mam_info")? else {
-        println!("serach found no");
         bail!(
             "Could not find torrent \"{}\", hash {} on mam",
             torrent.name,
             hash
         );
     };
-    println!("serach result");
     let Some((_, author)) = mam_torrent.author_info.first_key_value() else {
         bail!("Torrent \"{}\" has no author", torrent.name);
     };
