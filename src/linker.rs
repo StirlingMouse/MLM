@@ -122,9 +122,10 @@ async fn link_torrent(
         bail!("Torrent \"{}\" has no author", torrent.name);
     };
     let author = clean_value(author)?;
-
     let series = mam_torrent.series_info.first_key_value();
-    let dir = match series {
+    let meta = mam_torrent.as_meta()?;
+
+    let mut dir = match series {
         Some((_, (series_name, series_num))) => {
             let series_name = clean_value(series_name)?;
             PathBuf::from(author)
@@ -137,8 +138,18 @@ async fn link_torrent(
         }
         None => PathBuf::from(author).join(&mam_torrent.title),
     };
+    if let Some(narrator) = &meta.narrators.first() {
+        if !config.exclude_narrator_in_library_dir {
+            dir.set_file_name(format!(
+                "{} {{{}}}",
+                dir.file_name().unwrap().to_string_lossy(),
+                narrator
+            ));
+        }
+    }
     let dir = library.library_dir.join(dir);
     println!("out_dir: {:?}", dir);
+
     let mut titles = mam_torrent.title.splitn(2, ":");
     let title = titles.next().unwrap();
     let subtitle = titles.next().map(|t| t.trim());
@@ -149,7 +160,6 @@ async fn link_torrent(
         Some(isbn_raw)
     };
     let asin = isbn_raw.strip_prefix("ASIN:");
-    let meta = mam_torrent.as_meta()?;
 
     let metadata = json!({
         "authors": &meta.authors,
