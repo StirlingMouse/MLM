@@ -9,7 +9,7 @@ mod mam;
 mod mam_enums;
 mod qbittorrent;
 
-use std::{sync::Arc, time::Duration};
+use std::{env, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use autograbber::run_autograbbers;
@@ -27,15 +27,17 @@ use crate::{config::Config, linker::link_torrents_to_library, mam::MaM, qbittorr
 async fn main() -> Result<()> {
     env_logger::init();
 
+    let config_file = env::var("CONFIG_FILE").unwrap_or("config.toml".to_owned());
+    let database_file = env::var("DB_FILE").unwrap_or("data.db".to_owned());
     let config: Config = Figment::new()
-        .merge(Toml::file("config.toml"))
+        .merge(Toml::file(config_file))
         .merge(Env::prefixed("MLM_"))
         .extract()?;
     let config = Arc::new(config);
 
     println!("config: {config:#?}");
 
-    let db = native_db::Builder::new().create(&data::MODELS, "data.db")?;
+    let db = native_db::Builder::new().create(&data::MODELS, database_file)?;
     // export_db(&db)?;
     // return Ok(());
     let db = Arc::new(db);
