@@ -65,8 +65,7 @@ pub async fn run_autograbbers(
         let hash = torrent_file.info_hash();
         qbit.add_torrent(TorrentAddUrls {
             torrents: vec![torrent_file_bytes.iter().copied().collect()],
-            stopped: true,
-            auto_tmm: Some(true),
+            stopped: config.add_torrents_stopped,
             category: torrent.category.clone(),
             tags: if torrent.tags.is_empty() {
                 None

@@ -13,6 +13,8 @@ pub struct Config {
     pub mam_id: String,
     #[serde(default = "default_unsat_buffer")]
     pub unsat_buffer: u64,
+    #[serde(default)]
+    pub add_torrents_stopped: bool,
 
     #[serde(rename = "autograb")]
     pub autograbs: Vec<TorrentFilter>,
