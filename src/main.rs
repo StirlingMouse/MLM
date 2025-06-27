@@ -67,7 +67,7 @@ async fn main() -> Result<()> {
                 {
                     eprintln!("Error running autograbbers: {err}");
                 }
-                sleep(Duration::from_secs(60 * 20)).await;
+                sleep(Duration::from_secs(60 * config.search_interval)).await;
             }
         });
     }
@@ -94,7 +94,7 @@ async fn main() -> Result<()> {
                 if let Err(err) = run_library_cleaner(config.clone(), db.clone()).await {
                     eprintln!("Error running library_cleaner: {err}");
                 }
-                sleep(Duration::from_secs(60 * 10)).await;
+                sleep(Duration::from_secs(60 * config.link_interval)).await;
             }
         }
         // });

@@ -15,6 +15,10 @@ pub struct Config {
     pub unsat_buffer: u64,
     #[serde(default)]
     pub add_torrents_stopped: bool,
+    #[serde(default = "default_search_interval")]
+    pub search_interval: u64,
+    #[serde(default = "default_link_interval")]
+    pub link_interval: u64,
 
     #[serde(rename = "autograb")]
     pub autograbs: Vec<TorrentFilter>,
@@ -167,6 +171,14 @@ pub struct Library {
 }
 
 fn default_unsat_buffer() -> u64 {
+    10
+}
+
+fn default_search_interval() -> u64 {
+    30
+}
+
+fn default_link_interval() -> u64 {
     10
 }
 
