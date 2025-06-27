@@ -14,6 +14,7 @@ use std::{sync::Arc, time::Duration};
 use anyhow::Result;
 use autograbber::run_autograbbers;
 use cleaner::run_library_cleaner;
+use exporter::export_db;
 use figment::{
     Figment,
     providers::{Env, Format, Toml},
@@ -35,6 +36,8 @@ async fn main() -> Result<()> {
     println!("config: {config:#?}");
 
     let db = native_db::Builder::new().create(&data::MODELS, "data.db")?;
+    // export_db(&db)?;
+    // return Ok(());
     let db = Arc::new(db);
 
     let mam = MaM::new(&config, db.clone()).await?;

@@ -58,10 +58,9 @@ pub async fn run_autograbbers(
 
         let mam_id = torrent.mam_id;
         let title = torrent.meta.title.clone();
-        if let Err(err) = grab_torrent(&config, &db, qbit, &mam, torrent).await {
-            if let Err(err) = add_errored_torrent(&db, mam_id, title, err) {
-                eprintln!("Error writing errored torrent: {err}");
-            }
+        let result = grab_torrent(&config, &db, qbit, &mam, torrent).await;
+        if let Err(err) = update_errored_torrent(&db, mam_id, title, result) {
+            eprintln!("Error writing errored torrent: {err}");
         }
 
         sleep(Duration::from_millis(1000)).await;
@@ -341,15 +340,25 @@ fn add_duplicate_torrent(
     Ok(())
 }
 
-fn add_errored_torrent(db: &Database<'_>, mam_id: u64, torrent: String, err: Error) -> Result<()> {
-    println!("add_errored_torrent {torrent} - {err} - Grabber");
+fn update_errored_torrent(
+    db: &Database<'_>,
+    mam_id: u64,
+    torrent: String,
+    result: Result<(), Error>,
+) -> Result<()> {
     let rw = db.rw_transaction()?;
-    rw.upsert(ErroredTorrent {
-        id: ErroredTorrentId::Grabber(mam_id),
-        title: torrent,
-        error: format!("{err}"),
-        meta: None,
-    })?;
+    let id = ErroredTorrentId::Grabber(mam_id);
+    if let Err(err) = result {
+        println!("add_errored_torrent {torrent} - {err} - Grabber");
+        rw.upsert(ErroredTorrent {
+            id,
+            title: torrent,
+            error: format!("{err}"),
+            meta: None,
+        })?;
+    } else if let Some(error) = rw.get().primary::<ErroredTorrent>(id)? {
+        rw.remove(error)?;
+    }
     rw.commit()?;
     Ok(())
 }

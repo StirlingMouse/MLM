@@ -72,7 +72,7 @@ pub async fn link_torrents_to_library(
             continue;
         };
 
-        if let Err(err) = link_torrent(
+        let result = link_torrent(
             config.clone(),
             db.clone(),
             qbit,
@@ -81,11 +81,9 @@ pub async fn link_torrents_to_library(
             &torrent,
             library,
         )
-        .await
-        {
-            if let Err(err) = add_errored_torrent(&db, hash, torrent.name, err) {
-                eprintln!("Error writing errored torrent: {err}");
-            }
+        .await;
+        if let Err(err) = update_errored_torrent(&db, hash, torrent.name, result) {
+            eprintln!("Error writing errored torrent: {err}");
         }
     }
 
@@ -258,15 +256,25 @@ fn select_format(wanted_formats: &[String], files: &[TorrentContent]) -> Option<
         .find(|ext| files.iter().any(|f| f.name.ends_with(ext)))
 }
 
-fn add_errored_torrent(db: &Database<'_>, hash: &str, torrent: String, err: Error) -> Result<()> {
-    println!("add_errored_torrent {torrent} - {err} - Linker");
+fn update_errored_torrent(
+    db: &Database<'_>,
+    hash: &str,
+    torrent: String,
+    result: Result<(), Error>,
+) -> Result<()> {
     let rw = db.rw_transaction()?;
-    rw.upsert(ErroredTorrent {
-        id: ErroredTorrentId::Linker(hash.to_owned()),
-        title: torrent,
-        error: format!("{err}"),
-        meta: None,
-    })?;
+    let id = ErroredTorrentId::Linker(hash.to_owned());
+    if let Err(err) = result {
+        println!("add_errored_torrent {torrent} - {err} - Linker");
+        rw.upsert(ErroredTorrent {
+            id,
+            title: torrent,
+            error: format!("{err}"),
+            meta: None,
+        })?;
+    } else if let Some(error) = rw.get().primary::<ErroredTorrent>(id)? {
+        rw.remove(error)?;
+    }
     rw.commit()?;
     Ok(())
 }

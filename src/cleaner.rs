@@ -107,10 +107,9 @@ async fn process_batch(
         for (remove, _) in batch {
             let hash = remove.hash.clone();
             let title = remove.meta.title.clone();
-            if let Err(err) = remove_torrent(&config, db, &keep, remove).await {
-                if let Err(err) = add_errored_torrent(db, hash, title, err) {
-                    eprintln!("Error writing errored torrent: {err}");
-                }
+            let result = remove_torrent(&config, db, &keep, remove).await;
+            if let Err(err) = update_errored_torrent(db, hash, title, result) {
+                eprintln!("Error writing errored torrent: {err}");
             }
         }
     }
@@ -192,15 +191,25 @@ async fn remove_torrent(
     Ok(())
 }
 
-fn add_errored_torrent(db: &Database<'_>, hash: String, torrent: String, err: Error) -> Result<()> {
-    println!("add_errored_torrent {torrent} - {err} - Cleaner");
+fn update_errored_torrent(
+    db: &Database<'_>,
+    hash: String,
+    torrent: String,
+    result: Result<(), Error>,
+) -> Result<()> {
     let rw = db.rw_transaction()?;
-    rw.upsert(ErroredTorrent {
-        id: ErroredTorrentId::Cleaner(hash),
-        title: torrent,
-        error: format!("{err}"),
-        meta: None,
-    })?;
+    let id = ErroredTorrentId::Cleaner(hash.to_owned());
+    if let Err(err) = result {
+        println!("add_errored_torrent {torrent} - {err} - Cleaner");
+        rw.upsert(ErroredTorrent {
+            id,
+            title: torrent,
+            error: format!("{err}"),
+            meta: None,
+        })?;
+    } else if let Some(error) = rw.get().primary::<ErroredTorrent>(id)? {
+        rw.remove(error)?;
+    }
     rw.commit()?;
     Ok(())
 }
