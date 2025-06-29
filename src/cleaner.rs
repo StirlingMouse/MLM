@@ -2,6 +2,7 @@ use std::{fs, io::ErrorKind, mem, ops::Deref, os::unix::fs::MetadataExt, sync::A
 
 use anyhow::{Error, Result};
 use native_db::Database;
+use time::OffsetDateTime;
 
 use crate::{
     config::Config,
@@ -127,7 +128,7 @@ async fn remove_torrent(
         "Replacing library torrent \"{}\" with formats {:?} with {:?}",
         remove.meta.title, remove.meta.filetypes, keep.meta.filetypes
     );
-    remove.replaced_with = Some(keep.hash.clone());
+    remove.replaced_with = Some((keep.hash.clone(), OffsetDateTime::now_utc()));
     let library_path = remove.library_path.take();
     println!(
         "keep files: {:?} {:?}",
@@ -206,6 +207,7 @@ fn update_errored_torrent(
             title: torrent,
             error: format!("{err}"),
             meta: None,
+            created_at: OffsetDateTime::now_utc(),
         })?;
     } else if let Some(error) = rw.get().primary::<ErroredTorrent>(id)? {
         rw.remove(error)?;

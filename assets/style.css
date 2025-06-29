@@ -1,0 +1,42 @@
+body {
+        font-family: Arial, sans-serif;
+        --color-1: #142d4c; 
+        --color-2: #385170; 
+        --color-3: #9fd3c7; 
+        --color-4: #ececec; 
+
+        --background: var(--color-1); 
+        --above: var(--color-2); 
+        --text: var(--color-4); 
+
+        background: var(--background);
+        color: var(--text);
+}
+
+a {
+        color: var(--text);
+        text-decoration-color: transparent;
+
+        &:hover {
+                text-decoration-color: currentColor;
+        }
+}
+
+nav > a {
+        padding: 4px;
+        background: var(--above);
+}
+
+.table {
+        display: grid;
+        --alternate: var(--above);
+
+        & > .header, & > div {
+                display: block;
+                padding: 4px;
+        }
+
+        & > .header {
+                font-weight: bold;
+        }
+}

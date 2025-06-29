@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Torrents{% endblock %}
+
+{% block head %}
+  <style>
+    .TorrentsTable {
+      {{self::table_styles(8) | safe}}
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<h1>Torrents</h1>
+<div class="TorrentsTable table">
+  {{ table_header(Some(TorrentsPageSort::Kind), "Type") | safe }}
+  {{ table_header(Some(TorrentsPageSort::Title), "Title") | safe }}
+  {{ table_header(Some(TorrentsPageSort::Authors), "Authors") | safe }}
+  {{ table_header(Some(TorrentsPageSort::Narrators), "Narrators") | safe }}
+  {{ table_header(Some(TorrentsPageSort::Series), "Series") | safe }}
+  {{ table_header(Some(TorrentsPageSort::Linked), "Is Linked") | safe }}
+  {{ table_header(None, "Filetypes") | safe }}
+  {{ table_header(Some(TorrentsPageSort::CreatedAt), "Added At") | safe }}
+{% for torrent in torrents %}
+  <div>{{ torrent.meta.main_cat.as_str() }}</div>
+  <div>{{ torrent.meta.title }}</div>
+  <div>{{ torrent.meta.authors.join(", ") }}</div>
+  <div>{{ torrent.meta.narrators.join(", ") }}</div>
+  <div>{{ torrent.meta.series.iter().map(self::series).join(", ") }}</div>
+  <div>{{ torrent.library_path.is_some() }}</div>
+  <div>{{ torrent.meta.filetypes.join(" ") }}</div>
+  <div>{{ self::time(torrent.created_at) }}</div>
+{% endfor %}
+</div>
+{% endblock %}

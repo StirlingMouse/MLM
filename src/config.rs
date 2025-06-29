@@ -11,6 +11,10 @@ use crate::{
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub mam_id: String,
+    #[serde(default = "default_host")]
+    pub web_host: String,
+    #[serde(default = "default_port")]
+    pub web_port: u16,
     #[serde(default = "default_unsat_buffer")]
     pub unsat_buffer: u64,
     #[serde(default)]
@@ -177,6 +181,14 @@ pub struct QbitOnCleaned {
 pub struct Library {
     pub download_dir: PathBuf,
     pub library_dir: PathBuf,
+}
+
+fn default_host() -> String {
+    "0.0.0.0".to_owned()
+}
+
+fn default_port() -> u16 {
+    3157
 }
 
 fn default_unsat_buffer() -> u64 {

@@ -324,8 +324,7 @@ impl MaMTorrent {
                 Ok((series_name, series_num.clone()))
             })
             .collect::<Result<Vec<_>>>()?;
-        let main_cat = data::MainCat::from_id(self.main_cat)
-            .ok_or_else(|| MetaError::UnknownMainCat(self.main_cat))?;
+        let main_cat = data::MainCat::from_id(self.main_cat).map_err(MetaError::UnknownMainCat)?;
         let filetypes = self
             .filetype
             .split(" ")
@@ -346,8 +345,8 @@ impl MaMTorrent {
 
 #[derive(thiserror::Error, Debug)]
 pub enum MetaError {
-    #[error("Unknown main_cat {0}")]
-    UnknownMainCat(u64),
+    #[error("{0}")]
+    UnknownMainCat(String),
     #[error("Unknown error: {0}")]
     Other(#[from] Error),
 }

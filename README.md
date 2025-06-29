@@ -68,6 +68,8 @@ services:
 A more advanced example showcasing all current options with their default values:
 ```toml
 mam_id = "set mam_id here"
+web_host = "0.0.0.0" # What address to bind the web server to
+web_port = 3157 # What port to bind the web server to
 unsat_buffer = 10 # how many unsat slots to leave empty
 add_torrents_stopped = false
 search_interval = 30 # in minutes, how often a search should be done for the autograbs

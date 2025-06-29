@@ -12,6 +12,7 @@ use anyhow::{Error, Result};
 use lava_torrent::torrent::v1::Torrent;
 use native_db::{Database, db_type, transaction::RwTransaction};
 use qbit::parameters::TorrentAddUrls;
+use time::OffsetDateTime;
 use tokio::time::sleep;
 
 pub async fn run_autograbbers(
@@ -313,6 +314,7 @@ pub async fn select_torrents(
                 tags,
                 title_search,
                 meta,
+                created_at: OffsetDateTime::now_utc(),
             })?;
             rw_opt.unwrap().commit()?;
         }
@@ -356,6 +358,7 @@ async fn grab_torrent(
         library_files: Default::default(),
         title_search: torrent.title_search.clone(),
         meta: torrent.meta.clone(),
+        created_at: OffsetDateTime::now_utc(),
         replaced_with: None,
         request_matadata_update: false,
     })
@@ -383,6 +386,7 @@ fn add_duplicate_torrent(
         mam_id: meta.mam_id,
         title_search,
         meta,
+        created_at: OffsetDateTime::now_utc(),
         duplicate_of,
         request_replace: false,
     })?;
@@ -404,6 +408,7 @@ fn update_errored_torrent(
             title: torrent,
             error: format!("{err}"),
             meta: None,
+            created_at: OffsetDateTime::now_utc(),
         })?;
     } else if let Some(error) = rw.get().primary::<ErroredTorrent>(id)? {
         rw.remove(error)?;

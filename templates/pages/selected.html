@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Selected Torrents{% endblock %}
+
+{% block head %}
+  <style>
+    .SelectedTable {
+      {{self::table_styles(7) | safe}}
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<h1>Selected Torrents</h1>
+<p>Torrents that the autograbber has selected and will be downloaded</p>
+<div class="SelectedTable table">
+  {{ table_header(Some(SelectedPageSort::Kind), "Type") | safe }}
+  {{ table_header(Some(SelectedPageSort::Title), "Title") | safe }}
+  {{ table_header(Some(SelectedPageSort::Authors), "Authors") | safe }}
+  {{ table_header(Some(SelectedPageSort::Narrators), "Narrators") | safe }}
+  {{ table_header(Some(SelectedPageSort::Series), "Series") | safe }}
+  {{ table_header(None, "Filetypes") | safe }}
+  {{ table_header(Some(SelectedPageSort::CreatedAt), "Added At") | safe }}
+{% for torrent in torrents %}
+  <div>{{ torrent.meta.main_cat.as_str() }}</div>
+  <div>{{ torrent.meta.title }}</div>
+  <div>{{ torrent.meta.authors.join(", ") }}</div>
+  <div>{{ torrent.meta.narrators.join(", ") }}</div>
+  <div>{{ torrent.meta.series.iter().map(self::series).join(", ") }}</div>
+  <div>{{ torrent.meta.filetypes.join(" ") }}</div>
+  <div>{{ self::time(torrent.created_at) }}</div>
+{% endfor %}
+</div>
+{% endblock %}

@@ -17,6 +17,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry cargo build --release
 
 # Copy our sources
 COPY ./src /app/src
+COPY ./templates /app/templates
 
 # A bit of magic here!
 # * We're mounting that cache again to use during the build, otherwise it's not present and we'll have to download those again - bad!
@@ -34,6 +35,7 @@ CMD ["/app/target/release/mlm"]
 # Again, our final image is the same - a slim base and just our app
 FROM debian:bookworm-slim AS app
 RUN apt update && apt install -y ca-certificates && apt clean
+COPY ./assets /assets
 COPY --from=build /app/target/release/mlm /mlm
 ENV CONFIG_FILE /config/config.toml
 ENV DB_FILE /data/data.db

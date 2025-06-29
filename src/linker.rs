@@ -1,6 +1,7 @@
 use std::{
-    fs::{File, create_dir_all, hard_link},
+    fs::{self, File, create_dir_all, hard_link},
     io::{BufWriter, ErrorKind, Write},
+    os::unix::fs::MetadataExt as _,
     path::{Component, PathBuf},
     sync::Arc,
 };
@@ -15,11 +16,13 @@ use qbit::{
 };
 use regex::Regex;
 use serde_json::json;
+use time::OffsetDateTime;
 
 use crate::{
     config::{Config, Library, QbitConfig},
     data::{self, ErroredTorrent, ErroredTorrentId},
     mam::{MaM, clean_value, normalize_title},
+    mam_enums::Size,
     qbittorrent::QbitError,
 };
 
@@ -105,21 +108,14 @@ async fn link_torrent(
     println!("{selected_audio_format:?} {selected_ebook_format:?}");
 
     if selected_audio_format.is_none() && selected_ebook_format.is_none() {
-        bail!(
-            "Could not find and wanted formats in torrent \"{}\"",
-            torrent.name,
-        );
+        bail!("Could not find any wanted formats in torrent");
     }
 
     let Some(mam_torrent) = mam.get_torrent_info(hash).await.context("get_mam_info")? else {
-        bail!(
-            "Could not find torrent \"{}\", hash {} on mam",
-            torrent.name,
-            hash
-        );
+        bail!("Could not find torrent on mam");
     };
     let Some((_, author)) = mam_torrent.author_info.first_key_value() else {
-        bail!("Torrent \"{}\" has no author", torrent.name);
+        bail!("Torrent has no author");
     };
     let author = clean_value(author)?;
     let series = mam_torrent.series_info.first_key_value();
@@ -209,23 +205,30 @@ async fn link_torrent(
             PathBuf::from(&file_name)
         };
         let library_path = dir.join(&file_path);
-        library_files.push(file_path);
+        library_files.push(file_path.clone());
         let download_path = PathBuf::from(&torrent.save_path).join(&file.name);
         println!("linking: {:?} -> {:?}", download_path, library_path);
         hard_link(&download_path, &library_path).or_else(|err| {
             if err.kind() == ErrorKind::AlreadyExists {
                 println!("AlreadyExists: {}", err);
-                let download_id = get_file_id(download_path);
+                let download_id = get_file_id(&download_path);
                 println!("got 1: {download_id:?}");
-                let library_id = get_file_id(library_path);
+                let library_id = get_file_id(&library_path);
                 println!("got 2: {library_id:?}");
                 if let (Ok(download_id), Ok(library_id)) = (download_id, library_id) {
                     if download_id == library_id {
                         return Ok(());
+                    } else {
+                        bail!(
+                            "File \"{:?}\" already exists, torrent file size: {}, library file size: {}",
+                            file_path,
+                            fs::metadata(&download_path).map_or("?".to_string(), |s| Size::from_bytes(s.size()).to_string()),
+                            fs::metadata(&library_path).map_or("?".to_string(), |s| Size::from_bytes(s.size()).to_string())
+                        );
                     }
                 }
             }
-            Err(err)
+            Err(err.into())
         })?;
     }
 
@@ -242,6 +245,7 @@ async fn link_torrent(
             library_files,
             title_search: normalize_title(&mam_torrent.title),
             meta,
+            created_at: OffsetDateTime::now_utc(),
             replaced_with: None,
             request_matadata_update: false,
         })?;
@@ -279,6 +283,7 @@ fn update_errored_torrent(
             title: torrent,
             error: format!("{err}"),
             meta: None,
+            created_at: OffsetDateTime::now_utc(),
         })?;
     } else if let Some(error) = rw.get().primary::<ErroredTorrent>(id)? {
         rw.remove(error)?;

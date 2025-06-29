@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>{% block title %}{{ title }} - MLM{% endblock %}</title>
+    <link rel="stylesheet" href="/assets/style.css">
+    {% block head %}{% endblock %}
+  </head>
+  <body>
+    <nav>
+      <a href="/errors">Errors</a>
+      <a href="/selected">Selected Torrents</a>
+      <a href="/duplicate">Duplicate Torrents</a>
+      <a href="/torrents">Torrents</a>
+    </nav>
+    <main>
+      {% block content %}{% endblock %}
+    </div>
+  </body>
+</html>

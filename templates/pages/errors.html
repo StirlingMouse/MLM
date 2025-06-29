@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Errors{% endblock %}
+
+{% block head %}
+  <style>
+    .ErrorsTable {
+      {{self::table_styles(4) | safe}}
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<h1>Torrent Errors</h1>
+<p>Errors encountered while either grabbing, linking or cleaning torrents</p>
+<div class="ErrorsTable table">
+  {{ table_header(Some(ErrorsPageSort::Step), "Step") | safe }}
+  {{ table_header(Some(ErrorsPageSort::Title), "Title") | safe }}
+  {{ table_header(Some(ErrorsPageSort::Error), "Error") | safe }}
+  {{ table_header(Some(ErrorsPageSort::CreatedAt), "When") | safe }}
+{% for error in errors %}
+  <div>{{ error.id.step() }}</div>
+  <div>{{ error.title }}</div>
+  <div>{{ error.error }}</div>
+  <div>{{ self::time(error.created_at) }}</div>
+{% endfor %}
+</div>
+{% endblock %}

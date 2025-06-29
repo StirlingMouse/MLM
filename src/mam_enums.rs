@@ -11,12 +11,35 @@ use serde::{
 pub struct Size(u64);
 
 impl Size {
+    pub fn from_bytes(bytes: u64) -> Size {
+        Size(bytes)
+    }
+
     pub fn bytes(self) -> u64 {
         self.0
     }
 
     pub fn unit(self) -> u64 {
         if self.0 > 0 { 1 } else { 0 }
+    }
+}
+
+impl ToString for Size {
+    fn to_string(&self) -> String {
+        let mut value = self.0 as f64;
+        let mut unit = "B";
+        if value > 1024_f64.powf(3.0) {
+            value /= 1024_f64.powf(3.0);
+            unit = "GiB";
+        } else if value > 1024_f64.powf(2.0) {
+            value /= 1024_f64.powf(2.0);
+            unit = "MiB";
+        } else if value > 1024.0 {
+            value /= 1024.0;
+            unit = "KiB";
+        }
+        let value = ((value * 1000.0).round() as u64) / 1000;
+        format!("{} {}", value, unit)
     }
 }
 

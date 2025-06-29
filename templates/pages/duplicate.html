@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Duplicate Torrents{% endblock %}
+
+{% block head %}
+  <style>
+    .DuplicateTable {
+      {{self::table_styles(7) | safe}}
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<h1>Duplicate Torrents</h1>
+<p>Torrents that the autograbber did not select due to a pre-existing torrent in your library</p>
+<div class="DuplicateTable table">
+  {{ table_header(Some(DuplicatePageSort::Kind), "Type") | safe }}
+  {{ table_header(Some(DuplicatePageSort::Title), "Title") | safe }}
+  {{ table_header(Some(DuplicatePageSort::Authors), "Authors") | safe }}
+  {{ table_header(Some(DuplicatePageSort::Narrators), "Narrators") | safe }}
+  {{ table_header(Some(DuplicatePageSort::Series), "Series") | safe }}
+  {{ table_header(None, "Filetypes") | safe }}
+  {{ table_header(Some(DuplicatePageSort::CreatedAt), "Added At") | safe }}
+{% for torrent in torrents %}
+  <div>{{ torrent.meta.main_cat.as_str() }}</div>
+  <div>{{ torrent.meta.title }}</div>
+  <div>{{ torrent.meta.authors.join(", ") }}</div>
+  <div>{{ torrent.meta.narrators.join(", ") }}</div>
+  <div>{{ torrent.meta.series.iter().map(self::series).join(", ") }}</div>
+  <div>{{ torrent.meta.filetypes.join(" ") }}</div>
+  <div>{{ self::time(torrent.created_at) }}</div>
+{% endfor %}
+</div>
+{% endblock %}

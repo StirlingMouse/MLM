@@ -5,29 +5,34 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.98"
+askama = { version = "0.14.0", features = ["code-in-doc"] }
+axum = { version = "0.8.4", features = ["query", "macros"] }
+bytes = "1.10.1"
 cookie = "0.18.1"
+env_logger = "0.11.8"
 figment = { version = "0.10", features = ["toml", "env"] }
+file-id = "0.2.2"
+htmlentity = "1.3.2"
+itertools = "0.14.0"
+lava_torrent = "0.11.1"
+log = "0.4.27"
 native_db = "0.8.1"
 native_model = "0.4.20"
 once_cell = "1.21.3"
 openssl = { version = "0.10.35", features = ["vendored"] }
 # qbit = "=0.1.1"
-# qbit = { path = "../qbittorrent-webui-api" }
 qbit = { git = "https://github.com/StirlingMouse/qbittorrent-webui-api.git" }
+# qbit = { path = "../qbittorrent-webui-api" }
+regex = "1.11.1"
 reqwest = "0.12.20"
 reqwest_cookie_store = "0.8.0"
 serde = "1.0.136"
 serde_derive = "1.0.136"
 serde_json = "1.0.140"
 serde-nested-json = "0.1.3"
+thiserror = "2.0.12"
+time = { version = "0.3.41", features = ["formatting", "local-offset", "serde"] }
 tokio = { version = "1.45.1", features = ["full"] }
 toml = "0.8.23"
-regex = "1.11.1"
-htmlentity = "1.3.2"
+tower-http = { version = "0.6.6", features = ["fs"] }
 unidecode = "0.3.0"
-lava_torrent = "0.11.1"
-bytes = "1.10.1"
-log = "0.4.27"
-env_logger = "0.11.8"
-thiserror = "2.0.12"
-file-id = "0.2.2"
