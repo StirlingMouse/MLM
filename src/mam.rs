@@ -5,6 +5,8 @@ use bytes::Bytes;
 use cookie::Cookie;
 use htmlentity::entity::{self, ICodedDataTrait as _};
 use native_db::Database;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use reqwest::Url;
 use reqwest_cookie_store::CookieStoreRwLock;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -298,7 +300,7 @@ pub struct MaMTorrent {
     #[serde(deserialize_with = "string_or_number")]
     pub tags: String,
     pub times_completed: u64,
-    #[serde(deserialize_with = "string_or_number")]
+    #[serde(deserialize_with = "parse_title")]
     pub title: String,
     pub vip: u64,
     pub w: u64,
@@ -381,6 +383,22 @@ where
         Value::String(v) => Ok(v),
         Value::Number(v) => Ok(v.to_string()),
         _ => Err(serde::de::Error::custom("expected number or string")),
+    }
+}
+
+pub static TITLE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"(.*?) +\[[^\]]*\]$").unwrap());
+
+// Workaround policy to put english translations in torrent titles
+fn parse_title<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let title = string_or_number(deserializer)?;
+
+    if let Some(title) = TITLE_PATTERN.captures(&title).and_then(|c| c.get(1)) {
+        Ok(title.as_str().to_owned())
+    } else {
+        Ok(title)
     }
 }
 
