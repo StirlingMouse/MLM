@@ -171,23 +171,29 @@ pub async fn select_torrents(
         .filter(|t| torrent_filter.filter.matches(t));
 
     'torrent: for torrent in torrents {
-        let rw = db.rw_transaction()?;
-        if let Some(old_selected) = rw
-            .get()
-            .primary::<data::SelectedTorrent>(torrent.id)
-            .ok()
-            .flatten()
-        {
-            if let Some(unsat_buffer) = torrent_filter.unsat_buffer {
-                if old_selected.unsat_buffer.is_none_or(|u| unsat_buffer < u) {
-                    let mut updated = old_selected.clone();
-                    updated.unsat_buffer = Some(unsat_buffer);
-                    rw.update(old_selected, updated)?;
-                    rw.commit()?;
-                    continue;
+        let rw_opt = if torrent_filter.dry_run {
+            None
+        } else {
+            Some(db.rw_transaction()?)
+        };
+        if let Some(rw) = &rw_opt {
+            if let Some(old_selected) = rw
+                .get()
+                .primary::<data::SelectedTorrent>(torrent.id)
+                .ok()
+                .flatten()
+            {
+                if let Some(unsat_buffer) = torrent_filter.unsat_buffer {
+                    if old_selected.unsat_buffer.is_none_or(|u| unsat_buffer < u) {
+                        let mut updated = old_selected.clone();
+                        updated.unsat_buffer = Some(unsat_buffer);
+                        rw.update(old_selected, updated)?;
+                        rw_opt.unwrap().commit()?;
+                        continue;
+                    }
                 }
+                continue;
             }
-            continue;
         }
         let title_search = normalize_title(&torrent.title);
         let meta = match torrent.as_meta() {
@@ -210,7 +216,7 @@ pub async fn select_torrents(
         if preference.is_none() {
             continue;
         }
-        {
+        if let Some(rw) = &rw_opt {
             let old_selected = {
                 rw.scan()
                     .secondary::<data::SelectedTorrent>(data::SelectedTorrentKey::title_search)?
@@ -228,7 +234,7 @@ pub async fn select_torrents(
                         .position(|t| old.meta.filetypes.contains(t));
                     if old_preference <= preference {
                         if old_preference == preference {
-                            if let Err(err) = add_duplicate_torrent(&rw, None, title_search, meta) {
+                            if let Err(err) = add_duplicate_torrent(rw, None, title_search, meta) {
                                 eprintln!("Error writing duplicate torrent: {err}");
                             }
                         }
@@ -243,7 +249,7 @@ pub async fn select_torrents(
                 }
             }
         }
-        {
+        if let Some(rw) = &rw_opt {
             let old_library = {
                 rw.scan()
                     .secondary::<data::Torrent>(data::TorrentKey::title_search)?
@@ -262,7 +268,7 @@ pub async fn select_torrents(
                     if old_preference <= preference {
                         if old_preference == preference {
                             if let Err(err) =
-                                add_duplicate_torrent(&rw, Some(old.hash), title_search, meta)
+                                add_duplicate_torrent(rw, Some(old.hash), title_search, meta)
                             {
                                 eprintln!("Error writing duplicate torrent: {err}");
                             }
@@ -295,19 +301,21 @@ pub async fn select_torrents(
             category,
             tags
         );
-        rw.insert(data::SelectedTorrent {
-            mam_id: torrent.id,
-            dl_link: torrent
-                .dl
-                .clone()
-                .ok_or_else(|| Error::msg(format!("no dl field for torrent {}", torrent.id)))?,
-            unsat_buffer: torrent_filter.unsat_buffer,
-            category,
-            tags,
-            title_search,
-            meta,
-        })?;
-        rw.commit()?;
+        if let Some(rw) = &rw_opt {
+            rw.insert(data::SelectedTorrent {
+                mam_id: torrent.id,
+                dl_link: torrent
+                    .dl
+                    .clone()
+                    .ok_or_else(|| Error::msg(format!("no dl field for torrent {}", torrent.id)))?,
+                unsat_buffer: torrent_filter.unsat_buffer,
+                category,
+                tags,
+                title_search,
+                meta,
+            })?;
+            rw_opt.unwrap().commit()?;
+        }
     }
 
     Ok(())
