@@ -74,6 +74,8 @@ pub struct Filter {
     #[serde(default)]
     pub flags: Flags,
     #[serde(default)]
+    pub min_size: Size,
+    #[serde(default)]
     pub max_size: Size,
     #[serde(default)]
     pub exclude_uploader: Vec<String>,
@@ -104,10 +106,13 @@ impl Filter {
             return false;
         }
 
-        if self.max_size.bytes() > 0 {
+        if self.min_size.bytes() > 0 || self.max_size.bytes() > 0 {
             match Size::try_from(torrent.size.clone()) {
                 Ok(size) => {
-                    if size > self.max_size {
+                    if self.min_size.bytes() > 0 && size < self.min_size {
+                        return false;
+                    }
+                    if self.max_size.bytes() > 0 && size > self.max_size {
                         return false;
                     }
                 }

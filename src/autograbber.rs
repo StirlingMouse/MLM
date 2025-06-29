@@ -114,8 +114,13 @@ pub async fn select_torrents(
                     Some(if flags_is_hide { 0 } else { 1 })
                 },
                 browse_flags: flags,
+                min_size: torrent_filter.filter.min_size.bytes(),
                 max_size: torrent_filter.filter.max_size.bytes(),
-                unit: torrent_filter.filter.max_size.unit(),
+                unit: torrent_filter
+                    .filter
+                    .min_size
+                    .unit()
+                    .max(torrent_filter.filter.max_size.unit()),
                 sort_type,
                 ..Default::default()
             },
