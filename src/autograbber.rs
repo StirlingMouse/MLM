@@ -3,7 +3,9 @@ use std::{ops::RangeInclusive, sync::Arc, time::Duration};
 use crate::{
     config::{Config, Cost, TorrentFilter, Type},
     data::{self, ErroredTorrent, ErroredTorrentId, SelectedTorrent, TorrentMeta},
-    mam::{MaM, MetaError, SearchKind, SearchQuery, SearchTarget, Tor, normalize_title},
+    mam::{
+        MaM, MetaError, SearchKind, SearchQuery, SearchResult, SearchTarget, Tor, normalize_title,
+    },
     qbittorrent::QbitError,
 };
 use anyhow::{Error, Result};
@@ -91,45 +93,79 @@ pub async fn select_torrents(
         _ => "",
     };
     let (flags_is_hide, flags) = torrent_filter.filter.flags.as_search_bitfield();
-    let results = mam
-        .search(&SearchQuery {
-            dl_link: true,
-            perpage: 100.min(max_torrents),
-            tor: Tor {
-                target,
-                kind,
-                text: &torrent_filter.query.clone().unwrap_or_default(),
-                srch_in: torrent_filter.search_in.clone(),
-                main_cat: torrent_filter.filter.categories.get_main_cats(),
-                cat: torrent_filter.filter.categories.get_cats(),
-                browse_lang: torrent_filter
-                    .filter
-                    .languages
-                    .iter()
-                    .map(|l| l.to_id())
-                    .collect(),
-                browse_flags_hide_vs_show: if flags.is_empty() {
-                    None
-                } else {
-                    Some(if flags_is_hide { 0 } else { 1 })
-                },
-                browse_flags: flags,
-                min_size: torrent_filter.filter.min_size.bytes(),
-                max_size: torrent_filter.filter.max_size.bytes(),
-                unit: torrent_filter
-                    .filter
-                    .min_size
-                    .unit()
-                    .max(torrent_filter.filter.max_size.unit()),
-                sort_type,
-                ..Default::default()
-            },
+    let paginate = matches!(torrent_filter.kind, Type::Bookmarks | Type::Freeleech);
 
-            ..Default::default()
-        })
-        .await?;
+    let mut results: Option<SearchResult> = None;
+    loop {
+        let mut page_results = mam
+            .search(&SearchQuery {
+                dl_link: true,
+                perpage: 100.min(max_torrents),
+                tor: Tor {
+                    start_number: results.as_ref().map_or(0, |r| r.data.len() as u64),
+                    target,
+                    kind,
+                    text: &torrent_filter.query.clone().unwrap_or_default(),
+                    srch_in: torrent_filter.search_in.clone(),
+                    main_cat: torrent_filter.filter.categories.get_main_cats(),
+                    cat: torrent_filter.filter.categories.get_cats(),
+                    browse_lang: torrent_filter
+                        .filter
+                        .languages
+                        .iter()
+                        .map(|l| l.to_id())
+                        .collect(),
+                    browse_flags_hide_vs_show: if flags.is_empty() {
+                        None
+                    } else {
+                        Some(if flags_is_hide { 0 } else { 1 })
+                    },
+                    browse_flags: flags.clone(),
+                    min_size: torrent_filter.filter.min_size.bytes(),
+                    max_size: torrent_filter.filter.max_size.bytes(),
+                    unit: torrent_filter
+                        .filter
+                        .min_size
+                        .unit()
+                        .max(torrent_filter.filter.max_size.unit()),
+                    sort_type,
+                    ..Default::default()
+                },
+
+                ..Default::default()
+            })
+            .await?;
+
+        println!(
+            "result: perpage: {}, start: {}, data: {}, total: {}, found: {}",
+            page_results.perpage,
+            page_results.start,
+            page_results.data.len(),
+            page_results.total,
+            page_results.found
+        );
+
+        if page_results.data.is_empty() {
+            if results.is_none() {
+                results = Some(page_results);
+            }
+            break;
+        }
+
+        if let Some(results) = &mut results {
+            results.data.append(&mut page_results.data);
+        } else {
+            results = Some(page_results);
+        }
+
+        let results = results.as_ref().unwrap();
+        if !paginate || results.data.len() >= results.found {
+            break;
+        }
+    }
 
     let torrents = results
+        .unwrap()
         .data
         .into_iter()
         .filter(|t| torrent_filter.filter.matches(t));

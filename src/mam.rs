@@ -208,7 +208,7 @@ pub struct Tor<'a> {
     pub start_number: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum SearchTarget {
     Bookmarks,
@@ -218,7 +218,7 @@ pub enum SearchTarget {
     MyReseed,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum SearchKind {
     /// Last update had 1+ seeders
     #[serde(rename = "active")]
@@ -245,11 +245,11 @@ pub enum SearchKind {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct SearchResult {
-    pub perpage: i64,
-    pub start: i64,
+    pub perpage: usize,
+    pub start: usize,
     pub data: Vec<MaMTorrent>,
-    pub total: i64,
-    pub found: i64,
+    pub total: usize,
+    pub found: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
