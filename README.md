@@ -94,6 +94,7 @@ tags = [ "superseded" ]
 type = "freeleech" # autograbs from the global freeleech list only, not PF or VIP
 languages = [ "english" ] # you can filter by language
 flags = { lgbt = true } # or flags, true requires the flag to exist
+min_size = "50 MiB"
 exclude_uploader = [ "Oriel" ] # and exclude certain uploaders (excluding yourself is a good idea if you use multiple clients!)
 unsat_buffer = 50 # you can set a different unsat buffer for a specific autograb if you don't want it to overwhelm your slots
 
@@ -102,6 +103,7 @@ type = "new" # autograbs from newly uploaded torrents
 query = '"Akwaeke Emezi"|"T J Klune"' # a normal search query, see the search guide for what you can do: https://www.myanonamouse.net/guides/?gid=37729
 search_in = [ "author" ] # only search in authors
 flags = { violence = false } # with false we forbid the flag
+dry_run = true # this makes MLM not actually download the selected torrents, only log them, for testing your search
 
 [[tag]]
 categories = { audio = false, ebook = [ "food" ] }
