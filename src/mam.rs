@@ -414,8 +414,8 @@ impl<'a> MaM<'a> {
             .ok()
             .flatten()
             .map(|c| c.value);
-        if let Some(stored_mam_id) = &stored_mam_id {
-            println!("Restoring mam_id: {}", stored_mam_id);
+        if stored_mam_id.is_some() {
+            println!("Restoring mam_id");
         } else {
             println!("Using mam_id from config");
         }
@@ -473,7 +473,7 @@ impl<'a> MaM<'a> {
             .error_for_status()?
             .json()
             .await?;
-        // self.store_cookies();
+        self.store_cookies();
         Ok(resp)
     }
 
@@ -489,33 +489,8 @@ impl<'a> MaM<'a> {
             .bytes()
             .await?;
         Ok(resp)
-        // println!("response: {torrent_file}");
     }
     pub async fn get_torrent_info(&self, hash: &str) -> Result<Option<MaMTorrent>> {
-        // let resp = self
-        //     .client
-        //     .post("https://www.myanonamouse.net/tor/js/loadSearchJSONbasic.php")
-        //     .json(&json!({
-        //         "description": true,
-        //         "isbn": true,
-        //         "tor": { "hash": hash }
-        //     }))
-        //     .send()
-        //     .await?
-        //     .error_for_status()?
-        //     .text()
-        //     .await?;
-        // println!("resp: {resp:?}");
-        // if let Ok(resp) = serde_json::from_str::<SearchError>(&resp) {
-        //     if resp.error == "Nothing returned, out of 0" {
-        //         return Ok(None);
-        //     } else {
-        //         return Err(Error::msg(resp.error));
-        //     }
-        // };
-        // let mut resp: SearchResult = serde_json::from_str(&resp).context("parse mam response")?;
-        // println!("resp2: {resp:?}");
-        // self.store_cookies();
         let mut resp = self
             .search(&SearchQuery {
                 description: true,
@@ -552,7 +527,7 @@ impl<'a> MaM<'a> {
             eprintln!("Error parsing mam response: {err}\nResponse: {resp}");
             err
         })?;
-        // self.store_cookies();
+        self.store_cookies();
         Ok(resp)
     }
 
@@ -573,7 +548,7 @@ impl<'a> MaM<'a> {
                     .is_ok();
 
                 if ok {
-                    println!("stored new mam_id: {}", cookie.value());
+                    println!("stored new mam_id");
                 }
             }
         }
