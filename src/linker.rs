@@ -63,11 +63,10 @@ pub async fn link_torrents_to_library(
                 continue;
             };
         }
-        let Some(library) = config
-            .libraries
-            .iter()
-            .find(|l| PathBuf::from(&torrent.save_path).starts_with(&l.download_dir))
-        else {
+        let Some(library) = config.libraries.iter().find(|l| match l {
+            Library::ByDir(l) => PathBuf::from(&torrent.save_path).starts_with(&l.download_dir),
+            Library::ByCategory(l) => torrent.category == l.category,
+        }) else {
             println!(
                 "Could not find matching library for torrent \"{}\", save_path {}",
                 torrent.name, torrent.save_path
@@ -143,7 +142,7 @@ async fn link_torrent(
             ));
         }
     }
-    let dir = library.library_dir.join(dir);
+    let dir = library.library_dir().join(dir);
     println!("out_dir: {:?}", dir);
 
     let mut titles = mam_torrent.title.splitn(2, ":");

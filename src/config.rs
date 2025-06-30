@@ -177,9 +177,32 @@ pub struct QbitOnCleaned {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum Library {
+    ByDir(LibraryByDir),
+    ByCategory(LibraryByCategory),
+}
+
+impl Library {
+    pub fn library_dir(&self) -> &PathBuf {
+        match self {
+            Library::ByDir(l) => &l.library_dir,
+            Library::ByCategory(l) => &l.library_dir,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Library {
+pub struct LibraryByDir {
     pub download_dir: PathBuf,
+    pub library_dir: PathBuf,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LibraryByCategory {
+    pub category: String,
     pub library_dir: PathBuf,
 }
 

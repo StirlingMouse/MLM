@@ -44,11 +44,11 @@ categories = { audio = false, ebook = true }
 category = "Ebooks"
 
 [[library]] # you can skip the library sections if you don't want MLM to organize a library folder for you
-download_dir = "/mnt/Data/Downloads/Audiobooks" # this selects all torrents with this download path (I assume this is where your audiobooks category will download to)
+category = "Audiobooks" # this selects all torrents with the category Audiobooks
 library_dir = "/mnt/Data/Library/Audiobooks" # this is where your nicely organized audiobooks will end up
 
 [[library]]
-download_dir = "/mnt/Data/Downloads/Ebooks"
+category = "Ebooks"
 library_dir = "/mnt/Data/Library/Ebooks"
 ```
 
@@ -128,15 +128,15 @@ categories = { audio = false, ebook = true }
 category = "Ebooks"
 
 [[library]]
-download_dir = "/mnt/Data/Downloads/Audiobooks"
+category = "Audiobooks"
 library_dir = "/mnt/Data/Library/Audiobooks"
 
 [[library]]
-download_dir = "/mnt/Data/Downloads/Ebooks"
+download_dir = "/mnt/Data/Downloads/Ebooks" # you can also specify a library using the download_dir
 library_dir = "/mnt/Data/Library/Ebooks"
 
 [[library]]
-download_dir = "/mnt/Data/Uploads/Audiobooks" # multiple download dirs can contribute to the same library dir, for example if you keep your own uploads separate
+download_dir = "/mnt/Data/Uploads/Audiobooks" # multiple libraries can contribute to the same library dir, for example if you keep your own uploads separate
 library_dir = "/mnt/Data/Library/Audiobooks"
 ```
 
