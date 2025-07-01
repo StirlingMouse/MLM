@@ -22,10 +22,7 @@ pub async fn run_autograbbers(
     mam: Arc<MaM<'_>>,
 ) -> Result<()> {
     let user_info = mam.user_info().await?;
-    let max_torrents = user_info
-        .classname
-        .unsats()
-        .saturating_sub(user_info.unsat.count);
+    let max_torrents = user_info.unsat.limit.saturating_sub(user_info.unsat.count);
     println!("user_info: {user_info:#?}; max_torrents: {max_torrents}");
 
     for autograb_config in &config.autograbs {
