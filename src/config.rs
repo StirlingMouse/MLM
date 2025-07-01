@@ -26,18 +26,22 @@ pub struct Config {
     #[serde(default = "default_link_interval")]
     pub link_interval: u64,
 
-    #[serde(rename = "autograb")]
-    pub autograbs: Vec<TorrentFilter>,
-
-    #[serde(rename = "tag")]
-    pub tags: Vec<TagFilter>,
-
     #[serde(default = "default_audio_types")]
     pub audio_types: Vec<String>,
     #[serde(default = "default_ebook_types")]
     pub ebook_types: Vec<String>,
 
+    #[serde(default)]
+    #[serde(rename = "autograb")]
+    pub autograbs: Vec<TorrentFilter>,
+
+    #[serde(default)]
+    #[serde(rename = "tag")]
+    pub tags: Vec<TagFilter>,
+
     pub qbittorrent: Vec<QbitConfig>,
+
+    #[serde(default)]
     #[serde(rename = "library")]
     pub libraries: Vec<Library>,
 }
