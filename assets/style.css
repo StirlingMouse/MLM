@@ -1,9 +1,9 @@
 body {
         font-family: Arial, sans-serif;
-        --color-1: #142d4c; 
-        --color-2: #385170; 
-        --color-3: #9fd3c7; 
-        --color-4: #ececec; 
+        --color-1: #2a2438; 
+        --color-2: #352f44; 
+        --color-3: #5c5470; 
+        --color-4: #dbd8e3; 
 
         --background: var(--color-1); 
         --above: var(--color-2); 
