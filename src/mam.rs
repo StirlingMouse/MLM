@@ -11,6 +11,7 @@ use reqwest::Url;
 use reqwest_cookie_store::CookieStoreRwLock;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
+use tracing::{debug, error, info, trace, warn};
 use unidecode::unidecode;
 
 use crate::{config::Config, data, mam_enums::SearchIn};
@@ -436,9 +437,9 @@ impl<'a> MaM<'a> {
             .flatten()
             .map(|c| c.value);
         if stored_mam_id.is_some() {
-            println!("Restoring mam_id");
+            info!("Restoring mam_id");
         } else {
-            println!("Using mam_id from config");
+            info!("Using mam_id from config");
         }
         let has_stored_mam_id = stored_mam_id.is_some();
         let cookie =
@@ -456,7 +457,7 @@ impl<'a> MaM<'a> {
         let mam = MaM { jar, client, db };
         if let Err(err) = mam.check_mam_id().await {
             if has_stored_mam_id {
-                eprintln!("Stored mam_id failed with {err}, falling back to config value");
+                warn!("Stored mam_id failed with {err}, falling back to config value");
                 let cookie = Cookie::build(("mam_id", config.mam_id.clone())).build();
                 mam.jar
                     .write()
@@ -480,7 +481,7 @@ impl<'a> MaM<'a> {
             .error_for_status()?
             .text()
             .await?;
-        println!("checked mam_id: {resp:?}");
+        info!("checked mam_id: {resp:?}");
         self.store_cookies();
         Ok(())
     }
@@ -527,7 +528,7 @@ impl<'a> MaM<'a> {
     }
 
     pub async fn search(&self, query: &SearchQuery<'_>) -> Result<SearchResult> {
-        println!("search: {}", serde_json::to_string_pretty(query)?);
+        debug!("search: {}", serde_json::to_string_pretty(query)?);
         let resp = self
             .client
             .post("https://www.myanonamouse.net/tor/js/loadSearchJSONbasic.php")
@@ -545,7 +546,7 @@ impl<'a> MaM<'a> {
             }
         };
         let resp: SearchResult = serde_json::from_str(&resp).map_err(|err| {
-            eprintln!("Error parsing mam response: {err}\nResponse: {resp}");
+            error!("Error parsing mam response: {err}\nResponse: {resp}");
             err
         })?;
         self.store_cookies();
@@ -569,7 +570,7 @@ impl<'a> MaM<'a> {
                     .is_ok();
 
                 if ok {
-                    println!("stored new mam_id");
+                    trace!("stored new mam_id");
                 }
             }
         }

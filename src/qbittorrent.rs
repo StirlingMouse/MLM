@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Display};
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct QbitError(pub qbit::Error);
 
 impl std::error::Error for QbitError {}

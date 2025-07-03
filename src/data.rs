@@ -6,6 +6,7 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use time::OffsetDateTime;
+use tracing::{info, instrument};
 
 pub static MODELS: Lazy<Models> = Lazy::new(|| {
     let mut models = Models::new();
@@ -35,6 +36,7 @@ pub type ErroredTorrentId = v1::ErroredTorrentId;
 pub type TorrentMeta = v1::TorrentMeta;
 pub type MainCat = v1::MainCat;
 
+#[instrument(skip_all)]
 pub fn migrate(db: &Database<'_>) -> Result<()> {
     let rw = db.rw_transaction()?;
 
@@ -43,7 +45,7 @@ pub fn migrate(db: &Database<'_>) -> Result<()> {
     rw.migrate::<v2::DuplicateTorrent>()?;
     rw.migrate::<v2::ErroredTorrent>()?;
     rw.commit()?;
-    println!("Migrations done");
+    info!("Migrations done");
 
     Ok(())
 }

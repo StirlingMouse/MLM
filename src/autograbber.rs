@@ -14,7 +14,9 @@ use native_db::{Database, db_type, transaction::RwTransaction};
 use qbit::parameters::TorrentAddUrls;
 use time::OffsetDateTime;
 use tokio::time::sleep;
+use tracing::{debug, error, info, instrument, trace, warn};
 
+#[instrument(skip_all)]
 pub async fn run_autograbbers(
     config: Arc<Config>,
     db: Arc<Database<'_>>,
@@ -23,7 +25,7 @@ pub async fn run_autograbbers(
 ) -> Result<()> {
     let user_info = mam.user_info().await?;
     let max_torrents = user_info.unsat.limit.saturating_sub(user_info.unsat.count);
-    println!("user_info: {user_info:#?}; max_torrents: {max_torrents}");
+    debug!("user_info: {user_info:#?}; max_torrents: {max_torrents}");
 
     for autograb_config in &config.autograbs {
         let max_torrents = max_torrents
@@ -60,7 +62,7 @@ pub async fn run_autograbbers(
         let title = torrent.meta.title.clone();
         let result = grab_torrent(&config, &db, qbit, &mam, torrent).await;
         if let Err(err) = update_errored_torrent(&db, mam_id, title, result) {
-            eprintln!("Error writing errored torrent: {err}");
+            error!("Error writing errored torrent: {err}");
         }
 
         sleep(Duration::from_millis(1000)).await;
@@ -70,6 +72,7 @@ pub async fn run_autograbbers(
     Ok(())
 }
 
+#[instrument(skip_all)]
 pub async fn select_torrents(
     config: Arc<Config>,
     db: Arc<Database<'_>>,
@@ -134,7 +137,7 @@ pub async fn select_torrents(
             })
             .await?;
 
-        println!(
+        debug!(
             "result: perpage: {}, start: {}, data: {}, total: {}, found: {}",
             page_results.perpage,
             page_results.start,
@@ -198,7 +201,7 @@ pub async fn select_torrents(
             Ok(it) => it,
             Err(err) => match err {
                 MetaError::UnknownMainCat(_) => {
-                    println!("{err} for torrent {} {}", torrent.id, torrent.title);
+                    warn!("{err} for torrent {} {}", torrent.id, torrent.title);
                     continue;
                 }
                 _ => return Err(err.into()),
@@ -222,7 +225,7 @@ pub async fn select_torrents(
                     .collect::<Result<Vec<_>, native_db::db_type::Error>>()
             }?;
             for old in old_selected {
-                println!(
+                trace!(
                     "Checking old torrent {} with formats {:?}",
                     old.title_search, old.meta.filetypes
                 );
@@ -233,12 +236,12 @@ pub async fn select_torrents(
                     if old_preference <= preference {
                         if old_preference == preference {
                             if let Err(err) = add_duplicate_torrent(rw, None, title_search, meta) {
-                                eprintln!("Error writing duplicate torrent: {err}");
+                                error!("Error writing duplicate torrent: {err}");
                             }
                         }
                         continue 'torrent;
                     } else {
-                        println!(
+                        info!(
                             "Unselecting torrent \"{}\" with formats {:?}",
                             old.meta.title, old.meta.filetypes
                         );
@@ -255,7 +258,7 @@ pub async fn select_torrents(
                     .collect::<Result<Vec<_>, native_db::db_type::Error>>()
             }?;
             for old in old_library {
-                println!(
+                trace!(
                     "Checking old torrent {} with formats {:?}",
                     old.title_search, old.meta.filetypes
                 );
@@ -268,12 +271,12 @@ pub async fn select_torrents(
                             if let Err(err) =
                                 add_duplicate_torrent(rw, Some(old.hash), title_search, meta)
                             {
-                                eprintln!("Error writing duplicate torrent: {err}");
+                                error!("Error writing duplicate torrent: {err}");
                             }
                         }
                         continue 'torrent;
                     } else {
-                        println!(
+                        info!(
                             "Selecting replacement for library torrent \"{}\" with formats {:?}",
                             old.meta.title, old.meta.filetypes
                         );
@@ -288,7 +291,7 @@ pub async fn select_torrents(
             .collect();
         let category = tags.iter().find_map(|t| t.category.clone());
         let tags = tags.iter().flat_map(|t| t.tags.clone()).collect();
-        println!(
+        info!(
             "Selecting torrent \"{}\" in format {}, free: {}, fl_vip: {}, pf: {}, vip: {}, with category {:?} and tags {:?}",
             torrent.title,
             torrent.filetype,
@@ -320,6 +323,7 @@ pub async fn select_torrents(
     Ok(())
 }
 
+#[instrument(skip_all)]
 async fn grab_torrent(
     config: &Config,
     db: &Database<'_>,
@@ -327,7 +331,7 @@ async fn grab_torrent(
     mam: &MaM<'_>,
     torrent: SelectedTorrent,
 ) -> Result<()> {
-    println!(
+    info!(
         "Grabbing torrent \"{}\", with category {:?} and tags {:?}",
         torrent.meta.title, torrent.category, torrent.tags,
     );
@@ -361,7 +365,7 @@ async fn grab_torrent(
     })
     .or_else(|err| {
         if let db_type::Error::DuplicateKey { .. } = err {
-            println!("Got dup key on {:?}", torrent);
+            warn!("Got dup key on {:?}", torrent);
             Ok(())
         } else {
             Err(err)
@@ -399,7 +403,7 @@ fn update_errored_torrent(
     let rw = db.rw_transaction()?;
     let id = ErroredTorrentId::Grabber(mam_id);
     if let Err(err) = result {
-        println!("add_errored_torrent {torrent} - {err} - Grabber");
+        warn!("Autograbber error for {torrent}: {err}");
         rw.upsert(ErroredTorrent {
             id,
             title: torrent,

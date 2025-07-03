@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use serde::Deserialize;
+use tracing::error;
 
 use crate::{
     mam::MaMTorrent,
@@ -103,7 +104,7 @@ impl Filter {
                     return false;
                 }
             } else {
-                eprintln!(
+                error!(
                     "Failed parsing language \"{}\" for torrent \"{}\"",
                     torrent.language, torrent.title
                 );
@@ -127,7 +128,7 @@ impl Filter {
                     }
                 }
                 Err(_) => {
-                    eprintln!(
+                    error!(
                         "Failed parsing size \"{}\" for torrent \"{}\"",
                         torrent.size, torrent.title
                     );

@@ -17,6 +17,7 @@ use qbit::{
 use regex::Regex;
 use serde_json::json;
 use time::OffsetDateTime;
+use tracing::{Level, debug, error, instrument, span, trace, warn};
 
 use crate::{
     config::{Config, Library, QbitConfig},
@@ -29,6 +30,7 @@ use crate::{
 pub static DISK_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?:CD|Disc|Disk)\s*(\d+)").unwrap());
 
+#[instrument(skip_all)]
 pub async fn link_torrents_to_library(
     config: Arc<Config>,
     db: Arc<Database<'_>>,
@@ -67,7 +69,7 @@ pub async fn link_torrents_to_library(
             Library::ByDir(l) => PathBuf::from(&torrent.save_path).starts_with(&l.download_dir),
             Library::ByCategory(l) => torrent.category == l.category,
         }) else {
-            println!(
+            trace!(
                 "Could not find matching library for torrent \"{}\", save_path {}",
                 torrent.name, torrent.save_path
             );
@@ -85,13 +87,14 @@ pub async fn link_torrents_to_library(
         )
         .await;
         if let Err(err) = update_errored_torrent(&db, hash, torrent.name, result) {
-            eprintln!("Error writing errored torrent: {err}");
+            error!("Error writing errored torrent: {err}");
         }
     }
 
     Ok(())
 }
 
+#[instrument(skip_all)]
 async fn link_torrent(
     config: Arc<Config>,
     db: Arc<Database<'_>>,
@@ -104,7 +107,7 @@ async fn link_torrent(
     let files = qbit.1.files(hash, None).await.map_err(QbitError)?;
     let selected_audio_format = select_format(&config.audio_types, &files);
     let selected_ebook_format = select_format(&config.ebook_types, &files);
-    println!("{selected_audio_format:?} {selected_ebook_format:?}");
+    debug!("{selected_audio_format:?} {selected_ebook_format:?}");
 
     if selected_audio_format.is_none() && selected_ebook_format.is_none() {
         bail!("Could not find any wanted formats in torrent");
@@ -143,7 +146,7 @@ async fn link_torrent(
         }
     }
     let dir = library.library_dir().join(dir);
-    println!("out_dir: {:?}", dir);
+    trace!("out_dir: {:?}", dir);
 
     let mut titles = mam_torrent.title.splitn(2, ":");
     let title = titles.next().unwrap();
@@ -168,12 +171,12 @@ async fn link_torrent(
         "isbn": isbn,
         "asin": asin,
     });
-    println!("metadata: {metadata:?}");
     create_dir_all(&dir)?;
 
     let mut library_files = vec![];
     for file in files {
-        println!("file: {:?}", file.name);
+        let span = span!(Level::TRACE, "file: {:?}", file.name);
+        let _s = span.enter();
         if !(selected_audio_format
             .as_ref()
             .is_some_and(|ext| file.name.ends_with(ext))
@@ -181,7 +184,7 @@ async fn link_torrent(
                 .as_ref()
                 .is_some_and(|ext| file.name.ends_with(ext)))
         {
-            eprintln!("Skiping \"{}\"", file.name);
+            debug!("Skiping \"{}\"", file.name);
             continue;
         }
         let torrent_path = PathBuf::from(&file.name);
@@ -206,7 +209,7 @@ async fn link_torrent(
         let library_path = dir.join(&file_path);
         library_files.push(file_path.clone());
         let download_path = PathBuf::from(&torrent.save_path).join(&file.name);
-        println!("linking: {:?} -> {:?}", download_path, library_path);
+        debug!("linking: {:?} -> {:?}", download_path, library_path);
         hard_link(&download_path, &library_path).or_else(|err| {
             if err.kind() == ErrorKind::AlreadyExists {
                 println!("AlreadyExists: {}", err);
@@ -276,7 +279,7 @@ fn update_errored_torrent(
     let rw = db.rw_transaction()?;
     let id = ErroredTorrentId::Linker(hash.to_owned());
     if let Err(err) = result {
-        println!("add_errored_torrent {torrent} - {err} - Linker");
+        warn!("Linker error for {torrent}: {err}");
         rw.upsert(ErroredTorrent {
             id,
             title: torrent,

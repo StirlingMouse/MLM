@@ -14,7 +14,6 @@ use std::{env, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use autograbber::run_autograbbers;
-use axum::{Router, routing::get};
 use cleaner::run_library_cleaner;
 use exporter::export_db;
 use figment::{
@@ -22,6 +21,7 @@ use figment::{
     providers::{Env, Format, Toml},
 };
 use tokio::time::sleep;
+use tracing::{error, info};
 use web::start_webserver;
 
 use crate::{config::Config, linker::link_torrents_to_library, mam::MaM, qbittorrent::QbitError};
@@ -29,7 +29,7 @@ use crate::{config::Config, linker::link_torrents_to_library, mam::MaM, qbittorr
 #[tokio::main]
 // #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
-    env_logger::init();
+    tracing_subscriber::fmt::init();
 
     let config_file = env::var("CONFIG_FILE").unwrap_or("config.toml".to_owned());
     let database_file = env::var("DB_FILE").unwrap_or("data.db".to_owned());
@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
         .extract()?;
     let config = Arc::new(config);
 
-    println!("config: {config:#?}");
+    info!("config: {config:#?}");
 
     let db = native_db::Builder::new().create(&data::MODELS, database_file)?;
     data::migrate(&db)?;
@@ -62,7 +62,7 @@ async fn main() -> Result<()> {
                 if let Err(err) =
                     run_autograbbers(config.clone(), db.clone(), &qbit, mam.clone()).await
                 {
-                    eprintln!("Error running autograbbers: {err}");
+                    error!("Error running autograbbers: {err:?}");
                 }
                 sleep(Duration::from_secs(60 * config.search_interval)).await;
             }
@@ -85,7 +85,7 @@ async fn main() -> Result<()> {
                 {
                     Ok(qbit) => qbit,
                     Err(err) => {
-                        eprintln!("Error logging in to qbit {}: {err}", qbit_conf.url);
+                        error!("Error logging in to qbit {}: {err}", qbit_conf.url);
                         return;
                     }
                 };
@@ -97,12 +97,11 @@ async fn main() -> Result<()> {
                         mam.clone(),
                     )
                     .await
-                    // .context("link_torrents_to_library")
                     {
-                        eprintln!("Error running linker: {err}");
+                        error!("Error running linker: {err:?}");
                     }
                     if let Err(err) = run_library_cleaner(config.clone(), db.clone()).await {
-                        eprintln!("Error running library_cleaner: {err}");
+                        error!("Error running library_cleaner: {err:?}");
                     }
                     sleep(Duration::from_secs(60 * config.link_interval)).await;
                 }

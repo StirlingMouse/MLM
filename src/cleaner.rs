@@ -3,6 +3,7 @@ use std::{fs, io::ErrorKind, mem, ops::Deref, os::unix::fs::MetadataExt, sync::A
 use anyhow::{Error, Result};
 use native_db::Database;
 use time::OffsetDateTime;
+use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
     config::Config,
@@ -10,6 +11,7 @@ use crate::{
     qbittorrent::QbitError,
 };
 
+#[instrument(skip_all)]
 pub async fn run_library_cleaner(config: Arc<Config>, db: Arc<Database<'_>>) -> Result<()> {
     let torrents: Vec<data::Torrent> = {
         let r = db.r_transaction()?;
@@ -39,6 +41,7 @@ pub async fn run_library_cleaner(config: Arc<Config>, db: Arc<Database<'_>>) -> 
     Ok(())
 }
 
+#[instrument(skip_all)]
 async fn process_batch(
     config: &Config,
     db: &Database<'_>,
@@ -80,7 +83,7 @@ async fn process_batch(
             .collect::<Vec<_>>();
         batch.sort_by_key(|(_, preference)| *preference);
         if batch[0].1 == batch[1].1 {
-            println!(
+            trace!(
                 "need to compare torrent \"{}\" and \"{}\" by size",
                 batch[0].0.meta.title, batch[1].0.meta.title
             );
@@ -98,7 +101,7 @@ async fn process_batch(
                 })
                 .collect::<Vec<_>>();
             new_batch.sort_by(|a, b| a.1.cmp(&b.1).then(b.2.cmp(&a.2)));
-            println!("new_batch {:?}", new_batch);
+            trace!("new_batch {:?}", new_batch);
             batch = new_batch
                 .into_iter()
                 .map(|(torrent, preference, _)| (torrent, preference))
@@ -110,7 +113,7 @@ async fn process_batch(
             let title = remove.meta.title.clone();
             let result = remove_torrent(&config, db, &keep, remove).await;
             if let Err(err) = update_errored_torrent(db, hash, title, result) {
-                eprintln!("Error writing errored torrent: {err}");
+                error!("Error writing errored torrent: {err}");
             }
         }
     }
@@ -118,33 +121,33 @@ async fn process_batch(
     Ok(())
 }
 
+#[instrument(skip_all)]
 async fn remove_torrent(
     config: &&Config,
     db: &Database<'_>,
     keep: &Torrent,
     mut remove: Torrent,
 ) -> Result<()> {
-    println!(
+    info!(
         "Replacing library torrent \"{}\" with formats {:?} with {:?}",
         remove.meta.title, remove.meta.filetypes, keep.meta.filetypes
     );
     remove.replaced_with = Some((keep.hash.clone(), OffsetDateTime::now_utc()));
     let library_path = remove.library_path.take();
-    println!(
+    debug!(
         "keep files: {:?} {:?}",
         keep.library_path, keep.library_files
     );
-    println!("main_cat: {:?}", keep.meta.main_cat);
-    println!("authors: {:?}", keep.meta.authors);
-    println!("narrators: {:?}", keep.meta.narrators);
-    println!(
+    debug!("main_cat: {:?}", keep.meta.main_cat);
+    debug!("authors: {:?}", keep.meta.authors);
+    debug!("narrators: {:?}", keep.meta.narrators);
+    debug!(
         "remove files: {:?} {:?}",
         remove.library_path, remove.library_files
     );
-    println!("main_cat: {:?}", remove.meta.main_cat);
-    println!("authors: {:?}", remove.meta.authors);
-    println!("narrators: {:?}", remove.meta.narrators);
-    println!();
+    debug!("main_cat: {:?}", remove.meta.main_cat);
+    debug!("authors: {:?}", remove.meta.authors);
+    debug!("narrators: {:?}", remove.meta.narrators);
 
     for qbit_conf in config.qbittorrent.iter() {
         if let Some(on_cleaned) = &qbit_conf.on_cleaned {
@@ -167,7 +170,7 @@ async fn remove_torrent(
                 .map_err(QbitError)?;
             }
         }
-        println!("qbit updated");
+        trace!("qbit updated");
     }
 
     if let Some(library_path) = library_path {
@@ -175,7 +178,7 @@ async fn remove_torrent(
             let path = library_path.join(file);
             fs::remove_file(path).or_else(|err| {
                 if err.kind() == ErrorKind::NotFound {
-                    println!("file already missing");
+                    trace!("file already missing");
                     Ok(())
                 } else {
                     Err(err)
@@ -183,7 +186,7 @@ async fn remove_torrent(
             })?;
         }
     }
-    println!("files removed");
+    trace!("files removed");
 
     let rw = db.rw_transaction()?;
     rw.upsert(remove)?;
@@ -201,7 +204,7 @@ fn update_errored_torrent(
     let rw = db.rw_transaction()?;
     let id = ErroredTorrentId::Cleaner(hash.to_owned());
     if let Err(err) = result {
-        println!("add_errored_torrent {torrent} - {err} - Cleaner");
+        warn!("Cleaner error for {torrent}: {err}");
         rw.upsert(ErroredTorrent {
             id,
             title: torrent,
