@@ -47,13 +47,14 @@ impl TryFrom<String> for Size {
     type Error = String;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let size_pattern = Regex::new(r"^(\d{1,6}(?:\.\d{1,3})?) ([kKMG]?)(i)?B$").unwrap();
+        let size_pattern =
+            Regex::new(r"^((?:\d{1,3},)?\d{1,6}(?:\.\d{1,3})?) ([kKMG]?)(i)?B$").unwrap();
 
         if let Some((Some(value), Some(unit), i)) = size_pattern
             .captures(&value)
             .map(|c| (c.get(1), c.get(2), c.get(3)))
         {
-            let value: f64 = value.as_str().parse().unwrap();
+            let value: f64 = value.as_str().replace(",", "").parse().unwrap();
             let base: u64 = if i.is_some() { 1024 } else { 1000 };
             let multiplier = match unit.as_str() {
                 "" => 1,
@@ -66,6 +67,19 @@ impl TryFrom<String> for Size {
         } else {
             Err(format!("invalid size value {value}"))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_thousands_divider() {
+        assert_eq!(
+            Size::try_from("1,016.2 KiB".to_string()),
+            Ok(Size(1_040_589))
+        );
     }
 }
 
