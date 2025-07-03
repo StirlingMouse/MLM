@@ -138,6 +138,8 @@ library_dir = "/mnt/Data/Library/Ebooks"
 [[library]]
 download_dir = "/mnt/Data/Uploads/Audiobooks" # multiple libraries can contribute to the same library dir, for example if you keep your own uploads separate
 library_dir = "/mnt/Data/Library/Audiobooks"
+allow_tags = [ "library" ] # you can also require the torrents to have certain tags
+deny_tags = [ "skip" ] # or disallow some
 ```
 
 I will never promise any future development, but some of my current plans:

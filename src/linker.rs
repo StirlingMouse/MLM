@@ -58,17 +58,40 @@ pub async fn link_torrents_to_library(
         if torrent.progress < 1.0 {
             continue;
         }
+        let torrent_tags = torrent.tags.split(", ").collect::<Vec<_>>();
         if let Some(ref wanted_tags) = qbit.0.tags {
-            let mut torrent_tags = torrent.tags.split(", ");
-            let wanted = torrent_tags.any(|ttag| wanted_tags.iter().any(|wtag| ttag == wtag));
+            let wanted = torrent_tags
+                .iter()
+                .any(|ttag| wanted_tags.iter().any(|wtag| ttag == wtag));
             if !wanted {
                 continue;
             };
         }
-        let Some(library) = config.libraries.iter().find(|l| match l {
-            Library::ByDir(l) => PathBuf::from(&torrent.save_path).starts_with(&l.download_dir),
-            Library::ByCategory(l) => torrent.category == l.category,
-        }) else {
+        let Some(library) = config
+            .libraries
+            .iter()
+            .filter(|l| match l {
+                Library::ByDir(l) => PathBuf::from(&torrent.save_path).starts_with(&l.download_dir),
+                Library::ByCategory(l) => torrent.category == l.category,
+            })
+            .find(|l| {
+                let filters = l.tag_filters();
+                if filters
+                    .deny_tags
+                    .iter()
+                    .any(|tag| torrent_tags.contains(&tag.as_str()))
+                {
+                    return false;
+                }
+                if filters.allow_tags.is_empty() {
+                    return true;
+                }
+                filters
+                    .allow_tags
+                    .iter()
+                    .any(|tag| torrent_tags.contains(&tag.as_str()))
+            })
+        else {
             trace!(
                 "Could not find matching library for torrent \"{}\", save_path {}",
                 torrent.name, torrent.save_path

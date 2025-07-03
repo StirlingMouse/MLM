@@ -195,6 +195,13 @@ impl Library {
             Library::ByCategory(l) => &l.library_dir,
         }
     }
+
+    pub fn tag_filters(&self) -> &LibraryTagFilters {
+        match self {
+            Library::ByDir(l) => &l.tag_filters,
+            Library::ByCategory(l) => &l.tag_filters,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -202,6 +209,8 @@ impl Library {
 pub struct LibraryByDir {
     pub download_dir: PathBuf,
     pub library_dir: PathBuf,
+    #[serde(flatten)]
+    pub tag_filters: LibraryTagFilters,
 }
 
 #[derive(Debug, Deserialize)]
@@ -209,6 +218,17 @@ pub struct LibraryByDir {
 pub struct LibraryByCategory {
     pub category: String,
     pub library_dir: PathBuf,
+    #[serde(flatten)]
+    pub tag_filters: LibraryTagFilters,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LibraryTagFilters {
+    #[serde(default)]
+    pub allow_tags: Vec<String>,
+    #[serde(default)]
+    pub deny_tags: Vec<String>,
 }
 
 fn default_host() -> String {
