@@ -265,9 +265,11 @@ async fn torrents_page(
                 TorrentsPageSort::Narrators => a.meta.narrators.cmp(&b.meta.narrators),
                 TorrentsPageSort::Series => a.meta.series.cmp(&b.meta.series),
                 TorrentsPageSort::Linked => a.library_path.is_some().cmp(&b.library_path.is_some()),
-                TorrentsPageSort::Replaced => {
-                    a.replaced_with.is_some().cmp(&b.replaced_with.is_some())
-                }
+                TorrentsPageSort::Replaced => a
+                    .replaced_with
+                    .as_ref()
+                    .map(|r| r.1)
+                    .cmp(&b.replaced_with.as_ref().map(|r| r.1)),
                 TorrentsPageSort::CreatedAt => a.created_at.cmp(&b.created_at),
             };
             if sort.asc { ord.reverse() } else { ord }
