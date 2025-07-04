@@ -65,6 +65,8 @@ async fn errors_page(
                 let ok = match field {
                     ErrorsPageFilter::Step => t.id.step() == value,
                     ErrorsPageFilter::Title => &t.title == value,
+                    ErrorsPageFilter::SortBy => true,
+                    ErrorsPageFilter::Asc => true,
                 };
                 if !ok {
                     return false;
@@ -115,6 +117,8 @@ async fn selected_page(
                         t.meta.series.iter().any(|(name, _)| name == value)
                     }
                     SelectedPageFilter::Filetype => t.meta.filetypes.contains(value),
+                    SelectedPageFilter::SortBy => true,
+                    SelectedPageFilter::Asc => true,
                 };
                 if !ok {
                     return false;
@@ -164,6 +168,8 @@ async fn duplicate_page(
                         t.meta.series.iter().any(|(name, _)| name == value)
                     }
                     DuplicatePageFilter::Filetype => t.meta.filetypes.contains(value),
+                    DuplicatePageFilter::SortBy => true,
+                    DuplicatePageFilter::Asc => true,
                 };
                 if !ok {
                     return false;
@@ -214,6 +220,8 @@ async fn torrents_page(
                     }
                     TorrentsPageFilter::Linked => t.library_path.is_some() == (value == "true"),
                     TorrentsPageFilter::Filetype => t.meta.filetypes.contains(value),
+                    TorrentsPageFilter::SortBy => true,
+                    TorrentsPageFilter::Asc => true,
                 };
                 if !ok {
                     return false;
@@ -263,10 +271,13 @@ enum ErrorsPageSort {
 impl Key for ErrorsPageSort {}
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 enum ErrorsPageFilter {
     Step,
     Title,
+    // Workaround sort decode failure
+    SortBy,
+    Asc,
 }
 
 impl Key for ErrorsPageFilter {}
@@ -300,7 +311,7 @@ enum SelectedPageSort {
 impl Key for SelectedPageSort {}
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 enum SelectedPageFilter {
     Kind,
     Title,
@@ -308,6 +319,9 @@ enum SelectedPageFilter {
     Narrator,
     Series,
     Filetype,
+    // Workaround sort decode failure
+    SortBy,
+    Asc,
 }
 
 impl Key for SelectedPageFilter {}
@@ -341,7 +355,7 @@ enum DuplicatePageSort {
 impl Key for DuplicatePageSort {}
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 enum DuplicatePageFilter {
     Kind,
     Title,
@@ -349,6 +363,9 @@ enum DuplicatePageFilter {
     Narrator,
     Series,
     Filetype,
+    // Workaround sort decode failure
+    SortBy,
+    Asc,
 }
 
 impl Key for DuplicatePageFilter {}
@@ -383,7 +400,7 @@ enum TorrentsPageSort {
 impl Key for TorrentsPageSort {}
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 enum TorrentsPageFilter {
     Kind,
     Title,
@@ -392,6 +409,9 @@ enum TorrentsPageFilter {
     Series,
     Linked,
     Filetype,
+    // Workaround sort decode failure
+    SortBy,
+    Asc,
 }
 
 impl Key for TorrentsPageFilter {}
