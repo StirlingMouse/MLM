@@ -22,13 +22,13 @@
   {{ table_header(None, "Filetypes") | safe }}
   {{ table_header(Some(TorrentsPageSort::CreatedAt), "Added At") | safe }}
 {% for torrent in torrents %}
-  <div>{{ torrent.meta.main_cat.as_str() }}</div>
-  <div>{{ torrent.meta.title }}</div>
-  <div>{{ torrent.meta.authors.join(", ") }}</div>
-  <div>{{ torrent.meta.narrators.join(", ") }}</div>
-  <div>{{ torrent.meta.series.iter().map(self::series).join(", ") }}</div>
-  <div>{{ torrent.library_path.is_some() }}</div>
-  <div>{{ torrent.meta.filetypes.join(" ") }}</div>
+  <div>{{ self::item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) | safe }}</div>
+  <div>{{ self::item(TorrentsPageFilter::Title, torrent.meta.title) | safe }}</div>
+  <div>{{ self::items(TorrentsPageFilter::Author, torrent.meta.authors) | safe }}</div>
+  <div>{{ self::items(TorrentsPageFilter::Narrator, torrent.meta.narrators) | safe }}</div>
+  <div>{{ self::series(TorrentsPageFilter::Series, torrent.meta.series) | safe }}</div>
+  <div>{{ self::item(TorrentsPageFilter::Linked, &torrent.library_path.is_some().to_string()) | safe }}</div>
+  <div>{{ self::items(TorrentsPageFilter::Filetype, torrent.meta.filetypes) | safe }}</div>
   <div>{{ self::time(torrent.created_at) }}</div>
 {% endfor %}
 </div>

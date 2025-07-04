@@ -22,12 +22,12 @@
   {{ table_header(None, "Filetypes") | safe }}
   {{ table_header(Some(DuplicatePageSort::CreatedAt), "Added At") | safe }}
 {% for torrent in torrents %}
-  <div>{{ torrent.meta.main_cat.as_str() }}</div>
-  <div>{{ torrent.meta.title }}</div>
-  <div>{{ torrent.meta.authors.join(", ") }}</div>
-  <div>{{ torrent.meta.narrators.join(", ") }}</div>
-  <div>{{ torrent.meta.series.iter().map(self::series).join(", ") }}</div>
-  <div>{{ torrent.meta.filetypes.join(" ") }}</div>
+  <div>{{ self::item(DuplicatePageFilter::Kind, torrent.meta.main_cat.as_str()) | safe }}</div>
+  <div>{{ self::item(DuplicatePageFilter::Title, torrent.meta.title) | safe }}</div>
+  <div>{{ self::items(DuplicatePageFilter::Author, torrent.meta.authors) | safe }}</div>
+  <div>{{ self::items(DuplicatePageFilter::Narrator, torrent.meta.narrators) | safe }}</div>
+  <div>{{ self::series(DuplicatePageFilter::Series, torrent.meta.series) | safe }}</div>
+  <div>{{ self::items(DuplicatePageFilter::Filetype, torrent.meta.filetypes) | safe }}</div>
   <div>{{ self::time(torrent.created_at) }}</div>
 {% endfor %}
 </div>
