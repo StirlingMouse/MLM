@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     fs::{self, File, create_dir_all, hard_link},
     io::{BufWriter, ErrorKind, Write},
     os::unix::fs::MetadataExt as _,
@@ -21,8 +22,8 @@ use tracing::{Level, debug, error, instrument, span, trace, warn};
 
 use crate::{
     config::{Config, Library, QbitConfig},
-    data::{self, ErroredTorrent, ErroredTorrentId},
-    mam::{MaM, clean_value, normalize_title},
+    data::{self, ErroredTorrent, ErroredTorrentId, TorrentMeta},
+    mam::{MaM, MaMTorrent, clean_value, normalize_title},
     mam_enums::Size,
     qbittorrent::QbitError,
 };
@@ -99,7 +100,7 @@ pub async fn link_torrents_to_library(
             continue;
         };
 
-        let result = link_torrent(
+        let result = match_torrent(
             config.clone(),
             db.clone(),
             qbit,
@@ -118,7 +119,7 @@ pub async fn link_torrents_to_library(
 }
 
 #[instrument(skip_all)]
-async fn link_torrent(
+async fn match_torrent(
     config: Arc<Config>,
     db: Arc<Database<'_>>,
     qbit: (&QbitConfig, &qbit::Api),
@@ -135,16 +136,59 @@ async fn link_torrent(
     if selected_audio_format.is_none() && selected_ebook_format.is_none() {
         bail!("Could not find any wanted formats in torrent");
     }
-
     let Some(mam_torrent) = mam.get_torrent_info(hash).await.context("get_mam_info")? else {
         bail!("Could not find torrent on mam");
     };
+    let meta = mam_torrent.as_meta()?;
+
+    link_torrent(
+        config,
+        db,
+        hash,
+        torrent,
+        files,
+        selected_audio_format,
+        selected_ebook_format,
+        library,
+        mam_torrent,
+        &meta,
+    )
+    .await
+    .map_err(|err| anyhow::Error::new(TorrentMetaError(meta, err)))
+}
+
+#[derive(Debug)]
+struct TorrentMetaError(TorrentMeta, anyhow::Error);
+impl Display for TorrentMetaError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.1.fmt(f)
+    }
+}
+impl std::error::Error for TorrentMetaError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.1.source()
+    }
+}
+
+#[instrument(skip_all)]
+#[allow(clippy::too_many_arguments)]
+async fn link_torrent(
+    config: Arc<Config>,
+    db: Arc<Database<'_>>,
+    hash: &str,
+    torrent: &TorrentInfo,
+    files: Vec<TorrentContent>,
+    selected_audio_format: Option<String>,
+    selected_ebook_format: Option<String>,
+    library: &Library,
+    mam_torrent: MaMTorrent,
+    meta: &TorrentMeta,
+) -> Result<()> {
     let Some((_, author)) = mam_torrent.author_info.first_key_value() else {
         bail!("Torrent has no author");
     };
     let author = clean_value(author)?;
     let series = mam_torrent.series_info.first_key_value();
-    let meta = mam_torrent.as_meta()?;
 
     let mut dir = match series {
         Some((_, (series_name, series_num))) => {
@@ -241,9 +285,12 @@ async fn link_torrent(
                 let library_id = get_file_id(&library_path);
                 println!("got 2: {library_id:?}");
                 if let (Ok(download_id), Ok(library_id)) = (download_id, library_id) {
+                println!("got both");
                     if download_id == library_id {
+                println!("both match");
                         return Ok(());
                     } else {
+                println!("no match");
                         bail!(
                             "File \"{:?}\" already exists, torrent file size: {}, library file size: {}",
                             file_path,
@@ -269,7 +316,7 @@ async fn link_torrent(
             library_path: Some(dir),
             library_files,
             title_search: normalize_title(&mam_torrent.title),
-            meta,
+            meta: meta.clone(),
             created_at: OffsetDateTime::now_utc(),
             replaced_with: None,
             request_matadata_update: false,
@@ -303,11 +350,15 @@ fn update_errored_torrent(
     let id = ErroredTorrentId::Linker(hash.to_owned());
     if let Err(err) = result {
         warn!("Linker error for {torrent}: {err}");
+        let (err, meta) = match err.downcast::<TorrentMetaError>() {
+            Ok(TorrentMetaError(meta, err)) => (err, Some(meta)),
+            Err(err) => (err, None),
+        };
         rw.upsert(ErroredTorrent {
             id,
             title: torrent,
             error: format!("{err}"),
-            meta: None,
+            meta,
             created_at: OffsetDateTime::now_utc(),
         })?;
     } else if let Some(error) = rw.get().primary::<ErroredTorrent>(id)? {

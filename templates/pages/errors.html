@@ -5,7 +5,7 @@
 {% block head %}
   <style>
     .ErrorsTable {
-      {{self::table_styles(4) | safe}}
+      {{self::table_styles(5) | safe}}
     }
   </style>
 {% endblock %}
@@ -18,11 +18,19 @@
   {{ table_header(Some(ErrorsPageSort::Title), "Title") | safe }}
   {{ table_header(Some(ErrorsPageSort::Error), "Error") | safe }}
   {{ table_header(Some(ErrorsPageSort::CreatedAt), "When") | safe }}
+  {{ table_header(None, "") | safe }}
 {% for error in errors %}
   <div>{{ self::item(ErrorsPageFilter::Step, error.id.step()) | safe }}</div>
   <div>{{ self::item(ErrorsPageFilter::Title, error.title) | safe }}</div>
   <div>{{ error.error }}</div>
   <div>{{ self::time(error.created_at) }}</div>
+  <div>
+  {% match error.meta %}
+    {% when Some(meta) %}
+      <a href="https://www.myanonamouse.net/t/{{ meta.mam_id }}" target=_blank>MaM</a></div>
+    {% when None %}
+  {% endmatch %}
+  </div>
 {% endfor %}
 </div>
 {% endblock %}
