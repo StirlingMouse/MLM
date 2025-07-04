@@ -30,8 +30,12 @@
   <div>{{ self::items(TorrentsPageFilter::Narrator, torrent.meta.narrators) | safe }}</div>
   <div>{{ self::series(TorrentsPageFilter::Series, torrent.meta.series) | safe }}</div>
   <div>{{ self::items(TorrentsPageFilter::Filetype, torrent.meta.filetypes) | safe }}</div>
-  <div>{{ self::item(TorrentsPageFilter::Linked, &torrent.library_path.is_some().to_string()) | safe }}</div>
-  <div>{{ self::item(TorrentsPageFilter::Replaced, &torrent.replaced_with.is_some().to_string()) | safe }}</div>
+  <div {% match torrent.library_path %}{% when Some(path) %}title="{{ path.to_string_lossy() }}"{% when None %}{% endmatch %}>
+    {{ self::item(TorrentsPageFilter::Linked, &torrent.library_path.is_some().to_string()) | safe }}
+  </div>
+  <div {% match torrent.replaced_with %}{% when Some((_, replaced_at)) %}title="replaced at: {{ self::time(replaced_at) }}"{% when None %}{% endmatch %}>
+    {{ self::item(TorrentsPageFilter::Replaced, &torrent.replaced_with.is_some().to_string()) | safe }}
+  </div>
   <div>{{ self::time(torrent.created_at) }}</div>
   <div><a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a></div>
 {% endfor %}
