@@ -218,8 +218,9 @@ async fn torrents_page(
                     TorrentsPageFilter::Series => {
                         t.meta.series.iter().any(|(name, _)| name == value)
                     }
-                    TorrentsPageFilter::Linked => t.library_path.is_some() == (value == "true"),
                     TorrentsPageFilter::Filetype => t.meta.filetypes.contains(value),
+                    TorrentsPageFilter::Linked => t.library_path.is_some() == (value == "true"),
+                    TorrentsPageFilter::Replaced => t.replaced_with.is_some() == (value == "true"),
                     TorrentsPageFilter::SortBy => true,
                     TorrentsPageFilter::Asc => true,
                 };
@@ -239,6 +240,9 @@ async fn torrents_page(
                 TorrentsPageSort::Narrators => a.meta.narrators.cmp(&b.meta.narrators),
                 TorrentsPageSort::Series => a.meta.series.cmp(&b.meta.series),
                 TorrentsPageSort::Linked => a.library_path.is_some().cmp(&b.library_path.is_some()),
+                TorrentsPageSort::Replaced => {
+                    a.replaced_with.is_some().cmp(&b.replaced_with.is_some())
+                }
                 TorrentsPageSort::CreatedAt => a.created_at.cmp(&b.created_at),
             };
             if sort.asc { ord.reverse() } else { ord }
@@ -394,6 +398,7 @@ enum TorrentsPageSort {
     Narrators,
     Series,
     Linked,
+    Replaced,
     CreatedAt,
 }
 
@@ -407,8 +412,9 @@ enum TorrentsPageFilter {
     Author,
     Narrator,
     Series,
-    Linked,
     Filetype,
+    Linked,
+    Replaced,
     // Workaround sort decode failure
     SortBy,
     Asc,

@@ -5,7 +5,7 @@
 {% block head %}
   <style>
     .TorrentsTable {
-      {{self::table_styles(8) | safe}}
+      {{self::table_styles(10) | safe}}
     }
   </style>
 {% endblock %}
@@ -18,18 +18,22 @@
   {{ table_header(Some(TorrentsPageSort::Authors), "Authors") | safe }}
   {{ table_header(Some(TorrentsPageSort::Narrators), "Narrators") | safe }}
   {{ table_header(Some(TorrentsPageSort::Series), "Series") | safe }}
-  {{ table_header(Some(TorrentsPageSort::Linked), "Is Linked") | safe }}
   {{ table_header(None, "Filetypes") | safe }}
+  {{ table_header(Some(TorrentsPageSort::Linked), "Is Linked") | safe }}
+  {{ table_header(Some(TorrentsPageSort::Replaced), "Is Replaced") | safe }}
   {{ table_header(Some(TorrentsPageSort::CreatedAt), "Added At") | safe }}
+  {{ table_header(None, "") | safe }}
 {% for torrent in torrents %}
   <div>{{ self::item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) | safe }}</div>
   <div>{{ self::item(TorrentsPageFilter::Title, torrent.meta.title) | safe }}</div>
   <div>{{ self::items(TorrentsPageFilter::Author, torrent.meta.authors) | safe }}</div>
   <div>{{ self::items(TorrentsPageFilter::Narrator, torrent.meta.narrators) | safe }}</div>
   <div>{{ self::series(TorrentsPageFilter::Series, torrent.meta.series) | safe }}</div>
-  <div>{{ self::item(TorrentsPageFilter::Linked, &torrent.library_path.is_some().to_string()) | safe }}</div>
   <div>{{ self::items(TorrentsPageFilter::Filetype, torrent.meta.filetypes) | safe }}</div>
+  <div>{{ self::item(TorrentsPageFilter::Linked, &torrent.library_path.is_some().to_string()) | safe }}</div>
+  <div>{{ self::item(TorrentsPageFilter::Replaced, &torrent.replaced_with.is_some().to_string()) | safe }}</div>
   <div>{{ self::time(torrent.created_at) }}</div>
+  <div><a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a></div>
 {% endfor %}
 </div>
 {% endblock %}

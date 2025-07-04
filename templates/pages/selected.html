@@ -5,7 +5,7 @@
 {% block head %}
   <style>
     .SelectedTable {
-      {{self::table_styles(7) | safe}}
+      {{self::table_styles(8) | safe}}
     }
   </style>
 {% endblock %}
@@ -21,6 +21,7 @@
   {{ table_header(Some(SelectedPageSort::Series), "Series") | safe }}
   {{ table_header(None, "Filetypes") | safe }}
   {{ table_header(Some(SelectedPageSort::CreatedAt), "Added At") | safe }}
+  {{ table_header(None, "") | safe }}
 {% for torrent in torrents %}
   <div>{{ self::item(SelectedPageFilter::Kind, torrent.meta.main_cat.as_str()) | safe }}</div>
   <div>{{ self::item(SelectedPageFilter::Title, torrent.meta.title) | safe }}</div>
@@ -29,6 +30,7 @@
   <div>{{ self::series(SelectedPageFilter::Series, torrent.meta.series) | safe }}</div>
   <div>{{ self::items(SelectedPageFilter::Filetype, torrent.meta.filetypes) | safe }}</div>
   <div>{{ self::time(torrent.created_at) }}</div>
+  <div><a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a></div>
 {% endfor %}
 </div>
 {% endblock %}

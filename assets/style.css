@@ -37,6 +37,10 @@ nav > a {
         }
 
         & > .header {
+                position: sticky;
+                top: 0;
                 font-weight: bold;
+                border-bottom: 1px solid currentColor;
+                background: var(--background);
         }
 }
