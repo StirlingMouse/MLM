@@ -151,13 +151,13 @@ pub struct Tor<'a> {
     pub cat: Vec<u8>,
 
     /// Date in format YYYY-MM-DD or unix timestamp of earliest torrent(s) to show. Inclusive of the provided value
-    #[serde(skip_serializing_if = "str::is_empty")]
+    #[serde(skip_serializing_if = "String::is_empty")]
     #[serde(rename = "startDate")]
-    pub start_date: &'a str,
+    pub start_date: String,
     /// Date in format YYYY-MM-DD or unix timestamp torrents should have been created before. Exclusive of value provided
-    #[serde(skip_serializing_if = "str::is_empty")]
+    #[serde(skip_serializing_if = "String::is_empty")]
     #[serde(rename = "endDate")]
-    pub end_date: &'a str,
+    pub end_date: String,
 
     #[serde(skip_serializing_if = "is_zero")]
     #[serde(rename = "minSize")]
@@ -167,6 +167,25 @@ pub struct Tor<'a> {
     pub max_size: u64,
     #[serde(skip_serializing_if = "is_zero")]
     pub unit: u64,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "minSeeders")]
+    pub min_seeders: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "maxSeeders")]
+    pub max_seeders: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "minLeechers")]
+    pub min_leechers: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "maxLeechers")]
+    pub max_leechers: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "minSnatched")]
+    pub min_snatched: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "maxSnatched")]
+    pub max_snatched: Option<u64>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "browseFlagsHideVsShow")]

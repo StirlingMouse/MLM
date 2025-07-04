@@ -11,10 +11,17 @@ use crate::{
 use anyhow::{Error, Result};
 use lava_torrent::torrent::v1::Torrent;
 use native_db::{Database, db_type, transaction::RwTransaction};
+use once_cell::sync::Lazy;
 use qbit::parameters::TorrentAddUrls;
-use time::OffsetDateTime;
+use time::{
+    OffsetDateTime,
+    format_description::{self, OwnedFormatItem},
+};
 use tokio::time::sleep;
 use tracing::{debug, error, info, instrument, trace, warn};
+
+pub static DATE_FORMAT: Lazy<OwnedFormatItem> =
+    Lazy::new(|| format_description::parse_owned::<2>("[year]-[month]-[day]").unwrap());
 
 #[instrument(skip_all)]
 pub async fn run_autograbbers(
@@ -122,8 +129,20 @@ pub async fn select_torrents(
                         Some(if flags_is_hide { 0 } else { 1 })
                     },
                     browse_flags: flags.clone(),
+                    start_date: torrent_filter
+                        .uploaded_after
+                        .map_or_else(|| Ok(String::new()), |d| d.format(&DATE_FORMAT))?,
+                    end_date: torrent_filter
+                        .uploaded_before
+                        .map_or_else(|| Ok(String::new()), |d| d.format(&DATE_FORMAT))?,
                     min_size: torrent_filter.filter.min_size.bytes(),
                     max_size: torrent_filter.filter.max_size.bytes(),
+                    min_seeders: torrent_filter.min_seeders,
+                    max_seeders: torrent_filter.max_seeders,
+                    min_leechers: torrent_filter.min_leechers,
+                    max_leechers: torrent_filter.max_leechers,
+                    min_snatched: torrent_filter.min_snatched,
+                    max_snatched: torrent_filter.max_snatched,
                     unit: torrent_filter
                         .filter
                         .min_size

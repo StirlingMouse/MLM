@@ -143,11 +143,10 @@ deny_tags = [ "skip" ] # or disallow some
 ```
 
 I will never promise any future development, but some of my current plans:
-- Add more search filters
-- Add a web ui to show status and allow a few actions (like updating metadata for a torrent you suggested updated info for)
+- Improve web ui to show status and allow a few actions (like updating metadata for a torrent you suggested updated info for)
 - Add a plain .torrent file mode that can work with any client
 - Add a way to handle requests, e.g. with Goodreads lists or "to read" on The Storygraph
 - Support auto applying wedges to non-free torrents
-- Support editing the config file running
+- Support editing the config file while running
 
 

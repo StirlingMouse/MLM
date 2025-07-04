@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use serde::Deserialize;
+use time::Date;
 use tracing::error;
 
 use crate::{
@@ -59,6 +60,16 @@ pub struct TorrentFilter {
     pub search_in: Vec<SearchIn>,
     #[serde(flatten)]
     pub filter: Filter,
+
+    pub uploaded_after: Option<Date>,
+    pub uploaded_before: Option<Date>,
+    pub min_seeders: Option<u64>,
+    pub max_seeders: Option<u64>,
+    pub min_leechers: Option<u64>,
+    pub max_leechers: Option<u64>,
+    pub min_snatched: Option<u64>,
+    pub max_snatched: Option<u64>,
+
     pub unsat_buffer: Option<u64>,
     #[serde(default)]
     pub dry_run: bool,
