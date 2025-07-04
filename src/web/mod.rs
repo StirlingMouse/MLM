@@ -19,16 +19,22 @@ use time::{
     OffsetDateTime, UtcOffset,
     format_description::{self, OwnedFormatItem},
 };
+use tokio::sync::Mutex;
 use tower_http::services::ServeDir;
 
 use crate::{
     config::Config,
     data::{DuplicateTorrent, ErroredTorrent, ErroredTorrentId, SelectedTorrent, Torrent},
+    stats::Stats,
 };
 
-pub async fn start_webserver(config: Arc<Config>, db: Arc<Database<'static>>) -> Result<()> {
+pub async fn start_webserver(
+    config: Arc<Config>,
+    db: Arc<Database<'static>>,
+    stats: Arc<Mutex<Stats>>,
+) -> Result<()> {
     let app = Router::new()
-        .route("/", get(index_page))
+        .route("/", get(index_page).with_state(stats))
         .route("/errors", get(errors_page).with_state(db.clone()))
         .route("/selected", get(selected_page).with_state(db.clone()))
         .route("/duplicate", get(duplicate_page).with_state(db.clone()))
@@ -42,8 +48,27 @@ pub async fn start_webserver(config: Arc<Config>, db: Arc<Database<'static>>) ->
     Ok(())
 }
 
-async fn index_page() -> std::result::Result<Html<String>, AppError> {
-    let template = IndexPageTemplate {};
+async fn index_page(
+    State(stats): State<Arc<Mutex<Stats>>>,
+) -> std::result::Result<Html<String>, AppError> {
+    let stats = stats.lock().await;
+    let template = IndexPageTemplate {
+        autograbber_run_at: stats.autograbber_run_at,
+        autograbber_result: stats
+            .autograbber_result
+            .as_ref()
+            .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+        linker_run_at: stats.linker_run_at,
+        linker_result: stats
+            .linker_result
+            .as_ref()
+            .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+        cleaner_run_at: stats.cleaner_run_at,
+        cleaner_result: stats
+            .cleaner_result
+            .as_ref()
+            .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+    };
     Ok::<_, AppError>(Html(template.to_string()))
 }
 
@@ -254,7 +279,14 @@ async fn torrents_page(
 
 #[derive(Template)]
 #[template(path = "pages/index.html")]
-struct IndexPageTemplate {}
+struct IndexPageTemplate {
+    autograbber_run_at: Option<OffsetDateTime>,
+    autograbber_result: Option<Result<(), String>>,
+    linker_run_at: Option<OffsetDateTime>,
+    linker_result: Option<Result<(), String>>,
+    cleaner_run_at: Option<OffsetDateTime>,
+    cleaner_result: Option<Result<(), String>>,
+}
 
 #[derive(Template)]
 #[template(path = "pages/errors.html")]
