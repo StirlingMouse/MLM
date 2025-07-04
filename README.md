@@ -107,6 +107,16 @@ search_in = [ "author" ] # only search in authors
 flags = { violence = false } # with false we forbid the flag
 dry_run = true # this makes MLM not actually download the selected torrents, only log them, for testing your search
 
+# Other filters you can use
+# uploaded_after = "2020-06-01"
+# uploaded_before = "2025-01-01"
+# min_seeders = 10
+# max_seeders = 10
+# min_leechers = 10
+# max_leechers = 10
+# min_snatched = 10
+# max_snatched = 10
+
 [[tag]]
 categories = { audio = false, ebook = [ "food" ] }
 category = "Cookbooks" # Cookbooks will win over Ebooks as it is defined first and a torrent can only have one category
