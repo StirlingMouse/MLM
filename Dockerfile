@@ -39,4 +39,5 @@ COPY ./assets /assets
 COPY --from=build /app/target/release/mlm /mlm
 ENV CONFIG_FILE /config/config.toml
 ENV DB_FILE /data/data.db
+ENV RUST_LOG mlm=trace
 CMD ["/mlm"]
