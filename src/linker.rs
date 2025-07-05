@@ -204,7 +204,11 @@ async fn link_torrent(
         None => PathBuf::from(author).join(&mam_torrent.title),
     };
     if let Some(narrator) = &meta.narrators.first() {
-        if !config.exclude_narrator_in_library_dir {
+        let mut force_narrator = false;
+        if config.exclude_narrator_in_library_dir && library.library_dir().join(&dir).exists() {
+            force_narrator = true;
+        }
+        if !config.exclude_narrator_in_library_dir || force_narrator {
             dir.set_file_name(format!(
                 "{} {{{}}}",
                 dir.file_name().unwrap().to_string_lossy(),
