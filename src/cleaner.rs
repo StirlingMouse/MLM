@@ -27,11 +27,10 @@ pub async fn run_library_cleaner(config: Arc<Config>, db: Arc<Database<'_>>) -> 
     let mut batch: Vec<data::Torrent> = vec![];
     for torrent in torrents {
         if let Some(current) = batch.first() {
-            if current.title_search == torrent.title_search {
-                batch.push(torrent);
-            } else {
+            if current.title_search != torrent.title_search {
                 process_batch(&config, &db, mem::take(&mut batch)).await?;
             }
+            batch.push(torrent);
         } else {
             batch.push(torrent);
         }
