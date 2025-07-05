@@ -1,5 +1,4 @@
 use std::{
-    fmt::Display,
     fs::{self, File, create_dir_all, hard_link},
     io::{BufWriter, ErrorKind, Write},
     os::unix::fs::MetadataExt as _,
@@ -7,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{Context, Error, Result, bail};
+use anyhow::{Context, Result, bail};
 use file_id::get_file_id;
 use native_db::Database;
 use once_cell::sync::Lazy;
@@ -17,14 +16,13 @@ use qbit::{
 };
 use regex::Regex;
 use serde_json::json;
-use time::OffsetDateTime;
-use tracing::{Level, debug, error, instrument, span, trace, warn};
+use tracing::{Level, debug, instrument, span, trace};
 
 use crate::{
     config::{Config, Library, QbitConfig},
-    data::{self, ErroredTorrent, ErroredTorrentId, TorrentMeta},
+    data::{self, ErroredTorrentId, Size, Timestamp, TorrentMeta},
+    logging::{TorrentMetaError, update_errored_torrent},
     mam::{MaM, MaMTorrent, clean_value, normalize_title},
-    mam_enums::Size,
     qbittorrent::QbitError,
 };
 
@@ -109,10 +107,14 @@ pub async fn link_torrents_to_library(
             &torrent,
             library,
         )
-        .await;
-        if let Err(err) = update_errored_torrent(&db, hash, torrent.name, result) {
-            error!("Error writing errored torrent: {err}");
-        }
+        .await
+        .context("match_torrent");
+        update_errored_torrent(
+            &db,
+            ErroredTorrentId::Linker(hash.clone()),
+            torrent.name,
+            result,
+        )
     }
 
     Ok(())
@@ -139,7 +141,7 @@ async fn match_torrent(
     let Some(mam_torrent) = mam.get_torrent_info(hash).await.context("get_mam_info")? else {
         bail!("Could not find torrent on mam");
     };
-    let meta = mam_torrent.as_meta()?;
+    let meta = mam_torrent.as_meta().context("as_meta")?;
 
     link_torrent(
         config,
@@ -154,20 +156,8 @@ async fn match_torrent(
         &meta,
     )
     .await
+    .context("link_torrent")
     .map_err(|err| anyhow::Error::new(TorrentMetaError(meta, err)))
-}
-
-#[derive(Debug)]
-struct TorrentMetaError(TorrentMeta, anyhow::Error);
-impl Display for TorrentMetaError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.1.fmt(f)
-    }
-}
-impl std::error::Error for TorrentMetaError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.1.source()
-    }
 }
 
 #[instrument(skip_all)]
@@ -319,9 +309,11 @@ async fn link_torrent(
             hash: hash.to_owned(),
             library_path: Some(dir),
             library_files,
+            selected_audio_format,
+            selected_ebook_format,
             title_search: normalize_title(&mam_torrent.title),
             meta: meta.clone(),
-            created_at: OffsetDateTime::now_utc(),
+            created_at: Timestamp::now(),
             replaced_with: None,
             request_matadata_update: false,
         })?;
@@ -342,32 +334,4 @@ fn select_format(wanted_formats: &[String], files: &[TorrentContent]) -> Option<
             }
         })
         .find(|ext| files.iter().any(|f| f.name.ends_with(ext)))
-}
-
-fn update_errored_torrent(
-    db: &Database<'_>,
-    hash: &str,
-    torrent: String,
-    result: Result<(), Error>,
-) -> Result<()> {
-    let rw = db.rw_transaction()?;
-    let id = ErroredTorrentId::Linker(hash.to_owned());
-    if let Err(err) = result {
-        warn!("Linker error for {torrent}: {err}");
-        let (err, meta) = match err.downcast::<TorrentMetaError>() {
-            Ok(TorrentMetaError(meta, err)) => (err, Some(meta)),
-            Err(err) => (err, None),
-        };
-        rw.upsert(ErroredTorrent {
-            id,
-            title: torrent,
-            error: format!("{err}"),
-            meta,
-            created_at: OffsetDateTime::now_utc(),
-        })?;
-    } else if let Some(error) = rw.get().primary::<ErroredTorrent>(id)? {
-        rw.remove(error)?;
-    }
-    rw.commit()?;
-    Ok(())
 }

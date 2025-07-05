@@ -5,6 +5,7 @@ mod data;
 mod data_impl;
 mod exporter;
 mod linker;
+mod logging;
 mod mam;
 mod mam_enums;
 mod qbittorrent;
@@ -13,7 +14,7 @@ mod web;
 
 use std::{env, sync::Arc, time::Duration};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use autograbber::run_autograbbers;
 use cleaner::run_library_cleaner;
 use exporter::export_db;
@@ -69,7 +70,9 @@ async fn main() -> Result<()> {
                     stats.autograbber_run_at = Some(OffsetDateTime::now_utc());
                     stats.autograbber_result = None;
                 }
-                let result = run_autograbbers(config.clone(), db.clone(), &qbit, mam.clone()).await;
+                let result = run_autograbbers(config.clone(), db.clone(), &qbit, mam.clone())
+                    .await
+                    .context("autograbbers");
                 if let Err(err) = &result {
                     error!("Error running autograbbers: {err:?}");
                 }
@@ -115,7 +118,8 @@ async fn main() -> Result<()> {
                         (&qbit_conf, &qbit),
                         mam.clone(),
                     )
-                    .await;
+                    .await
+                    .context("link_torrents_to_library");
                     if let Err(err) = &result {
                         error!("Error running linker: {err:?}");
                     }
@@ -125,7 +129,9 @@ async fn main() -> Result<()> {
                         stats.cleaner_run_at = Some(OffsetDateTime::now_utc());
                         stats.cleaner_result = None;
                     }
-                    let result = run_library_cleaner(config.clone(), db.clone()).await;
+                    let result = run_library_cleaner(config.clone(), db.clone())
+                        .await
+                        .context("library_cleaner");
                     if let Err(err) = &result {
                         error!("Error running library_cleaner: {err:?}");
                     }

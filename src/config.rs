@@ -5,8 +5,10 @@ use time::Date;
 use tracing::error;
 
 use crate::{
+    data::{Language, Size},
+    data_impl::{parse, parse_vec},
     mam::MaMTorrent,
-    mam_enums::{Categories, Flags, Language, SearchIn, Size},
+    mam_enums::{Categories, Flags, SearchIn},
 };
 
 #[derive(Debug, Deserialize)]
@@ -92,12 +94,15 @@ pub struct Filter {
     #[serde(default)]
     pub categories: Categories,
     #[serde(default)]
+    #[serde(deserialize_with = "parse_vec")]
     pub languages: Vec<Language>,
     #[serde(default)]
     pub flags: Flags,
     #[serde(default)]
+    #[serde(deserialize_with = "parse")]
     pub min_size: Size,
     #[serde(default)]
+    #[serde(deserialize_with = "parse")]
     pub max_size: Size,
     #[serde(default)]
     pub exclude_uploader: Vec<String>,

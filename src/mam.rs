@@ -14,7 +14,11 @@ use serde_json::Value;
 use tracing::{debug, error, info, trace, warn};
 use unidecode::unidecode;
 
-use crate::{config::Config, data, mam_enums::SearchIn};
+use crate::{
+    config::Config,
+    data::{self, Language},
+    mam_enums::SearchIn,
+};
 
 fn is_false(value: &bool) -> bool {
     !value
@@ -351,16 +355,22 @@ impl MaMTorrent {
             })
             .collect::<Result<Vec<_>>>()?;
         let main_cat = data::MainCat::from_id(self.main_cat).map_err(MetaError::UnknownMainCat)?;
+        let language = Language::from_id(self.language)
+            .ok_or_else(|| MetaError::UnknownLanguage(self.language, self.lang_code.clone()))?;
         let filetypes = self
             .filetype
             .split(" ")
             .map(|t| t.to_owned())
             .collect::<Vec<_>>();
+        println!("{},{}", self.title, self.size);
+        let size = self.size.parse().map_err(MetaError::InvalidSize)?;
 
         Ok(data::TorrentMeta {
             mam_id: self.id,
             main_cat,
+            language: Some(language),
             filetypes,
+            size,
             title: self.title.to_owned(),
             authors,
             narrators,
@@ -373,6 +383,10 @@ impl MaMTorrent {
 pub enum MetaError {
     #[error("{0}")]
     UnknownMainCat(String),
+    #[error("Unknown language id {0}, code: {1}")]
+    UnknownLanguage(u8, String),
+    #[error("{0}")]
+    InvalidSize(String),
     #[error("Unknown error: {0}")]
     Other(#[from] Error),
 }

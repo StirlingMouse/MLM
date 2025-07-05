@@ -5,8 +5,8 @@
 {% block head %}
   <style>
     .TorrentsTable {
-      {{self::table_styles(10) | safe}}
-      grid-template-columns: 84px 2fr 1fr 1fr 1fr 80px 78px 97px 157px 44px;
+      {{self::table_styles(11) | safe}}
+      grid-template-columns: 84px 2fr 1fr 1fr 1fr 100px 80px 1fr 97px 157px 44px;
     }
   </style>
 {% endblock %}
@@ -19,6 +19,7 @@
   {{ table_header(Some(TorrentsPageSort::Authors), "Authors") | safe }}
   {{ table_header(Some(TorrentsPageSort::Narrators), "Narrators") | safe }}
   {{ table_header(Some(TorrentsPageSort::Series), "Series") | safe }}
+  {{ table_header(Some(TorrentsPageSort::Language), "Language") | safe }}
   {{ table_header(None, "Filetypes") | safe }}
   {{ table_header(Some(TorrentsPageSort::Linked), "Linked") | safe }}
   {{ table_header(Some(TorrentsPageSort::Replaced), "Replaced") | safe }}
@@ -30,9 +31,15 @@
   <div>{{ self::items(TorrentsPageFilter::Author, torrent.meta.authors) | safe }}</div>
   <div>{{ self::items(TorrentsPageFilter::Narrator, torrent.meta.narrators) | safe }}</div>
   <div>{{ self::series(TorrentsPageFilter::Series, torrent.meta.series) | safe }}</div>
+  <div>{{ self::item(TorrentsPageFilter::Language, torrent.meta.language.map(Language::to_str).unwrap_or_default()) | safe }}</div>
   <div>{{ self::items(TorrentsPageFilter::Filetype, torrent.meta.filetypes) | safe }}</div>
-  <div {% match torrent.library_path %}{% when Some(path) %}title="{{ path.to_string_lossy() }}"{% when None %}{% endmatch %}>
+  <div>
     {{ self::item(TorrentsPageFilter::Linked, &torrent.library_path.is_some().to_string()) | safe }}
+    {% match torrent.library_path %}
+    {% when Some(path) %}
+      {{ path.to_string_lossy() }}
+    {% when None %}
+    {% endmatch %}
   </div>
   <div {% match torrent.replaced_with %}{% when Some((_, replaced_at)) %}title="replaced at: {{ self::time(replaced_at) }}"{% when None %}{% endmatch %}>
     {{ self::item(TorrentsPageFilter::Replaced, &torrent.replaced_with.is_some().to_string()) | safe }}

@@ -1,5 +1,6 @@
 use std::{
     fmt::{self, Display},
+    str::FromStr,
     sync::Arc,
 };
 
@@ -16,7 +17,7 @@ use native_db::Database;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use time::{
-    OffsetDateTime, UtcOffset,
+    UtcOffset,
     format_description::{self, OwnedFormatItem},
 };
 use tokio::sync::Mutex;
@@ -24,7 +25,10 @@ use tower_http::services::ServeDir;
 
 use crate::{
     config::Config,
-    data::{DuplicateTorrent, ErroredTorrent, ErroredTorrentId, SelectedTorrent, Torrent},
+    data::{
+        DuplicateTorrent, ErroredTorrent, ErroredTorrentId, Language, SelectedTorrent, Timestamp,
+        Torrent,
+    },
     stats::Stats,
 };
 
@@ -53,17 +57,17 @@ async fn index_page(
 ) -> std::result::Result<Html<String>, AppError> {
     let stats = stats.lock().await;
     let template = IndexPageTemplate {
-        autograbber_run_at: stats.autograbber_run_at,
+        autograbber_run_at: stats.autograbber_run_at.map(Into::into),
         autograbber_result: stats
             .autograbber_result
             .as_ref()
             .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
-        linker_run_at: stats.linker_run_at,
+        linker_run_at: stats.linker_run_at.map(Into::into),
         linker_result: stats
             .linker_result
             .as_ref()
             .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
-        cleaner_run_at: stats.cleaner_run_at,
+        cleaner_run_at: stats.cleaner_run_at.map(Into::into),
         cleaner_result: stats
             .cleaner_result
             .as_ref()
@@ -243,6 +247,9 @@ async fn torrents_page(
                     TorrentsPageFilter::Series => {
                         t.meta.series.iter().any(|(name, _)| name == value)
                     }
+                    TorrentsPageFilter::Language => {
+                        t.meta.language == Language::from_str(value).ok()
+                    }
                     TorrentsPageFilter::Filetype => t.meta.filetypes.contains(value),
                     TorrentsPageFilter::Linked => t.library_path.is_some() == (value == "true"),
                     TorrentsPageFilter::Replaced => t.replaced_with.is_some() == (value == "true"),
@@ -264,7 +271,8 @@ async fn torrents_page(
                 TorrentsPageSort::Authors => a.meta.authors.cmp(&b.meta.authors),
                 TorrentsPageSort::Narrators => a.meta.narrators.cmp(&b.meta.narrators),
                 TorrentsPageSort::Series => a.meta.series.cmp(&b.meta.series),
-                TorrentsPageSort::Linked => a.library_path.is_some().cmp(&b.library_path.is_some()),
+                TorrentsPageSort::Language => a.meta.language.cmp(&b.meta.language),
+                TorrentsPageSort::Linked => a.library_path.cmp(&b.library_path),
                 TorrentsPageSort::Replaced => a
                     .replaced_with
                     .as_ref()
@@ -282,11 +290,11 @@ async fn torrents_page(
 #[derive(Template)]
 #[template(path = "pages/index.html")]
 struct IndexPageTemplate {
-    autograbber_run_at: Option<OffsetDateTime>,
+    autograbber_run_at: Option<Timestamp>,
     autograbber_result: Option<Result<(), String>>,
-    linker_run_at: Option<OffsetDateTime>,
+    linker_run_at: Option<Timestamp>,
     linker_result: Option<Result<(), String>>,
-    cleaner_run_at: Option<OffsetDateTime>,
+    cleaner_run_at: Option<Timestamp>,
     cleaner_result: Option<Result<(), String>>,
 }
 
@@ -431,6 +439,7 @@ enum TorrentsPageSort {
     Authors,
     Narrators,
     Series,
+    Language,
     Linked,
     Replaced,
     CreatedAt,
@@ -446,6 +455,7 @@ enum TorrentsPageFilter {
     Author,
     Narrator,
     Series,
+    Language,
     Filetype,
     Linked,
     Replaced,
@@ -598,8 +608,9 @@ pub static TIME_FORMAT: Lazy<OwnedFormatItem> = Lazy::new(|| {
     format_description::parse_owned::<2>("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap()
 });
 
-fn time(time: &OffsetDateTime) -> String {
-    time.to_offset(UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC))
+fn time(time: &Timestamp) -> String {
+    time.0
+        .to_offset(UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC))
         .replace_nanosecond(0)
         .unwrap()
         .format(&TIME_FORMAT)
@@ -643,10 +654,14 @@ enum AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         #[derive(Debug, Template)]
-        #[template(source = "<p>{error}</p>", ext = "html")]
+        #[template(source = "<p>{{error}}</p>", ext = "html")]
         struct Tmpl {
             #[allow(dead_code)]
             error: AppError,
+        }
+        match self {
+            AppError::Db(ref error) => eprintln!("{:?}", error),
+            AppError::Render(ref error) => eprintln!("{:?}", error),
         }
 
         let status = StatusCode::INTERNAL_SERVER_ERROR;

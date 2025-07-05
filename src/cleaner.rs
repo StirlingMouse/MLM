@@ -1,13 +1,13 @@
 use std::{fs, io::ErrorKind, mem, ops::Deref, os::unix::fs::MetadataExt, sync::Arc};
 
-use anyhow::{Error, Result};
+use anyhow::Result;
 use native_db::Database;
-use time::OffsetDateTime;
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, info, instrument, trace};
 
 use crate::{
     config::Config,
-    data::{self, ErroredTorrent, ErroredTorrentId, Torrent},
+    data::{self, ErroredTorrentId, Timestamp, Torrent},
+    logging::{TorrentMetaError, update_errored_torrent},
     qbittorrent::QbitError,
 };
 
@@ -108,12 +108,15 @@ async fn process_batch(
         }
         let (keep, _) = batch.remove(0);
         for (remove, _) in batch {
-            let hash = remove.hash.clone();
-            let title = remove.meta.title.clone();
-            let result = remove_torrent(&config, db, &keep, remove).await;
-            if let Err(err) = update_errored_torrent(db, hash, title, result) {
-                error!("Error writing errored torrent: {err}");
-            }
+            let result = remove_torrent(&config, db, &keep, remove.clone())
+                .await
+                .map_err(|err| anyhow::Error::new(TorrentMetaError(remove.meta.clone(), err)));
+            update_errored_torrent(
+                db,
+                ErroredTorrentId::Cleaner(remove.hash),
+                remove.meta.title,
+                result,
+            )
         }
     }
 
@@ -131,7 +134,7 @@ async fn remove_torrent(
         "Replacing library torrent \"{}\" with formats {:?} with {:?}",
         remove.meta.title, remove.meta.filetypes, keep.meta.filetypes
     );
-    remove.replaced_with = Some((keep.hash.clone(), OffsetDateTime::now_utc()));
+    remove.replaced_with = Some((keep.hash.clone(), Timestamp::now()));
     let library_path = remove.library_path.take();
     debug!(
         "keep files: {:?} {:?}",
@@ -215,29 +218,5 @@ async fn remove_torrent(
     rw.upsert(remove)?;
     rw.commit()?;
 
-    Ok(())
-}
-
-fn update_errored_torrent(
-    db: &Database<'_>,
-    hash: String,
-    torrent: String,
-    result: Result<(), Error>,
-) -> Result<()> {
-    let rw = db.rw_transaction()?;
-    let id = ErroredTorrentId::Cleaner(hash.to_owned());
-    if let Err(err) = result {
-        warn!("Cleaner error for {torrent}: {err}");
-        rw.upsert(ErroredTorrent {
-            id,
-            title: torrent,
-            error: format!("{err}"),
-            meta: None,
-            created_at: OffsetDateTime::now_utc(),
-        })?;
-    } else if let Some(error) = rw.get().primary::<ErroredTorrent>(id)? {
-        rw.remove(error)?;
-    }
-    rw.commit()?;
     Ok(())
 }

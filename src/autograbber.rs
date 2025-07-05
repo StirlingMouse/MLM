@@ -2,21 +2,19 @@ use std::{ops::RangeInclusive, sync::Arc, time::Duration};
 
 use crate::{
     config::{Config, Cost, TorrentFilter, Type},
-    data::{self, ErroredTorrent, ErroredTorrentId, SelectedTorrent, TorrentMeta},
+    data::{self, ErroredTorrentId, SelectedTorrent, Timestamp, TorrentMeta},
+    logging::{TorrentMetaError, update_errored_torrent},
     mam::{
         MaM, MetaError, SearchKind, SearchQuery, SearchResult, SearchTarget, Tor, normalize_title,
     },
     qbittorrent::QbitError,
 };
-use anyhow::{Error, Result};
+use anyhow::{Context, Error, Result};
 use lava_torrent::torrent::v1::Torrent;
 use native_db::{Database, db_type, transaction::RwTransaction};
 use once_cell::sync::Lazy;
 use qbit::parameters::TorrentAddUrls;
-use time::{
-    OffsetDateTime,
-    format_description::{self, OwnedFormatItem},
-};
+use time::format_description::{self, OwnedFormatItem};
 use tokio::time::sleep;
 use tracing::{debug, error, info, instrument, trace, warn};
 
@@ -45,7 +43,8 @@ pub async fn run_autograbbers(
                 mam.clone(),
                 max_torrents,
             )
-            .await?;
+            .await
+            .context("select_torrents")?;
         }
     }
 
@@ -65,12 +64,15 @@ pub async fn run_autograbbers(
             continue;
         }
 
-        let mam_id = torrent.mam_id;
-        let title = torrent.meta.title.clone();
-        let result = grab_torrent(&config, &db, qbit, &mam, torrent).await;
-        if let Err(err) = update_errored_torrent(&db, mam_id, title, result) {
-            error!("Error writing errored torrent: {err}");
-        }
+        let result = grab_torrent(&config, &db, qbit, &mam, torrent.clone())
+            .await
+            .map_err(|err| anyhow::Error::new(TorrentMetaError(torrent.meta.clone(), err)));
+        update_errored_torrent(
+            &db,
+            ErroredTorrentId::Grabber(torrent.mam_id),
+            torrent.meta.title,
+            result,
+        );
 
         sleep(Duration::from_millis(1000)).await;
         snatched_torrents += 1;
@@ -137,24 +139,25 @@ pub async fn select_torrents(
                         .map_or_else(|| Ok(String::new()), |d| d.format(&DATE_FORMAT))?,
                     min_size: torrent_filter.filter.min_size.bytes(),
                     max_size: torrent_filter.filter.max_size.bytes(),
+                    unit: torrent_filter
+                        .filter
+                        .min_size
+                        .unit()
+                        .max(torrent_filter.filter.max_size.unit()),
                     min_seeders: torrent_filter.min_seeders,
                     max_seeders: torrent_filter.max_seeders,
                     min_leechers: torrent_filter.min_leechers,
                     max_leechers: torrent_filter.max_leechers,
                     min_snatched: torrent_filter.min_snatched,
                     max_snatched: torrent_filter.max_snatched,
-                    unit: torrent_filter
-                        .filter
-                        .min_size
-                        .unit()
-                        .max(torrent_filter.filter.max_size.unit()),
                     sort_type,
                     ..Default::default()
                 },
 
                 ..Default::default()
             })
-            .await?;
+            .await
+            .context("search")?;
 
         debug!(
             "result: perpage: {}, start: {}, data: {}, total: {}, found: {}",
@@ -333,7 +336,7 @@ pub async fn select_torrents(
                 tags,
                 title_search,
                 meta,
-                created_at: OffsetDateTime::now_utc(),
+                created_at: Timestamp::now(),
             })?;
             rw_opt.unwrap().commit()?;
         }
@@ -376,9 +379,11 @@ async fn grab_torrent(
         hash,
         library_path: None,
         library_files: Default::default(),
+        selected_audio_format: None,
+        selected_ebook_format: None,
         title_search: torrent.title_search.clone(),
         meta: torrent.meta.clone(),
-        created_at: OffsetDateTime::now_utc(),
+        created_at: Timestamp::now(),
         replaced_with: None,
         request_matadata_update: false,
     })
@@ -406,33 +411,9 @@ fn add_duplicate_torrent(
         mam_id: meta.mam_id,
         title_search,
         meta,
-        created_at: OffsetDateTime::now_utc(),
+        created_at: Timestamp::now(),
         duplicate_of,
         request_replace: false,
     })?;
-    Ok(())
-}
-
-fn update_errored_torrent(
-    db: &Database<'_>,
-    mam_id: u64,
-    torrent: String,
-    result: Result<(), Error>,
-) -> Result<()> {
-    let rw = db.rw_transaction()?;
-    let id = ErroredTorrentId::Grabber(mam_id);
-    if let Err(err) = result {
-        warn!("Autograbber error for {torrent}: {err}");
-        rw.upsert(ErroredTorrent {
-            id,
-            title: torrent,
-            error: format!("{err}"),
-            meta: None,
-            created_at: OffsetDateTime::now_utc(),
-        })?;
-    } else if let Some(error) = rw.get().primary::<ErroredTorrent>(id)? {
-        rw.remove(error)?;
-    }
-    rw.commit()?;
     Ok(())
 }
