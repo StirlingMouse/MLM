@@ -8,6 +8,7 @@ body {
         --background: var(--color-1); 
         --above: var(--color-2); 
         --text: var(--color-4); 
+        --accent: hsl(331.8, 91.3%, 45%);
 
         background: var(--background);
         color: var(--text);
@@ -25,6 +26,30 @@ a {
 nav > a {
         padding: 4px;
         background: var(--above);
+}
+
+.row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+}
+
+.show_toggles {
+        display: flex;
+        gap: 4px;
+
+        label {
+                padding: 2px 4px;
+                background: var(--above);
+                border-radius: 2px;
+                &:has([checked]) {
+                        background: var(--accent);
+                }
+        }
+
+        input {
+                display: none;
+        }
 }
 
 .table {

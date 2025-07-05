@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     fmt::{self, Display},
     str::FromStr,
     sync::Arc,
@@ -276,6 +277,7 @@ async fn torrents_page(
     State(db): State<Arc<Database<'static>>>,
     Query(sort): Query<SortOn<TorrentsPageSort>>,
     Query(filter): Query<Vec<(TorrentsPageFilter, String)>>,
+    Query(show): Query<TorrentsPageColumnsQuery>,
 ) -> std::result::Result<Html<String>, AppError> {
     let mut torrents = db
         .r_transaction()?
@@ -303,6 +305,7 @@ async fn torrents_page(
                     TorrentsPageFilter::Replaced => t.replaced_with.is_some() == (value == "true"),
                     TorrentsPageFilter::SortBy => true,
                     TorrentsPageFilter::Asc => true,
+                    TorrentsPageFilter::Show => true,
                 };
                 if !ok {
                     return false;
@@ -331,7 +334,12 @@ async fn torrents_page(
             if sort.asc { ord.reverse() } else { ord }
         });
     }
-    let template = TorrentsPageTemplate { sort, torrents };
+    let template = TorrentsPageTemplate {
+        sort,
+        show: show.show.unwrap_or_default(),
+        cols: Default::default(),
+        torrents,
+    };
     Ok::<_, AppError>(Html(template.to_string()))
 }
 
@@ -499,6 +507,8 @@ impl Sortable for DuplicatePageTemplate {
 #[template(path = "pages/torrents.html")]
 struct TorrentsPageTemplate {
     sort: SortOn<TorrentsPageSort>,
+    show: TorrentsPageColumns,
+    cols: RefCell<Vec<String>>,
     torrents: Vec<Torrent>,
 }
 
@@ -533,15 +543,80 @@ enum TorrentsPageFilter {
     // Workaround sort decode failure
     SortBy,
     Asc,
+    Show,
 }
 
 impl Key for TorrentsPageFilter {}
+
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "String")]
+struct TorrentsPageColumns {
+    authors: bool,
+    narrators: bool,
+    series: bool,
+    language: bool,
+    filetypes: bool,
+    path: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+struct TorrentsPageColumnsQuery {
+    show: Option<TorrentsPageColumns>,
+}
+
+impl Default for TorrentsPageColumns {
+    fn default() -> Self {
+        TorrentsPageColumns {
+            authors: true,
+            narrators: true,
+            series: true,
+            language: false,
+            filetypes: true,
+            path: false,
+        }
+    }
+}
+
+impl TryFrom<String> for TorrentsPageColumns {
+    type Error = String;
+
+    fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
+        let mut columns = TorrentsPageColumns {
+            authors: false,
+            narrators: false,
+            series: false,
+            language: false,
+            filetypes: false,
+            path: false,
+        };
+        for column in value.split(",") {
+            match column {
+                "author" => columns.authors = true,
+                "narrator" => columns.narrators = true,
+                "series" => columns.series = true,
+                "language" => columns.language = true,
+                "filetype" => columns.filetypes = true,
+                "path" => columns.path = true,
+                "" => {}
+                _ => {
+                    return Err(format!("Unknown column {column}"));
+                }
+            }
+        }
+        Ok(columns)
+    }
+}
 
 impl Sortable for TorrentsPageTemplate {
     type SortKey = TorrentsPageSort;
 
     fn get_current_sort(&self) -> SortOn<Self::SortKey> {
         self.sort
+    }
+}
+impl HidableColumns for TorrentsPageTemplate {
+    fn add_column(&self, size: &str) {
+        self.cols.borrow_mut().push(size.to_owned());
     }
 }
 
@@ -576,11 +651,53 @@ trait Sortable {
             asc: sort.asc,
             key: sort_key,
             label: label.to_owned(),
+            show: true,
+        }
+    }
+}
+
+trait HidableColumns: Sortable {
+    fn add_column(&self, size: &str);
+
+    fn table_header_if(
+        &self,
+        show: &bool,
+        sort_key: Option<Self::SortKey>,
+        label: &str,
+        size: &str,
+    ) -> TableHeader<Self::SortKey> {
+        let sort = self.get_current_sort();
+        if *show {
+            self.add_column(size);
+        }
+        TableHeader {
+            current_key: sort.sort_by,
+            asc: sort.asc,
+            key: sort_key,
+            label: label.to_owned(),
+            show: *show,
+        }
+    }
+    fn table_header_s(
+        &self,
+        sort_key: Option<Self::SortKey>,
+        label: &str,
+        size: &str,
+    ) -> TableHeader<Self::SortKey> {
+        let sort = self.get_current_sort();
+        self.add_column(size);
+        TableHeader {
+            current_key: sort.sort_by,
+            asc: sort.asc,
+            key: sort_key,
+            label: label.to_owned(),
+            show: true,
         }
     }
 }
 
 /// ```askama
+/// {% if show %}
 /// {% match key %}
 /// {% when Some(key) %}
 /// <a
@@ -597,6 +714,7 @@ trait Sortable {
 /// {{ label }}
 /// </div>
 /// {% endmatch %}
+/// {% endif %}
 /// ```
 #[derive(Template)]
 #[template(ext = "html", in_doc = true)]
@@ -605,6 +723,7 @@ struct TableHeader<T: Key> {
     asc: bool,
     key: Option<T>,
     label: String,
+    show: bool,
 }
 
 impl<T: Key> TableHeader<T> {
