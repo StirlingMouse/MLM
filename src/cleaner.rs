@@ -183,7 +183,31 @@ async fn remove_torrent(
                     Err(err)
                 }
             })?;
+            if let Some(sub_dir) = file.parent() {
+                fs::remove_dir(sub_dir).ok();
+            }
         }
+        let mut remove_files = true;
+        let mut files_to_remove = vec![];
+        if let Ok(files) = fs::read_dir(&library_path) {
+            for file in files {
+                if let Ok(file) = file {
+                    if file.file_name() == "cover.jpg" || file.file_name() == "metadata.json" {
+                        files_to_remove.push(file);
+                    } else {
+                        remove_files = false;
+                    }
+                } else {
+                    remove_files = false;
+                }
+            }
+            if remove_files {
+                for file in files_to_remove {
+                    fs::remove_file(file.path()).ok();
+                }
+            }
+        }
+        fs::remove_dir(library_path).ok();
     }
     trace!("files removed");
 
