@@ -26,8 +26,8 @@ use tower_http::services::ServeDir;
 use crate::{
     config::Config,
     data::{
-        DuplicateTorrent, ErroredTorrent, ErroredTorrentId, Language, SelectedTorrent, Timestamp,
-        Torrent,
+        DuplicateTorrent, ErroredTorrent, ErroredTorrentId, Event, EventKey, EventType, Language,
+        SelectedTorrent, Timestamp, Torrent,
     },
     stats::Stats,
 };
@@ -39,10 +39,11 @@ pub async fn start_webserver(
 ) -> Result<()> {
     let app = Router::new()
         .route("/", get(index_page).with_state(stats))
+        .route("/torrents", get(torrents_page).with_state(db.clone()))
+        .route("/events", get(event_page).with_state(db.clone()))
         .route("/errors", get(errors_page).with_state(db.clone()))
         .route("/selected", get(selected_page).with_state(db.clone()))
         .route("/duplicate", get(duplicate_page).with_state(db.clone()))
-        .route("/torrents", get(torrents_page).with_state(db.clone()))
         .nest_service("/assets", ServeDir::new("assets"));
 
     let listener =
@@ -72,6 +73,53 @@ async fn index_page(
             .cleaner_result
             .as_ref()
             .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+    };
+    Ok::<_, AppError>(Html(template.to_string()))
+}
+
+async fn event_page(
+    State(db): State<Arc<Database<'static>>>,
+    Query(filter): Query<Vec<(EventPageFilter, String)>>,
+) -> std::result::Result<Html<String>, AppError> {
+    let events = db
+        .r_transaction()?
+        .scan()
+        .secondary::<Event>(EventKey::created_at)?;
+    let events = events.all()?.rev();
+    let mut events_with_torrent = Vec::with_capacity(events.size_hint().0);
+    for event in events {
+        let event = event?;
+        if let Some(hash) = &event.hash {
+            let r = db.r_transaction()?;
+            let torrent: Option<Torrent> = r.get().primary(hash.clone())?;
+            let replaced_with = torrent
+                .as_ref()
+                .and_then(|t| t.replaced_with.clone())
+                .and_then(|(hash, _)| r.get().primary(hash).ok()?);
+
+            events_with_torrent.push((event, torrent, replaced_with));
+        } else {
+            events_with_torrent.push((event, None, None));
+        }
+    }
+    // .filter(|t| {
+    //     let Ok(t) = t else {
+    //         return true;
+    //     };
+    //     for (field, value) in filter.iter() {
+    //         let ok = match field {
+    //             // TODO
+    //             EventPageFilter::Kind => true,
+    //         };
+    //         if !ok {
+    //             return false;
+    //         }
+    //     }
+    //     true
+    // })
+    // .collect::<Result<Vec<_>, native_db::db_type::Error>>()?;
+    let template = EventPageTemplate {
+        events: events_with_torrent,
     };
     Ok::<_, AppError>(Html(template.to_string()))
 }
@@ -297,6 +345,29 @@ struct IndexPageTemplate {
     cleaner_run_at: Option<Timestamp>,
     cleaner_result: Option<Result<(), String>>,
 }
+
+#[derive(Template)]
+#[template(path = "pages/events.html")]
+struct EventPageTemplate {
+    events: Vec<(Event, Option<Torrent>, Option<Torrent>)>,
+}
+
+impl EventPageTemplate {
+    fn torrent_title<'a>(&'a self, torrent: &'a Option<Torrent>) -> &'a str {
+        torrent
+            .as_ref()
+            .map(|t| t.meta.title.as_str())
+            .unwrap_or_default()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum EventPageFilter {
+    Kind,
+}
+
+impl Key for EventPageFilter {}
 
 #[derive(Template)]
 #[template(path = "pages/errors.html")]

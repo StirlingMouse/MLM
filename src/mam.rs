@@ -362,7 +362,6 @@ impl MaMTorrent {
             .split(" ")
             .map(|t| t.to_owned())
             .collect::<Vec<_>>();
-        println!("{},{}", self.title, self.size);
         let size = self.size.parse().map_err(MetaError::InvalidSize)?;
 
         Ok(data::TorrentMeta {

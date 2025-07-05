@@ -6,8 +6,8 @@ use tracing::{debug, info, instrument, trace};
 
 use crate::{
     config::Config,
-    data::{self, ErroredTorrentId, Timestamp, Torrent},
-    logging::{TorrentMetaError, update_errored_torrent},
+    data::{self, ErroredTorrentId, Event, EventType, Timestamp, Torrent},
+    logging::{TorrentMetaError, update_errored_torrent, write_event},
     qbittorrent::QbitError,
 };
 
@@ -175,7 +175,7 @@ async fn remove_torrent(
         trace!("qbit updated");
     }
 
-    if let Some(library_path) = library_path {
+    if let Some(library_path) = &library_path {
         for file in remove.library_files.iter() {
             let path = library_path.join(file);
             fs::remove_file(path).or_else(|err| {
@@ -192,7 +192,7 @@ async fn remove_torrent(
         }
         let mut remove_files = true;
         let mut files_to_remove = vec![];
-        if let Ok(files) = fs::read_dir(&library_path) {
+        if let Ok(files) = fs::read_dir(library_path) {
             for file in files {
                 if let Ok(file) = file {
                     if file.file_name() == "cover.jpg" || file.file_name() == "metadata.json" {
@@ -214,9 +214,28 @@ async fn remove_torrent(
     }
     trace!("files removed");
 
-    let rw = db.rw_transaction()?;
-    rw.upsert(remove)?;
-    rw.commit()?;
+    let hash = remove.hash.clone();
+    let mam_id = remove.meta.mam_id;
+    let library_files = remove.library_files.clone();
+    {
+        let rw = db.rw_transaction()?;
+        rw.upsert(remove)?;
+        rw.commit()?;
+    }
+
+    if let Some(library_path) = library_path {
+        write_event(
+            db,
+            Event::new(
+                Some(hash),
+                Some(mam_id),
+                EventType::Cleaned {
+                    library_path,
+                    files: library_files,
+                },
+            ),
+        );
+    }
 
     Ok(())
 }

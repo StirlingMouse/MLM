@@ -40,6 +40,7 @@ pub type DuplicateTorrent = v3::DuplicateTorrent;
 pub type ErroredTorrent = v3::ErroredTorrent;
 pub type ErroredTorrentId = v1::ErroredTorrentId;
 pub type Event = v3::Event;
+pub type EventKey = v3::EventKey;
 pub type EventType = v3::EventType;
 pub type TorrentMeta = v3::TorrentMeta;
 pub type MainCat = v1::MainCat;
@@ -526,7 +527,6 @@ pub mod v3 {
             library_path: PathBuf,
             files: Vec<PathBuf>,
         },
-        Replaced,
     }
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -644,7 +644,7 @@ pub mod v3 {
 
     impl ToKey for Timestamp {
         fn to_key(&self) -> Key {
-            Key::new(self.0.unix_timestamp().to_le_bytes().into())
+            Key::new(self.0.unix_timestamp().to_be_bytes().into())
         }
 
         fn key_names() -> Vec<String> {

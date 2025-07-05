@@ -2,8 +2,8 @@ use std::{ops::RangeInclusive, sync::Arc, time::Duration};
 
 use crate::{
     config::{Config, Cost, TorrentFilter, Type},
-    data::{self, ErroredTorrentId, SelectedTorrent, Timestamp, TorrentMeta},
-    logging::{TorrentMetaError, update_errored_torrent},
+    data::{self, ErroredTorrentId, Event, EventType, SelectedTorrent, Timestamp, TorrentMeta},
+    logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{
         MaM, MetaError, SearchKind, SearchQuery, SearchResult, SearchTarget, Tor, normalize_title,
     },
@@ -374,29 +374,34 @@ async fn grab_torrent(
     .await
     .map_err(QbitError)?;
 
-    let rw = db.rw_transaction()?;
-    rw.insert(data::Torrent {
-        hash,
-        library_path: None,
-        library_files: Default::default(),
-        selected_audio_format: None,
-        selected_ebook_format: None,
-        title_search: torrent.title_search.clone(),
-        meta: torrent.meta.clone(),
-        created_at: Timestamp::now(),
-        replaced_with: None,
-        request_matadata_update: false,
-    })
-    .or_else(|err| {
-        if let db_type::Error::DuplicateKey { .. } = err {
-            warn!("Got dup key on {:?}", torrent);
-            Ok(())
-        } else {
-            Err(err)
-        }
-    })?;
-    rw.remove(torrent)?;
-    rw.commit()?;
+    let mam_id = torrent.mam_id;
+    {
+        let rw = db.rw_transaction()?;
+        rw.insert(data::Torrent {
+            hash: hash.clone(),
+            library_path: None,
+            library_files: Default::default(),
+            selected_audio_format: None,
+            selected_ebook_format: None,
+            title_search: torrent.title_search.clone(),
+            meta: torrent.meta.clone(),
+            created_at: Timestamp::now(),
+            replaced_with: None,
+            request_matadata_update: false,
+        })
+        .or_else(|err| {
+            if let db_type::Error::DuplicateKey { .. } = err {
+                warn!("Got dup key on {:?}", torrent);
+                Ok(())
+            } else {
+                Err(err)
+            }
+        })?;
+        rw.remove(torrent)?;
+        rw.commit()?;
+    }
+
+    write_event(db, Event::new(Some(hash), Some(mam_id), EventType::Grabbed));
 
     Ok(())
 }

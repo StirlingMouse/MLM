@@ -20,8 +20,8 @@ use tracing::{Level, debug, instrument, span, trace};
 
 use crate::{
     config::{Config, Library, QbitConfig},
-    data::{self, ErroredTorrentId, Size, Timestamp, TorrentMeta},
-    logging::{TorrentMetaError, update_errored_torrent},
+    data::{self, ErroredTorrentId, Event, EventType, Size, Timestamp, TorrentMeta},
+    logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{MaM, MaMTorrent, clean_value, normalize_title},
     qbittorrent::QbitError,
 };
@@ -307,7 +307,7 @@ async fn link_torrent(
         let rw = db.rw_transaction()?;
         rw.upsert(data::Torrent {
             hash: hash.to_owned(),
-            library_path: Some(dir),
+            library_path: Some(dir.clone()),
             library_files,
             selected_audio_format,
             selected_ebook_format,
@@ -319,6 +319,15 @@ async fn link_torrent(
         })?;
         rw.commit()?;
     }
+
+    write_event(
+        &db,
+        Event::new(
+            Some(hash.to_owned()),
+            Some(meta.mam_id),
+            EventType::Linked { library_path: dir },
+        ),
+    );
 
     Ok(())
 }
