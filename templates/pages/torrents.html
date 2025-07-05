@@ -6,6 +6,7 @@
   <style>
     .TorrentsTable {
       {{self::table_styles(10) | safe}}
+      grid-template-columns: 84px 2fr 1fr 1fr 1fr 80px 78px 97px 157px 44px;
     }
   </style>
 {% endblock %}
@@ -19,8 +20,8 @@
   {{ table_header(Some(TorrentsPageSort::Narrators), "Narrators") | safe }}
   {{ table_header(Some(TorrentsPageSort::Series), "Series") | safe }}
   {{ table_header(None, "Filetypes") | safe }}
-  {{ table_header(Some(TorrentsPageSort::Linked), "Is Linked") | safe }}
-  {{ table_header(Some(TorrentsPageSort::Replaced), "Is Replaced") | safe }}
+  {{ table_header(Some(TorrentsPageSort::Linked), "Linked") | safe }}
+  {{ table_header(Some(TorrentsPageSort::Replaced), "Replaced") | safe }}
   {{ table_header(Some(TorrentsPageSort::CreatedAt), "Added At") | safe }}
   {{ table_header(None, "") | safe }}
 {% for torrent in torrents %}
