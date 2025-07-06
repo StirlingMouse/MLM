@@ -104,7 +104,7 @@ pub async fn run_goodreads_import(
                             series: item.series.iter().cloned().collect(),
                             cover_url: item.book_large_image_url.clone(),
                             book_url: None,
-                            isbn: item.isbn,
+                            isbn: item.isbn.as_ref().and_then(|isbn| isbn.parse().ok()),
                             prefer_format: list.prefer_format,
                             audio_torrent: None,
                             wanted_audio_torrent: None,
@@ -419,6 +419,6 @@ struct Item {
     series: Option<(String, u64)>,
     book_large_image_url: String,
     // book_description: String,
-    isbn: Option<u64>,
+    isbn: Option<String>,
     // description: String,
 }
