@@ -5,21 +5,17 @@ use crate::{
     data::{self, ErroredTorrentId, Event, EventType, SelectedTorrent, Timestamp, TorrentMeta},
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{
-        MaM, MetaError, SearchKind, SearchQuery, SearchResult, SearchTarget, Tor, normalize_title,
+        DATE_FORMAT, MaM, MaMTorrent, MetaError, SearchKind, SearchQuery, SearchResult,
+        SearchTarget, Tor, normalize_title,
     },
     qbittorrent::QbitError,
 };
 use anyhow::{Context, Error, Result};
 use lava_torrent::torrent::v1::Torrent;
 use native_db::{Database, db_type, transaction::RwTransaction};
-use once_cell::sync::Lazy;
 use qbit::parameters::TorrentAddUrls;
-use time::format_description::{self, OwnedFormatItem};
 use tokio::time::sleep;
 use tracing::{debug, error, info, instrument, trace, warn};
-
-pub static DATE_FORMAT: Lazy<OwnedFormatItem> =
-    Lazy::new(|| format_description::parse_owned::<2>("[year]-[month]-[day]").unwrap());
 
 #[instrument(skip_all)]
 pub async fn run_autograbbers(
@@ -36,7 +32,7 @@ pub async fn run_autograbbers(
         let max_torrents = max_torrents
             .saturating_sub(autograb_config.unsat_buffer.unwrap_or(config.unsat_buffer));
         if max_torrents > 0 {
-            select_torrents(
+            search_torrents(
                 config.clone(),
                 db.clone(),
                 autograb_config,
@@ -44,10 +40,25 @@ pub async fn run_autograbbers(
                 max_torrents,
             )
             .await
-            .context("select_torrents")?;
+            .context("search_torrents")?;
         }
     }
 
+    grab_selected_torrents(&config, &db, qbit, &mam, max_torrents)
+        .await
+        .context("grab_selected_torrents")?;
+
+    Ok(())
+}
+
+#[instrument(skip_all)]
+pub async fn grab_selected_torrents(
+    config: &Config,
+    db: &Database<'_>,
+    qbit: &qbit::Api,
+    mam: &MaM<'_>,
+    max_torrents: u64,
+) -> Result<()> {
     let selected_torrents = {
         let r = db.r_transaction()?;
         r.scan()
@@ -64,11 +75,11 @@ pub async fn run_autograbbers(
             continue;
         }
 
-        let result = grab_torrent(&config, &db, qbit, &mam, torrent.clone())
+        let result = grab_torrent(config, db, qbit, mam, torrent.clone())
             .await
             .map_err(|err| anyhow::Error::new(TorrentMetaError(torrent.meta.clone(), err)));
         update_errored_torrent(
-            &db,
+            db,
             ErroredTorrentId::Grabber(torrent.mam_id),
             torrent.meta.title,
             result,
@@ -77,12 +88,11 @@ pub async fn run_autograbbers(
         sleep(Duration::from_millis(1000)).await;
         snatched_torrents += 1;
     }
-
     Ok(())
 }
 
 #[instrument(skip_all)]
-pub async fn select_torrents(
+pub async fn search_torrents(
     config: Arc<Config>,
     db: Arc<Database<'_>>,
     torrent_filter: &TorrentFilter,
@@ -132,9 +142,11 @@ pub async fn select_torrents(
                     },
                     browse_flags: flags.clone(),
                     start_date: torrent_filter
+                        .filter
                         .uploaded_after
                         .map_or_else(|| Ok(String::new()), |d| d.format(&DATE_FORMAT))?,
                     end_date: torrent_filter
+                        .filter
                         .uploaded_before
                         .map_or_else(|| Ok(String::new()), |d| d.format(&DATE_FORMAT))?,
                     min_size: torrent_filter.filter.min_size.bytes(),
@@ -144,12 +156,12 @@ pub async fn select_torrents(
                         .min_size
                         .unit()
                         .max(torrent_filter.filter.max_size.unit()),
-                    min_seeders: torrent_filter.min_seeders,
-                    max_seeders: torrent_filter.max_seeders,
-                    min_leechers: torrent_filter.min_leechers,
-                    max_leechers: torrent_filter.max_leechers,
-                    min_snatched: torrent_filter.min_snatched,
-                    max_snatched: torrent_filter.max_snatched,
+                    min_seeders: torrent_filter.filter.min_seeders,
+                    max_seeders: torrent_filter.filter.max_seeders,
+                    min_leechers: torrent_filter.filter.min_leechers,
+                    max_leechers: torrent_filter.filter.max_leechers,
+                    min_snatched: torrent_filter.filter.min_snatched,
+                    max_snatched: torrent_filter.filter.max_snatched,
                     sort_type,
                     ..Default::default()
                 },
@@ -193,8 +205,37 @@ pub async fn select_torrents(
         .into_iter()
         .filter(|t| torrent_filter.filter.matches(t));
 
+    select_torrents(
+        &config,
+        &db,
+        torrents,
+        torrent_filter.unsat_buffer,
+        torrent_filter.dry_run,
+    )
+    .await
+    .context("select_torrents")
+}
+
+#[instrument(skip_all)]
+pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
+    config: &Config,
+    db: &Database<'_>,
+    torrents: T,
+    unsat_buffer: Option<u64>,
+    dry_run: bool,
+) -> Result<()> {
     'torrent: for torrent in torrents {
-        let rw_opt = if torrent_filter.dry_run {
+        let meta = match torrent.as_meta() {
+            Ok(it) => it,
+            Err(err) => match err {
+                MetaError::UnknownMainCat(_) => {
+                    warn!("{err} for torrent {} {}", torrent.id, torrent.title);
+                    continue;
+                }
+                _ => return Err(err.into()),
+            },
+        };
+        let rw_opt = if dry_run {
             None
         } else {
             Some(db.rw_transaction()?)
@@ -206,7 +247,7 @@ pub async fn select_torrents(
                 .ok()
                 .flatten()
             {
-                if let Some(unsat_buffer) = torrent_filter.unsat_buffer {
+                if let Some(unsat_buffer) = unsat_buffer {
                     if old_selected.unsat_buffer.is_none_or(|u| unsat_buffer < u) {
                         let mut updated = old_selected.clone();
                         updated.unsat_buffer = Some(unsat_buffer);
@@ -219,16 +260,6 @@ pub async fn select_torrents(
             }
         }
         let title_search = normalize_title(&torrent.title);
-        let meta = match torrent.as_meta() {
-            Ok(it) => it,
-            Err(err) => match err {
-                MetaError::UnknownMainCat(_) => {
-                    warn!("{err} for torrent {} {}", torrent.id, torrent.title);
-                    continue;
-                }
-                _ => return Err(err.into()),
-            },
-        };
         let preferred_types = match meta.main_cat {
             data::MainCat::Audio => &config.audio_types,
             data::MainCat::Ebook => &config.ebook_types,
@@ -331,7 +362,7 @@ pub async fn select_torrents(
                     .dl
                     .clone()
                     .ok_or_else(|| Error::msg(format!("no dl field for torrent {}", torrent.id)))?,
-                unsat_buffer: torrent_filter.unsat_buffer,
+                unsat_buffer,
                 category,
                 tags,
                 title_search,

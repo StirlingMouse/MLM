@@ -5,7 +5,7 @@ use serde::{
     de::{self, SeqAccess, Visitor},
 };
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum SearchIn {
     Author,
@@ -36,13 +36,19 @@ impl SearchIn {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Categories {
     #[serde(deserialize_with = "categories_parser")]
-    audio: Option<Vec<AudiobookCategory>>,
+    pub audio: Option<Vec<AudiobookCategory>>,
     #[serde(deserialize_with = "categories_parser")]
-    ebook: Option<Vec<EbookCategory>>,
+    pub ebook: Option<Vec<EbookCategory>>,
 }
 
 impl Categories {
     pub fn get_main_cats(&self) -> Vec<u8> {
+        if self.audio.as_ref().is_some_and(|c| !c.is_empty())
+            || self.ebook.as_ref().is_some_and(|c| !c.is_empty())
+        {
+            return vec![];
+        }
+
         [
             self.audio
                 .as_ref()
@@ -59,7 +65,9 @@ impl Categories {
     }
 
     pub fn get_cats(&self) -> Vec<u8> {
-        if self.audio.is_none() && self.ebook.is_none() {
+        if self.audio.as_ref().is_none_or(|c| c.is_empty())
+            && self.ebook.as_ref().is_none_or(|c| c.is_empty())
+        {
             return vec![];
         }
 
@@ -832,5 +840,54 @@ impl TryFrom<String> for UserClass {
             Some(v) => Ok(v),
             None => Err(format!("invalid category {value}")),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_categories() {
+        let mut categories = Categories::default();
+        assert_eq!(categories.get_main_cats(), vec![13, 14]);
+        assert_eq!(categories.get_cats(), Vec::<u8>::new());
+
+        categories.audio = Some(vec![]);
+        assert_eq!(categories.get_main_cats(), vec![14]);
+        assert_eq!(categories.get_cats(), Vec::<u8>::new());
+
+        categories.audio = None;
+        categories.ebook = Some(vec![]);
+        assert_eq!(categories.get_main_cats(), vec![13]);
+        assert_eq!(categories.get_cats(), Vec::<u8>::new());
+
+        categories.audio = None;
+        categories.ebook = Some(vec![EbookCategory::Food]);
+        assert_eq!(categories.get_main_cats(), Vec::<u8>::new());
+        assert_eq!(
+            categories.get_cats(),
+            [
+                AudiobookCategory::all()
+                    .into_iter()
+                    .map(AudiobookCategory::to_id)
+                    .collect::<Vec<u8>>(),
+                vec![EbookCategory::Food.to_id()]
+            ]
+            .concat()
+        );
+
+        categories.audio = Some(vec![AudiobookCategory::Food]);
+        categories.ebook = Some(vec![EbookCategory::Food]);
+        assert_eq!(categories.get_main_cats(), Vec::<u8>::new());
+        assert_eq!(
+            categories.get_cats(),
+            vec![AudiobookCategory::Food.to_id(), EbookCategory::Food.to_id()]
+        );
+
+        categories.audio = Some(vec![]);
+        categories.ebook = Some(vec![EbookCategory::Food]);
+        assert_eq!(categories.get_main_cats(), Vec::<u8>::new());
+        assert_eq!(categories.get_cats(), vec![EbookCategory::Food.to_id()]);
     }
 }

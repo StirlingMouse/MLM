@@ -11,6 +11,7 @@ use reqwest::Url;
 use reqwest_cookie_store::CookieStoreRwLock;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
+use time::format_description::{self, OwnedFormatItem};
 use tracing::{debug, error, info, trace, warn};
 use unidecode::unidecode;
 
@@ -19,6 +20,13 @@ use crate::{
     data::{self, Language},
     mam_enums::SearchIn,
 };
+
+pub static DATE_FORMAT: Lazy<OwnedFormatItem> =
+    Lazy::new(|| format_description::parse_owned::<2>("[year]-[month]-[day]").unwrap());
+
+pub static DATE_TIME_FORMAT: Lazy<OwnedFormatItem> = Lazy::new(|| {
+    format_description::parse_owned::<2>("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap()
+});
 
 fn is_false(value: &bool) -> bool {
     !value
@@ -287,7 +295,7 @@ pub struct SearchError {
     pub error: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct MaMTorrent {
     pub id: u64,
     pub added: String,
@@ -375,6 +383,10 @@ impl MaMTorrent {
             narrators,
             series,
         })
+    }
+
+    pub fn is_free(&self) -> bool {
+        self.free > 0 || self.personal_freeleech > 0 || self.fl_vip > 0
     }
 }
 

@@ -43,7 +43,7 @@ pub fn update_errored_torrent(
             rw.upsert(ErroredTorrent {
                 id,
                 title: torrent,
-                error: format!("{err}"),
+                error: format!("{err:?}"),
                 meta,
                 created_at: Timestamp::now(),
             })?;

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}{{ list.title }}{% endblock %}
+
+{% block content %}
+<h1>{{ list.title }}</h1>
+
+{% for item in items %}
+  <div>
+    <h2>{{ item.title }}</h2>
+    <p>by {{ item.authors.join(", ") }}</p>
+    {% if !item.series.is_empty() %}
+    <p>
+      {% for (name, num) in item.series %}
+        {{ name }} #{{num}}{% if !loop.last %}, {% endif %}
+      {% endfor %}
+    </p>
+    {% endif %}
+    {% if let Some((mam_id, time)) = item.wanted_audio_torrent %}
+      <p>Suggest wedge audiobook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> since {{ self::time(time) }}
+    {% endif %}
+    {% if let Some((mam_id, time)) = item.wanted_ebook_torrent %}
+      <p>Suggest wedge ebook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> since {{ self::time(time) }}
+    {% endif %}
+    {% if let Some((mam_id, time)) = item.audio_torrent %}
+      <p>Downloaded audiobook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> at {{ self::time(time) }}
+    {% endif %}
+    {% if let Some((mam_id, time)) = item.ebook_torrent %}
+      <p>Downloaded ebook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> at {{ self::time(time) }}
+    {% endif %}
+  </div>
+{% endfor %}
+{% endblock %}

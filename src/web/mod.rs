@@ -9,7 +9,7 @@ use anyhow::Result;
 use askama::Template;
 use axum::{
     Router,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{Html, IntoResponse, Response},
     routing::get,
@@ -28,7 +28,7 @@ use crate::{
     config::Config,
     data::{
         DuplicateTorrent, ErroredTorrent, ErroredTorrentId, Event, EventKey, EventType, Language,
-        SelectedTorrent, Timestamp, Torrent,
+        List, ListItem, ListItemKey, ListKey, SelectedTorrent, Timestamp, Torrent,
     },
     stats::Stats,
 };
@@ -42,6 +42,8 @@ pub async fn start_webserver(
         .route("/", get(index_page).with_state(stats))
         .route("/torrents", get(torrents_page).with_state(db.clone()))
         .route("/events", get(event_page).with_state(db.clone()))
+        .route("/lists", get(lists_page).with_state(db.clone()))
+        .route("/lists/{list_id}", get(list_page).with_state(db.clone()))
         .route("/errors", get(errors_page).with_state(db.clone()))
         .route("/selected", get(selected_page).with_state(db.clone()))
         .route("/duplicate", get(duplicate_page).with_state(db.clone()))
@@ -72,6 +74,11 @@ async fn index_page(
         cleaner_run_at: stats.cleaner_run_at.map(Into::into),
         cleaner_result: stats
             .cleaner_result
+            .as_ref()
+            .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+        goodreads_run_at: stats.goodreads_run_at.map(Into::into),
+        goodreads_result: stats
+            .goodreads_result
             .as_ref()
             .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
     };
@@ -122,6 +129,39 @@ async fn event_page(
     let template = EventPageTemplate {
         events: events_with_torrent,
     };
+    Ok::<_, AppError>(Html(template.to_string()))
+}
+
+async fn lists_page(
+    State(db): State<Arc<Database<'static>>>,
+) -> std::result::Result<Html<String>, AppError> {
+    let lists = db
+        .r_transaction()?
+        .scan()
+        .secondary::<List>(ListKey::title)?;
+    let lists = lists
+        .all()?
+        .collect::<Result<Vec<_>, native_db::db_type::Error>>()?;
+    let template = ListsPageTemplate { lists };
+    Ok::<_, AppError>(Html(template.to_string()))
+}
+
+async fn list_page(
+    State(db): State<Arc<Database<'static>>>,
+    Path(list_id): Path<u64>,
+) -> std::result::Result<Html<String>, AppError> {
+    let Some(list) = db.r_transaction()?.get().primary::<List>(list_id)? else {
+        return Err(AppError::NotFound);
+    };
+    let items = db
+        .r_transaction()?
+        .scan()
+        .secondary::<ListItem>(ListItemKey::created_at)?;
+    let items = items
+        .all()?
+        .rev()
+        .collect::<Result<Vec<_>, native_db::db_type::Error>>()?;
+    let template = ListPageTemplate { list, items };
     Ok::<_, AppError>(Html(template.to_string()))
 }
 
@@ -352,6 +392,8 @@ struct IndexPageTemplate {
     linker_result: Option<Result<(), String>>,
     cleaner_run_at: Option<Timestamp>,
     cleaner_result: Option<Result<(), String>>,
+    goodreads_run_at: Option<Timestamp>,
+    goodreads_result: Option<Result<(), String>>,
 }
 
 #[derive(Template)]
@@ -376,6 +418,19 @@ enum EventPageFilter {
 }
 
 impl Key for EventPageFilter {}
+
+#[derive(Template)]
+#[template(path = "pages/lists.html")]
+struct ListsPageTemplate {
+    lists: Vec<List>,
+}
+
+#[derive(Template)]
+#[template(path = "pages/list.html")]
+struct ListPageTemplate {
+    list: List,
+    items: Vec<ListItem>,
+}
 
 #[derive(Template)]
 #[template(path = "pages/errors.html")]
@@ -839,6 +894,8 @@ enum AppError {
     Db(#[from] native_db::db_type::Error),
     #[error("Could not render template: {0}")]
     Render(#[from] askama::Error),
+    #[error("Page Not Found")]
+    NotFound,
 }
 
 impl IntoResponse for AppError {
@@ -852,6 +909,7 @@ impl IntoResponse for AppError {
         match self {
             AppError::Db(ref error) => eprintln!("{:?}", error),
             AppError::Render(ref error) => eprintln!("{:?}", error),
+            _ => {}
         }
 
         let status = StatusCode::INTERNAL_SERVER_ERROR;

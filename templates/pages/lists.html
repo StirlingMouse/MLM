@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Goodreads lists{% endblock %}
+
+{% block content %}
+<h1>Goodreads Lists</h1>
+<p>Goodreads lists can be used to autograb want to read books</p>
+
+{% for list in lists %}
+  <div>
+    <a href="/lists/{{ list.id }}"><h2>{{ list.title }}</h2></a>
+  </div>
+{% endfor %}
+{% endblock %}

@@ -17,6 +17,8 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
     models.define::<v3::DuplicateTorrent>().unwrap();
     models.define::<v3::ErroredTorrent>().unwrap();
     models.define::<v3::Event>().unwrap();
+    models.define::<v3::List>().unwrap();
+    models.define::<v3::ListItem>().unwrap();
 
     models.define::<v2::Torrent>().unwrap();
     models.define::<v2::SelectedTorrent>().unwrap();
@@ -42,6 +44,10 @@ pub type ErroredTorrentId = v1::ErroredTorrentId;
 pub type Event = v3::Event;
 pub type EventKey = v3::EventKey;
 pub type EventType = v3::EventType;
+pub type List = v3::List;
+pub type ListKey = v3::ListKey;
+pub type ListItem = v3::ListItem;
+pub type ListItemKey = v3::ListItemKey;
 pub type TorrentMeta = v3::TorrentMeta;
 pub type MainCat = v1::MainCat;
 pub type Uuid = v3::Uuid;
@@ -515,6 +521,39 @@ pub mod v3 {
         #[secondary_key]
         pub created_at: Timestamp,
         pub event: EventType,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 7, version = 3)]
+    #[native_db]
+    pub struct List {
+        #[primary_key]
+        pub id: u64,
+        #[secondary_key]
+        pub title: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 8, version = 3)]
+    #[native_db]
+    pub struct ListItem {
+        #[primary_key]
+        pub guid: (u64, String),
+        #[secondary_key]
+        pub list_id: u64,
+        pub title: String,
+        pub authors: Vec<String>,
+        pub series: Vec<(String, u64)>,
+        pub cover_url: String,
+        pub book_url: Option<String>,
+        pub isbn: Option<u64>,
+        pub prefer_format: Option<MainCat>,
+        pub audio_torrent: Option<(u64, Timestamp)>,
+        pub wanted_audio_torrent: Option<(u64, Timestamp)>,
+        pub ebook_torrent: Option<(u64, Timestamp)>,
+        pub wanted_ebook_torrent: Option<(u64, Timestamp)>,
+        #[secondary_key]
+        pub created_at: Timestamp,
     }
 
     #[derive(Serialize, Deserialize, Debug, Clone)]

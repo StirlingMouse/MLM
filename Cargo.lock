@@ -1027,6 +1027,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
+name = "matchr"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ec453904a69e1e27cbfdf87a1759aa1f1351593b3730f6da3ac35438b9b4d7e"
+
+[[package]]
 name = "memchr"
 version = "2.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1083,11 +1089,13 @@ dependencies = [
  "itertools 0.14.0",
  "lava_torrent",
  "log",
+ "matchr",
  "native_db",
  "native_model",
  "once_cell",
  "openssl",
  "qbit",
+ "quick-xml",
  "regex",
  "reqwest",
  "reqwest_cookie_store",
@@ -1443,6 +1451,16 @@ dependencies = [
  "serde_repr",
  "tokio",
  "url",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.38.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8927b0664f5c5a98265138b7e3f90aa19a6b21353182469ace36d4ac527b7b1b"
+dependencies = [
+ "memchr",
+ "serde",
 ]
 
 [[package]]

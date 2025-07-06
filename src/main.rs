@@ -4,6 +4,7 @@ mod config;
 mod data;
 mod data_impl;
 mod exporter;
+mod goodreads;
 mod linker;
 mod logging;
 mod mam;
@@ -22,6 +23,7 @@ use figment::{
     Figment,
     providers::{Env, Format, Toml},
 };
+use goodreads::run_goodreads_import;
 use stats::Stats;
 use time::OffsetDateTime;
 use tokio::{sync::Mutex, time::sleep};
@@ -56,33 +58,68 @@ async fn main() -> Result<()> {
     let stats: Arc<Mutex<Stats>> = Default::default();
 
     if let Some(qbit_conf) = config.qbittorrent.first() {
-        let config = config.clone();
-        let db = db.clone();
-        let mam = mam.clone();
-        let stats = stats.clone();
-        let qbit = qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
-            .await
-            .map_err(QbitError)?;
-        tokio::spawn(async move {
-            loop {
-                {
-                    let mut stats = stats.lock().await;
-                    stats.autograbber_run_at = Some(OffsetDateTime::now_utc());
-                    stats.autograbber_result = None;
+        if !config.autograbs.is_empty() {
+            let config = config.clone();
+            let db = db.clone();
+            let mam = mam.clone();
+            let stats = stats.clone();
+            let qbit = qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
+                .await
+                .map_err(QbitError)?;
+            tokio::spawn(async move {
+                loop {
+                    {
+                        let mut stats = stats.lock().await;
+                        stats.autograbber_run_at = Some(OffsetDateTime::now_utc());
+                        stats.autograbber_result = None;
+                    }
+                    let result = run_autograbbers(config.clone(), db.clone(), &qbit, mam.clone())
+                        .await
+                        .context("autograbbers");
+                    if let Err(err) = &result {
+                        error!("Error running autograbbers: {err:?}");
+                    }
+                    {
+                        let mut stats = stats.lock().await;
+                        stats.autograbber_result = Some(result);
+                    }
+                    sleep(Duration::from_secs(60 * config.search_interval)).await;
                 }
-                let result = run_autograbbers(config.clone(), db.clone(), &qbit, mam.clone())
-                    .await
-                    .context("autograbbers");
-                if let Err(err) = &result {
-                    error!("Error running autograbbers: {err:?}");
+            });
+        }
+    }
+
+    if let Some(qbit_conf) = config.qbittorrent.first() {
+        if !config.goodreads_lists.is_empty() {
+            let config = config.clone();
+            let db = db.clone();
+            let mam = mam.clone();
+            let stats = stats.clone();
+            let qbit = qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
+                .await
+                .map_err(QbitError)?;
+            tokio::spawn(async move {
+                loop {
+                    {
+                        let mut stats = stats.lock().await;
+                        stats.goodreads_run_at = Some(OffsetDateTime::now_utc());
+                        stats.goodreads_result = None;
+                    }
+                    let result =
+                        run_goodreads_import(config.clone(), db.clone(), &qbit, mam.clone())
+                            .await
+                            .context("goodreads_import");
+                    if let Err(err) = &result {
+                        error!("Error running goodreads import: {err:?}");
+                    }
+                    {
+                        let mut stats = stats.lock().await;
+                        stats.goodreads_result = Some(result);
+                    }
+                    sleep(Duration::from_secs(60 * config.goodreads_interval)).await;
                 }
-                {
-                    let mut stats = stats.lock().await;
-                    stats.autograbber_result = Some(result);
-                }
-                sleep(Duration::from_secs(60 * config.search_interval)).await;
-            }
-        });
+            });
+        }
     }
 
     {

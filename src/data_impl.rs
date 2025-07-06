@@ -3,27 +3,50 @@ use std::str::FromStr;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Deserializer};
+use time::Date;
 
-use crate::data::{Language, Size, Torrent, TorrentMeta};
+use crate::{
+    data::{Language, MainCat, Size, Torrent, TorrentMeta},
+    mam::DATE_FORMAT,
+};
 
 pub fn parse<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
-    T: TryFrom<String, Error = String>,
+    T: FromStr<Err = String>,
     D: Deserializer<'de>,
 {
     let v: String = Deserialize::deserialize(deserializer)?;
-    v.try_into().map_err(serde::de::Error::custom)
+    v.parse().map_err(serde::de::Error::custom)
+}
+
+pub fn parse_opt<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: FromStr<Err = String>,
+    D: Deserializer<'de>,
+{
+    let v: Option<String> = Deserialize::deserialize(deserializer)?;
+    v.map(|v| v.parse().map_err(serde::de::Error::custom))
+        .transpose()
 }
 
 pub fn parse_vec<'de, T, D>(deserializer: D) -> Result<Vec<T>, D::Error>
 where
-    T: TryFrom<String, Error = String>,
+    T: FromStr<Err = String>,
     D: Deserializer<'de>,
 {
     let v: Vec<String> = Deserialize::deserialize(deserializer)?;
     v.into_iter()
-        .map(|v| v.try_into().map_err(serde::de::Error::custom))
+        .map(|v| v.parse().map_err(serde::de::Error::custom))
         .collect()
+}
+
+pub fn parse_opt_date<'de, D>(deserializer: D) -> Result<Option<Date>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v: Option<String> = Deserialize::deserialize(deserializer)?;
+    v.map(|v| Date::parse(&v, &DATE_FORMAT).map_err(serde::de::Error::custom))
+        .transpose()
 }
 
 impl Torrent {
@@ -98,6 +121,30 @@ impl FromStr for Size {
 }
 
 impl TryFrom<String> for Size {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl FromStr for MainCat {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let l = match value.to_lowercase().as_str() {
+            "audio" => Some(MainCat::Audio),
+            "ebook" => Some(MainCat::Ebook),
+            _ => None,
+        };
+        match l {
+            Some(l) => Ok(l),
+            None => Err(format!("invalid category {value}")),
+        }
+    }
+}
+
+impl TryFrom<String> for MainCat {
     type Error = String;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
