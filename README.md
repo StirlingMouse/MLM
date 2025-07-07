@@ -1,9 +1,7 @@
 # MLM - Myanonamouse Library Manager
 
-NOTE: MLM is very early software, I'd advice that you only try it out at this time if you are happy to read very spammy logs if things doesn't work as expected
-
 MLM combines an auto downloader with a library organizer. This allows you to automatically download for example bookmarks and have them hardlinked into an organized library folder for e.g. ABS. It also follows a list of preferred formats so that if you first download the mp3 version if a book and then later download an m4b, the mp3 will be automatically removed from your library and optionally moved to a different category or tagged in qbittorrent.
-The auto downloader keeps track of your unsat slots and will by default always leave at least 10 open. It also keeps track of your library and avoids downloading e.g. an mp3 torrent if you already have an m4b.
+The auto downloader can both use configured searches similar to RSS and Goodreads lists as input, keeps track of your unsat slots and will by default always leave at least 10 open. It also keeps track of your library and avoids downloading e.g. an mp3 torrent if you already have an m4b.
 The library organizer will only link one audio file type and one ebook file type per torrent. So e.g. an audiobook torrent with both m4b and pdf files will have both linked, but an ebook torrent with both and epub and mobi will only have the epub linked.
 
 The auto downloader and library organizer are both optional parts so either one can be replaced with e.g. RSS or [booktree](https://github.com/myxdvz/booktree) if you prefer. And even if you use both, you can still add torrents manually and have them organized, and/or use booktree for collections or files that are not from MaM.
@@ -117,6 +115,28 @@ dry_run = true # this makes MLM not actually download the selected torrents, onl
 # min_snatched = 10
 # max_snatched = 10
 
+[[goodreads_list]]
+url = "https://www.goodreads.com/review/list_rss/..." # RSS feed of a Goodreads list
+
+[[goodreads_list.grab]] # A block deciding what torrents to grab from the list, if a torrent matches multiple block the first one is used
+cost = "all"
+languages = [ "english" ] # you can use the same search filters as for autograb blocks
+max_size = "15 MiB"
+
+[[goodreads_list.grab]]
+cost = "wedge" # automatically wedge torrents before download, as we have an cost=all block before with a max_size, this will only wedge torrents > 15 MiB
+languages = [ "english" ]
+
+[[goodreads_list]]
+url = "other list"
+
+[[goodreads_list.grab]] # each list has their own grab blocks to select torrents
+cost = "free"
+prefer_format = "audio" # If a torrent is available in both ebook and audio, only download the audiobook
+                        # however this still allow downloading an ebook if no audiobook is available.
+                        # leave this property out to download both formats.
+                        # If you never want to download an ebook, use categories = { audio = true, ebook = false } instead
+
 [[tag]]
 categories = { audio = false, ebook = [ "food" ] }
 category = "Cookbooks" # Cookbooks will win over Ebooks as it is defined first and a torrent can only have one category
@@ -155,8 +175,7 @@ deny_tags = [ "skip" ] # or disallow some
 I will never promise any future development, but some of my current plans:
 - Improve web ui to show status and allow a few actions (like updating metadata for a torrent you suggested updated info for)
 - Add a plain .torrent file mode that can work with any client
-- Add a way to handle requests, e.g. with Goodreads lists or "to read" on The Storygraph
-- Support auto applying wedges to non-free torrents
+- Investigate if it's possible to support The Storygraphs "to read" feature
 - Support editing the config file while running
 
 
