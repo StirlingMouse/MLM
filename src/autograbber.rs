@@ -2,11 +2,14 @@ use std::{ops::RangeInclusive, sync::Arc, time::Duration};
 
 use crate::{
     config::{Config, Cost, TorrentFilter, Type},
-    data::{self, ErroredTorrentId, Event, EventType, SelectedTorrent, Timestamp, TorrentMeta},
+    data::{
+        self, ErroredTorrentId, Event, EventType, SelectedTorrent, Timestamp, TorrentCost,
+        TorrentMeta,
+    },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{
         DATE_FORMAT, MaM, MaMTorrent, MetaError, SearchKind, SearchQuery, SearchResult,
-        SearchTarget, Tor, normalize_title,
+        SearchTarget, Tor, WedgeBuyError, normalize_title,
     },
     qbittorrent::QbitError,
 };
@@ -209,6 +212,7 @@ pub async fn search_torrents(
         &config,
         &db,
         torrents,
+        torrent_filter.cost,
         torrent_filter.unsat_buffer,
         torrent_filter.dry_run,
     )
@@ -221,6 +225,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
     config: &Config,
     db: &Database<'_>,
     torrents: T,
+    cost: Cost,
     unsat_buffer: Option<u64>,
     dry_run: bool,
 ) -> Result<()> {
@@ -344,16 +349,22 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             .collect();
         let category = tags.iter().find_map(|t| t.category.clone());
         let tags = tags.iter().flat_map(|t| t.tags.clone()).collect();
+        let cost = if torrent.fl_vip > 0 {
+            TorrentCost::Vip
+        } else if torrent.personal_freeleech > 0 {
+            TorrentCost::PersonalFreeleech
+        } else if torrent.free > 0 {
+            TorrentCost::GlobalFreeleech
+        } else if cost == Cost::Wedge {
+            TorrentCost::UseWedge
+        } else if cost == Cost::TryWedge {
+            TorrentCost::TryWedge
+        } else {
+            TorrentCost::Ratio
+        };
         info!(
-            "Selecting torrent \"{}\" in format {}, free: {}, fl_vip: {}, pf: {}, vip: {}, with category {:?} and tags {:?}",
-            torrent.title,
-            torrent.filetype,
-            torrent.free,
-            torrent.fl_vip,
-            torrent.personal_freeleech,
-            torrent.vip,
-            category,
-            tags
+            "Selecting torrent \"{}\" in format {}, cost: {:?}, with category {:?} and tags {:?}",
+            torrent.title, torrent.filetype, cost, category, tags
         );
         if let Some(rw) = &rw_opt {
             rw.insert(data::SelectedTorrent {
@@ -363,6 +374,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                     .clone()
                     .ok_or_else(|| Error::msg(format!("no dl field for torrent {}", torrent.id)))?,
                 unsat_buffer,
+                cost,
                 category,
                 tags,
                 title_search,
@@ -388,6 +400,33 @@ async fn grab_torrent(
         "Grabbing torrent \"{}\", with category {:?} and tags {:?}",
         torrent.meta.title, torrent.category, torrent.tags,
     );
+    let mut wedged = false;
+    if torrent.cost == TorrentCost::UseWedge || torrent.cost == TorrentCost::TryWedge {
+        info!("Using wedge on torrent \"{}\"", torrent.meta.title);
+        match mam.wedge_torrent(torrent.mam_id).await {
+            Ok(_) => {
+                wedged = true;
+            }
+            Err(err) => {
+                warn!(
+                    "Failed applying wedge for torrent {}: {}",
+                    torrent.mam_id, err
+                );
+                match err.downcast::<WedgeBuyError>() {
+                    Ok(
+                        WedgeBuyError::IsVip
+                        | WedgeBuyError::IsGlobalFreeleech
+                        | WedgeBuyError::IsPersonalFreeleech,
+                    ) => {}
+                    _ => {
+                        if torrent.cost == TorrentCost::UseWedge {
+                            return Err(anyhow::Error::msg("Failed to apply wedge for torrent"));
+                        }
+                    }
+                }
+            }
+        }
+    }
     let torrent_file_bytes = mam.get_torrent_file(&torrent.dl_link).await?;
     let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
     let hash = torrent_file.info_hash();
@@ -406,6 +445,7 @@ async fn grab_torrent(
     .map_err(QbitError)?;
 
     let mam_id = torrent.mam_id;
+    let cost = Some(torrent.cost);
     {
         let rw = db.rw_transaction()?;
         rw.insert(data::Torrent {
@@ -432,7 +472,14 @@ async fn grab_torrent(
         rw.commit()?;
     }
 
-    write_event(db, Event::new(Some(hash), Some(mam_id), EventType::Grabbed));
+    write_event(
+        db,
+        Event::new(
+            Some(hash),
+            Some(mam_id),
+            EventType::Grabbed { cost, wedged },
+        ),
+    );
 
     Ok(())
 }

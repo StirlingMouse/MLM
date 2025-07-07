@@ -189,11 +189,11 @@ async fn search_item(
                 taken.1.filetypes.join(", ")
             );
             match taken.1.main_cat {
-                crate::data::v1::MainCat::Audio => {
+                MainCat::Audio => {
                     db_item.wanted_audio_torrent = Some((taken.0.id, Timestamp::now()));
                     audiobook.take();
                 }
-                crate::data::v1::MainCat::Ebook => {
+                MainCat::Ebook => {
                     db_item.wanted_ebook_torrent = Some((taken.0.id, Timestamp::now()));
                     ebook.take();
                 }
@@ -234,18 +234,32 @@ async fn search_item(
         }
     }
 
-    select_torrents(
-        config,
-        db,
-        [audiobook, ebook]
-            .into_iter()
-            .flatten()
-            .map(|t| t.0.clone()),
-        list.unsat_buffer,
-        list.dry_run,
-    )
-    .await
-    .context("select_torrents")
+    if let Some(audiobook) = audiobook {
+        select_torrents(
+            config,
+            db,
+            [audiobook.0.clone()].into_iter(),
+            audiobook.3,
+            list.unsat_buffer,
+            list.dry_run,
+        )
+        .await
+        .context("select_torrents")?;
+    }
+    if let Some(ebook) = ebook {
+        select_torrents(
+            config,
+            db,
+            [ebook.0.clone()].into_iter(),
+            ebook.3,
+            list.unsat_buffer,
+            list.dry_run,
+        )
+        .await
+        .context("select_torrents")?;
+    }
+
+    Ok(())
 }
 
 #[instrument(skip_all)]

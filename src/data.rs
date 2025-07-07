@@ -1,5 +1,6 @@
 use anyhow::Result;
-use native_db::{Database, Key};
+use native_db::transaction::RwTransaction;
+use native_db::{Database, Key, ToInput, db_type};
 use native_db::{Models, ToKey, native_db};
 use native_model::{Model, native_model};
 use once_cell::sync::Lazy;
@@ -11,6 +12,9 @@ use tracing::{info, instrument};
 pub static MODELS: Lazy<Models> = Lazy::new(|| {
     let mut models = Models::new();
     models.define::<v1::Config>().unwrap();
+
+    models.define::<v4::SelectedTorrent>().unwrap();
+    models.define::<v4::Event>().unwrap();
 
     models.define::<v3::Torrent>().unwrap();
     models.define::<v3::SelectedTorrent>().unwrap();
@@ -36,14 +40,14 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
 pub type Config = v1::Config;
 pub type Torrent = v3::Torrent;
 pub type TorrentKey = v3::TorrentKey;
-pub type SelectedTorrent = v3::SelectedTorrent;
-pub type SelectedTorrentKey = v3::SelectedTorrentKey;
+pub type SelectedTorrent = v4::SelectedTorrent;
+pub type SelectedTorrentKey = v4::SelectedTorrentKey;
 pub type DuplicateTorrent = v3::DuplicateTorrent;
 pub type ErroredTorrent = v3::ErroredTorrent;
 pub type ErroredTorrentId = v1::ErroredTorrentId;
-pub type Event = v3::Event;
-pub type EventKey = v3::EventKey;
-pub type EventType = v3::EventType;
+pub type Event = v4::Event;
+pub type EventKey = v4::EventKey;
+pub type EventType = v4::EventType;
 pub type List = v3::List;
 pub type ListKey = v3::ListKey;
 pub type ListItem = v3::ListItem;
@@ -54,17 +58,44 @@ pub type Uuid = v3::Uuid;
 pub type Timestamp = v3::Timestamp;
 pub type Language = v3::Language;
 pub type Size = v3::Size;
+pub type TorrentCost = v4::TorrentCost;
 
 #[instrument(skip_all)]
 pub fn migrate(db: &Database<'_>) -> Result<()> {
     let rw = db.rw_transaction()?;
 
     rw.migrate::<Torrent>()?;
-    rw.migrate::<Torrent>()?;
-    rw.migrate::<Torrent>()?;
-    rw.migrate::<Torrent>()?;
+    rw.migrate::<SelectedTorrent>()?;
+    rw.migrate::<DuplicateTorrent>()?;
+    recover_migrate::<v2::ErroredTorrent, ErroredTorrent>(&rw)?;
+    rw.migrate::<ErroredTorrent>()?;
+    recover_migrate::<v3::Event, Event>(&rw)?;
+    rw.migrate::<Event>()?;
     rw.commit()?;
     info!("Migrations done");
+
+    Ok(())
+}
+
+fn recover_migrate<Old, New>(rw: &RwTransaction<'_>) -> Result<(), db_type::Error>
+where
+    Old: From<New> + Clone + ToInput,
+    New: From<Old> + ToInput,
+{
+    let old_data = rw
+        .scan()
+        .primary::<Old>()?
+        .all()?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    for old in old_data {
+        let new: New = old.clone().into();
+        rw.insert(new).or_else(|err| match err {
+            db_type::Error::DuplicateKey { .. } => Ok(()),
+            err => Err(err),
+        })?;
+        rw.remove(old)?;
+    }
 
     Ok(())
 }
@@ -778,6 +809,157 @@ pub mod v3 {
                 authors: t.authors,
                 narrators: t.narrators,
                 series: t.series,
+            }
+        }
+    }
+
+    impl From<v4::SelectedTorrent> for SelectedTorrent {
+        fn from(t: v4::SelectedTorrent) -> Self {
+            Self {
+                mam_id: t.mam_id,
+                dl_link: t.dl_link,
+                unsat_buffer: t.unsat_buffer,
+                category: t.category,
+                tags: t.tags,
+                title_search: t.title_search,
+                meta: t.meta,
+                created_at: t.created_at,
+            }
+        }
+    }
+
+    impl From<v4::Event> for Event {
+        fn from(t: v4::Event) -> Self {
+            Self {
+                id: t.id,
+                hash: t.hash,
+                mam_id: t.mam_id,
+                created_at: t.created_at,
+                event: t.event.into(),
+            }
+        }
+    }
+
+    impl From<v4::EventType> for EventType {
+        fn from(t: v4::EventType) -> Self {
+            match t {
+                v4::EventType::Grabbed { .. } => Self::Grabbed,
+                v4::EventType::Linked { library_path } => Self::Linked { library_path },
+                v4::EventType::Cleaned {
+                    library_path,
+                    files,
+                } => Self::Cleaned {
+                    library_path,
+                    files,
+                },
+            }
+        }
+    }
+}
+
+pub mod v4 {
+    use super::*;
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 3, version = 4, from = v3::SelectedTorrent)]
+    #[native_db]
+    pub struct SelectedTorrent {
+        #[primary_key]
+        pub mam_id: u64,
+        pub dl_link: String,
+        pub unsat_buffer: Option<u64>,
+        pub cost: TorrentCost,
+        pub category: Option<String>,
+        pub tags: Vec<String>,
+        #[secondary_key]
+        pub title_search: String,
+        pub meta: TorrentMeta,
+        pub created_at: Timestamp,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 6, version = 4, from = v3::Event)]
+    #[native_db]
+    pub struct Event {
+        #[primary_key]
+        pub id: Uuid,
+        #[secondary_key]
+        pub hash: Option<String>,
+        #[secondary_key]
+        pub mam_id: Option<u64>,
+        #[secondary_key]
+        pub created_at: Timestamp,
+        pub event: EventType,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    pub enum EventType {
+        Grabbed {
+            cost: Option<TorrentCost>,
+            wedged: bool,
+        },
+        Linked {
+            library_path: PathBuf,
+        },
+        Cleaned {
+            library_path: PathBuf,
+            files: Vec<PathBuf>,
+        },
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum TorrentCost {
+        GlobalFreeleech,
+        PersonalFreeleech,
+        Vip,
+        UseWedge,
+        TryWedge,
+        Ratio,
+    }
+
+    impl From<v3::SelectedTorrent> for SelectedTorrent {
+        fn from(t: v3::SelectedTorrent) -> Self {
+            Self {
+                mam_id: t.mam_id,
+                dl_link: t.dl_link,
+                unsat_buffer: t.unsat_buffer,
+                cost: TorrentCost::Ratio,
+                category: t.category,
+                tags: t.tags,
+                title_search: t.title_search,
+                meta: t.meta,
+                created_at: t.created_at,
+            }
+        }
+    }
+
+    impl From<v3::Event> for Event {
+        fn from(t: v3::Event) -> Self {
+            Self {
+                id: t.id,
+                hash: t.hash,
+                mam_id: t.mam_id,
+                created_at: t.created_at,
+                event: t.event.into(),
+            }
+        }
+    }
+
+    impl From<v3::EventType> for EventType {
+        fn from(t: v3::EventType) -> Self {
+            match t {
+                v3::EventType::Grabbed => Self::Grabbed {
+                    cost: None,
+                    wedged: false,
+                },
+                v3::EventType::Linked { library_path } => Self::Linked { library_path },
+                v3::EventType::Cleaned {
+                    library_path,
+                    files,
+                } => Self::Cleaned {
+                    library_path,
+                    files,
+                },
             }
         }
     }

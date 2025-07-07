@@ -17,8 +17,8 @@
   <div>{{ self::time(event.created_at) }}</div>
   <div>
   {% match event.event %}
-  {% when EventType::Grabbed %}
-    Grabbed Torrent {{ torrent_title(&torrent) }}<br />
+  {% when EventType::Grabbed { cost, wedged } %}
+    Grabbed Torrent {{ torrent_title(&torrent) }}{% if wedged %} using a wedge {% endif %}<br />
   {% when EventType::Linked { library_path } %}
     Linked Torrent {{ torrent_title(&torrent) }}<br />
     to: {{ library_path.to_string_lossy() }}

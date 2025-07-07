@@ -258,11 +258,23 @@ pub enum Type {
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum Cost {
     #[default]
     Free,
+    Wedge,
+    TryWedge,
     All,
+}
+
+impl Cost {
+    pub fn wedge(self) -> bool {
+        match self {
+            Cost::Wedge => true,
+            Cost::TryWedge => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]

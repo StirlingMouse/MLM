@@ -11,7 +11,10 @@ use reqwest::Url;
 use reqwest_cookie_store::CookieStoreRwLock;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use time::format_description::{self, OwnedFormatItem};
+use time::{
+    UtcDateTime,
+    format_description::{self, OwnedFormatItem},
+};
 use tracing::{debug, error, info, trace, warn};
 use unidecode::unidecode;
 
@@ -295,6 +298,12 @@ pub struct SearchError {
     pub error: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BonusBuyResult {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct MaMTorrent {
     pub id: u64,
@@ -463,6 +472,18 @@ where
     Ok(T::deserialize(v).unwrap_or_default())
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum WedgeBuyError {
+    #[error("torrent is VIP")]
+    IsVip,
+    #[error("torrent is global freeleech")]
+    IsGlobalFreeleech,
+    #[error("torrent is personal freeleech")]
+    IsPersonalFreeleech,
+    #[error("Unknown error: {0}")]
+    Unknown(String),
+}
+
 pub struct MaM<'a> {
     jar: Arc<CookieStoreRwLock>,
     client: reqwest::Client,
@@ -595,6 +616,29 @@ impl<'a> MaM<'a> {
         })?;
         self.store_cookies();
         Ok(resp)
+    }
+
+    pub async fn wedge_torrent(&self, mam_id: u64) -> Result<()> {
+        let timestamp = UtcDateTime::now().unix_timestamp() * 1000;
+        let resp: BonusBuyResult = self
+            .client
+            .get(format!("https://www.myanonamouse.net/json/bonusBuy.php/{timestamp}?spendtype=personalFL&torrentid={mam_id}&timestamp={timestamp}"))
+            .send()
+            .await?
+            .json()
+            .await?;
+        self.store_cookies();
+        if resp.success {
+            return Ok(());
+        }
+        let err = match resp.error.as_deref() {
+            Some("This Torrent is VIP") => WedgeBuyError::IsVip,
+            Some("Cannot spend FL Wedges on Freeleech Picks") => WedgeBuyError::IsGlobalFreeleech,
+            Some("This is already a personal freeleech") => WedgeBuyError::IsPersonalFreeleech,
+            Some(err) => WedgeBuyError::Unknown(err.to_owned()),
+            None => WedgeBuyError::Unknown("No error message provided".to_owned()),
+        };
+        Err(anyhow::Error::new(err))
     }
 
     fn store_cookies(&self) {
