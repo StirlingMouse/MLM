@@ -28,7 +28,7 @@ use crate::{
     config::Config,
     data::{
         DuplicateTorrent, ErroredTorrent, ErroredTorrentId, Event, EventKey, EventType, Language,
-        List, ListItem, ListItemKey, ListKey, SelectedTorrent, Timestamp, Torrent,
+        List, ListItem, ListItemKey, ListKey, SelectedTorrent, Timestamp, Torrent, TorrentKey,
     },
     stats::Stats,
 };
@@ -322,8 +322,9 @@ async fn torrents_page(
     let mut torrents = db
         .r_transaction()?
         .scan()
-        .primary::<Torrent>()?
+        .secondary::<Torrent>(TorrentKey::created_at)?
         .all()?
+        .rev()
         .filter(|t| {
             let Ok(t) = t else {
                 return true;
