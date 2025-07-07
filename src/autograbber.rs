@@ -349,7 +349,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             .collect();
         let category = tags.iter().find_map(|t| t.category.clone());
         let tags = tags.iter().flat_map(|t| t.tags.clone()).collect();
-        let cost = if torrent.fl_vip > 0 {
+        let cost = if torrent.vip > 0 {
             TorrentCost::Vip
         } else if torrent.personal_freeleech > 0 {
             TorrentCost::PersonalFreeleech
