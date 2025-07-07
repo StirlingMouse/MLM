@@ -35,6 +35,7 @@ use crate::{
         List, ListItem, ListItemKey, ListKey, MainCat, SelectedTorrent, Timestamp, Torrent,
         TorrentCost, TorrentKey,
     },
+    mam::MaM,
     stats::Stats,
 };
 
@@ -42,9 +43,10 @@ pub async fn start_webserver(
     config: Arc<Config>,
     db: Arc<Database<'static>>,
     stats: Arc<Mutex<Stats>>,
+    mam: Arc<MaM<'static>>,
 ) -> Result<()> {
     let app = Router::new()
-        .route("/", get(index_page).with_state(stats))
+        .route("/", get(index_page).with_state((stats, mam)))
         .route("/torrents", get(torrents_page).with_state(db.clone()))
         .route("/events", get(event_page).with_state(db.clone()))
         .route("/lists", get(lists_page).with_state(db.clone()))
@@ -76,10 +78,11 @@ async fn set_static_cache_control(request: Request<Body>, next: Next) -> Respons
 }
 
 async fn index_page(
-    State(stats): State<Arc<Mutex<Stats>>>,
+    State((stats, mam)): State<(Arc<Mutex<Stats>>, Arc<MaM<'static>>)>,
 ) -> std::result::Result<Html<String>, AppError> {
     let stats = stats.lock().await;
     let template = IndexPageTemplate {
+        username: mam.user.lock().await.as_ref().map(|u| u.username.clone()),
         autograbber_run_at: stats.autograbber_run_at.map(Into::into),
         autograbber_result: stats
             .autograbber_result
@@ -415,6 +418,7 @@ async fn torrents_page(
 #[derive(Template)]
 #[template(path = "pages/index.html")]
 struct IndexPageTemplate {
+    username: Option<String>,
     autograbber_run_at: Option<Timestamp>,
     autograbber_result: Option<Result<(), String>>,
     linker_run_at: Option<Timestamp>,

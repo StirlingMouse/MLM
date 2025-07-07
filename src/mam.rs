@@ -15,6 +15,7 @@ use time::{
     UtcDateTime,
     format_description::{self, OwnedFormatItem},
 };
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, trace, warn};
 use unidecode::unidecode;
 
@@ -39,9 +40,10 @@ fn is_zero(value: &u64) -> bool {
     *value == 0
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UserResponse {
     pub unsat: Unsats,
+    pub username: String,
     // pub classname: UserClass,
     // pub connectable: String,
     // pub country_code: Option<String>,
@@ -85,7 +87,7 @@ pub struct UserResponse {
     // pub vip_until: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Unsats {
     pub count: u64,
     pub red: bool,
@@ -488,6 +490,7 @@ pub struct MaM<'a> {
     jar: Arc<CookieStoreRwLock>,
     client: reqwest::Client,
     db: Arc<Database<'a>>,
+    pub user: Arc<Mutex<Option<UserResponse>>>,
 }
 
 impl<'a> MaM<'a> {
@@ -519,7 +522,12 @@ impl<'a> MaM<'a> {
             .user_agent("MLM")
             .build()?;
 
-        let mam = MaM { jar, client, db };
+        let mam = MaM {
+            jar,
+            client,
+            db,
+            user: Default::default(),
+        };
         if let Err(err) = mam.check_mam_id().await {
             if has_stored_mam_id {
                 warn!("Stored mam_id failed with {err}, falling back to config value");
@@ -552,7 +560,7 @@ impl<'a> MaM<'a> {
     }
 
     pub async fn user_info(&self) -> Result<UserResponse> {
-        let resp = self
+        let resp: UserResponse = self
             .client
             .get("https://www.myanonamouse.net/jsonLoad.php?snatch_summary=true")
             .send()
@@ -561,6 +569,7 @@ impl<'a> MaM<'a> {
             .json()
             .await?;
         self.store_cookies();
+        self.user.lock().await.replace(resp.clone());
         Ok(resp)
     }
 

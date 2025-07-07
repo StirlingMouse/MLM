@@ -182,7 +182,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    start_webserver(config, db, stats).await?;
+    start_webserver(config, db, stats, mam).await?;
 
     Ok(())
 }

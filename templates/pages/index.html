@@ -6,7 +6,7 @@
 {% endblock %}
 
 {% block content %}
-<p>Welcome to MLM, select a page above</p>
+<p>{% if let Some(username) = username %}Hi {{ username }}! {% endif %}Welcome to MLM, select a page above</p>
 
 <div class="infoboxes">
 <div class="infobox">
