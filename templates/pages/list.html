@@ -1,33 +1,36 @@
 {% extends "base.html" %}
 
-{% block title %}{{ list.title }}{% endblock %}
+{% block title %}MLM - {{ list.title }}{% endblock %}
 
 {% block content %}
 <h1>{{ list.title }}</h1>
 
 {% for item in items %}
-  <div>
-    <h2>{{ item.title }}</h2>
-    <p>by {{ item.authors.join(", ") }}</p>
+  <div class=list_item>
+    <img src="{{ item.cover_url }}">
+    <div>
+    <h3>{{ item.title }}</h3>
+    <p class=author>by {{ item.authors.join(", ") }}</p>
     {% if !item.series.is_empty() %}
-    <p>
-      {% for (name, num) in item.series %}
+      <p>{% for (name, num) in item.series %}
         {{ name }} #{{num}}{% if !loop.last %}, {% endif %}
-      {% endfor %}
-    </p>
-    {% endif %}
-    {% if let Some((mam_id, time)) = item.wanted_audio_torrent %}
-      <p>Suggest wedge audiobook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> since {{ self::time(time) }}
-    {% endif %}
-    {% if let Some((mam_id, time)) = item.wanted_ebook_torrent %}
-      <p>Suggest wedge ebook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> since {{ self::time(time) }}
+      {% endfor %}</p>
     {% endif %}
     {% if let Some((mam_id, time)) = item.audio_torrent %}
-      <p>Downloaded audiobook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> at {{ self::time(time) }}
+      Downloaded audiobook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> at {{ self::time(time) }}<br />
+    {% elif let Some((mam_id, time)) = item.wanted_audio_torrent %}
+      Suggest wedge audiobook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> at {{ self::time(time) }}<br />
+    {% elif item.want_audio() %}
+      <span class=missing>Audiobook missing</span><br />
     {% endif %}
     {% if let Some((mam_id, time)) = item.ebook_torrent %}
-      <p>Downloaded ebook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> at {{ self::time(time) }}
+      Downloaded ebook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> at {{ self::time(time) }}<br />
+    {% elif let Some((mam_id, time)) = item.wanted_ebook_torrent %}
+      Suggest wedge ebook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> at {{ self::time(time) }}<br />
+    {% elif item.want_ebook() %}
+      <span class=missing>Ebook missing</span><br />
     {% endif %}
+    </div>
   </div>
 {% endfor %}
 {% endblock %}

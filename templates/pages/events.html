@@ -1,27 +1,56 @@
 {% extends "base.html" %}
 
-{% block title %}Selected Torrents{% endblock %}
+{% block title %}MLM - Events{% endblock %}
 
 {% block head %}
   <style>
-    .SelectedTable {
+    .EventsTable {
       {{self::table_styles(2) | safe}}
+      grid-template-columns: auto 1fr;
     }
   </style>
 {% endblock %}
 
 {% block content %}
-<h1>Events</h1>
-<div class="SelectedTable table">
+<div class="row">
+  <h1>Events</h1>
+  <div class="show_toggles">
+    Show:
+    <label>
+      All
+      <input type=radio name=show {% if show.is_none() %}checked{% endif %}>
+    </label>
+    <label>
+      Grabber
+      <input type=radio name=show {% if show == Some("grabber") %}checked{% endif %} value="grabber">
+    </label>
+    <label>
+      Linker
+      <input type=radio name=show {% if show == Some("linker") %}checked{% endif %} value="linker">
+    </label>
+    <label>
+      Cleaner
+      <input type=radio name=show {% if show == Some("cleaner") %}checked{% endif %} value="cleaner">
+    </label>
+  </div>
+</div>
+<div class="EventsTable table">
 {% for (event, torrent, replacement) in events %}
   <div>{{ self::time(event.created_at) }}</div>
   <div>
   {% match event.event %}
   {% when EventType::Grabbed { cost, wedged } %}
-    Grabbed Torrent {{ torrent_title(&torrent) }}{% if wedged %} using a wedge {% endif %}<br />
+    Grabbed {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}
+    {% if wedged %} using a wedge
+    {% else %}{% match cost %}
+      {% when Some(TorrentCost::Vip) %} as VIP
+      {% when Some(TorrentCost::GlobalFreeleech) %} as Freeleech
+      {% when Some(TorrentCost::PersonalFreeleech) %} as Personal Freeleech
+      {% when Some(_) %} using ratio
+      {% when _ %}{% endmatch %}{% endif %}<br />
   {% when EventType::Linked { library_path } %}
-    Linked Torrent {{ torrent_title(&torrent) }}<br />
-    to: {{ library_path.to_string_lossy() }}
+    Linked {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}<br />
+    to: {{ library_path.to_string_lossy() }}<br />
     {% if let Some(torrent) = torrent %}
     files:
     <ul>
@@ -31,11 +60,11 @@
     </ul>
     {% endif %}
   {% when EventType::Cleaned { library_path, files } %}
-    Cleaned Torrent {{ torrent_title(&torrent) }}<br />
+    Cleaned {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}<br />
     from: {{ library_path.to_string_lossy() }}<br />
-    {% if let Some(replacement) = replacement %}
-    replaced with: {{ replacement.meta.title }}<br />
-    {% if let Some(library_path) = replacement.library_path %}
+    {% if let Some(r) = replacement %}
+    replaced with: {{ torrent_title(&replacement) | safe }}<br />
+    {% if let Some(library_path) = r.library_path %}
     in: {{ library_path.to_string_lossy() }}<br />
     {% endif %}
     {% endif %}

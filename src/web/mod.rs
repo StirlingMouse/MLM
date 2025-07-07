@@ -9,26 +9,31 @@ use anyhow::Result;
 use askama::Template;
 use axum::{
     Router,
+    body::Body,
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderValue, Request, StatusCode},
+    middleware::{self, Next},
     response::{Html, IntoResponse, Response},
     routing::get,
 };
 use native_db::Database;
 use once_cell::sync::Lazy;
+use reqwest::header;
 use serde::{Deserialize, Serialize};
 use time::{
     UtcOffset,
     format_description::{self, OwnedFormatItem},
 };
 use tokio::sync::Mutex;
+use tower::ServiceBuilder;
 use tower_http::services::ServeDir;
 
 use crate::{
     config::Config,
     data::{
         DuplicateTorrent, ErroredTorrent, ErroredTorrentId, Event, EventKey, EventType, Language,
-        List, ListItem, ListItemKey, ListKey, SelectedTorrent, Timestamp, Torrent, TorrentKey,
+        List, ListItem, ListItemKey, ListKey, MainCat, SelectedTorrent, Timestamp, Torrent,
+        TorrentCost, TorrentKey,
     },
     stats::Stats,
 };
@@ -47,13 +52,27 @@ pub async fn start_webserver(
         .route("/errors", get(errors_page).with_state(db.clone()))
         .route("/selected", get(selected_page).with_state(db.clone()))
         .route("/duplicate", get(duplicate_page).with_state(db.clone()))
-        .nest_service("/assets", ServeDir::new("assets"));
+        .nest_service(
+            "/assets",
+            ServiceBuilder::new()
+                .layer(middleware::from_fn(set_static_cache_control))
+                .service(ServeDir::new("assets")),
+        );
 
     let listener =
         tokio::net::TcpListener::bind((config.web_host.clone(), config.web_port)).await?;
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+async fn set_static_cache_control(request: Request<Body>, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("must-revalidate"),
+    );
+    response
 }
 
 async fn index_page(
@@ -95,6 +114,24 @@ async fn event_page(
         .secondary::<Event>(EventKey::created_at)?;
     let events = events.all()?.rev();
     let mut events_with_torrent = Vec::with_capacity(events.size_hint().0);
+    let events = events.filter(|t| {
+        let Ok(t) = t else {
+            return true;
+        };
+        for (field, value) in filter.iter() {
+            let ok = match field {
+                EventPageFilter::Show => match t.event {
+                    EventType::Grabbed { .. } => value == "grabber",
+                    EventType::Linked { .. } => value == "linker",
+                    EventType::Cleaned { .. } => value == "cleaner",
+                },
+            };
+            if !ok {
+                return false;
+            }
+        }
+        true
+    });
     for event in events {
         let event = event?;
         if let Some(hash) = &event.hash {
@@ -110,23 +147,14 @@ async fn event_page(
             events_with_torrent.push((event, None, None));
         }
     }
-    // .filter(|t| {
-    //     let Ok(t) = t else {
-    //         return true;
-    //     };
-    //     for (field, value) in filter.iter() {
-    //         let ok = match field {
-    //             // TODO
-    //             EventPageFilter::Kind => true,
-    //         };
-    //         if !ok {
-    //             return false;
-    //         }
-    //     }
-    //     true
-    // })
-    // .collect::<Result<Vec<_>, native_db::db_type::Error>>()?;
     let template = EventPageTemplate {
+        show: filter.iter().find_map(|f| {
+            if f.0 == EventPageFilter::Show {
+                Some(f.1.as_str())
+            } else {
+                None
+            }
+        }),
         events: events_with_torrent,
     };
     Ok::<_, AppError>(Html(template.to_string()))
@@ -399,15 +427,25 @@ struct IndexPageTemplate {
 
 #[derive(Template)]
 #[template(path = "pages/events.html")]
-struct EventPageTemplate {
+struct EventPageTemplate<'a> {
+    show: Option<&'a str>,
     events: Vec<(Event, Option<Torrent>, Option<Torrent>)>,
 }
 
-impl EventPageTemplate {
-    fn torrent_title<'a>(&'a self, torrent: &'a Option<Torrent>) -> &'a str {
+impl<'a> EventPageTemplate<'a> {
+    fn torrent_title(&'a self, torrent: &'a Option<Torrent>) -> Conditional<TorrentLink<'a>> {
+        Conditional {
+            template: torrent.as_ref().map(|t| TorrentLink {
+                id: t.meta.mam_id,
+                title: &t.meta.title,
+            }),
+        }
+    }
+
+    fn torrent_main_cat(&'a self, torrent: &'a Option<Torrent>) -> &'a str {
         torrent
             .as_ref()
-            .map(|t| t.meta.title.as_str())
+            .map(|t| t.meta.main_cat.as_str())
             .unwrap_or_default()
     }
 }
@@ -415,7 +453,7 @@ impl EventPageTemplate {
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum EventPageFilter {
-    Kind,
+    Show,
 }
 
 impl Key for EventPageFilter {}
@@ -431,6 +469,16 @@ struct ListsPageTemplate {
 struct ListPageTemplate {
     list: List,
     items: Vec<ListItem>,
+}
+
+impl ListItem {
+    fn want_audio(&self) -> bool {
+        self.prefer_format.is_none_or(|f| f == MainCat::Audio)
+    }
+
+    fn want_ebook(&self) -> bool {
+        self.prefer_format.is_none_or(|f| f == MainCat::Ebook)
+    }
 }
 
 #[derive(Template)]
@@ -877,6 +925,27 @@ struct Series<'a, T: Key> {
 
 fn series<T: Key>(field: T, series: &Vec<(String, String)>) -> Series<'_, T> {
     Series { field, series }
+}
+
+/// ```askama
+/// {% match template %}
+/// {% when Some(template) %}{{ template | safe }}
+/// {% when None %}{% endmatch %}
+/// ```
+#[derive(Template)]
+#[template(ext = "html", in_doc = true)]
+struct Conditional<T: Template> {
+    template: Option<T>,
+}
+
+/// ```askama
+/// <a href="https://www.myanonamouse.net/t/{{ id }}" class=torrent target=_blank>{{ title }}</a>
+/// ```
+#[derive(Template)]
+#[template(ext = "html", in_doc = true)]
+struct TorrentLink<'a> {
+    id: u64,
+    title: &'a str,
 }
 
 impl ErroredTorrentId {

@@ -9,6 +9,7 @@ body {
         --above: var(--color-2); 
         --text: var(--color-4); 
         --accent: hsl(331.8, 91.3%, 45%);
+        --warn: #e08067;
 
         background: var(--background);
         color: var(--text);
@@ -21,6 +22,11 @@ a {
         &:hover {
                 text-decoration-color: currentColor;
         }
+}
+
+ul {
+        margin-top: 0;
+        padding-left: 1em;
 }
 
 nav > a {
@@ -68,4 +74,33 @@ nav > a {
                 border-bottom: 1px solid currentColor;
                 background: var(--background);
         }
+}
+
+.list_item {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        margin: 24px;
+        gap: 16px;
+
+        img {
+                width: 64px;
+        }
+        h3 {
+                margin: 0;
+        }
+        p {
+                margin: 0.5em 0;
+        }
+        .author {
+                margin-top: 0;
+                font-style: italic;
+        }
+}
+
+.torrent {
+        font-weight: bold;
+}
+
+.missing {
+        color: var(--warn);
 }

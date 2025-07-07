@@ -22,9 +22,14 @@ document.body.addEventListener('change', e => {
         const toggles = e.target.closest('.show_toggles')
         if (toggles) {
                 setTimeout(() => {
-                        const show = Array.from(toggles.querySelectorAll('input[type="checkbox"]')).filter(i => i.checked).map(i => i.value)
+                        const show = Array.from(toggles.querySelectorAll('input[type="checkbox"],input[type="radio"]')).filter(i => i.checked).map(i => i.type === "radio" && i.value == "on" ? '' : i.value)
                         const params = new URLSearchParams(location.search)
-                        params.set('show', show.join(','))
+                        const show_str = show.join(',')
+                        if (show_str) {
+                                params.set('show', show_str)
+                        } else {
+                                params.delete('show')
+                        }
                         const target = new URL(location.href)
                         target.search = params
                         location.href = target
