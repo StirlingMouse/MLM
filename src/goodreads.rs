@@ -21,7 +21,7 @@ use crate::{
 };
 
 pub static SERIES_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(.*?) \((.*?), #(\d+)\)$").unwrap());
+    Lazy::new(|| Regex::new(r"(.*?) \((.*?),? #(\d+)\)$").unwrap());
 
 #[instrument(skip_all)]
 pub async fn run_goodreads_import(
