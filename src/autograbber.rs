@@ -8,8 +8,8 @@ use crate::{
     },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{
-        DATE_FORMAT, MaM, MaMTorrent, MetaError, SearchKind, SearchQuery, SearchResult,
-        SearchTarget, Tor, WedgeBuyError, normalize_title,
+        DATE_FORMAT, MaM, MaMTorrent, MetaError, RateLimitError, SearchKind, SearchQuery,
+        SearchResult, SearchTarget, Tor, WedgeBuyError, normalize_title,
     },
     qbittorrent::QbitError,
 };
@@ -81,6 +81,20 @@ pub async fn grab_selected_torrents(
         let result = grab_torrent(config, db, qbit, mam, torrent.clone())
             .await
             .map_err(|err| anyhow::Error::new(TorrentMetaError(torrent.meta.clone(), err)));
+        let mut long_wait = false;
+        let result = match result {
+            Ok(v) => Ok(v),
+            Err(e) => Err(match e.downcast::<RateLimitError>() {
+                Ok(e) => {
+                    long_wait = true;
+                    anyhow::Error::new(e)
+                }
+                Err(e) => e,
+            }),
+        };
+        if result.is_ok() {
+            snatched_torrents += 1;
+        }
         update_errored_torrent(
             db,
             ErroredTorrentId::Grabber(torrent.mam_id),
@@ -88,8 +102,7 @@ pub async fn grab_selected_torrents(
             result,
         );
 
-        sleep(Duration::from_millis(1000)).await;
-        snatched_torrents += 1;
+        sleep(Duration::from_millis(if long_wait { 30_000 } else { 1000 })).await;
     }
     Ok(())
 }
@@ -462,13 +475,20 @@ async fn grab_torrent(
         })
         .or_else(|err| {
             if let db_type::Error::DuplicateKey { .. } = err {
-                warn!("Got dup key on {:?}", torrent);
+                warn!("Got dup key when adding torrent {:?}", torrent);
                 Ok(())
             } else {
                 Err(err)
             }
         })?;
-        rw.remove(torrent)?;
+        rw.remove(torrent).map(|_| ()).or_else(|err| {
+            if let db_type::Error::KeyNotFound { .. } = err {
+                warn!("Got missing key when removing selected torrent",);
+                Ok(())
+            } else {
+                Err(err)
+            }
+        })?;
         rw.commit()?;
     }
 

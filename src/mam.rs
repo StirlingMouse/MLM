@@ -475,6 +475,20 @@ where
 }
 
 #[derive(thiserror::Error, Debug)]
+#[error("Hit MaM rate limit")]
+pub struct RateLimitError;
+
+impl RateLimitError {
+    pub fn maybe(error: reqwest::Error) -> anyhow::Error {
+        if error.status().is_some_and(|s| s == 429) {
+            anyhow::Error::new(RateLimitError)
+        } else {
+            anyhow::Error::new(error)
+        }
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
 pub enum WedgeBuyError {
     #[error("torrent is VIP")]
     IsVip,
@@ -551,7 +565,8 @@ impl<'a> MaM<'a> {
             .get("https://www.myanonamouse.net/json/checkCookie.php")
             .send()
             .await?
-            .error_for_status()?
+            .error_for_status()
+            .map_err(RateLimitError::maybe)?
             .text()
             .await?;
         info!("checked mam_id: {resp:?}");
@@ -565,7 +580,8 @@ impl<'a> MaM<'a> {
             .get("https://www.myanonamouse.net/jsonLoad.php?snatch_summary=true")
             .send()
             .await?
-            .error_for_status()?
+            .error_for_status()
+            .map_err(RateLimitError::maybe)?
             .json()
             .await?;
         self.store_cookies();
@@ -581,7 +597,8 @@ impl<'a> MaM<'a> {
             ))
             .send()
             .await?
-            .error_for_status()?
+            .error_for_status()
+            .map_err(RateLimitError::maybe)?
             .bytes()
             .await?;
         Ok(resp)
@@ -609,7 +626,8 @@ impl<'a> MaM<'a> {
             .json(query)
             .send()
             .await?
-            .error_for_status()?
+            .error_for_status()
+            .map_err(RateLimitError::maybe)?
             .text()
             .await?;
         if let Ok(resp) = serde_json::from_str::<SearchError>(&resp) {
