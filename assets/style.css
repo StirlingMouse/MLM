@@ -9,6 +9,7 @@ body {
         --above: var(--color-2); 
         --text: var(--color-4); 
         --accent: hsl(331.8, 91.3%, 45%);
+        --accent-above: hsl(331.8, 91.3%, 55%);
         --warn: #e08067;
 
         background: var(--background);
@@ -22,7 +23,11 @@ a {
         &:hover {
                 text-decoration-color: currentColor;
         }
+        &:focus-ring {
+                text-decoration-color: currentColor;
+        }
 }
+
 
 ul {
         margin-top: 0;
@@ -40,7 +45,12 @@ nav > a {
         justify-content: space-between;
 }
 
-.show_toggles {
+.table_options {
+        display: flex;
+        gap: 16px;
+}
+
+.option_group {
         display: flex;
         gap: 4px;
 
@@ -55,6 +65,66 @@ nav > a {
 
         input {
                 display: none;
+        }
+
+        select {
+                appearance: base-select;
+                border: none;
+                padding: 2px 4px;
+                background: var(--above);
+                color: var(--text);
+                border-radius: 2px;
+        }
+}
+
+.pagination {
+        position: sticky;
+        bottom: 0;
+        display: grid;
+        grid-template-columns: min-content min-content auto min-content min-content;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 8px;
+        border-top: 1px solid currentColor;
+        background: var(--background);
+
+        > div {
+                display: flex;
+                gap: 4px;
+        }
+        a {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 30px;
+                height: 30px;
+                padding: 4px;
+                background: var(--above);
+                border-radius: 50%;
+
+                &:hover {
+                        text-decoration: none;
+                        background: var(--color-3);
+                }
+                &:focus-ring {
+                        text-decoration: none;
+                        background: var(--color-3);
+                }
+        }
+        .active {
+                background: var(--accent);
+
+                &:hover {
+                        background: var(--accent-above);
+                }
+                &:focus-ring {
+                        background: var(--accent-above);
+                }
+        }
+        .disabled {
+                color: var(--color-3);
+                background: var(--above) !important;
         }
 }
 

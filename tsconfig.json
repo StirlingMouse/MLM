@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "lib": "es2020"
+  },
+  "include": ["assets/*"]
+}

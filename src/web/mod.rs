@@ -1,6 +1,7 @@
 use std::{
     cell::RefCell,
     fmt::{self, Display},
+    ops::{Range, RangeInclusive},
     str::FromStr,
     sync::Arc,
 };
@@ -26,7 +27,7 @@ use time::{
 };
 use tokio::sync::Mutex;
 use tower::ServiceBuilder;
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
     config::Config,
@@ -60,6 +61,14 @@ pub async fn start_webserver(
                 .layer(middleware::from_fn(set_static_cache_control))
                 .service(ServeDir::new("assets")),
         );
+
+    #[cfg(debug_assertions)]
+    let app = app.nest_service(
+        "/assets/favicon.png",
+        ServiceBuilder::new()
+            .layer(middleware::from_fn(set_static_cache_control))
+            .service(ServeFile::new("assets/favicon_dev.png")),
+    );
 
     let listener =
         tokio::net::TcpListener::bind((config.web_host.clone(), config.web_port)).await?;
@@ -349,11 +358,13 @@ async fn torrents_page(
     Query(sort): Query<SortOn<TorrentsPageSort>>,
     Query(filter): Query<Vec<(TorrentsPageFilter, String)>>,
     Query(show): Query<TorrentsPageColumnsQuery>,
+    Query(paging): Query<PaginationParams>,
 ) -> std::result::Result<Html<String>, AppError> {
-    let mut torrents = db
+    let torrents = db
         .r_transaction()?
         .scan()
-        .secondary::<Torrent>(TorrentKey::created_at)?
+        .secondary::<Torrent>(TorrentKey::created_at)?;
+    let mut torrents = torrents
         .all()?
         .rev()
         .filter(|t| {
@@ -378,6 +389,8 @@ async fn torrents_page(
                     TorrentsPageFilter::SortBy => true,
                     TorrentsPageFilter::Asc => true,
                     TorrentsPageFilter::Show => true,
+                    TorrentsPageFilter::From => true,
+                    TorrentsPageFilter::PageSize => true,
                 };
                 if !ok {
                     return false;
@@ -385,7 +398,10 @@ async fn torrents_page(
             }
             true
         })
-        .collect::<Result<Vec<_>, native_db::db_type::Error>>()?;
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let paging = paging.default_page_size(500, torrents.len());
+
     if let Some(sort_by) = &sort.sort_by {
         torrents.sort_by(|a, b| {
             let ord = match sort_by {
@@ -406,13 +422,145 @@ async fn torrents_page(
             if sort.asc { ord.reverse() } else { ord }
         });
     }
+    if let Some(paging) = &paging {
+        torrents = torrents
+            .into_iter()
+            .skip(paging.from)
+            .take(paging.page_size)
+            .collect();
+    }
+
     let template = TorrentsPageTemplate {
+        paging: paging.unwrap_or_default(),
         sort,
         show: show.show.unwrap_or_default(),
         cols: Default::default(),
         torrents,
     };
     Ok::<_, AppError>(Html(template.to_string()))
+}
+
+#[derive(Debug, Deserialize)]
+struct PaginationParams {
+    from: Option<usize>,
+    page_size: Option<usize>,
+}
+
+impl PaginationParams {
+    fn default_page_size(&self, page_size: usize, total: usize) -> Option<Pagination> {
+        let from = self.from.unwrap_or_default();
+        let page_size = self.page_size.unwrap_or(page_size);
+        if page_size == 0 {
+            None
+        } else {
+            Some(Pagination {
+                from,
+                page_size,
+                total,
+                max_pages: 7,
+            })
+        }
+    }
+}
+
+/// ```askama
+/// {% if page_size > 0 && total > page_size %}
+/// <div class=pagination>
+///   {% if num_pages() > max_pages %}
+///     <a href="?from=0" {% if from == 0 %}class=disabled{% endif %}>«</a>
+///   {% endif %}
+///   <a href="?from={{ prev() }}" {% if from == 0 %}class=disabled{% endif %}>‹</a>
+///   <div>
+///   {% for page in pages() %}
+///     <a href="?from={{ link(*page) }}" {% if active(*page) %}class=active{% endif %}>{{page}}</a>
+///   {% endfor %}
+///   </div>
+///   <a href="?from={{ next() }}" {% if last() %}class=disabled{% endif %}>›</a>
+///   {% if num_pages() > max_pages %}
+///     <a href="?from={{ (num_pages() - 1) * self.page_size }}" {% if last() %}class=disabled{% endif %}>»</a>
+///   {% endif %}
+/// </div>
+/// {% endif %}
+/// ```
+#[derive(Template, Default)]
+#[template(ext = "html", in_doc = true)]
+struct Pagination {
+    from: usize,
+    page_size: usize,
+    total: usize,
+    max_pages: usize,
+}
+impl Pagination {
+    fn num_pages(&self) -> usize {
+        (self.total as f64 / self.page_size as f64).ceil().round() as usize
+    }
+    fn pages(&self) -> RangeInclusive<usize> {
+        let last_page = self.num_pages();
+        if last_page > self.max_pages {
+            let current_page = self.from / self.page_size + 1;
+            let half = self.max_pages / 2;
+            if current_page <= half {
+                1..=self.max_pages
+            } else if current_page >= last_page - half {
+                (last_page - self.max_pages + 1)..=last_page
+            } else {
+                (current_page - half)..=(current_page + half)
+            }
+        } else {
+            1..=last_page
+        }
+    }
+    fn active(&self, page: usize) -> bool {
+        let from = (page - 1) * self.page_size;
+        from == self.from
+    }
+    fn prev(&self) -> usize {
+        self.from.saturating_sub(self.page_size)
+    }
+    fn next(&self) -> usize {
+        let last_page = self.num_pages();
+        (self.from + self.page_size).min((last_page.saturating_sub(1)) * self.page_size)
+    }
+    fn link(&self, page: usize) -> usize {
+        self.page_size * (page - 1)
+    }
+    fn last(&self) -> bool {
+        self.from >= self.total - self.page_size
+    }
+    fn selector<'a>(&'a self, values: &'a [usize]) -> PageSizeSelector<'a> {
+        PageSizeSelector {
+            current: self.page_size,
+            values,
+        }
+    }
+}
+
+/// ```askama
+/// <select name=page_size>
+/// {% for (value, selected) in options() %}
+///   <option value="{{value}}" {% if selected %}selected{% endif %}>{{value}}</option>
+/// {% endfor %}
+///  <option value="0" {% if current == 0 %}selected{% endif %}>all</option>
+/// </select>
+/// ```
+#[derive(Template, Default)]
+#[template(ext = "html", in_doc = true)]
+struct PageSizeSelector<'a> {
+    current: usize,
+    values: &'a [usize],
+}
+
+impl<'a> PageSizeSelector<'a> {
+    fn options(&self) -> impl Iterator<Item = (usize, bool)> {
+        let mut values = vec![];
+        if self.current != 0 && !self.values.contains(&self.current) {
+            values.push(self.current);
+        }
+        for value in self.values {
+            values.push(*value);
+        }
+        values.into_iter().map(|v| (v, v == self.current))
+    }
 }
 
 #[derive(Template)]
@@ -614,6 +762,7 @@ impl Sortable for DuplicatePageTemplate {
 #[derive(Template)]
 #[template(path = "pages/torrents.html")]
 struct TorrentsPageTemplate {
+    paging: Pagination,
     sort: SortOn<TorrentsPageSort>,
     show: TorrentsPageColumns,
     cols: RefCell<Vec<String>>,
@@ -652,6 +801,8 @@ enum TorrentsPageFilter {
     SortBy,
     Asc,
     Show,
+    From,
+    PageSize,
 }
 
 impl Key for TorrentsPageFilter {}

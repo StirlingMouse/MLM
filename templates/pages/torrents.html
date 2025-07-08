@@ -13,32 +13,37 @@
 {% block content %}
 <div class="row">
   <h1>Torrents</h1>
-  <div class="show_toggles">
-    Columns:
-    <label>
-      Authors
-      <input type=checkbox {% if show.authors %}checked{% endif %} value="author">
-    </label>
-    <label>
-      Narrators
-      <input type=checkbox {% if show.narrators %}checked{% endif %} value="narrator">
-    </label>
-    <label>
-      Series
-      <input type=checkbox {% if show.series %}checked{% endif %} value="series">
-    </label>
-    <label>
-      Language
-      <input type=checkbox {% if show.language %}checked{% endif %} value="language">
-    </label>
-    <label>
-      Filetypes
-      <input type=checkbox {% if show.filetypes %}checked{% endif %} value="filetype">
-    </label>
-    <label>
-      Path
-      <input type=checkbox {% if show.path %}checked{% endif %} value="path">
-    </label>
+  <div class="table_options">
+    <div class="option_group">
+      Columns:
+      <label>
+        Authors
+        <input type=checkbox name=show {% if show.authors %}checked{% endif %} value="author">
+      </label>
+      <label>
+        Narrators
+        <input type=checkbox name=show {% if show.narrators %}checked{% endif %} value="narrator">
+      </label>
+      <label>
+        Series
+        <input type=checkbox name=show {% if show.series %}checked{% endif %} value="series">
+      </label>
+      <label>
+        Language
+        <input type=checkbox name=show {% if show.language %}checked{% endif %} value="language">
+      </label>
+      <label>
+        Filetypes
+        <input type=checkbox name=show {% if show.filetypes %}checked{% endif %} value="filetype">
+      </label>
+      <label>
+        Path
+        <input type=checkbox name=show {% if show.path %}checked{% endif %} value="path">
+      </label>
+    </div>
+    <div class="option_group">
+      Page size: {{ paging.selector([100, 500, 1000, 5000]) | safe }}
+    </div>
   </div>
 </div>
 <div class="TorrentsTable table">
@@ -92,6 +97,7 @@
   <div><a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a></div>
 {% endfor %}
 </div>
+{{ paging | safe }}
 <style>
   .TorrentsTable {
     display: grid;
