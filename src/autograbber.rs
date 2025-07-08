@@ -483,7 +483,7 @@ async fn grab_torrent(
         })?;
         rw.remove(torrent).map(|_| ()).or_else(|err| {
             if let db_type::Error::KeyNotFound { .. } = err {
-                warn!("Got missing key when removing selected torrent",);
+                warn!("Got missing key when removing selected torrent");
                 Ok(())
             } else {
                 Err(err)

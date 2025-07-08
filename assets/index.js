@@ -1,5 +1,12 @@
 document.body.addEventListener('click', e => {
-        if (e.target instanceof HTMLElement && e.target.tagName === 'A' && e.target.getAttribute('href').startsWith('?')) {
+        if (e.target instanceof HTMLButtonElement) {
+                if (e.target.dataset.prompt) {
+                        if (!confirm(e.target.dataset.prompt)) {
+                                e.preventDefault()
+                        }
+                }
+        }
+        if (e.target instanceof HTMLAnchorElement && e.target.getAttribute('href').startsWith('?')) {
                 const link = new URLSearchParams(e.target.getAttribute('href'))
                 const current = new URLSearchParams(location.search)
                 const sortBy = link.get('sort_by') ?? current.get('sort_by')
@@ -7,7 +14,8 @@ document.body.addEventListener('click', e => {
                 const show = link.get('show') ?? current.get('show')
                 const from = link.get('from') ?? current.get('from')
                 const page_size = link.get('page_size') ?? current.get('page_size')
-                const filter = [...link.entries(), ...current.entries()].find(([key, value]) => key !== 'sort_by' && key !== 'asc' && key !== 'show' && key !== 'from' && key !== 'page_size')
+                const filter = [...link.entries(), ...current.entries()]
+                        .find(([key,]) => key !== 'sort_by' && key !== 'asc' && key !== 'show' && key !== 'from' && key !== 'page_size')
                 const combined = new URLSearchParams()
                 if (sortBy) combined.set('sort_by', sortBy)
                 if (asc) combined.set('asc', asc)
@@ -42,5 +50,41 @@ document.body.addEventListener('change', e => {
                         target.search = params
                         location.href = target
                 })
+                return
+        }
+        if (e.target.type === 'checkbox') {
+                const table = e.target.closest('.table')
+                if (table) {
+                        const name = e.target.name
+                        if (name.endsWith('_all')) {
+                                for (const checkbox of Array.from(table.querySelectorAll(`input[type="checkbox"][name="${name.slice(0, -4)}"]`))) {
+                                        checkbox.checked = e.target.checked
+                                }
+                        } else {
+                                const all = table.querySelector(`input[type="checkbox"][name="${name}_all"]`)
+                                if (all) {
+                                        const actions = document.querySelector(`.actions.actions_${name}`)
+                                        const checkboxes = Array.from(table.querySelectorAll(`input[type="checkbox"][name="${name}"]`))
+                                        const allNotChecked = checkboxes.every(c => !c.checked)
+                                        if (allNotChecked) {
+                                                all.checked = false
+                                                all.indeterminate = false
+                                                if (actions) actions.style.display = 'none';
+                                                return
+                                        }
+
+                                        if (actions) actions.style.display = 'flex';
+
+                                        const allChecked = checkboxes.every(c => c.checked)
+                                        if (allChecked) {
+                                                all.checked = true
+                                                all.indeterminate = false
+                                                return
+                                        }
+                                        all.checked = false
+                                        all.indeterminate = true
+                                }
+                        }
+                }
         }
 })

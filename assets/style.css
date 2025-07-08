@@ -45,6 +45,33 @@ nav > a {
         justify-content: space-between;
 }
 
+.actions {
+        display: none;
+        gap: 8px;
+
+        button {
+                appearance: none;
+                padding: 4px 8px;
+                border: none;
+                border-radius: 2px;
+                font-size: inherit;
+                color: var(--text);
+                background: var(--above);
+                cursor: pointer;
+
+                &[data-prompt] {
+                        color: var(--warn);
+                }
+
+                &:hover {
+                        background: var(--color-3);
+                }
+                &:focus-ring {
+                        background: var(--color-3);
+                }
+        }
+}
+
 .table_options {
         display: flex;
         gap: 16px;

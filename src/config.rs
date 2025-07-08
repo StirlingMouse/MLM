@@ -285,7 +285,6 @@ pub struct QbitConfig {
     pub username: String,
     #[serde(default)]
     pub password: String,
-    pub tags: Option<Vec<String>>,
     pub on_cleaned: Option<QbitOnCleaned>,
 }
 

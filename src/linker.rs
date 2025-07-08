@@ -8,6 +8,7 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 use file_id::get_file_id;
+use log::error;
 use native_db::Database;
 use once_cell::sync::Lazy;
 use qbit::{
@@ -19,8 +20,9 @@ use serde_json::json;
 use tracing::{Level, debug, instrument, span, trace};
 
 use crate::{
+    cleaner::remove_library_files,
     config::{Config, Library, QbitConfig},
-    data::{self, ErroredTorrentId, Event, EventType, Size, Timestamp, TorrentMeta},
+    data::{self, ErroredTorrentId, Event, EventType, Size, Timestamp, Torrent, TorrentMeta},
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{MaM, MaMTorrent, clean_value, normalize_title},
     qbittorrent::QbitError,
@@ -57,40 +59,7 @@ pub async fn link_torrents_to_library(
         if torrent.progress < 1.0 {
             continue;
         }
-        let torrent_tags = torrent.tags.split(", ").collect::<Vec<_>>();
-        if let Some(ref wanted_tags) = qbit.0.tags {
-            let wanted = torrent_tags
-                .iter()
-                .any(|ttag| wanted_tags.iter().any(|wtag| ttag == wtag));
-            if !wanted {
-                continue;
-            };
-        }
-        let Some(library) = config
-            .libraries
-            .iter()
-            .filter(|l| match l {
-                Library::ByDir(l) => PathBuf::from(&torrent.save_path).starts_with(&l.download_dir),
-                Library::ByCategory(l) => torrent.category == l.category,
-            })
-            .find(|l| {
-                let filters = l.tag_filters();
-                if filters
-                    .deny_tags
-                    .iter()
-                    .any(|tag| torrent_tags.contains(&tag.as_str()))
-                {
-                    return false;
-                }
-                if filters.allow_tags.is_empty() {
-                    return true;
-                }
-                filters
-                    .allow_tags
-                    .iter()
-                    .any(|tag| torrent_tags.contains(&tag.as_str()))
-            })
-        else {
+        let Some(library) = find_library(&config, &torrent) else {
             trace!(
                 "Could not find matching library for torrent \"{}\", save_path {}",
                 torrent.name, torrent.save_path
@@ -133,7 +102,6 @@ async fn match_torrent(
     let files = qbit.1.files(hash, None).await.map_err(QbitError)?;
     let selected_audio_format = select_format(&config.audio_types, &files);
     let selected_ebook_format = select_format(&config.ebook_types, &files);
-    debug!("{selected_audio_format:?} {selected_ebook_format:?}");
 
     if selected_audio_format.is_none() && selected_ebook_format.is_none() {
         bail!("Could not find any wanted formats in torrent");
@@ -144,8 +112,8 @@ async fn match_torrent(
     let meta = mam_torrent.as_meta().context("as_meta")?;
 
     link_torrent(
-        config,
-        db,
+        &config,
+        &db,
         hash,
         torrent,
         files,
@@ -161,10 +129,127 @@ async fn match_torrent(
 }
 
 #[instrument(skip_all)]
+pub async fn refresh_metadata(
+    db: &Database<'_>,
+    mam: &MaM<'_>,
+    hash: String,
+) -> Result<(Torrent, MaMTorrent)> {
+    let Some(mut torrent): Option<Torrent> = db.r_transaction()?.get().primary(hash)? else {
+        bail!("Could not find torrent hash");
+    };
+    debug!("refreshing metadata for torrent {}", torrent.meta.mam_id);
+    let Some(mam_torrent) = mam
+        .get_torrent_info(&torrent.hash)
+        .await
+        .context("get_mam_info")?
+    else {
+        bail!("Could not find torrent on mam");
+    };
+    let meta = mam_torrent.as_meta().context("as_meta")?;
+
+    let metadata = create_metadata(&mam_torrent, &meta);
+    if let (Some(libary_path), serde_json::Value::Object(new)) = (&torrent.library_path, metadata) {
+        let metadata_path = libary_path.join("metadata.json");
+        if metadata_path.exists() {
+            let existing = fs::read_to_string(&metadata_path)?;
+            let mut existing: serde_json::Map<String, serde_json::Value> =
+                serde_json::from_str(&existing)?;
+            for (key, value) in new {
+                existing.insert(key, value);
+            }
+            let file = File::create(&metadata_path)?;
+            let mut writer = BufWriter::new(file);
+            serde_json::to_writer(&mut writer, &serde_json::Value::Object(existing))?;
+            writer.flush()?;
+            debug!("updated ABS metadata file {}", torrent.meta.mam_id);
+        }
+    }
+
+    torrent.meta = meta.clone();
+    {
+        let rw = db.rw_transaction()?;
+        rw.upsert(torrent.clone())?;
+        rw.commit()?;
+    }
+    Ok((torrent, mam_torrent))
+}
+
+#[instrument(skip_all)]
+pub async fn refresh_metadata_relink(
+    config: &Config,
+    db: &Database<'_>,
+    mam: &MaM<'_>,
+    hash: String,
+) -> Result<()> {
+    let mut torrent = None;
+    for qbit_conf in &config.qbittorrent {
+        let qbit = match qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
+            .await
+            .map_err(QbitError)
+        {
+            Ok(qbit) => qbit,
+            Err(err) => {
+                error!("Error logging in to qbit {}: {err}", qbit_conf.url);
+                continue;
+            }
+        };
+        let mut torrents = match qbit
+            .torrents(TorrentListParams {
+                hashes: Some(vec![hash.clone()]),
+                ..TorrentListParams::default()
+            })
+            .await
+            .map_err(QbitError)
+        {
+            Ok(torrents) => torrents,
+            Err(err) => {
+                error!("Error getting torrents from qbit {}: {err}", qbit_conf.url);
+                continue;
+            }
+        };
+        let Some(t) = torrents.pop() else {
+            continue;
+        };
+        torrent.replace((qbit, t));
+        break;
+    }
+    let Some((qbit, qbit_torrent)) = torrent else {
+        bail!("Could not find torrent in qbit");
+    };
+    let Some(library) = find_library(config, &qbit_torrent) else {
+        bail!("Could not find matching library for torrent");
+    };
+    let files = qbit.files(&hash, None).await.map_err(QbitError)?;
+    let selected_audio_format = select_format(&config.audio_types, &files);
+    let selected_ebook_format = select_format(&config.ebook_types, &files);
+
+    if selected_audio_format.is_none() && selected_ebook_format.is_none() {
+        bail!("Could not find any wanted formats in torrent");
+    }
+    let (torrent, mam_torrent) = refresh_metadata(db, mam, hash.clone()).await?;
+    remove_library_files(&torrent)?;
+    link_torrent(
+        config,
+        db,
+        &hash,
+        &qbit_torrent,
+        files,
+        selected_audio_format,
+        selected_ebook_format,
+        library,
+        mam_torrent,
+        &torrent.meta,
+    )
+    .await
+    .context("link_torrent")
+    .map_err(|err| anyhow::Error::new(TorrentMetaError(torrent.meta, err)))
+}
+
+#[instrument(skip_all)]
 #[allow(clippy::too_many_arguments)]
 async fn link_torrent(
-    config: Arc<Config>,
-    db: Arc<Database<'_>>,
+    config: &Config,
+    db: &Database<'_>,
     hash: &str,
     torrent: &TorrentInfo,
     files: Vec<TorrentContent>,
@@ -209,29 +294,7 @@ async fn link_torrent(
     let dir = library.library_dir().join(dir);
     trace!("out_dir: {:?}", dir);
 
-    let mut titles = mam_torrent.title.splitn(2, ":");
-    let title = titles.next().unwrap();
-    let subtitle = titles.next().map(|t| t.trim());
-    let isbn_raw: &str = mam_torrent.isbn.as_deref().unwrap_or("");
-    let isbn = if isbn_raw.is_empty() || isbn_raw.starts_with("ASIN:") {
-        None
-    } else {
-        Some(isbn_raw)
-    };
-    let asin = isbn_raw.strip_prefix("ASIN:");
-
-    let metadata = json!({
-        "authors": &meta.authors,
-        "narrators": &meta.narrators,
-        "series": &meta.series.iter().map(|(series_name, series_num)| {
-            if series_num.is_empty() { series_name.clone() } else { format!("{series_name} #{series_num}") }
-        }).collect::<Vec<_>>(),
-        "title": title,
-        "subtitle": subtitle,
-        "description": mam_torrent.description,
-        "isbn": isbn,
-        "asin": asin,
-    });
+    let metadata = create_metadata(&mam_torrent, meta);
     create_dir_all(&dir)?;
 
     let mut library_files = vec![];
@@ -321,7 +384,7 @@ async fn link_torrent(
     }
 
     write_event(
-        &db,
+        db,
         Event::new(
             Some(hash.to_owned()),
             Some(meta.mam_id),
@@ -330,6 +393,61 @@ async fn link_torrent(
     );
 
     Ok(())
+}
+
+fn find_library<'a>(config: &'a Config, torrent: &TorrentInfo) -> Option<&'a Library> {
+    config
+        .libraries
+        .iter()
+        .filter(|l| match l {
+            Library::ByDir(l) => PathBuf::from(&torrent.save_path).starts_with(&l.download_dir),
+            Library::ByCategory(l) => torrent.category == l.category,
+        })
+        .find(|l| {
+            let filters = l.tag_filters();
+            if filters
+                .deny_tags
+                .iter()
+                .any(|tag| torrent.tags.split(", ").any(|t| t == tag.as_str()))
+            {
+                return false;
+            }
+            if filters.allow_tags.is_empty() {
+                return true;
+            }
+            filters
+                .allow_tags
+                .iter()
+                .any(|tag| torrent.tags.split(", ").any(|t| t == tag.as_str()))
+        })
+}
+
+fn create_metadata(mam_torrent: &MaMTorrent, meta: &TorrentMeta) -> serde_json::Value {
+    let mut titles = mam_torrent.title.splitn(2, ":");
+    let title = titles.next().unwrap();
+    let subtitle = titles.next().map(|t| t.trim());
+    let isbn_raw: &str = mam_torrent.isbn.as_deref().unwrap_or("");
+    let isbn = if isbn_raw.is_empty() || isbn_raw.starts_with("ASIN:") {
+        None
+    } else {
+        Some(isbn_raw)
+    };
+    let asin = isbn_raw.strip_prefix("ASIN:");
+
+    let metadata = json!({
+        "authors": &meta.authors,
+        "narrators": &meta.narrators,
+        "series": &meta.series.iter().map(|(series_name, series_num)| {
+            if series_num.is_empty() { series_name.clone() } else { format!("{series_name} #{series_num}") }
+        }).collect::<Vec<_>>(),
+        "title": title,
+        "subtitle": subtitle,
+        "description": mam_torrent.description,
+        "isbn": isbn,
+        "asin": asin,
+    });
+
+    metadata
 }
 
 fn select_format(wanted_formats: &[String], files: &[TorrentContent]) -> Option<String> {

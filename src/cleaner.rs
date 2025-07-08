@@ -107,8 +107,27 @@ async fn process_batch(
                 .collect();
         }
         let (keep, _) = batch.remove(0);
-        for (remove, _) in batch {
-            let result = remove_torrent(&config, db, &keep, remove.clone())
+        for (mut remove, _) in batch {
+            info!(
+                "Replacing library torrent \"{}\" with formats {:?} with {:?}",
+                remove.meta.title, remove.meta.filetypes, keep.meta.filetypes
+            );
+            remove.replaced_with = Some((keep.hash.clone(), Timestamp::now()));
+            debug!(
+                "keep files: {:?} {:?}",
+                keep.library_path, keep.library_files
+            );
+            debug!("main_cat: {:?}", keep.meta.main_cat);
+            debug!("authors: {:?}", keep.meta.authors);
+            debug!("narrators: {:?}", keep.meta.narrators);
+            debug!(
+                "remove files: {:?} {:?}",
+                remove.library_path, remove.library_files
+            );
+            debug!("main_cat: {:?}", remove.meta.main_cat);
+            debug!("authors: {:?}", remove.meta.authors);
+            debug!("narrators: {:?}", remove.meta.narrators);
+            let result = clean_torrent(config, db, remove.clone())
                 .await
                 .map_err(|err| anyhow::Error::new(TorrentMetaError(remove.meta.clone(), err)));
             update_errored_torrent(
@@ -124,33 +143,7 @@ async fn process_batch(
 }
 
 #[instrument(skip_all)]
-async fn remove_torrent(
-    config: &&Config,
-    db: &Database<'_>,
-    keep: &Torrent,
-    mut remove: Torrent,
-) -> Result<()> {
-    info!(
-        "Replacing library torrent \"{}\" with formats {:?} with {:?}",
-        remove.meta.title, remove.meta.filetypes, keep.meta.filetypes
-    );
-    remove.replaced_with = Some((keep.hash.clone(), Timestamp::now()));
-    let library_path = remove.library_path.take();
-    debug!(
-        "keep files: {:?} {:?}",
-        keep.library_path, keep.library_files
-    );
-    debug!("main_cat: {:?}", keep.meta.main_cat);
-    debug!("authors: {:?}", keep.meta.authors);
-    debug!("narrators: {:?}", keep.meta.narrators);
-    debug!(
-        "remove files: {:?} {:?}",
-        remove.library_path, remove.library_files
-    );
-    debug!("main_cat: {:?}", remove.meta.main_cat);
-    debug!("authors: {:?}", remove.meta.authors);
-    debug!("narrators: {:?}", remove.meta.narrators);
-
+pub async fn clean_torrent(config: &Config, db: &Database<'_>, mut remove: Torrent) -> Result<()> {
     for qbit_conf in config.qbittorrent.iter() {
         if let Some(on_cleaned) = &qbit_conf.on_cleaned {
             let qbit = qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
@@ -175,7 +168,39 @@ async fn remove_torrent(
         trace!("qbit updated");
     }
 
-    if let Some(library_path) = &library_path {
+    remove_library_files(&remove)?;
+
+    let hash = remove.hash.clone();
+    let mam_id = remove.meta.mam_id;
+    let library_path = remove.library_path.take();
+    let library_files = remove.library_files.clone();
+    {
+        let rw = db.rw_transaction()?;
+        rw.upsert(remove)?;
+        rw.commit()?;
+    }
+
+    if let Some(library_path) = library_path {
+        write_event(
+            db,
+            Event::new(
+                Some(hash),
+                Some(mam_id),
+                EventType::Cleaned {
+                    library_path,
+                    files: library_files,
+                },
+            ),
+        );
+    }
+
+    Ok(())
+}
+
+#[instrument(skip_all)]
+pub fn remove_library_files(remove: &Torrent) -> Result<()> {
+    if let Some(library_path) = &remove.library_path {
+        debug!("Removing library files for torrent {}", remove.meta.mam_id);
         for file in remove.library_files.iter() {
             let path = library_path.join(file);
             fs::remove_file(path).or_else(|err| {
@@ -213,29 +238,5 @@ async fn remove_torrent(
         fs::remove_dir(library_path).ok();
     }
     trace!("files removed");
-
-    let hash = remove.hash.clone();
-    let mam_id = remove.meta.mam_id;
-    let library_files = remove.library_files.clone();
-    {
-        let rw = db.rw_transaction()?;
-        rw.upsert(remove)?;
-        rw.commit()?;
-    }
-
-    if let Some(library_path) = library_path {
-        write_event(
-            db,
-            Event::new(
-                Some(hash),
-                Some(mam_id),
-                EventType::Cleaned {
-                    library_path,
-                    files: library_files,
-                },
-            ),
-        );
-    }
-
     Ok(())
 }

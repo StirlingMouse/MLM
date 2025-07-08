@@ -1,7 +1,7 @@
 use std::{
     cell::RefCell,
     fmt::{self, Display},
-    ops::{Range, RangeInclusive},
+    ops::RangeInclusive,
     str::FromStr,
     sync::Arc,
 };
@@ -11,12 +11,13 @@ use askama::Template;
 use axum::{
     Router,
     body::Body,
-    extract::{Path, Query, State},
+    extract::{OriginalUri, Path, Query, State},
     http::{HeaderValue, Request, StatusCode},
     middleware::{self, Next},
-    response::{Html, IntoResponse, Response},
-    routing::get,
+    response::{Html, IntoResponse, Redirect, Response},
+    routing::{get, post},
 };
+use axum_extra::extract::Form;
 use native_db::Database;
 use once_cell::sync::Lazy;
 use reqwest::header;
@@ -30,12 +31,14 @@ use tower::ServiceBuilder;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
+    cleaner::clean_torrent,
     config::Config,
     data::{
         DuplicateTorrent, ErroredTorrent, ErroredTorrentId, Event, EventKey, EventType, Language,
         List, ListItem, ListItemKey, ListKey, MainCat, SelectedTorrent, Timestamp, Torrent,
         TorrentCost, TorrentKey,
     },
+    linker::{refresh_metadata, refresh_metadata_relink},
     mam::MaM,
     stats::Stats,
 };
@@ -47,8 +50,12 @@ pub async fn start_webserver(
     mam: Arc<MaM<'static>>,
 ) -> Result<()> {
     let app = Router::new()
-        .route("/", get(index_page).with_state((stats, mam)))
+        .route("/", get(index_page).with_state((stats, mam.clone())))
         .route("/torrents", get(torrents_page).with_state(db.clone()))
+        .route(
+            "/torrents",
+            post(torrents_page_post).with_state((config.clone(), db.clone(), mam.clone())),
+        )
         .route("/events", get(event_page).with_state(db.clone()))
         .route("/lists", get(lists_page).with_state(db.clone()))
         .route("/lists/{list_id}", get(list_page).with_state(db.clone()))
@@ -438,6 +445,56 @@ async fn torrents_page(
         torrents,
     };
     Ok::<_, AppError>(Html(template.to_string()))
+}
+
+#[axum::debug_handler]
+async fn torrents_page_post(
+    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, Arc<MaM<'static>>)>,
+    uri: OriginalUri,
+    Form(form): Form<TorrentsPageForm>,
+) -> Result<Redirect, AppError> {
+    match form.action.as_str() {
+        "clean" => {
+            for torrent in form.torrents {
+                let Some(torrent) = db.r_transaction()?.get().primary(torrent)? else {
+                    return Err(anyhow::Error::msg("Could not find torrent").into());
+                };
+                clean_torrent(&config, &db, torrent).await?;
+            }
+        }
+        "refresh" => {
+            for torrent in form.torrents {
+                refresh_metadata(&db, &mam, torrent).await?;
+            }
+        }
+        "refresh-relink" => {
+            for torrent in form.torrents {
+                refresh_metadata_relink(&config, &db, &mam, torrent).await?;
+            }
+        }
+        "remove" => {
+            for torrent in form.torrents {
+                let rw = db.rw_transaction()?;
+                let Some(torrent) = rw.get().primary::<Torrent>(torrent)? else {
+                    return Err(anyhow::Error::msg("Could not find torrent").into());
+                };
+                rw.remove(torrent)?;
+                rw.commit()?;
+            }
+        }
+        action => {
+            eprintln!("unknown action: {action}");
+        }
+    }
+
+    Ok(Redirect::to(&uri.to_string()))
+}
+
+#[derive(Debug, Deserialize)]
+struct TorrentsPageForm {
+    action: String,
+    #[serde(default, rename = "torrent")]
+    torrents: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -910,7 +967,6 @@ trait Sortable {
             asc: sort.asc,
             key: sort_key,
             label: label.to_owned(),
-            show: true,
         }
     }
 }
@@ -924,17 +980,18 @@ trait HidableColumns: Sortable {
         sort_key: Option<Self::SortKey>,
         label: &str,
         size: &str,
-    ) -> TableHeader<Self::SortKey> {
+    ) -> Conditional<TableHeader<Self::SortKey>> {
         let sort = self.get_current_sort();
         if *show {
             self.add_column(size);
         }
-        TableHeader {
-            current_key: sort.sort_by,
-            asc: sort.asc,
-            key: sort_key,
-            label: label.to_owned(),
-            show: *show,
+        Conditional {
+            template: show.then_some(TableHeader {
+                current_key: sort.sort_by,
+                asc: sort.asc,
+                key: sort_key,
+                label: label.to_owned(),
+            }),
         }
     }
     fn table_header_s(
@@ -950,13 +1007,26 @@ trait HidableColumns: Sortable {
             asc: sort.asc,
             key: sort_key,
             label: label.to_owned(),
-            show: true,
         }
+    }
+    fn table_header_all<'a>(&self, name: &'a str, size: &str) -> AllColumnHeader<'a> {
+        self.add_column(size);
+        AllColumnHeader { name }
     }
 }
 
 /// ```askama
-/// {% if show %}
+/// <div class="header">
+/// <input type=checkbox name={{ name }}_all>
+/// </div>
+/// ```
+#[derive(Template)]
+#[template(ext = "html", in_doc = true)]
+struct AllColumnHeader<'a> {
+    name: &'a str,
+}
+
+/// ```askama
 /// {% match key %}
 /// {% when Some(key) %}
 /// <a
@@ -973,7 +1043,6 @@ trait HidableColumns: Sortable {
 /// {{ label }}
 /// </div>
 /// {% endmatch %}
-/// {% endif %}
 /// ```
 #[derive(Template)]
 #[template(ext = "html", in_doc = true)]
@@ -982,7 +1051,6 @@ struct TableHeader<T: Key> {
     asc: bool,
     key: Option<T>,
     label: String,
-    show: bool,
 }
 
 impl<T: Key> TableHeader<T> {
@@ -1119,6 +1187,8 @@ enum AppError {
     Db(#[from] native_db::db_type::Error),
     #[error("Could not render template: {0}")]
     Render(#[from] askama::Error),
+    #[error("Error: {0:?}")]
+    Generic(#[from] anyhow::Error),
     #[error("Page Not Found")]
     NotFound,
 }
