@@ -46,6 +46,7 @@ pub type SelectedTorrent = v4::SelectedTorrent;
 pub type SelectedTorrentKey = v4::SelectedTorrentKey;
 pub type DuplicateTorrent = v3::DuplicateTorrent;
 pub type ErroredTorrent = v3::ErroredTorrent;
+pub type ErroredTorrentKey = v3::ErroredTorrentKey;
 pub type ErroredTorrentId = v1::ErroredTorrentId;
 pub type Event = v4::Event;
 pub type EventKey = v4::EventKey;

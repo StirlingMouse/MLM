@@ -34,9 +34,9 @@ use crate::{
     cleaner::clean_torrent,
     config::Config,
     data::{
-        DuplicateTorrent, ErroredTorrent, ErroredTorrentId, Event, EventKey, EventType, Language,
-        List, ListItem, ListItemKey, ListKey, SelectedTorrent, Timestamp, Torrent, TorrentCost,
-        TorrentKey, TorrentStatus,
+        DuplicateTorrent, ErroredTorrent, ErroredTorrentId, ErroredTorrentKey, Event, EventKey,
+        EventType, Language, List, ListItem, ListItemKey, ListKey, SelectedTorrent, Timestamp,
+        Torrent, TorrentCost, TorrentKey, TorrentStatus,
     },
     linker::{refresh_metadata, refresh_metadata_relink},
     mam::{MaM, Unsats},
@@ -224,8 +224,9 @@ async fn errors_page(
     let mut errored_torrents = db
         .r_transaction()?
         .scan()
-        .primary::<ErroredTorrent>()?
+        .secondary::<ErroredTorrent>(ErroredTorrentKey::created_at)?
         .all()?
+        .rev()
         .filter(|t| {
             let Ok(t) = t else {
                 return true;
