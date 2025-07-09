@@ -286,6 +286,10 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             .iter()
             .position(|t| meta.filetypes.contains(t));
         if preference.is_none() {
+            trace!(
+                "Could not find any wanted formats in torrent {}",
+                meta.mam_id
+            );
             continue;
         }
         if let Some(rw) = &rw_opt {
@@ -305,11 +309,14 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         .iter()
                         .position(|t| old.meta.filetypes.contains(t));
                     if old_preference <= preference {
-                        if old_preference == preference {
-                            if let Err(err) = add_duplicate_torrent(rw, None, title_search, meta) {
-                                error!("Error writing duplicate torrent: {err}");
-                            }
+                        let mam_id = meta.mam_id;
+                        if let Err(err) = add_duplicate_torrent(rw, None, title_search, meta) {
+                            error!("Error writing duplicate torrent: {err}");
                         }
+                        trace!(
+                            "Skipping torrent {} as we have {} selected",
+                            mam_id, old.meta.mam_id
+                        );
                         continue 'torrent;
                     } else {
                         info!(
@@ -338,13 +345,16 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         .iter()
                         .position(|t| old.meta.filetypes.contains(t));
                     if old_preference <= preference {
-                        if old_preference == preference {
-                            if let Err(err) =
-                                add_duplicate_torrent(rw, Some(old.hash), title_search, meta)
-                            {
-                                error!("Error writing duplicate torrent: {err}");
-                            }
+                        let mam_id = meta.mam_id;
+                        if let Err(err) =
+                            add_duplicate_torrent(rw, Some(old.hash), title_search, meta)
+                        {
+                            error!("Error writing duplicate torrent: {err}");
                         }
+                        trace!(
+                            "Skipping torrent {} as we have {} in libary",
+                            mam_id, old.meta.mam_id
+                        );
                         continue 'torrent;
                     } else {
                         info!(
