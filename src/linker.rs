@@ -360,6 +360,7 @@ async fn link_torrent(
             Err(err.into())
         })?;
     }
+    library_files.sort();
 
     let file = File::create(dir.join("metadata.json"))?;
     let mut writer = BufWriter::new(file);

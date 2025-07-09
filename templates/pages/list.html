@@ -3,13 +3,34 @@
 {% block title %}MLM - {{ list.title }}{% endblock %}
 
 {% block content %}
-<h1>{{ list.title }}</h1>
+<div class="row">
+  <h1>{{ list.title }}</h1>
+  <div class="option_group">
+    Show:
+    <label>
+      All
+      <input type=radio name=show {% if show.is_none() %}checked{% endif %}>
+    </label>
+    <label>
+      Any Missing
+      <input type=radio name=show {% if show == Some("any") %}checked{% endif %} value="any">
+    </label>
+    <label>
+      Audio Missing
+      <input type=radio name=show {% if show == Some("audio") %}checked{% endif %} value="audio">
+    </label>
+    <label>
+      Ebook Missing
+      <input type=radio name=show {% if show == Some("ebook") %}checked{% endif %} value="ebook">
+    </label>
+  </div>
+</div>
 
 {% for item in items %}
   <div class=list_item>
     <img src="{{ item.cover_url }}">
     <div>
-    <h3>{{ item.title }}</h3>
+    <div class="row"><h3>{{ item.title }}</h3><a href="{{ item.mam_search() }}" target=_blank>search on MaM</a></div>
     <p class=author>by {{ item.authors.join(", ") }}</p>
     {% if !item.series.is_empty() %}
       <p>{% for (name, num) in item.series %}

@@ -34,6 +34,7 @@
     </label>
   </div>
 </div>
+
 <div class="EventsTable table">
 {% for (event, torrent, replacement) in events %}
   <div>{{ self::time(event.created_at) }}</div>
@@ -61,13 +62,19 @@
     {% endif %}
   {% when EventType::Cleaned { library_path, files } %}
     Cleaned {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}<br />
+    {% if let Some(torrent) = torrent %}
+    formats: {{ torrent.meta.filetypes.join(", ") }}<br />
+    {% endif %}
     from: {{ library_path.to_string_lossy() }}<br />
     {% if let Some(r) = replacement %}
-    replaced with: {{ torrent_title(&replacement) | safe }}<br />
+    <br />replaced with: {{ torrent_title(&replacement) | safe }}<br />
+    {% if let Some(replacement) = replacement %}
+    formats: {{ replacement.meta.filetypes.join(", ") }}<br />
+    {% endif %}
     {% if let Some(library_path) = r.library_path %}
     in: {{ library_path.to_string_lossy() }}<br />
     {% endif %}
-    {% endif %}
+    {% endif %}<br />
     Removed files:
     <ul>
     {% for file in files %}

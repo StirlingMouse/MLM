@@ -173,7 +173,8 @@ pub async fn clean_torrent(config: &Config, db: &Database<'_>, mut remove: Torre
     let hash = remove.hash.clone();
     let mam_id = remove.meta.mam_id;
     let library_path = remove.library_path.take();
-    let library_files = remove.library_files.clone();
+    let mut library_files = remove.library_files.clone();
+    library_files.sort();
     {
         let rw = db.rw_transaction()?;
         rw.upsert(remove)?;
