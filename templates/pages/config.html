@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}MLM - Config{% endblock %}
+
+{% block content %}
+<h1>Config</h1>
+
+{% for autograb in config.autograbs %}
+<div class="infoboxes">
+  <div class="configbox">
+    <div class=row>
+      <h3>[autograb]</h3>
+      <a href="{{autograb.mam_search()}}" target=_blank>search on MaM</a>
+    </div>
+    <span class=key>type</span> = <span class=string>{{ autograb.kind | json }}</span><br>
+    <span class=key>cost</span> = <span class=string>{{ autograb.cost | json }}</span><br>
+    {% if let Some(query) = autograb.query %}
+    <span class=key>query</span> = <span class=string>{{ query | json }}</span><br>
+    {% endif %}
+    {% if !autograb.search_in.is_empty() %}
+    <span class=key>search_in</span> = {{ self::yaml_items(autograb.search_in) }}<br>
+    {% endif %}
+    {{ self::filter(autograb.filter) }}
+  </div>
+</div>
+{% endfor %}
+
+{% for tag in config.tags %}
+<div class="infoboxes">
+  <div class="configbox">
+    <div class=row>
+      <h3>[tag]</h3>
+    </div>
+    {{ self::filter(tag.filter) }}
+    {% if let Some(category) = tag.category %}
+    <span class=key>category</span> = <span class=string>{{ category | json }}</span><br>
+    {% endif %}
+    {% if !tag.tags.is_empty() %}
+    <span class=key>tags</span> = {{ self::yaml_items(tag.tags) }}<br>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+{% endblock %}

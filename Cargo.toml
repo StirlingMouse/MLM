@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.98"
-askama = { version = "0.14.0", features = ["code-in-doc"] }
+askama = { version = "0.14.0", features = ["code-in-doc", "serde_json"] }
 axum = { version = "0.8.4", features = ["query", "macros"] }
 axum-extra = { version = "0.10.1", features = ["form"] }
 bytes = "1.10.1"

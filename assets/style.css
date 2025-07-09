@@ -201,3 +201,17 @@ nav > a {
 .missing {
         color: var(--warn);
 }
+
+.configbox {
+        font-family: monospace;
+
+        h3 {
+                margin-bottom: 0;
+        }
+        .string {
+                color: #b5bd68;
+        }
+        .num {
+                color: #de935f;
+        }
+}
