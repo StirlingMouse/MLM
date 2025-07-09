@@ -39,7 +39,7 @@ use crate::{
         TorrentKey, TorrentStatus,
     },
     linker::{refresh_metadata, refresh_metadata_relink},
-    mam::MaM,
+    mam::{MaM, Unsats},
     stats::Stats,
 };
 
@@ -60,7 +60,10 @@ pub async fn start_webserver(
         .route("/lists", get(lists_page).with_state(db.clone()))
         .route("/lists/{list_id}", get(list_page).with_state(db.clone()))
         .route("/errors", get(errors_page).with_state(db.clone()))
-        .route("/selected", get(selected_page).with_state(db.clone()))
+        .route(
+            "/selected",
+            get(selected_page).with_state((config.clone(), db.clone(), mam.clone())),
+        )
         .route("/duplicate", get(duplicate_page).with_state(db.clone()))
         .nest_service(
             "/assets",
@@ -260,7 +263,7 @@ async fn errors_page(
 }
 
 async fn selected_page(
-    State(db): State<Arc<Database<'static>>>,
+    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, Arc<MaM<'static>>)>,
     Query(sort): Query<SortOn<SelectedPageSort>>,
     Query(filter): Query<Vec<(SelectedPageFilter, String)>>,
 ) -> std::result::Result<Html<String>, AppError> {
@@ -283,6 +286,7 @@ async fn selected_page(
                         t.meta.series.iter().any(|(name, _)| name == value)
                     }
                     SelectedPageFilter::Filetype => t.meta.filetypes.contains(value),
+                    SelectedPageFilter::Cost => t.cost.as_str() == value,
                     SelectedPageFilter::SortBy => true,
                     SelectedPageFilter::Asc => true,
                 };
@@ -301,12 +305,22 @@ async fn selected_page(
                 SelectedPageSort::Authors => a.meta.authors.cmp(&b.meta.authors),
                 SelectedPageSort::Narrators => a.meta.narrators.cmp(&b.meta.narrators),
                 SelectedPageSort::Series => a.meta.series.cmp(&b.meta.series),
+                SelectedPageSort::Cost => a.cost.cmp(&b.cost),
+                SelectedPageSort::Buffer => a
+                    .unsat_buffer
+                    .unwrap_or(config.unsat_buffer)
+                    .cmp(&b.unsat_buffer.unwrap_or(config.unsat_buffer)),
                 SelectedPageSort::CreatedAt => a.created_at.cmp(&b.created_at),
             };
             if sort.asc { ord.reverse() } else { ord }
         });
     }
-    let template = SelectedPageTemplate { sort, torrents };
+    let template = SelectedPageTemplate {
+        unsats: mam.user.lock().await.as_ref().map(|u| u.unsat.clone()),
+        unsat_buffer: config.unsat_buffer,
+        sort,
+        torrents,
+    };
     Ok::<_, AppError>(Html(template.to_string()))
 }
 
@@ -722,6 +736,8 @@ impl Sortable for ErrorsPageTemplate {
 #[derive(Template)]
 #[template(path = "pages/selected.html")]
 struct SelectedPageTemplate {
+    unsats: Option<Unsats>,
+    unsat_buffer: u64,
     sort: SortOn<SelectedPageSort>,
     torrents: Vec<SelectedTorrent>,
 }
@@ -734,6 +750,8 @@ enum SelectedPageSort {
     Authors,
     Narrators,
     Series,
+    Cost,
+    Buffer,
     CreatedAt,
 }
 
@@ -748,6 +766,7 @@ enum SelectedPageFilter {
     Narrator,
     Series,
     Filetype,
+    Cost,
     // Workaround sort decode failure
     SortBy,
     Asc,

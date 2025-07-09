@@ -5,7 +5,7 @@
 {% block head %}
   <style>
     .SelectedTable {
-      {{self::table_styles(8) | safe}}
+      {{self::table_styles(10) | safe}}
     }
   </style>
 {% endblock %}
@@ -13,6 +13,9 @@
 {% block content %}
 <h1>Selected Torrents</h1>
 <p>Torrents that the autograbber has selected and will be downloaded</p>
+{% if let Some(unsats) = unsats %}
+<p>Unsats: {{ unsats.count }} / {{ unsats.limit }}{% if !torrents.is_empty() %}<br>Queued Torrents: {{ torrents.len() }}{% endif %}</p>
+{% endif %}
 <div class="SelectedTable table">
   {{ table_header(Some(SelectedPageSort::Kind), "Type") | safe }}
   {{ table_header(Some(SelectedPageSort::Title), "Title") | safe }}
@@ -20,6 +23,8 @@
   {{ table_header(Some(SelectedPageSort::Narrators), "Narrators") | safe }}
   {{ table_header(Some(SelectedPageSort::Series), "Series") | safe }}
   {{ table_header(None, "Filetypes") | safe }}
+  {{ table_header(Some(SelectedPageSort::Cost), "Cost") | safe }}
+  {{ table_header(Some(SelectedPageSort::Buffer), "Required Unsats") | safe }}
   {{ table_header(Some(SelectedPageSort::CreatedAt), "Added At") | safe }}
   {{ table_header(None, "") | safe }}
 {% for torrent in torrents %}
@@ -29,6 +34,8 @@
   <div>{{ self::items(SelectedPageFilter::Narrator, torrent.meta.narrators) | safe }}</div>
   <div>{{ self::series(SelectedPageFilter::Series, torrent.meta.series) | safe }}</div>
   <div>{{ self::items(SelectedPageFilter::Filetype, torrent.meta.filetypes) | safe }}</div>
+  <div>{{ self::item(SelectedPageFilter::Cost, torrent.cost.as_str()) | safe }}</div>
+  <div>{{ torrent.unsat_buffer.unwrap_or(*unsat_buffer) }}</div>
   <div>{{ self::time(torrent.created_at) }}</div>
   <div><a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a></div>
 {% endfor %}

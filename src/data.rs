@@ -1002,7 +1002,7 @@ pub mod v4 {
         },
     }
 
-    #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+    #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     pub enum TorrentCost {
         GlobalFreeleech,
         PersonalFreeleech,

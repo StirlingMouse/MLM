@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer};
 use time::Date;
 
 use crate::{
-    data::{Language, ListItem, MainCat, Size, Torrent, TorrentMeta, TorrentStatus},
+    data::{Language, ListItem, MainCat, Size, Torrent, TorrentCost, TorrentMeta, TorrentStatus},
     mam::DATE_FORMAT,
 };
 
@@ -185,6 +185,19 @@ impl TryFrom<String> for MainCat {
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         value.parse()
+    }
+}
+
+impl TorrentCost {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TorrentCost::GlobalFreeleech => "free",
+            TorrentCost::PersonalFreeleech => "PF",
+            TorrentCost::Vip => "VIP",
+            TorrentCost::UseWedge => "wedge",
+            TorrentCost::TryWedge => "try wedge",
+            TorrentCost::Ratio => "ratio",
+        }
     }
 }
 
