@@ -123,6 +123,11 @@ async fn index_page(
             .goodreads_result
             .as_ref()
             .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+        downloader_run_at: stats.downloader_run_at.map(Into::into),
+        downloader_result: stats
+            .downloader_result
+            .as_ref()
+            .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
     };
     Ok::<_, AppError>(Html(template.to_string()))
 }
@@ -679,6 +684,8 @@ struct IndexPageTemplate {
     cleaner_result: Option<Result<(), String>>,
     goodreads_run_at: Option<Timestamp>,
     goodreads_result: Option<Result<(), String>>,
+    downloader_run_at: Option<Timestamp>,
+    downloader_result: Option<Result<(), String>>,
 }
 
 #[derive(Template)]

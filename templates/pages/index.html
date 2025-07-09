@@ -18,6 +18,14 @@
 </div>
 
 <div class="infobox">
+  <h2>Goodreads Import</h2>
+  <p>Last run: {% match goodreads_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
+  {% if goodreads_run_at.is_some() %}
+  <p>Result: {% match goodreads_result %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
+  {% endif %}
+</div>
+
+<div class="infobox">
   <h2>Linker</h2>
   <p>Last run: {% match linker_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
   {% if linker_run_at.is_some() %}
@@ -34,9 +42,9 @@
 </div>
 
 <div class="infobox">
-  <h2>Goodreads Import</h2>
-  <p>Last run: {% match goodreads_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
-  {% if goodreads_run_at.is_some() %}
+  <h2>Torrent downloader</h2>
+  <p>Last run: {% match downloader_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
+  {% if downloader_run_at.is_some() %}
   <p>Result: {% match goodreads_result %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
   {% endif %}
 </div>

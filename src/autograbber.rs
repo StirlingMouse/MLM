@@ -17,19 +17,22 @@ use anyhow::{Context, Error, Result};
 use lava_torrent::torrent::v1::Torrent;
 use native_db::{Database, db_type, transaction::RwTransaction};
 use qbit::parameters::TorrentAddUrls;
-use tokio::time::sleep;
+use tokio::{sync::watch::Sender, time::sleep};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 #[instrument(skip_all)]
 pub async fn run_autograbbers(
     config: Arc<Config>,
     db: Arc<Database<'_>>,
-    qbit: &qbit::Api,
     mam: Arc<MaM<'_>>,
+    autograb_trigger: Sender<()>,
 ) -> Result<()> {
     let user_info = mam.user_info().await?;
     let max_torrents = user_info.unsat.limit.saturating_sub(user_info.unsat.count);
-    debug!("user_info: {user_info:#?}; max_torrents: {max_torrents}");
+    debug!(
+        "autograbbers, unsats: {:#?}; max_torrents: {max_torrents}",
+        user_info.unsat
+    );
 
     for autograb_config in &config.autograbs {
         let max_torrents = max_torrents
@@ -47,9 +50,7 @@ pub async fn run_autograbbers(
         }
     }
 
-    grab_selected_torrents(&config, &db, qbit, &mam, max_torrents)
-        .await
-        .context("grab_selected_torrents")?;
+    autograb_trigger.send(())?;
 
     Ok(())
 }
@@ -60,7 +61,6 @@ pub async fn grab_selected_torrents(
     db: &Database<'_>,
     qbit: &qbit::Api,
     mam: &MaM<'_>,
-    max_torrents: u64,
 ) -> Result<()> {
     let selected_torrents = {
         let r = db.r_transaction()?;
@@ -69,6 +69,18 @@ pub async fn grab_selected_torrents(
             .all()?
             .collect::<Result<Vec<_>, native_db::db_type::Error>>()
     }?;
+    if selected_torrents.is_empty() {
+        trace!("no selected torrents");
+        return Ok(());
+    }
+
+    let user_info = mam.user_info().await?;
+    let max_torrents = user_info.unsat.limit.saturating_sub(user_info.unsat.count);
+    debug!(
+        "downloader, unsats: {:#?}; max_torrents: {max_torrents}",
+        user_info.unsat
+    );
+
     let mut snatched_torrents = 0;
     for torrent in selected_torrents {
         let max_torrents = max_torrents

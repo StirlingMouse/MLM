@@ -11,4 +11,6 @@ pub struct Stats {
     pub cleaner_result: Option<Result<()>>,
     pub goodreads_run_at: Option<OffsetDateTime>,
     pub goodreads_result: Option<Result<()>>,
+    pub downloader_run_at: Option<OffsetDateTime>,
+    pub downloader_result: Option<Result<()>>,
 }

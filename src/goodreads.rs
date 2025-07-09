@@ -8,10 +8,10 @@ use quick_xml::de::from_reader;
 use regex::Regex;
 use reqwest::Url;
 use serde::Deserialize;
+use tokio::sync::watch::Sender;
 use tracing::{debug, instrument};
 use tracing::{trace, warn};
 
-use crate::autograbber::grab_selected_torrents;
 use crate::data::{ListItemTorrent, Torrent, TorrentKey, TorrentStatus};
 use crate::mam::normalize_title;
 use crate::{
@@ -29,11 +29,15 @@ pub static SERIES_PATTERN: Lazy<Regex> =
 pub async fn run_goodreads_import(
     config: Arc<Config>,
     db: Arc<Database<'_>>,
-    qbit: &qbit::Api,
     mam: Arc<MaM<'_>>,
+    autograb_trigger: Sender<()>,
 ) -> Result<()> {
     let user_info = mam.user_info().await?;
     let max_torrents = user_info.unsat.limit.saturating_sub(user_info.unsat.count);
+    debug!(
+        "goodreads import, unsats: {:#?}; max_torrents: {max_torrents}",
+        user_info.unsat
+    );
 
     for list in &config.goodreads_lists {
         let max_torrents =
@@ -140,9 +144,7 @@ pub async fn run_goodreads_import(
         }
     }
 
-    grab_selected_torrents(&config, &db, qbit, &mam, max_torrents)
-        .await
-        .context("grab_selected_torrents")?;
+    autograb_trigger.send(())?;
 
     Ok(())
 }
