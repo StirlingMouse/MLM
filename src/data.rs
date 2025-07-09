@@ -15,6 +15,8 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
 
     models.define::<v4::SelectedTorrent>().unwrap();
     models.define::<v4::Event>().unwrap();
+    models.define::<v4::List>().unwrap();
+    models.define::<v4::ListItem>().unwrap();
 
     models.define::<v3::Torrent>().unwrap();
     models.define::<v3::SelectedTorrent>().unwrap();
@@ -48,10 +50,11 @@ pub type ErroredTorrentId = v1::ErroredTorrentId;
 pub type Event = v4::Event;
 pub type EventKey = v4::EventKey;
 pub type EventType = v4::EventType;
-pub type List = v3::List;
-pub type ListKey = v3::ListKey;
-pub type ListItem = v3::ListItem;
-pub type ListItemKey = v3::ListItemKey;
+pub type List = v4::List;
+pub type ListKey = v4::ListKey;
+pub type ListItem = v4::ListItem;
+pub type ListItemKey = v4::ListItemKey;
+pub type ListItemTorrent = v4::ListItemTorrent;
 pub type TorrentMeta = v3::TorrentMeta;
 pub type MainCat = v1::MainCat;
 pub type Uuid = v3::Uuid;
@@ -59,6 +62,7 @@ pub type Timestamp = v3::Timestamp;
 pub type Language = v3::Language;
 pub type Size = v3::Size;
 pub type TorrentCost = v4::TorrentCost;
+pub type TorrentStatus = v4::TorrentStatus;
 
 #[instrument(skip_all)]
 pub fn migrate(db: &Database<'_>) -> Result<()> {
@@ -71,6 +75,8 @@ pub fn migrate(db: &Database<'_>) -> Result<()> {
     rw.migrate::<ErroredTorrent>()?;
     recover_migrate::<v3::Event, Event>(&rw)?;
     rw.migrate::<Event>()?;
+    rw.migrate::<List>()?;
+    rw.migrate::<ListItem>()?;
     rw.commit()?;
     info!("Migrations done");
 
@@ -840,6 +846,62 @@ pub mod v3 {
         }
     }
 
+    impl From<v4::List> for List {
+        fn from(t: v4::List) -> Self {
+            Self {
+                id: t.id.split(':').next().unwrap().parse().unwrap(),
+                title: t.title,
+            }
+        }
+    }
+
+    impl From<v4::ListItem> for ListItem {
+        fn from(t: v4::ListItem) -> Self {
+            let list_id = t.list_id.split(':').next().unwrap().parse().unwrap();
+
+            Self {
+                guid: (list_id, t.guid.1),
+                list_id,
+                title: t.title,
+                authors: t.authors,
+                series: t.series,
+                cover_url: t.cover_url,
+                book_url: t.book_url,
+                isbn: t.isbn,
+                prefer_format: t.prefer_format,
+                audio_torrent: t.audio_torrent.as_ref().and_then(|t| {
+                    if t.status == TorrentStatus::Selected {
+                        Some((t.mam_id, t.at))
+                    } else {
+                        None
+                    }
+                }),
+                wanted_audio_torrent: t.audio_torrent.as_ref().and_then(|t| {
+                    if t.status == TorrentStatus::Wanted {
+                        Some((t.mam_id, t.at))
+                    } else {
+                        None
+                    }
+                }),
+                ebook_torrent: t.ebook_torrent.as_ref().and_then(|t| {
+                    if t.status == TorrentStatus::Selected {
+                        Some((t.mam_id, t.at))
+                    } else {
+                        None
+                    }
+                }),
+                wanted_ebook_torrent: t.ebook_torrent.as_ref().and_then(|t| {
+                    if t.status == TorrentStatus::Wanted {
+                        Some((t.mam_id, t.at))
+                    } else {
+                        None
+                    }
+                }),
+                created_at: t.created_at,
+            }
+        }
+    }
+
     impl From<v4::EventType> for EventType {
         fn from(t: v4::EventType) -> Self {
             match t {
@@ -893,6 +955,39 @@ pub mod v4 {
     }
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 7, version = 4, from = v3::List)]
+    #[native_db]
+    pub struct List {
+        #[primary_key]
+        pub id: String,
+        #[secondary_key]
+        pub title: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 8, version = 4, from = v3::ListItem)]
+    #[native_db]
+    pub struct ListItem {
+        #[primary_key]
+        pub guid: (String, String),
+        #[secondary_key]
+        pub list_id: String,
+        pub title: String,
+        pub authors: Vec<String>,
+        pub series: Vec<(String, u64)>,
+        pub cover_url: String,
+        pub book_url: Option<String>,
+        pub isbn: Option<u64>,
+        pub prefer_format: Option<MainCat>,
+        pub allow_audio: bool,
+        pub audio_torrent: Option<ListItemTorrent>,
+        pub allow_ebook: bool,
+        pub ebook_torrent: Option<ListItemTorrent>,
+        #[secondary_key]
+        pub created_at: Timestamp,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
     pub enum EventType {
         Grabbed {
             cost: Option<TorrentCost>,
@@ -915,6 +1010,21 @@ pub mod v4 {
         UseWedge,
         TryWedge,
         Ratio,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    pub struct ListItemTorrent {
+        pub mam_id: u64,
+        pub status: TorrentStatus,
+        pub at: Timestamp,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+    pub enum TorrentStatus {
+        Selected,
+        Wanted,
+        NotWanted,
+        Existing,
     }
 
     impl From<v3::SelectedTorrent> for SelectedTorrent {
@@ -941,6 +1051,62 @@ pub mod v4 {
                 mam_id: t.mam_id,
                 created_at: t.created_at,
                 event: t.event.into(),
+            }
+        }
+    }
+
+    impl From<v3::List> for List {
+        fn from(t: v3::List) -> Self {
+            Self {
+                id: format!("{}:to-read", t.id),
+                title: t.title,
+            }
+        }
+    }
+
+    impl From<v3::ListItem> for ListItem {
+        fn from(t: v3::ListItem) -> Self {
+            Self {
+                guid: (format!("{}:to-read", t.list_id), t.guid.1),
+                list_id: format!("{}:to-read", t.list_id),
+                title: t.title,
+                authors: t.authors,
+                series: t.series,
+                cover_url: t.cover_url,
+                book_url: t.book_url,
+                isbn: t.isbn,
+                prefer_format: t.prefer_format,
+                allow_audio: true,
+                audio_torrent: t
+                    .audio_torrent
+                    .map(|t| ListItemTorrent {
+                        mam_id: t.0,
+                        status: TorrentStatus::Selected,
+                        at: t.1,
+                    })
+                    .or_else(|| {
+                        t.wanted_audio_torrent.map(|t| ListItemTorrent {
+                            mam_id: t.0,
+                            status: TorrentStatus::Wanted,
+                            at: t.1,
+                        })
+                    }),
+                allow_ebook: true,
+                ebook_torrent: t
+                    .ebook_torrent
+                    .map(|t| ListItemTorrent {
+                        mam_id: t.0,
+                        status: TorrentStatus::Selected,
+                        at: t.1,
+                    })
+                    .or_else(|| {
+                        t.wanted_ebook_torrent.map(|t| ListItemTorrent {
+                            mam_id: t.0,
+                            status: TorrentStatus::Wanted,
+                            at: t.1,
+                        })
+                    }),
+                created_at: t.created_at,
             }
         }
     }

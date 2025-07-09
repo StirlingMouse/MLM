@@ -16,17 +16,31 @@
         {{ name }} #{{num}}{% if !loop.last %}, {% endif %}
       {% endfor %}</p>
     {% endif %}
-    {% if let Some((mam_id, time)) = item.audio_torrent %}
-      Downloaded audiobook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> at {{ self::time(time) }}<br />
-    {% elif let Some((mam_id, time)) = item.wanted_audio_torrent %}
-      Suggest wedge audiobook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> at {{ self::time(time) }}<br />
+    {% if let Some(torrent) = item.audio_torrent %}
+      {% match torrent.status %}
+      {% when TorrentStatus::Selected %}
+      Downloaded audiobook <a href="https://www.myanonamouse.net/t/{{ torrent.mam_id }}" target=_blank>torrent</a> at {{ self::time(torrent.at) }}<br />
+      {% when TorrentStatus::Wanted %}
+      Suggest wedge audiobook <a href="https://www.myanonamouse.net/t/{{ torrent.mam_id }}" target=_blank>torrent</a> at {{ self::time(torrent.at) }}<br />
+      {% when TorrentStatus::NotWanted %}
+      Skipped audiobook <a href="https://www.myanonamouse.net/t/{{ torrent.mam_id }}" target=_blank>torrent</a> as an ebook was found at {{ self::time(torrent.at) }}<br />
+      {% when TorrentStatus::Existing %}
+      Found matching audiobook <a href="https://www.myanonamouse.net/t/{{ torrent.mam_id }}" target=_blank>torrent</a> in library at {{ self::time(torrent.at) }}<br />
+      {% endmatch %}
     {% elif item.want_audio() %}
       <span class=missing>Audiobook missing</span><br />
     {% endif %}
-    {% if let Some((mam_id, time)) = item.ebook_torrent %}
-      Downloaded ebook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> at {{ self::time(time) }}<br />
-    {% elif let Some((mam_id, time)) = item.wanted_ebook_torrent %}
-      Suggest wedge ebook <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>torrent</a> at {{ self::time(time) }}<br />
+    {% if let Some(torrent) = item.ebook_torrent %}
+      {% match torrent.status %}
+      {% when TorrentStatus::Selected %}
+      Downloaded ebook <a href="https://www.myanonamouse.net/t/{{ torrent.mam_id }}" target=_blank>torrent</a> at {{ self::time(torrent.at) }}<br />
+      {% when TorrentStatus::Wanted %}
+      Suggest wedge ebook <a href="https://www.myanonamouse.net/t/{{ torrent.mam_id }}" target=_blank>torrent</a> at {{ self::time(torrent.at) }}<br />
+      {% when TorrentStatus::NotWanted %}
+      Skipped ebook <a href="https://www.myanonamouse.net/t/{{ torrent.mam_id }}" target=_blank>torrent</a> as an ebook was found at {{ self::time(torrent.at) }}<br />
+      {% when TorrentStatus::Existing %}
+      Found matching ebook <a href="https://www.myanonamouse.net/t/{{ torrent.mam_id }}" target=_blank>torrent</a> in library at {{ self::time(torrent.at) }}<br />
+      {% endmatch %}
     {% elif item.want_ebook() %}
       <span class=missing>Ebook missing</span><br />
     {% endif %}

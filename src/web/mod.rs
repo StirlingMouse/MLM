@@ -35,8 +35,8 @@ use crate::{
     config::Config,
     data::{
         DuplicateTorrent, ErroredTorrent, ErroredTorrentId, Event, EventKey, EventType, Language,
-        List, ListItem, ListItemKey, ListKey, MainCat, SelectedTorrent, Timestamp, Torrent,
-        TorrentCost, TorrentKey,
+        List, ListItem, ListItemKey, ListKey, SelectedTorrent, Timestamp, Torrent, TorrentCost,
+        TorrentKey, TorrentStatus,
     },
     linker::{refresh_metadata, refresh_metadata_relink},
     mam::MaM,
@@ -195,7 +195,7 @@ async fn lists_page(
 
 async fn list_page(
     State(db): State<Arc<Database<'static>>>,
-    Path(list_id): Path<u64>,
+    Path(list_id): Path<String>,
 ) -> std::result::Result<Html<String>, AppError> {
     let Some(list) = db.r_transaction()?.get().primary::<List>(list_id)? else {
         return Err(AppError::NotFound);
@@ -206,6 +206,7 @@ async fn list_page(
         .secondary::<ListItem>(ListItemKey::created_at)?;
     let items = items
         .all()?
+        .filter(|t| t.as_ref().is_ok_and(|t| t.list_id == list.id))
         .rev()
         .collect::<Result<Vec<_>, native_db::db_type::Error>>()?;
     let template = ListPageTemplate { list, items };
@@ -678,16 +679,6 @@ struct ListsPageTemplate {
 struct ListPageTemplate {
     list: List,
     items: Vec<ListItem>,
-}
-
-impl ListItem {
-    fn want_audio(&self) -> bool {
-        self.prefer_format.is_none_or(|f| f == MainCat::Audio)
-    }
-
-    fn want_ebook(&self) -> bool {
-        self.prefer_format.is_none_or(|f| f == MainCat::Ebook)
-    }
 }
 
 #[derive(Template)]

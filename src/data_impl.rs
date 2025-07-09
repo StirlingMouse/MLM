@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer};
 use time::Date;
 
 use crate::{
-    data::{Language, MainCat, Size, Torrent, TorrentMeta},
+    data::{Language, ListItem, MainCat, Size, Torrent, TorrentMeta, TorrentStatus},
     mam::DATE_FORMAT,
 };
 
@@ -65,6 +65,42 @@ impl TorrentMeta {
             && self.authors.iter().any(|a| other.authors.contains(a))
             && ((self.narrators.is_empty() && other.narrators.is_empty())
                 || self.narrators.iter().any(|a| other.narrators.contains(a)))
+    }
+}
+
+impl ListItem {
+    pub fn want_audio(&self) -> bool {
+        let have_audio = self
+            .audio_torrent
+            .as_ref()
+            .is_some_and(|t| t.status != TorrentStatus::Wanted);
+        let have_ebook = self
+            .ebook_torrent
+            .as_ref()
+            .is_some_and(|t| t.status != TorrentStatus::Wanted);
+
+        self.allow_audio
+            && !have_audio
+            && self
+                .prefer_format
+                .is_none_or(|f| f == MainCat::Audio || !have_ebook)
+    }
+
+    pub fn want_ebook(&self) -> bool {
+        let have_audio = self
+            .audio_torrent
+            .as_ref()
+            .is_some_and(|t| t.status != TorrentStatus::Wanted);
+        let have_ebook = self
+            .ebook_torrent
+            .as_ref()
+            .is_some_and(|t| t.status != TorrentStatus::Wanted);
+
+        self.allow_ebook
+            && !have_ebook
+            && self
+                .prefer_format
+                .is_none_or(|f| f == MainCat::Ebook || !have_audio)
     }
 }
 

@@ -12,6 +12,8 @@ use tracing::{debug, instrument};
 use tracing::{trace, warn};
 
 use crate::autograbber::grab_selected_torrents;
+use crate::data::{ListItemTorrent, Torrent, TorrentKey, TorrentStatus};
+use crate::mam::normalize_title;
 use crate::{
     autograbber::select_torrents,
     config::{Config, Cost, Grab},
@@ -44,18 +46,23 @@ pub async fn run_goodreads_import(
             trace!("Scanning Goodreads list {}", rss.channel.title);
 
             let link: Url = list.url.parse()?;
-            let list_id: u64 = link
+            let user_id: u64 = link
                 .path_segments()
                 .iter_mut()
                 .flatten()
                 .next_back()
-                .ok_or(anyhow::Error::msg("Failed to get goodreads list id"))?
+                .ok_or(anyhow::Error::msg("Failed to get goodreads user id"))?
                 .parse()?;
+            let (_, shelf) = link
+                .query_pairs()
+                .find(|(name, _)| name == "shelf")
+                .ok_or(anyhow::Error::msg("Failed to get goodreads shelf"))?;
+            let list_id = format!("{user_id}:{shelf}");
 
             if !list.dry_run {
                 let rw = db.rw_transaction()?;
                 rw.upsert(List {
-                    id: list_id,
+                    id: list_id.clone(),
                     title: rss.channel.title,
                 })?;
                 rw.commit()?;
@@ -74,11 +81,16 @@ pub async fn run_goodreads_import(
                 let db_item = match db
                     .r_transaction()?
                     .get()
-                    .primary::<ListItem>((list_id, item.guid.clone()))?
+                    .primary::<ListItem>((list_id.clone(), item.guid.clone()))?
                 {
                     Some(mut db_item) => {
-                        if db_item.prefer_format != list.prefer_format {
+                        if db_item.prefer_format != list.prefer_format
+                            || db_item.allow_audio != list.allow_audio()
+                            || db_item.allow_ebook != list.allow_ebook()
+                        {
                             db_item.prefer_format = list.prefer_format;
+                            db_item.allow_audio = list.allow_audio();
+                            db_item.allow_ebook = list.allow_ebook();
                             if !list.dry_run {
                                 let rw = db.rw_transaction()?;
                                 rw.upsert(db_item.clone())?;
@@ -97,8 +109,8 @@ pub async fn run_goodreads_import(
                     }
                     None => {
                         let db_item = ListItem {
-                            guid: (list_id, item.guid.clone()),
-                            list_id,
+                            guid: (list_id.clone(), item.guid.clone()),
+                            list_id: list_id.clone(),
                             title: item.title.clone(),
                             authors: vec![item.author_name.clone()],
                             series: item.series.iter().cloned().collect(),
@@ -106,10 +118,10 @@ pub async fn run_goodreads_import(
                             book_url: None,
                             isbn: item.isbn.as_ref().and_then(|isbn| isbn.parse().ok()),
                             prefer_format: list.prefer_format,
+                            allow_audio: list.allow_audio(),
                             audio_torrent: None,
-                            wanted_audio_torrent: None,
+                            allow_ebook: list.allow_ebook(),
                             ebook_torrent: None,
-                            wanted_ebook_torrent: None,
                             created_at: Timestamp::now(),
                         };
                         if !list.dry_run {
@@ -144,6 +156,20 @@ async fn search_item(
     item: &Item,
     mut db_item: ListItem,
 ) -> Result<()> {
+    if !db_item.want_audio() && !db_item.want_ebook() {
+        return Ok(());
+    }
+
+    let has_updates = search_library(config, db, &mut db_item, item).context("search_library")?;
+    if !list.dry_run && has_updates {
+        let rw = db.rw_transaction()?;
+        rw.upsert(db_item.clone())?;
+        rw.commit()?;
+    }
+    if !db_item.want_audio() && !db_item.want_ebook() {
+        return Ok(());
+    }
+
     let mut torrents = vec![];
     for grab in &list.grab {
         let results = search_grab(config, mam, item, &db_item, grab)
@@ -151,87 +177,75 @@ async fn search_item(
             .context("search_grab")?;
         torrents.push(results);
     }
-    let mut audiobook = torrents
-        .iter()
-        .flatten()
-        .filter(|t| t.1.main_cat == MainCat::Audio)
-        .find(|t| t.3 != Cost::Free || t.0.is_free())
-        .or_else(|| {
-            torrents
-                .iter()
-                .flatten()
-                .find(|t| t.1.main_cat == MainCat::Audio)
-        });
-    let mut ebook = torrents
-        .iter()
-        .flatten()
-        .filter(|t| t.1.main_cat == MainCat::Ebook)
-        .find(|t| t.3 != Cost::Free || t.0.is_free())
-        .or_else(|| {
-            torrents
-                .iter()
-                .flatten()
-                .find(|t| t.1.main_cat == MainCat::Ebook)
-        });
+    let mut audiobook = select_torrent(&torrents, MainCat::Audio);
+    let mut ebook = select_torrent(&torrents, MainCat::Ebook);
 
-    for selected in [audiobook, ebook].iter_mut() {
-        let mut take = false;
-        if let Some(selected) = selected {
-            if selected.3 == Cost::Free && !selected.0.is_free() {
-                take = true
-            }
-        }
-        if take {
-            let taken = selected.unwrap();
-            warn!(
-                "Skipping torrent {}, in format {} as it's not free",
-                taken.1.title,
-                taken.1.filetypes.join(", ")
-            );
-            match taken.1.main_cat {
-                MainCat::Audio => {
-                    db_item.wanted_audio_torrent = Some((taken.0.id, Timestamp::now()));
-                    audiobook.take();
-                }
-                MainCat::Ebook => {
-                    db_item.wanted_ebook_torrent = Some((taken.0.id, Timestamp::now()));
-                    ebook.take();
-                }
-            }
-            if !list.dry_run {
-                let rw = db.rw_transaction()?;
-                rw.upsert(db_item.clone())?;
-                rw.commit()?;
-            }
-        }
-    }
-
+    let mut has_updates = false;
     if audiobook.is_some() && ebook.is_some() {
         match list.prefer_format {
             Some(MainCat::Audio) => {
-                ebook.take();
+                let updated = not_wanted(&mut db_item.ebook_torrent, &mut ebook);
+                has_updates = updated || has_updates;
             }
             Some(MainCat::Ebook) => {
-                audiobook.take();
+                let updated = not_wanted(&mut db_item.audio_torrent, &mut audiobook);
+                has_updates = updated || has_updates;
             }
             None => {}
         }
     }
+    if !list.dry_run && has_updates {
+        let rw = db.rw_transaction()?;
+        rw.upsert(db_item.clone())?;
+        rw.commit()?;
+    }
 
-    {
-        db_item.audio_torrent = audiobook.map(|t| (t.0.id, Timestamp::now()));
-        db_item.ebook_torrent = ebook.map(|t| (t.0.id, Timestamp::now()));
-        if audiobook.is_some() {
-            db_item.wanted_audio_torrent.take();
+    let mut has_updates = false;
+    if check_cost(&mut db_item.audio_torrent, &mut audiobook) {
+        has_updates = true;
+    }
+    if check_cost(&mut db_item.ebook_torrent, &mut ebook) {
+        has_updates = true;
+    }
+    if !list.dry_run && has_updates {
+        let rw = db.rw_transaction()?;
+        rw.upsert(db_item.clone())?;
+        rw.commit()?;
+    }
+
+    let mut has_updates = false;
+    if let Some(found) = audiobook {
+        if db_item
+            .audio_torrent
+            .as_ref()
+            .is_none_or(|t| !(t.status == TorrentStatus::Selected && t.mam_id == found.0.id))
+        {
+            db_item.audio_torrent = Some(ListItemTorrent {
+                mam_id: found.0.id,
+                status: TorrentStatus::Selected,
+                at: Timestamp::now(),
+            });
+            has_updates = true;
         }
-        if ebook.is_some() {
-            db_item.wanted_ebook_torrent.take();
+    }
+    if let Some(found) = ebook {
+        if db_item
+            .ebook_torrent
+            .as_ref()
+            .is_none_or(|t| !(t.status == TorrentStatus::Selected && t.mam_id == found.0.id))
+        {
+            db_item.ebook_torrent = Some(ListItemTorrent {
+                mam_id: found.0.id,
+                status: TorrentStatus::Selected,
+                at: Timestamp::now(),
+            });
+            has_updates = true;
         }
-        if !list.dry_run {
-            let rw = db.rw_transaction()?;
-            rw.upsert(db_item.clone())?;
-            rw.commit()?;
-        }
+    }
+    if !list.dry_run && has_updates {
+        let rw = db.rw_transaction()?;
+        rw.upsert(db_item.clone())?;
+        rw.commit()?;
     }
 
     if let Some(audiobook) = audiobook {
@@ -260,6 +274,74 @@ async fn search_item(
     }
 
     Ok(())
+}
+
+#[instrument(skip_all)]
+fn search_library(
+    config: &Config,
+    db: &Database<'_>,
+    db_item: &mut ListItem,
+    item: &Item,
+) -> Result<bool> {
+    let r = db.r_transaction()?;
+    let title_search = normalize_title(&item.title);
+    let mut library = {
+        r.scan()
+            .secondary::<Torrent>(TorrentKey::title_search)?
+            .start_with(title_search.as_str())?
+            .filter(|t| t.as_ref().is_ok_and(|t| item.matches(&t.meta)))
+            .collect::<Result<Vec<_>, _>>()
+    }?;
+
+    library.sort_by_key(|torrent| {
+        let preferred_types = match torrent.meta.main_cat {
+            MainCat::Audio => &config.audio_types,
+            MainCat::Ebook => &config.ebook_types,
+        };
+        preferred_types
+            .iter()
+            .position(|t| torrent.meta.filetypes.contains(t))
+    });
+
+    let audiobook = library.iter().find(|t| t.meta.main_cat == MainCat::Audio);
+    let ebook = library.iter().find(|t| t.meta.main_cat == MainCat::Ebook);
+
+    let mut updated_any = false;
+    if let Some(audiobook) = audiobook {
+        let updated = set_existing(&mut db_item.audio_torrent, audiobook);
+        trace!(
+            "Found old audiobook torrent matching RSS item: {}",
+            audiobook.meta.title
+        );
+        updated_any = updated || updated_any;
+    }
+    if let Some(ebook) = ebook {
+        let updated = set_existing(&mut db_item.ebook_torrent, ebook);
+        trace!(
+            "Found old ebook torrent matching RSS item: {}",
+            ebook.meta.title
+        );
+        updated_any = updated || updated_any;
+    }
+
+    Ok(updated_any)
+}
+
+fn set_existing(field: &mut Option<ListItemTorrent>, torrent: &Torrent) -> bool {
+    if let Some(field) = field {
+        if field.status == TorrentStatus::Selected {
+            return false;
+        }
+        if field.status == TorrentStatus::Existing && field.mam_id == torrent.meta.mam_id {
+            return false;
+        }
+    }
+    field.replace(ListItemTorrent {
+        mam_id: torrent.meta.mam_id,
+        status: TorrentStatus::Existing,
+        at: Timestamp::now(),
+    });
+    true
 }
 
 #[instrument(skip_all)]
@@ -435,4 +517,77 @@ struct Item {
     // book_description: String,
     isbn: Option<String>,
     // description: String,
+}
+
+impl Item {
+    fn matches(&self, meta: &TorrentMeta) -> bool {
+        if score(&self.title, &meta.title) < 80 {
+            return false;
+        }
+
+        let author = self.author_name.to_lowercase().replace('.', " ");
+
+        meta.authors
+            .iter()
+            .map(|a| a.to_lowercase())
+            .any(|a| a == author)
+    }
+}
+
+fn select_torrent(
+    torrents: &[Vec<(MaMTorrent, TorrentMeta, usize, Cost)>],
+    main_cat: MainCat,
+) -> Option<&(MaMTorrent, TorrentMeta, usize, Cost)> {
+    torrents
+        .iter()
+        .flatten()
+        .filter(|t| t.1.main_cat == main_cat)
+        .find(|t| t.3 != Cost::Free || t.0.is_free())
+        .or_else(|| torrents.iter().flatten().find(|t| t.1.main_cat == main_cat))
+}
+
+fn not_wanted(
+    field: &mut Option<ListItemTorrent>,
+    unwanted: &mut Option<&(MaMTorrent, TorrentMeta, usize, Cost)>,
+) -> bool {
+    let found = unwanted.take().unwrap();
+    if field
+        .as_ref()
+        .is_none_or(|t| t.status != TorrentStatus::NotWanted)
+    {
+        debug!("Skipped {:?} torrent as is not wanted", found.1.main_cat);
+        field.replace(ListItemTorrent {
+            mam_id: found.0.id,
+            status: TorrentStatus::NotWanted,
+            at: Timestamp::now(),
+        });
+        true
+    } else {
+        false
+    }
+}
+fn check_cost(
+    field: &mut Option<ListItemTorrent>,
+    selected: &mut Option<&(MaMTorrent, TorrentMeta, usize, Cost)>,
+) -> bool {
+    let take = selected.is_some_and(|selected| selected.3 == Cost::Free && !selected.0.is_free());
+    if take {
+        let found = selected.take().unwrap();
+        warn!("Skipped {:?} torrent as it is not free", found.1.main_cat);
+        if field
+            .as_ref()
+            .is_none_or(|t| !(t.status == TorrentStatus::Wanted && t.mam_id == found.0.id))
+        {
+            field.replace(ListItemTorrent {
+                mam_id: found.0.id,
+                status: TorrentStatus::Wanted,
+                at: Timestamp::now(),
+            });
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    }
 }
