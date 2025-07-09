@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use anyhow::{Error, Result};
 use bytes::Bytes;
@@ -504,7 +508,7 @@ pub struct MaM<'a> {
     jar: Arc<CookieStoreRwLock>,
     client: reqwest::Client,
     db: Arc<Database<'a>>,
-    pub user: Arc<Mutex<Option<UserResponse>>>,
+    user: Arc<Mutex<Option<(SystemTime, UserResponse)>>>,
 }
 
 impl<'a> MaM<'a> {
@@ -575,6 +579,15 @@ impl<'a> MaM<'a> {
     }
 
     pub async fn user_info(&self) -> Result<UserResponse> {
+        let mut cache = self.user.lock().await;
+        if let Some((at, user_info)) = cache.as_ref() {
+            if SystemTime::now()
+                .duration_since(*at)
+                .is_ok_and(|d| d < Duration::from_secs(60))
+            {
+                return Ok(user_info.clone());
+            }
+        }
         let resp: UserResponse = self
             .client
             .get("https://www.myanonamouse.net/jsonLoad.php?snatch_summary=true")
@@ -585,8 +598,16 @@ impl<'a> MaM<'a> {
             .json()
             .await?;
         self.store_cookies();
-        self.user.lock().await.replace(resp.clone());
+        cache.replace((SystemTime::now(), resp.clone()));
         Ok(resp)
+    }
+
+    pub async fn cached_user_info(&self) -> Option<UserResponse> {
+        self.user
+            .lock()
+            .await
+            .as_ref()
+            .map(|(_, user_info)| user_info.clone())
     }
 
     pub async fn get_torrent_file(&self, dl_hash: &str) -> Result<Bytes> {

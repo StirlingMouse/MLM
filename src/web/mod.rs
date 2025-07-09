@@ -102,7 +102,7 @@ async fn index_page(
 ) -> std::result::Result<Html<String>, AppError> {
     let stats = stats.lock().await;
     let template = IndexPageTemplate {
-        username: mam.user.lock().await.as_ref().map(|u| u.username.clone()),
+        username: mam.cached_user_info().await.map(|u| u.username),
         autograbber_run_at: stats.autograbber_run_at.map(Into::into),
         autograbber_result: stats
             .autograbber_result
@@ -353,7 +353,7 @@ async fn selected_page(
         });
     }
     let template = SelectedPageTemplate {
-        unsats: mam.user.lock().await.as_ref().map(|u| u.unsat.clone()),
+        unsats: mam.user_info().await.map(|u| u.unsat).ok(),
         unsat_buffer: config.unsat_buffer,
         sort,
         torrents,
