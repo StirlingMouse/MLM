@@ -508,7 +508,7 @@ pub struct MaM<'a> {
     jar: Arc<CookieStoreRwLock>,
     client: reqwest::Client,
     db: Arc<Database<'a>>,
-    user: Arc<Mutex<Option<(SystemTime, UserResponse)>>>,
+    pub user: Arc<Mutex<Option<(SystemTime, UserResponse)>>>,
 }
 
 impl<'a> MaM<'a> {

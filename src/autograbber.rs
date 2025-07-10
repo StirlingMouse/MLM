@@ -106,6 +106,9 @@ pub async fn grab_selected_torrents(
         };
         if result.is_ok() {
             snatched_torrents += 1;
+            if let Some((_, user_info)) = mam.user.lock().await.as_mut() {
+                user_info.unsat.count += 1;
+            }
         }
         update_errored_torrent(
             db,
