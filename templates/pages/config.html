@@ -21,6 +21,12 @@
     <span class=key>search_in</span> = {{ self::yaml_items(autograb.search_in) }}<br>
     {% endif %}
     {{ self::filter(autograb.filter) }}
+    {% if let Some(unsat_buffer) = autograb.unsat_buffer %}
+    <span class=key>unsat_buffer</span> = <span class=num>{{ unsat_buffer }}</span><br>
+    {% endif %}
+    {% if autograb.dry_run %}
+    <span class=key>dry_run</span> = <span class=num>{{ autograb.dry_run }}</span><br>
+    {% endif %}
   </div>
 </div>
 {% endfor %}
@@ -37,6 +43,30 @@
     {% endif %}
     {% if !tag.tags.is_empty() %}
     <span class=key>tags</span> = {{ self::yaml_items(tag.tags) }}<br>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+{% for library in config.libraries %}
+<div class="infoboxes">
+  <div class="configbox">
+    <div class=row>
+      <h3>[library]</h3>
+    </div>
+    {% match library %}
+    {% when Library::ByDir(library) %}
+    <span class=key>download_dir</span> = <span class=string>{{ library.download_dir | json }}</span><br>
+    <span class=key>library_dir</span> = <span class=string>{{ library.library_dir | json }}</span><br>
+    {% when Library::ByCategory(library) %}
+    <span class=key>category</span> = <span class=string>{{ library.category | json }}</span><br>
+    <span class=key>library_dir</span> = <span class=string>{{ library.library_dir | json }}</span><br>
+    {% endmatch %}
+    {% if !library.tag_filters().allow_tags.is_empty() %}
+    <span class=key>allow_tags</span> = {{ self::yaml_items(library.tag_filters().allow_tags) }}<br>
+    {% endif %}
+    {% if !library.tag_filters().deny_tags.is_empty() %}
+    <span class=key>deny_tags</span> = {{ self::yaml_items(library.tag_filters().deny_tags) }}<br>
     {% endif %}
   </div>
 </div>

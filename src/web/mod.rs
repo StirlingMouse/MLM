@@ -32,7 +32,7 @@ use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
     cleaner::clean_torrent,
-    config::{Config, Cost, Filter, TorrentFilter, Type},
+    config::{Config, Cost, Filter, Library, TorrentFilter, Type},
     data::{
         DuplicateTorrent, ErroredTorrent, ErroredTorrentId, ErroredTorrentKey, Event, EventKey,
         EventType, Language, List, ListItem, ListItemKey, ListKey, SelectedTorrent, Timestamp,
