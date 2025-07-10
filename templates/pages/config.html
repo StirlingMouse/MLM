@@ -5,11 +5,39 @@
 {% block content %}
 <h1>Config</h1>
 
+{% for qbit in config.qbittorrent %}
+<div class="infoboxes">
+  <div class="configbox">
+    <div class=row>
+      <h3>[[qbittorrent]]</h3>
+    </div>
+    <span class=key>url</span> = <span class=string>{{ qbit.url | json }}</span><br>
+    {% if !qbit.username.is_empty() %}
+    <span class=key>username</span> = <span class=string>{{ qbit.username | json }}</span><br>
+    {% endif %}
+    {% if !qbit.password.is_empty() %}
+    <span class=key>password</span> = <span class=string>""</span> # hidden<br>
+    {% endif %}
+    {% if let Some(on_cleaned) = qbit.on_cleaned %}
+    <div class=row>
+      <h4>[qbittorrent.on_cleaned]</h4>
+    </div>
+    {% if let Some(category) = on_cleaned.category %}
+    <span class=key>category</span> = <span class=string>{{ category | json }}</span><br>
+    {% endif %}
+    {% if !on_cleaned.tags.is_empty() %}
+    <span class=key>tags</span> = {{ self::yaml_items(on_cleaned.tags) }}<br>
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
 {% for autograb in config.autograbs %}
 <div class="infoboxes">
   <div class="configbox">
     <div class=row>
-      <h3>[autograb]</h3>
+      <h3>[[autograb]]</h3>
       <a href="{{autograb.mam_search()}}" target=_blank>search on MaM</a>
     </div>
     <span class=key>type</span> = <span class=string>{{ autograb.kind | json }}</span><br>
@@ -35,7 +63,7 @@
 <div class="infoboxes">
   <div class="configbox">
     <div class=row>
-      <h3>[tag]</h3>
+      <h3>[[tag]]</h3>
     </div>
     {{ self::filter(tag.filter) }}
     {% if let Some(category) = tag.category %}
@@ -52,7 +80,7 @@
 <div class="infoboxes">
   <div class="configbox">
     <div class=row>
-      <h3>[library]</h3>
+      <h3>[[library]]</h3>
     </div>
     {% match library %}
     {% when Library::ByDir(library) %}
