@@ -1,0 +1,58 @@
+use std::sync::Arc;
+
+use askama::Template;
+use axum::{extract::State, response::Html};
+use tokio::sync::Mutex;
+
+use crate::{data::Timestamp, mam::MaM, stats::Stats, web::AppError, web::time};
+
+pub async fn index_page(
+    State((stats, mam)): State<(Arc<Mutex<Stats>>, Arc<MaM<'static>>)>,
+) -> std::result::Result<Html<String>, AppError> {
+    let stats = stats.lock().await;
+    let template = IndexPageTemplate {
+        username: mam.cached_user_info().await.map(|u| u.username),
+        autograbber_run_at: stats.autograbber_run_at.map(Into::into),
+        autograbber_result: stats
+            .autograbber_result
+            .as_ref()
+            .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+        linker_run_at: stats.linker_run_at.map(Into::into),
+        linker_result: stats
+            .linker_result
+            .as_ref()
+            .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+        cleaner_run_at: stats.cleaner_run_at.map(Into::into),
+        cleaner_result: stats
+            .cleaner_result
+            .as_ref()
+            .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+        goodreads_run_at: stats.goodreads_run_at.map(Into::into),
+        goodreads_result: stats
+            .goodreads_result
+            .as_ref()
+            .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+        downloader_run_at: stats.downloader_run_at.map(Into::into),
+        downloader_result: stats
+            .downloader_result
+            .as_ref()
+            .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+    };
+    Ok::<_, AppError>(Html(template.to_string()))
+}
+
+#[derive(Template)]
+#[template(path = "pages/index.html")]
+struct IndexPageTemplate {
+    username: Option<String>,
+    autograbber_run_at: Option<Timestamp>,
+    autograbber_result: Option<Result<(), String>>,
+    linker_run_at: Option<Timestamp>,
+    linker_result: Option<Result<(), String>>,
+    cleaner_run_at: Option<Timestamp>,
+    cleaner_result: Option<Result<(), String>>,
+    goodreads_run_at: Option<Timestamp>,
+    goodreads_result: Option<Result<(), String>>,
+    downloader_run_at: Option<Timestamp>,
+    downloader_result: Option<Result<(), String>>,
+}
