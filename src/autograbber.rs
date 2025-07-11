@@ -315,6 +315,15 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                     .collect::<Result<Vec<_>, native_db::db_type::Error>>()
             }?;
             for old in old_selected {
+                if old.mam_id == meta.mam_id {
+                    if old.meta != meta {
+                        let mut old = old;
+                        old.meta = meta;
+                        rw.upsert(old)?;
+                        rw_opt.unwrap().commit()?;
+                    }
+                    continue 'torrent;
+                }
                 trace!(
                     "Checking old torrent {} with formats {:?}",
                     old.title_search, old.meta.filetypes
@@ -351,6 +360,15 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                     .collect::<Result<Vec<_>, native_db::db_type::Error>>()
             }?;
             for old in old_library {
+                if old.meta.mam_id == meta.mam_id {
+                    if old.meta != meta {
+                        let mut old = old;
+                        old.meta = meta;
+                        rw.upsert(old)?;
+                        rw_opt.unwrap().commit()?;
+                    }
+                    continue 'torrent;
+                }
                 trace!(
                     "Checking old torrent {} with formats {:?}",
                     old.title_search, old.meta.filetypes
