@@ -60,6 +60,8 @@ document.body.addEventListener('change', e => {
                                 for (const checkbox of Array.from(table.querySelectorAll(`input[type="checkbox"][name="${name.slice(0, -4)}"]`))) {
                                         checkbox.checked = e.target.checked
                                 }
+                                const actions = document.querySelector(`.actions.actions_${name.slice(0, -4)}`)
+                                actions.style.display = e.target.checked ? 'flex' : 'none';
                         } else {
                                 const all = table.querySelector(`input[type="checkbox"][name="${name}_all"]`)
                                 if (all) {
