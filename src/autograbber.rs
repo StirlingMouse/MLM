@@ -308,6 +308,33 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             continue;
         }
         if let Some(rw) = &rw_opt {
+            let old_selected = rw.get().primary::<data::SelectedTorrent>(meta.mam_id)?;
+            if let Some(old) = old_selected {
+                if old.meta != meta {
+                    let mut old = old;
+                    old.meta = meta;
+                    rw.upsert(old)?;
+                    rw_opt.unwrap().commit()?;
+                }
+                continue 'torrent;
+            }
+        }
+        if let Some(rw) = &rw_opt {
+            let old_library = rw
+                .scan()
+                .primary::<data::Torrent>()?
+                .all()?
+                .find(|t| t.as_ref().is_ok_and(|t| t.meta.mam_id == meta.mam_id));
+            if let Some(mut old) = old_library.transpose()? {
+                if old.meta != meta {
+                    old.meta = meta;
+                    rw.upsert(old)?;
+                    rw_opt.unwrap().commit()?;
+                }
+                continue 'torrent;
+            }
+        }
+        if let Some(rw) = &rw_opt {
             let old_selected = {
                 rw.scan()
                     .secondary::<data::SelectedTorrent>(data::SelectedTorrentKey::title_search)?
