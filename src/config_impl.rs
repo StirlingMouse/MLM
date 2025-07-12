@@ -4,7 +4,7 @@ use time::UtcDateTime;
 use tracing::error;
 
 use crate::{
-    config::{Cost, Filter, GoodreadsList, Library, LibraryTagFilters},
+    config::{Cost, Filter, GoodreadsList, Library, LibraryLinkMethod, LibraryTagFilters},
     data::{Language, Size},
     mam::{DATE_TIME_FORMAT, MaMTorrent},
     mam_enums::Flags,
@@ -151,6 +151,13 @@ impl GoodreadsList {
 }
 
 impl Library {
+    pub fn method(&self) -> LibraryLinkMethod {
+        match self {
+            Library::ByDir(l) => l.tag_filters.method,
+            Library::ByCategory(l) => l.tag_filters.method,
+        }
+    }
+
     pub fn library_dir(&self) -> &PathBuf {
         match self {
             Library::ByDir(l) => &l.library_dir,

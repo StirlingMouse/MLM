@@ -205,9 +205,20 @@ pub struct LibraryByCategory {
 #[serde(deny_unknown_fields)]
 pub struct LibraryTagFilters {
     #[serde(default)]
+    pub method: LibraryLinkMethod,
+    #[serde(default)]
     pub allow_tags: Vec<String>,
     #[serde(default)]
     pub deny_tags: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum LibraryLinkMethod {
+    #[default]
+    Hardlink,
+    HardlinkOrCopy,
+    Copy,
 }
 
 fn default_host() -> String {

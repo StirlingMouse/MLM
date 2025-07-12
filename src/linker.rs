@@ -1,8 +1,8 @@
 use std::{
-    fs::{self, File, create_dir_all, hard_link},
+    fs::{self, File, create_dir_all},
     io::{BufWriter, ErrorKind, Write},
     os::unix::fs::MetadataExt as _,
-    path::{Component, PathBuf},
+    path::{Component, Path, PathBuf},
     sync::Arc,
 };
 
@@ -21,7 +21,7 @@ use tracing::{Level, debug, instrument, span, trace};
 
 use crate::{
     cleaner::remove_library_files,
-    config::{Config, Library, QbitConfig},
+    config::{Config, Library, LibraryLinkMethod, QbitConfig},
     data::{self, ErroredTorrentId, Event, EventType, Size, Timestamp, Torrent, TorrentMeta},
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{MaM, MaMTorrent, clean_value, normalize_title},
@@ -333,32 +333,14 @@ async fn link_torrent(
         let library_path = dir.join(&file_path);
         library_files.push(file_path.clone());
         let download_path = PathBuf::from(&torrent.save_path).join(&file.name);
-        debug!("linking: {:?} -> {:?}", download_path, library_path);
-        hard_link(&download_path, &library_path).or_else(|err| {
-            if err.kind() == ErrorKind::AlreadyExists {
-                println!("AlreadyExists: {}", err);
-                let download_id = get_file_id(&download_path);
-                println!("got 1: {download_id:?}");
-                let library_id = get_file_id(&library_path);
-                println!("got 2: {library_id:?}");
-                if let (Ok(download_id), Ok(library_id)) = (download_id, library_id) {
-                println!("got both");
-                    if download_id == library_id {
-                println!("both match");
-                        return Ok(());
-                    } else {
-                println!("no match");
-                        bail!(
-                            "File \"{:?}\" already exists, torrent file size: {}, library file size: {}",
-                            file_path,
-                            fs::metadata(&download_path).map_or("?".to_string(), |s| Size::from_bytes(s.size()).to_string()),
-                            fs::metadata(&library_path).map_or("?".to_string(), |s| Size::from_bytes(s.size()).to_string())
-                        );
-                    }
-                }
+        match library.method() {
+            LibraryLinkMethod::Hardlink => hard_link(&download_path, &library_path, &file_path)?,
+            LibraryLinkMethod::HardlinkOrCopy => {
+                hard_link(&download_path, &library_path, &file_path)
+                    .or_else(|_| copy(&download_path, &library_path))?
             }
-            Err(err.into())
-        })?;
+            LibraryLinkMethod::Copy => copy(&download_path, &library_path)?,
+        };
     }
     library_files.sort();
 
@@ -462,4 +444,42 @@ fn select_format(wanted_formats: &[String], files: &[TorrentContent]) -> Option<
             }
         })
         .find(|ext| files.iter().any(|f| f.name.ends_with(ext)))
+}
+
+#[instrument(skip_all)]
+fn hard_link(download_path: &Path, library_path: &Path, file_path: &Path) -> Result<()> {
+    debug!("linking: {:?} -> {:?}", download_path, library_path);
+    fs::hard_link(download_path, library_path).or_else(|err| {
+            if err.kind() == ErrorKind::AlreadyExists {
+                trace!("AlreadyExists: {}", err);
+                let download_id = get_file_id(download_path);
+                trace!("got 1: {download_id:?}");
+                let library_id = get_file_id(library_path);
+                trace!("got 2: {library_id:?}");
+                if let (Ok(download_id), Ok(library_id)) = (download_id, library_id) {
+                    trace!("got both");
+                    if download_id == library_id {
+                        trace!("both match");
+                        return Ok(());
+                    } else {
+                        trace!("no match");
+                        bail!(
+                            "File \"{:?}\" already exists, torrent file size: {}, library file size: {}",
+                            file_path,
+                            fs::metadata(download_path).map_or("?".to_string(), |s| Size::from_bytes(s.size()).to_string()),
+                            fs::metadata(library_path).map_or("?".to_string(), |s| Size::from_bytes(s.size()).to_string())
+                        );
+                    }
+                }
+            }
+            Err(err.into())
+        })?;
+    Ok(())
+}
+
+#[instrument(skip_all)]
+fn copy(download_path: &Path, library_path: &Path) -> Result<()> {
+    debug!("copying: {:?} -> {:?}", download_path, library_path);
+    fs::copy(download_path, library_path)?;
+    Ok(())
 }
