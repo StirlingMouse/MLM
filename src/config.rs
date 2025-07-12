@@ -218,7 +218,9 @@ pub enum LibraryLinkMethod {
     #[default]
     Hardlink,
     HardlinkOrCopy,
+    HardlinkOrSymlink,
     Copy,
+    Symlink,
 }
 
 fn default_host() -> String {

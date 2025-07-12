@@ -340,6 +340,11 @@ async fn link_torrent(
                     .or_else(|_| copy(&download_path, &library_path))?
             }
             LibraryLinkMethod::Copy => copy(&download_path, &library_path)?,
+            LibraryLinkMethod::HardlinkOrSymlink => {
+                hard_link(&download_path, &library_path, &file_path)
+                    .or_else(|_| symlink(&download_path, &library_path))?
+            }
+            LibraryLinkMethod::Symlink => symlink(&download_path, &library_path)?,
         };
     }
     library_files.sort();
@@ -481,5 +486,12 @@ fn hard_link(download_path: &Path, library_path: &Path, file_path: &Path) -> Res
 fn copy(download_path: &Path, library_path: &Path) -> Result<()> {
     debug!("copying: {:?} -> {:?}", download_path, library_path);
     fs::copy(download_path, library_path)?;
+    Ok(())
+}
+
+#[instrument(skip_all)]
+fn symlink(download_path: &Path, library_path: &Path) -> Result<()> {
+    debug!("symlinking: {:?} -> {:?}", download_path, library_path);
+    std::os::unix::fs::symlink(download_path, library_path)?;
     Ok(())
 }
