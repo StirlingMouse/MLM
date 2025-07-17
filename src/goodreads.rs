@@ -1,17 +1,20 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use itertools::Itertools;
 use matchr::score;
 use native_db::Database;
 use once_cell::sync::Lazy;
 use quick_xml::de::from_reader;
 use regex::Regex;
 use reqwest::Url;
+use scraper::{Html, Selector};
 use serde::Deserialize;
 use tokio::sync::watch::Sender;
 use tracing::{debug, instrument};
 use tracing::{trace, warn};
 
+use crate::config::GoodreadsList;
 use crate::data::{ListItemTorrent, Torrent, TorrentKey, TorrentStatus};
 use crate::mam::normalize_title;
 use crate::{
@@ -50,17 +53,16 @@ pub async fn run_goodreads_import(
             trace!("Scanning Goodreads list {}", rss.channel.title);
 
             let link: Url = list.url.parse()?;
-            let user_id: u64 = link
+            let user_id = link
                 .path_segments()
                 .iter_mut()
                 .flatten()
                 .next_back()
-                .ok_or(anyhow::Error::msg("Failed to get goodreads user id"))?
-                .parse()?;
+                .ok_or(anyhow::Error::msg("Failed to get goodreads user id"))?;
             let (_, shelf) = link
                 .query_pairs()
                 .find(|(name, _)| name == "shelf")
-                .ok_or(anyhow::Error::msg("Failed to get goodreads shelf"))?;
+                .unwrap_or_default();
             let list_id = format!("{user_id}:{shelf}");
 
             if !list.dry_run {
@@ -81,7 +83,7 @@ pub async fn run_goodreads_import(
                 }
             }
 
-            for item in rss.channel.items.iter() {
+            for item in rss.channel.items.into_iter() {
                 let db_item = match db
                     .r_transaction()?
                     .get()
@@ -112,22 +114,7 @@ pub async fn run_goodreads_import(
                         db_item
                     }
                     None => {
-                        let db_item = ListItem {
-                            guid: (list_id.clone(), item.guid.clone()),
-                            list_id: list_id.clone(),
-                            title: item.title.clone(),
-                            authors: vec![item.author_name.clone()],
-                            series: item.series.iter().cloned().collect(),
-                            cover_url: item.book_large_image_url.clone(),
-                            book_url: None,
-                            isbn: item.isbn.as_ref().and_then(|isbn| isbn.parse().ok()),
-                            prefer_format: list.prefer_format,
-                            allow_audio: list.allow_audio(),
-                            audio_torrent: None,
-                            allow_ebook: list.allow_ebook(),
-                            ebook_torrent: None,
-                            created_at: Timestamp::now(),
-                        };
+                        let db_item = item.as_list_item(&list_id, list);
                         if !list.dry_run {
                             let rw = db.rw_transaction()?;
                             rw.insert(db_item.clone())?;
@@ -137,7 +124,7 @@ pub async fn run_goodreads_import(
                     }
                 };
                 trace!("Searching for book {} from Goodreads list", item.title);
-                search_item(&config, &db, &mam, &list, item, db_item)
+                search_item(&config, &db, &mam, &list, &item, db_item)
                     .await
                     .context("search goodreads book")?;
             }
@@ -291,7 +278,7 @@ fn search_library(
         r.scan()
             .secondary::<Torrent>(TorrentKey::title_search)?
             .start_with(title_search.as_str())?
-            .filter(|t| t.as_ref().is_ok_and(|t| item.matches(&t.meta)))
+            .filter(|t| t.as_ref().is_ok_and(|t| db_item.matches(&t.meta)))
             .collect::<Result<Vec<_>, _>>()
     }?;
 
@@ -346,6 +333,11 @@ fn set_existing(field: &mut Option<ListItemTorrent>, torrent: &Torrent) -> bool 
     true
 }
 
+pub static BAD_CHARATERS: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"['`/?]|\s+[\(\[][^\)\]]+[\)\]]").unwrap());
+
+pub static AND: Lazy<Regex> = Lazy::new(|| Regex::new(r"&|\band\b").unwrap());
+
 #[instrument(skip_all)]
 async fn search_grab(
     config: &Config,
@@ -355,7 +347,14 @@ async fn search_grab(
     grab: &Grab,
 ) -> Result<Vec<(MaMTorrent, TorrentMeta, usize, Cost)>> {
     let (flags_is_hide, flags) = grab.filter.flags.as_search_bitfield();
-    let query = format!("{} {}", item.title, item.author_name);
+    let query = format!(
+        "@title {} @author ({})",
+        AND.replace_all(
+            &BAD_CHARATERS.replace_all(&db_item.title.replace("*", "\"*\""), " "),
+            "(and|&)"
+        ),
+        db_item.authors.iter().map(|a| format!("\"{a}\"")).join("|")
+    );
 
     let mut categories = grab.filter.categories.clone();
     if db_item.audio_torrent.is_some() {
@@ -447,7 +446,14 @@ async fn search_grab(
             let author_score = t
                 .author_info
                 .values()
-                .map(|author| score(&item.author_name, author))
+                .map(|author| {
+                    db_item
+                        .authors
+                        .iter()
+                        .map(|author_name| score(author_name, author))
+                        .max()
+                        .unwrap_or_default()
+                })
                 .max()
                 .unwrap_or_default();
             let series_score = item
@@ -513,26 +519,93 @@ struct Channel {
 struct Item {
     guid: String,
     title: String,
-    author_name: String,
+    author_name: Option<String>,
     series: Option<(String, u64)>,
-    book_large_image_url: String,
+    book_large_image_url: Option<String>,
     // book_description: String,
     isbn: Option<String>,
-    // description: String,
+    description: String,
 }
 
 impl Item {
+    fn as_list_item(&self, list_id: &str, list: &GoodreadsList) -> ListItem {
+        let fragment = Html::parse_fragment(&self.description);
+
+        let cover_url = if let Some(cover) = &self.book_large_image_url {
+            cover.clone()
+        } else {
+            let cover_selector = Selector::parse(".cover img").unwrap();
+            fragment
+                .select(&cover_selector)
+                .next()
+                .and_then(|e| e.attr("src"))
+                .map(|s| s.to_string())
+                .unwrap_or_default()
+        };
+
+        let user_list_selector =
+            Selector::parse("a[href^=\"https://www.goodreads.com/book/show/\"]").unwrap();
+        let group_list_selector = Selector::parse("a[href^=\"/book/show/\"]").unwrap();
+        let book_url = fragment
+            .select(&user_list_selector)
+            .next()
+            .and_then(|e| e.attr("href"))
+            .map(|s| s.to_string())
+            .or_else(|| {
+                fragment
+                    .select(&group_list_selector)
+                    .next()
+                    .and_then(|e| e.attr("href"))
+                    .map(|url| format!("https://www.goodreads.com{url}"))
+            });
+
+        let authors = if let Some(author_name) = &self.author_name {
+            vec![author_name.clone().replace('.', " ")]
+        } else {
+            let fragment = Html::parse_fragment(&self.description);
+            let author_selector =
+                Selector::parse("[itemprop=\"author\"] [itemprop=\"name\"]").unwrap();
+            fragment
+                .select(&author_selector)
+                .map(|e| e.text().collect::<String>().replace('.', " "))
+                .collect()
+        };
+
+        ListItem {
+            guid: (list_id.to_owned(), self.guid.clone()),
+            list_id: list_id.to_owned(),
+            title: self.title.clone(),
+            authors,
+            series: self.series.iter().cloned().collect(),
+            cover_url,
+            book_url,
+            isbn: self.isbn.as_ref().and_then(|isbn| isbn.parse().ok()),
+            prefer_format: list.prefer_format,
+            allow_audio: list.allow_audio(),
+            audio_torrent: None,
+            allow_ebook: list.allow_ebook(),
+            ebook_torrent: None,
+            created_at: Timestamp::now(),
+        }
+    }
+}
+
+impl ListItem {
     fn matches(&self, meta: &TorrentMeta) -> bool {
         if score(&self.title, &meta.title) < 80 {
             return false;
         }
 
-        let author = self.author_name.to_lowercase().replace('.', " ");
+        let authors = self
+            .authors
+            .iter()
+            .map(|a| a.to_lowercase())
+            .collect::<Vec<_>>();
 
         meta.authors
             .iter()
             .map(|a| a.to_lowercase())
-            .any(|a| a == author)
+            .any(|a| authors.iter().any(|b| score(b, &a) > 90))
     }
 }
 
