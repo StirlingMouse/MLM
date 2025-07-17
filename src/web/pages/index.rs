@@ -1,10 +1,20 @@
 use std::sync::Arc;
 
 use askama::Template;
-use axum::{extract::State, response::Html};
+use axum::{
+    extract::{OriginalUri, State},
+    response::{Html, Redirect},
+};
+use axum_extra::extract::Form;
+use serde::Deserialize;
 use tokio::sync::Mutex;
 
-use crate::{data::Timestamp, mam::MaM, stats::Stats, web::AppError, web::time};
+use crate::{
+    data::Timestamp,
+    mam::MaM,
+    stats::{Stats, Triggers},
+    web::{AppError, time},
+};
 
 pub async fn index_page(
     State((stats, mam)): State<(Arc<Mutex<Stats>>, Arc<MaM<'static>>)>,
@@ -41,6 +51,32 @@ pub async fn index_page(
     Ok::<_, AppError>(Html(template.to_string()))
 }
 
+pub async fn index_page_post(
+    State(triggers): State<Triggers>,
+    uri: OriginalUri,
+    Form(form): Form<IndexPageForm>,
+) -> Result<Redirect, AppError> {
+    match form.action.as_str() {
+        "run_linker" => {
+            triggers.linker_tx.send(())?;
+        }
+        "run_search" => {
+            triggers.search_tx.send(())?;
+        }
+        "run_goodreads" => {
+            triggers.goodreads_tx.send(())?;
+        }
+        "run_downloader" => {
+            triggers.downloader_tx.send(())?;
+        }
+        action => {
+            eprintln!("unknown action: {action}");
+        }
+    }
+
+    Ok(Redirect::to(&uri.to_string()))
+}
+
 #[derive(Template)]
 #[template(path = "pages/index.html")]
 struct IndexPageTemplate {
@@ -55,4 +91,9 @@ struct IndexPageTemplate {
     goodreads_result: Option<Result<(), String>>,
     downloader_run_at: Option<Timestamp>,
     downloader_result: Option<Result<(), String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct IndexPageForm {
+    action: String,
 }

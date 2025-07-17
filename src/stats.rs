@@ -1,5 +1,6 @@
 use anyhow::Result;
 use time::OffsetDateTime;
+use tokio::sync::watch::Sender;
 
 #[derive(Default)]
 pub struct Stats {
@@ -13,4 +14,12 @@ pub struct Stats {
     pub goodreads_result: Option<Result<()>>,
     pub downloader_run_at: Option<OffsetDateTime>,
     pub downloader_result: Option<Result<()>>,
+}
+
+#[derive(Clone)]
+pub struct Triggers {
+    pub search_tx: Sender<()>,
+    pub linker_tx: Sender<()>,
+    pub goodreads_tx: Sender<()>,
+    pub downloader_tx: Sender<()>,
 }

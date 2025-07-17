@@ -25,9 +25,10 @@ use figment::{
     providers::{Env, Format, Toml},
 };
 use goodreads::run_goodreads_import;
-use stats::Stats;
+use stats::{Stats, Triggers};
 use time::OffsetDateTime;
 use tokio::{
+    select,
     sync::{Mutex, watch},
     time::sleep,
 };
@@ -60,7 +61,10 @@ async fn main() -> Result<()> {
     let mam = Arc::new(mam);
     let stats: Arc<Mutex<Stats>> = Default::default();
 
-    let (autograb_tx, mut autograb_rx) = watch::channel(());
+    let (search_tx, mut search_rx) = watch::channel(());
+    let (linker_tx, mut linker_rx) = watch::channel(());
+    let (goodreads_tx, mut goodreads_rx) = watch::channel(());
+    let (downloader_tx, mut downloader_rx) = watch::channel(());
 
     if let Some(qbit_conf) = config.qbittorrent.first() {
         let config = config.clone();
@@ -72,7 +76,7 @@ async fn main() -> Result<()> {
             .map_err(QbitError)?;
         tokio::spawn(async move {
             loop {
-                if autograb_rx.changed().await.is_err() {
+                if downloader_rx.changed().await.is_err() {
                     break;
                 }
                 {
@@ -99,7 +103,7 @@ async fn main() -> Result<()> {
         let config = config.clone();
         let db = db.clone();
         let mam = mam.clone();
-        let autograb_tx = autograb_tx.clone();
+        let downloader_tx = downloader_tx.clone();
         let stats = stats.clone();
         tokio::spawn(async move {
             loop {
@@ -108,10 +112,14 @@ async fn main() -> Result<()> {
                     stats.autograbber_run_at = Some(OffsetDateTime::now_utc());
                     stats.autograbber_result = None;
                 }
-                let result =
-                    run_autograbbers(config.clone(), db.clone(), mam.clone(), autograb_tx.clone())
-                        .await
-                        .context("autograbbers");
+                let result = run_autograbbers(
+                    config.clone(),
+                    db.clone(),
+                    mam.clone(),
+                    downloader_tx.clone(),
+                )
+                .await
+                .context("autograbbers");
                 if let Err(err) = &result {
                     error!("Error running autograbbers: {err:?}");
                 }
@@ -119,7 +127,16 @@ async fn main() -> Result<()> {
                     let mut stats = stats.lock().await;
                     stats.autograbber_result = Some(result);
                 }
-                sleep(Duration::from_secs(60 * config.search_interval)).await;
+                select! {
+                    () = sleep(Duration::from_secs(60 * config.search_interval)) => {},
+                    result = search_rx.changed() => {
+                        if let Err(err) = result {
+                            error!("Error listening on search_rx: {err:?}");
+                            let mut stats = stats.lock().await;
+                            stats.autograbber_result = Some(Err(err.into()));
+                        }
+                    },
+                }
             }
         });
     }
@@ -129,6 +146,7 @@ async fn main() -> Result<()> {
         let db = db.clone();
         let mam = mam.clone();
         let stats = stats.clone();
+        let downloader_tx = downloader_tx.clone();
         tokio::spawn(async move {
             loop {
                 {
@@ -140,7 +158,7 @@ async fn main() -> Result<()> {
                     config.clone(),
                     db.clone(),
                     mam.clone(),
-                    autograb_tx.clone(),
+                    downloader_tx.clone(),
                 )
                 .await
                 .context("goodreads_import");
@@ -151,7 +169,16 @@ async fn main() -> Result<()> {
                     let mut stats = stats.lock().await;
                     stats.goodreads_result = Some(result);
                 }
-                sleep(Duration::from_secs(60 * config.goodreads_interval)).await;
+                select! {
+                    () = sleep(Duration::from_secs(60 * config.goodreads_interval)) => {},
+                    result = goodreads_rx.changed() => {
+                        if let Err(err) = result {
+                            error!("Error listening on goodreads_rx: {err:?}");
+                            let mut stats = stats.lock().await;
+                            stats.goodreads_result = Some(Err(err.into()));
+                        }
+                    },
+                }
             }
         });
     }
@@ -162,6 +189,7 @@ async fn main() -> Result<()> {
             let db = db.clone();
             let mam = mam.clone();
             let stats = stats.clone();
+            let mut linker_rx = linker_rx.clone();
             tokio::spawn(async move {
                 let qbit = match qbit::Api::login(
                     &qbit_conf.url,
@@ -210,13 +238,29 @@ async fn main() -> Result<()> {
                         let mut stats = stats.lock().await;
                         stats.cleaner_result = Some(result);
                     }
-                    sleep(Duration::from_secs(60 * config.link_interval)).await;
+                    select! {
+                        () = sleep(Duration::from_secs(60 * config.link_interval)) => {},
+                        result = linker_rx.changed() => {
+                            if let Err(err) = result {
+                                error!("Error listening on link_rx: {err:?}");
+                                let mut stats = stats.lock().await;
+                                stats.linker_result = Some(Err(err.into()));
+                            }
+                        },
+                    }
                 }
             });
         }
     }
 
-    start_webserver(config, db, stats, mam).await?;
+    let triggers = Triggers {
+        search_tx,
+        linker_tx,
+        goodreads_tx,
+        downloader_tx,
+    };
+
+    start_webserver(config, db, stats, mam, triggers).await?;
 
     Ok(())
 }

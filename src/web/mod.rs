@@ -20,7 +20,7 @@ use pages::{
     duplicate::duplicate_page,
     errors::errors_page,
     events::event_page,
-    index::index_page,
+    index::{index_page, index_page_post},
     list::list_page,
     lists::lists_page,
     selected::selected_page,
@@ -33,7 +33,7 @@ use time::{
     Date, UtcOffset,
     format_description::{self, OwnedFormatItem},
 };
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, watch::error::SendError};
 use tower::ServiceBuilder;
 use tower_http::services::{ServeDir, ServeFile};
 
@@ -42,7 +42,8 @@ use crate::{
     data::Timestamp,
     mam::{DATE_FORMAT, MaM},
     mam_enums::{AudiobookCategory, EbookCategory},
-    stats::Stats,
+    qbittorrent::QbitError,
+    stats::{Stats, Triggers},
 };
 
 pub async fn start_webserver(
@@ -50,9 +51,11 @@ pub async fn start_webserver(
     db: Arc<Database<'static>>,
     stats: Arc<Mutex<Stats>>,
     mam: Arc<MaM<'static>>,
+    triggers: Triggers,
 ) -> Result<()> {
     let app = Router::new()
         .route("/", get(index_page).with_state((stats, mam.clone())))
+        .route("/", post(index_page_post).with_state(triggers))
         .route("/torrents", get(torrents_page).with_state(db.clone()))
         .route(
             "/torrents",
@@ -193,6 +196,10 @@ enum AppError {
     Db(#[from] native_db::db_type::Error),
     #[error("Could not render template: {0}")]
     Render(#[from] askama::Error),
+    #[error("Qbit Error: {0:?}")]
+    QbitError(#[from] QbitError),
+    #[error("Send Error: {0:?}")]
+    SendError(#[from] SendError<()>),
     #[error("Error: {0:?}")]
     Generic(#[from] anyhow::Error),
     #[error("Page Not Found")]

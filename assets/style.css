@@ -48,7 +48,9 @@ nav > a {
 .actions {
         display: none;
         gap: 8px;
+}
 
+form {
         button {
                 appearance: none;
                 padding: 4px 8px;
