@@ -1,0 +1,56 @@
+name: Windows
+
+on:
+  push:
+    branches: [ "main" ]
+    # Publish semver tags as releases.
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-upload:
+    name: Build and upload
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        include:
+          - build: windows-gnu
+            os: windows-latest
+            target: x86_64-pc-windows-gnu
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Get the release version from the tag
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --verbose --release --target ${{ matrix.target }}
+
+      - name: Rename files
+        shell: bash
+        run: |
+          binary_name="mlm"
+          asset="$binary_name-${{ env.VERSION }}-${{ matrix.target }}.exe"
+          echo "ASSET=$asset" >> $GITHUB_ENV
+          mv "target/${{ matrix.target }}/release/$binary_name.exe" "$asset"
+
+      - name: Upload the binaries
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ env.ASSET }}
