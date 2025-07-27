@@ -12,6 +12,7 @@ mod mam;
 mod mam_enums;
 mod qbittorrent;
 mod stats;
+mod tray;
 mod web;
 
 use std::{env, sync::Arc, time::Duration};
@@ -33,6 +34,7 @@ use tokio::{
     time::sleep,
 };
 use tracing::{error, info};
+use tray::start_tray_icon;
 use web::start_webserver;
 
 use crate::{config::Config, linker::link_torrents_to_library, mam::MaM, qbittorrent::QbitError};
@@ -44,7 +46,7 @@ async fn main() -> Result<()> {
     let config_file = env::var("CONFIG_FILE").unwrap_or("config.toml".to_owned());
     let database_file = env::var("DB_FILE").unwrap_or("data.db".to_owned());
     let config: Config = Figment::new()
-        .merge(Toml::file(config_file))
+        .merge(Toml::file(&config_file))
         .merge(Env::prefixed("MLM_"))
         .extract()?;
     let config = Arc::new(config);
@@ -61,8 +63,11 @@ async fn main() -> Result<()> {
     let mam = Arc::new(mam);
     let stats: Arc<Mutex<Stats>> = Default::default();
 
+    #[cfg(target_family = "windows")]
+    let _tray = start_tray_icon(config_file, config.clone())?;
+
     let (search_tx, mut search_rx) = watch::channel(());
-    let (linker_tx, mut linker_rx) = watch::channel(());
+    let (linker_tx, linker_rx) = watch::channel(());
     let (goodreads_tx, mut goodreads_rx) = watch::channel(());
     let (downloader_tx, mut downloader_rx) = watch::channel(());
 
