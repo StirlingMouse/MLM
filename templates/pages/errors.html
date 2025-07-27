@@ -32,5 +32,8 @@
   {% endmatch %}
   </div>
 {% endfor %}
+{% if errors.is_empty() %}
+<p><i>There are currently no errors</i>
+{% endif %}
 </div>
 {% endblock %}

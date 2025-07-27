@@ -11,4 +11,7 @@
     <a href="/lists/{{ list.id }}"><h2>{{ list.title }}</h2></a>
   </div>
 {% endfor %}
+{% if lists.is_empty() %}
+<p><i>You have no Goodreads lists</i>
+{% endif %}
 {% endblock %}

@@ -110,6 +110,9 @@
   <div>{{ self::time(replacement.created_at) }}</div>
   <div><a href="https://www.myanonamouse.net/t/{{ replacement.meta.mam_id }}" target=_blank>MaM</a></div>
 {% endfor %}
+{% if torrents.is_empty() %}
+<p><i>You have no replaced torrents</i>
+{% endif %}
 </div>
 </form>
 {{ paging | safe }}

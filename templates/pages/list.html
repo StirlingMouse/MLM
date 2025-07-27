@@ -68,4 +68,7 @@
     </div>
   </div>
 {% endfor %}
+{% if items.is_empty() %}
+<p><i>The list is empty</i>
+{% endif %}
 {% endblock %}

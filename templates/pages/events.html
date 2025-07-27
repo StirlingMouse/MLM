@@ -84,5 +84,8 @@
   {% endmatch %}
   </div>
 {% endfor %}
+{% if events.is_empty() %}
+<p><i>No events yet</i>
+{% endif %}
 </div>
 {% endblock %}

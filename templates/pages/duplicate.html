@@ -32,5 +32,8 @@
   <div>{{ self::time(torrent.created_at) }}</div>
   <div><a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a></div>
 {% endfor %}
+{% if torrents.is_empty() %}
+<p><i>There are currently no duplicate torrents</i>
+{% endif %}
 </div>
 {% endblock %}
