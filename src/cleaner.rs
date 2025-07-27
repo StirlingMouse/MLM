@@ -1,14 +1,11 @@
-use std::{fs, io::ErrorKind, mem, ops::Deref, os::unix::fs::MetadataExt, sync::Arc};
+use std::{fs, io::ErrorKind, mem, ops::Deref, sync::Arc};
 
 use anyhow::Result;
 use native_db::Database;
 use tracing::{debug, info, instrument, trace};
 
 use crate::{
-    config::Config,
-    data::{self, ErroredTorrentId, Event, EventType, Timestamp, Torrent},
-    logging::{TorrentMetaError, update_errored_torrent, write_event},
-    qbittorrent::QbitError,
+    config::Config, data::{self, ErroredTorrentId, Event, EventType, Timestamp, Torrent}, linker::file_size, logging::{update_errored_torrent, write_event, TorrentMetaError}, qbittorrent::QbitError
 };
 
 #[instrument(skip_all)]
@@ -93,7 +90,7 @@ async fn process_batch(
                     if let Some(library_path) = &torrent.library_path {
                         for file in &torrent.library_files {
                             let path = library_path.join(file);
-                            size += fs::metadata(path).map_or(0, |s| s.size());
+                            size += fs::metadata(path).map_or(0, |s| file_size(&s));
                         }
                     }
                     (torrent, preference, size)

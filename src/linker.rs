@@ -1,10 +1,13 @@
 use std::{
-    fs::{self, File, create_dir_all},
+    fs::{self, create_dir_all, File, Metadata},
     io::{BufWriter, ErrorKind, Write},
-    os::unix::fs::MetadataExt as _,
     path::{Component, Path, PathBuf},
     sync::Arc,
 };
+#[cfg(target_family = "unix")]
+use std::os::unix::fs::MetadataExt as _;
+#[cfg(target_family = "windows")]
+use std::os::windows::fs::MetadataExt as _;
 
 use anyhow::{Context, Result, bail};
 use file_id::get_file_id;
@@ -471,8 +474,8 @@ fn hard_link(download_path: &Path, library_path: &Path, file_path: &Path) -> Res
                         bail!(
                             "File \"{:?}\" already exists, torrent file size: {}, library file size: {}",
                             file_path,
-                            fs::metadata(download_path).map_or("?".to_string(), |s| Size::from_bytes(s.size()).to_string()),
-                            fs::metadata(library_path).map_or("?".to_string(), |s| Size::from_bytes(s.size()).to_string())
+                            fs::metadata(download_path).map_or("?".to_string(), |s| Size::from_bytes(file_size(&s)).to_string()),
+                            fs::metadata(library_path).map_or("?".to_string(), |s| Size::from_bytes(file_size(&s)).to_string())
                         );
                     }
                 }
@@ -492,6 +495,17 @@ fn copy(download_path: &Path, library_path: &Path) -> Result<()> {
 #[instrument(skip_all)]
 fn symlink(download_path: &Path, library_path: &Path) -> Result<()> {
     debug!("symlinking: {:?} -> {:?}", download_path, library_path);
+    #[cfg(target_family = "unix")]
     std::os::unix::fs::symlink(download_path, library_path)?;
+    #[cfg(target_family = "windows")]
+    bail!("symlink is not supported on Windows");
+    #[allow(unreachable_code)]
     Ok(())
+}
+
+pub fn file_size(m: &Metadata) -> u64 {
+    #[cfg(target_family = "unix")]
+    return m.size();
+    #[cfg(target_family = "windows")]
+    return m.file_size();
 }
