@@ -16,7 +16,7 @@ use axum::{
 use native_db::Database;
 use once_cell::sync::Lazy;
 use pages::{
-    config::config_page,
+    config::{config_page, config_page_post},
     duplicate::duplicate_page,
     errors::errors_page,
     events::event_page,
@@ -71,6 +71,10 @@ pub async fn start_webserver(
         )
         .route("/duplicate", get(duplicate_page).with_state(db.clone()))
         .route("/config", get(config_page).with_state(config.clone()))
+        .route(
+            "/config",
+            post(config_page_post).with_state((config.clone(), db.clone(), mam.clone())),
+        )
         .nest_service(
             "/assets",
             ServiceBuilder::new()

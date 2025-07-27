@@ -1,11 +1,12 @@
 use std::path::PathBuf;
 
+use anyhow::ensure;
 use time::UtcDateTime;
 use tracing::error;
 
 use crate::{
     config::{Cost, Filter, GoodreadsList, Library, LibraryLinkMethod, LibraryTagFilters},
-    data::{Language, Size},
+    data::{Language, MainCat, Size, Torrent},
     mam::{DATE_TIME_FORMAT, MaMTorrent},
     mam_enums::Flags,
 };
@@ -115,6 +116,48 @@ impl Filter {
         }
 
         true
+    }
+
+    pub(crate) fn matches_lib(&self, torrent: &Torrent) -> Result<bool, anyhow::Error> {
+        if let Some(language) = &torrent.meta.language {
+            if !self.languages.is_empty() && !self.languages.contains(language) {
+                return Ok(false);
+            }
+        }
+        if self.categories.audio.as_ref().is_some_and(|c| c.is_empty())
+            && torrent.meta.main_cat == MainCat::Audio
+        {
+            return Ok(false);
+        }
+        if self.categories.ebook.as_ref().is_some_and(|c| c.is_empty())
+            && torrent.meta.main_cat == MainCat::Ebook
+        {
+            return Ok(false);
+        }
+
+        ensure!(self.flags.as_bitfield() == 0, "has flags");
+        ensure!(self.min_size.bytes() == 0, "has min_size");
+        ensure!(self.max_size.bytes() == 0, "has max_size");
+        ensure!(self.exclude_uploader.is_empty(), "has exclude_uploader");
+        ensure!(self.uploaded_after.is_none(), "has uploaded_after");
+        ensure!(self.uploaded_before.is_none(), "has uploaded_before");
+        ensure!(self.min_seeders.is_none(), "has min_seeders");
+        ensure!(self.max_seeders.is_none(), "has max_seeders");
+        ensure!(self.min_leechers.is_none(), "has min_leechers");
+        ensure!(self.max_leechers.is_none(), "has max_leechers");
+        ensure!(self.min_snatched.is_none(), "has min_snatched");
+        ensure!(self.max_snatched.is_none(), "has max_snatched");
+
+        ensure!(
+            self.categories.audio.as_ref().is_none_or(|c| c.is_empty()),
+            "has advanced audio selection"
+        );
+        ensure!(
+            self.categories.ebook.as_ref().is_none_or(|c| c.is_empty()),
+            "has advanced ebook selection"
+        );
+
+        Ok(true)
     }
 }
 

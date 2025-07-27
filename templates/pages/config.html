@@ -59,11 +59,17 @@
 </div>
 {% endfor %}
 
-{% for tag in config.tags %}
+{% for (i, tag) in config.tags.iter().enumerate() %}
 <div class="infoboxes">
   <div class="configbox">
     <div class=row>
       <h3>[[tag]]</h3>
+      {% if show_apply_tags %}
+      <form method=post>
+        <button name=action value=apply data-prompt="Are you sure you want to apply these tags to all existing torrents in all torrent clients?">apply to all</button>
+        <input type=hidden name=tag_filter value={{i}}>
+      </form>
+      {% endif %}
     </div>
     {{ self::filter(tag.filter) }}
     {% if let Some(category) = tag.category %}

@@ -1,27 +1,124 @@
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 use askama::Template;
-use axum::{extract::State, response::Html};
+use axum::{
+    extract::{OriginalUri, Query, State},
+    response::{Html, Redirect},
+};
+use axum_extra::extract::Form;
+use native_db::Database;
 use reqwest::Url;
+use serde::Deserialize;
+use tracing::info;
 
 use crate::{
     config::{Config, Cost, Library, TorrentFilter, Type},
-    mam::DATE_FORMAT,
+    data::Torrent,
+    mam::{DATE_FORMAT, MaM},
     mam_enums::{AudiobookCategory, EbookCategory},
+    qbittorrent::QbitError,
     web::{AppError, filter, yaml_items},
 };
 
 pub async fn config_page(
     State(config): State<Arc<Config>>,
+    Query(query): Query<ConfigPageQuery>,
 ) -> std::result::Result<Html<String>, AppError> {
-    let template = ConfigPageTemplate { config };
+    let template = ConfigPageTemplate {
+        config,
+        show_apply_tags: query.show_apply_tags.unwrap_or_default(),
+    };
     Ok::<_, AppError>(Html(template.to_string()))
+}
+
+pub async fn config_page_post(
+    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, Arc<MaM<'static>>)>,
+    uri: OriginalUri,
+    Form(form): Form<ConfigPageForm>,
+) -> Result<Redirect, AppError> {
+    match form.action.as_str() {
+        "apply" => {
+            let tag_filter = form
+                .tag_filter
+                .ok_or(anyhow::Error::msg("apply requires tag_filter"))?;
+            let tag_filter = config
+                .tags
+                .get(tag_filter)
+                .ok_or(anyhow::Error::msg("invalid tag_filter"))?;
+            let qbit_conf = config
+                .qbittorrent
+                .first()
+                .ok_or(anyhow::Error::msg("requires a qbit config"))?;
+            let qbit = qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
+                .await
+                .map_err(QbitError)?;
+            let torrents = db.r_transaction()?.scan().primary::<Torrent>()?;
+            for torrent in torrents.all()? {
+                let torrent = torrent?;
+                match tag_filter.filter.matches_lib(&torrent) {
+                    Ok(matches) => {
+                        if !matches {
+                            continue;
+                        }
+                    }
+                    Err(err) => {
+                        info!("need to ask mam due to: {err}");
+                        let Some(mam_torrent) = mam.get_torrent_info(&torrent.hash).await? else {
+                            continue;
+                        };
+                        if !tag_filter.filter.matches(&mam_torrent) {
+                            continue;
+                        }
+                    }
+                };
+                if let Some(category) = &tag_filter.category {
+                    qbit.set_category(Some(vec![torrent.hash.as_str()]), category)
+                        .await
+                        .map_err(QbitError)?;
+                    println!(
+                        "set category {} on torrent {}",
+                        category, torrent.meta.title
+                    );
+                }
+
+                if !tag_filter.tags.is_empty() {
+                    qbit.add_tags(
+                        Some(vec![torrent.hash.as_str()]),
+                        tag_filter.tags.iter().map(Deref::deref).collect(),
+                    )
+                    .await
+                    .map_err(QbitError)?;
+                    println!(
+                        "set tags {:?} on torrent {}",
+                        tag_filter.tags, torrent.meta.title
+                    );
+                }
+            }
+        }
+        action => {
+            eprintln!("unknown action: {action}");
+        }
+    }
+
+    Ok(Redirect::to(&uri.to_string()))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ConfigPageQuery {
+    show_apply_tags: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ConfigPageForm {
+    action: String,
+    tag_filter: Option<usize>,
 }
 
 #[derive(Template)]
 #[template(path = "pages/config.html")]
 struct ConfigPageTemplate {
     config: Arc<Config>,
+    show_apply_tags: bool,
 }
 
 impl TorrentFilter {
