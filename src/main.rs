@@ -12,6 +12,7 @@ mod mam;
 mod mam_enums;
 mod qbittorrent;
 mod stats;
+#[cfg(target_family = "windows")]
 mod tray;
 mod web;
 
@@ -34,6 +35,7 @@ use tokio::{
     time::sleep,
 };
 use tracing::{error, info};
+#[cfg(target_family = "windows")]
 use tray::start_tray_icon;
 use web::start_webserver;
 
