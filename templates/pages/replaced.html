@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}MLM - Torrents{% endblock %}
+{% block title %}MLM - Replaced Torrents{% endblock %}
 
 {% block head %}
   <style>
@@ -13,11 +13,10 @@
 {% block content %}
 <form method=post>
 <div class="row">
-  <h1>Torrents</h1>
+  <h1>Replaced Torrents</h1>
   <div class="actions actions_torrent">
     <button name=action value=refresh>refresh metadata</button>
     <button name=action value=refresh-relink>refresh metadata and relink</button>
-    <button name=action value=clean data-prompt="Are you sure you want to clean the selected torrents?">clean torrent</button>
     <button name=action value=remove data-prompt="Are you sure you want to remove the selected torrents?">remove torrent from MLM</button>
   </div>
   <div class="table_options">
@@ -43,16 +42,13 @@
         Filetypes
         <input type=checkbox name=show {% if show.filetypes %}checked{% endif %} value="filetype">
       </label>
-      <label>
-        Path
-        <input type=checkbox name=show {% if show.path %}checked{% endif %} value="path">
-      </label>
     </div>
     <div class="option_group">
       Page size: {{ paging.selector([100, 500, 1000, 5000]) | safe }}
     </div>
   </div>
 </div>
+<p>Torrents that have been unlinked from the library and been replaced with a preferred version</p>
 <div class="TorrentsTable table">
   {{ table_header_all("torrent", "30px") | safe }}
   {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", "84px") | safe }}
@@ -62,11 +58,10 @@
   {{ table_header_if(show.series, Some(TorrentsPageSort::Series), "Series", "1fr") | safe }}
   {{ table_header_if(show.language, Some(TorrentsPageSort::Language), "Language", "100px") | safe }}
   {{ table_header_if(show.filetypes, None, "Filetypes", "100px") | safe }}
-  {{ table_header_if(!show.path, Some(TorrentsPageSort::Linked), "Linked", "80px") | safe }}
-  {{ table_header_if(show.path, Some(TorrentsPageSort::Linked), "Path", "2fr") | safe }}
+  {{ table_header_s(Some(TorrentsPageSort::Replaced), "Replaced", "157px") | safe }}
   {{ table_header_s(Some(TorrentsPageSort::CreatedAt), "Added At", "157px") | safe }}
   {{ table_header_s(None, "", "44px") | safe }}
-{% for torrent in torrents %}
+{% for (torrent, replacement) in torrents %}
   <div><input type=checkbox name=torrent value={{torrent.hash}}></div>
   <div>{{ self::item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) | safe }}</div>
   <div>{{ self::item(TorrentsPageFilter::Title, torrent.meta.title) | safe }}</div>
@@ -85,21 +80,35 @@
   {% if show.filetypes %}
   <div>{{ self::items(TorrentsPageFilter::Filetype, torrent.meta.filetypes) | safe }}</div>
   {% endif %}
-  {% if show.path %}
   <div>
-    {% match torrent.library_path %}
-    {% when Some(path) %}
-      {{ path.to_string_lossy() }}
-    {% when None %}
-    {% endmatch %}
+    {% if let Some((_, replaced_at)) = torrent.replaced_with %}{{ self::time(replaced_at) }}{% endif %}
   </div>
-  {% else %}
-    <div {% if let Some(path) = torrent.library_path %}title="{{ path.to_string_lossy() }}"{% endif %}>
-    {{ self::item(TorrentsPageFilter::Linked, &torrent.library_path.is_some().to_string()) | safe }}
-  </div>
-  {% endif %}
   <div>{{ self::time(torrent.created_at) }}</div>
   <div><a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a></div>
+
+  <div></div>
+  <div>replaced with:</div>
+  <div>{{ self::item(TorrentsPageFilter::Title, replacement.meta.title) | safe }}</div>
+  {% if show.authors %}
+  <div>{{ self::items(TorrentsPageFilter::Author, replacement.meta.authors) | safe }}</div>
+  {% endif %}
+  {% if show.narrators %}
+  <div>{{ self::items(TorrentsPageFilter::Narrator, replacement.meta.narrators) | safe }}</div>
+  {% endif %}
+  {% if show.series %}
+  <div>{{ self::series(TorrentsPageFilter::Series, replacement.meta.series) | safe }}</div>
+  {% endif %}
+  {% if show.language %}
+  <div>{{ self::item(TorrentsPageFilter::Language, replacement.meta.language.map(Language::to_str).unwrap_or_default()) | safe }}</div>
+  {% endif %}
+  {% if show.filetypes %}
+  <div>{{ self::items(TorrentsPageFilter::Filetype, replacement.meta.filetypes) | safe }}</div>
+  {% endif %}
+  <div>
+    {% if let Some((_, replaced_at)) = replacement.replaced_with %}{{ self::time(replaced_at) }}{% endif %}
+  </div>
+  <div>{{ self::time(replacement.created_at) }}</div>
+  <div><a href="https://www.myanonamouse.net/t/{{ replacement.meta.mam_id }}" target=_blank>MaM</a></div>
 {% endfor %}
 </div>
 </form>
@@ -107,7 +116,7 @@
 <style>
   .TorrentsTable {
     display: grid;
-    {{self::table_styles(*((self.cols.borrow().len()) as u64)) | safe}}
+    {{self::table_styles_rows(*((self.cols.borrow().len()) as u64), 2) | safe}}
     grid-template-columns: {{ self.cols.borrow().join(" ") }};
   }
 </style>

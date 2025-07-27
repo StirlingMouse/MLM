@@ -23,6 +23,7 @@ use pages::{
     index::{index_page, index_page_post},
     list::list_page,
     lists::lists_page,
+    replaced::{replaced_torrents_page, replaced_torrents_page_post},
     selected::selected_page,
     torrents::{torrents_page, torrents_page_post},
 };
@@ -68,6 +69,14 @@ pub async fn start_webserver(
         .route(
             "/selected",
             get(selected_page).with_state((config.clone(), db.clone(), mam.clone())),
+        )
+        .route(
+            "/replaced",
+            get(replaced_torrents_page).with_state(db.clone()),
+        )
+        .route(
+            "/replaced",
+            post(replaced_torrents_page_post).with_state((config.clone(), db.clone(), mam.clone())),
         )
         .route("/duplicate", get(duplicate_page).with_state(db.clone()))
         .route("/config", get(config_page).with_state(config.clone()))

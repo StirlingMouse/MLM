@@ -11,7 +11,6 @@ use native_db::Database;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    cleaner::clean_torrent,
     config::Config,
     data::{Language, Torrent, TorrentKey},
     linker::{refresh_metadata, refresh_metadata_relink},
@@ -20,13 +19,13 @@ use crate::{
         AppError, series,
         tables::{
             HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable, item, items,
-            table_styles,
+            table_styles_rows,
         },
         time,
     },
 };
 
-pub async fn torrents_page(
+pub async fn replaced_torrents_page(
     State(db): State<Arc<Database<'static>>>,
     Query(sort): Query<SortOn<TorrentsPageSort>>,
     Query(filter): Query<Vec<(TorrentsPageFilter, String)>>,
@@ -37,14 +36,14 @@ pub async fn torrents_page(
         .r_transaction()?
         .scan()
         .secondary::<Torrent>(TorrentKey::created_at)?;
-    let mut torrents = torrents
+    let mut replaced_torrents = torrents
         .all()?
         .rev()
         .filter(|t| {
             let Ok(t) = t else {
                 return true;
             };
-            if t.replaced_with.is_some() {
+            if t.replaced_with.is_none() {
                 return false;
             }
             for (field, value) in filter.iter() {
@@ -75,10 +74,10 @@ pub async fn torrents_page(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let paging = paging.default_page_size(500, torrents.len());
+    let paging = paging.default_page_size(500, replaced_torrents.len());
 
     if let Some(sort_by) = &sort.sort_by {
-        torrents.sort_by(|a, b| {
+        replaced_torrents.sort_by(|a, b| {
             let ord = match sort_by {
                 TorrentsPageSort::Kind => a.meta.main_cat.cmp(&b.meta.main_cat),
                 TorrentsPageSort::Title => a.meta.title.cmp(&b.meta.title),
@@ -87,20 +86,36 @@ pub async fn torrents_page(
                 TorrentsPageSort::Series => a.meta.series.cmp(&b.meta.series),
                 TorrentsPageSort::Language => a.meta.language.cmp(&b.meta.language),
                 TorrentsPageSort::Linked => a.library_path.cmp(&b.library_path),
+                TorrentsPageSort::Replaced => a
+                    .replaced_with
+                    .as_ref()
+                    .map(|r| r.1)
+                    .cmp(&b.replaced_with.as_ref().map(|r| r.1)),
                 TorrentsPageSort::CreatedAt => a.created_at.cmp(&b.created_at),
             };
             if sort.asc { ord.reverse() } else { ord }
         });
     }
     if let Some(paging) = &paging {
-        torrents = torrents
+        replaced_torrents = replaced_torrents
             .into_iter()
             .skip(paging.from)
             .take(paging.page_size)
             .collect();
     }
 
-    let template = TorrentsPageTemplate {
+    let mut torrents = vec![];
+    for torrent in replaced_torrents {
+        let Some((with, _)) = &torrent.replaced_with else {
+            continue;
+        };
+        let Some(replacement) = db.r_transaction()?.get().primary(with.clone())? else {
+            continue;
+        };
+        torrents.push((torrent, replacement));
+    }
+
+    let template = ReplacedTorrentsPageTemplate {
         paging: paging.unwrap_or_default(),
         sort,
         show: show.show.unwrap_or_default(),
@@ -110,20 +125,12 @@ pub async fn torrents_page(
     Ok::<_, AppError>(Html(template.to_string()))
 }
 
-pub async fn torrents_page_post(
+pub async fn replaced_torrents_page_post(
     State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, Arc<MaM<'static>>)>,
     uri: OriginalUri,
     Form(form): Form<TorrentsPageForm>,
 ) -> Result<Redirect, AppError> {
     match form.action.as_str() {
-        "clean" => {
-            for torrent in form.torrents {
-                let Some(torrent) = db.r_transaction()?.get().primary(torrent)? else {
-                    return Err(anyhow::Error::msg("Could not find torrent").into());
-                };
-                clean_torrent(&config, &db, torrent).await?;
-            }
-        }
         "refresh" => {
             for torrent in form.torrents {
                 refresh_metadata(&db, &mam, torrent).await?;
@@ -160,13 +167,13 @@ pub struct TorrentsPageForm {
 }
 
 #[derive(Template)]
-#[template(path = "pages/torrents.html")]
-struct TorrentsPageTemplate {
+#[template(path = "pages/replaced.html")]
+struct ReplacedTorrentsPageTemplate {
     paging: Pagination,
     sort: SortOn<TorrentsPageSort>,
     show: TorrentsPageColumns,
     cols: RefCell<Vec<String>>,
-    torrents: Vec<Torrent>,
+    torrents: Vec<(Torrent, Torrent)>,
 }
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -179,6 +186,7 @@ pub enum TorrentsPageSort {
     Series,
     Language,
     Linked,
+    Replaced,
     CreatedAt,
 }
 
@@ -264,14 +272,14 @@ impl TryFrom<String> for TorrentsPageColumns {
     }
 }
 
-impl Sortable for TorrentsPageTemplate {
+impl Sortable for ReplacedTorrentsPageTemplate {
     type SortKey = TorrentsPageSort;
 
     fn get_current_sort(&self) -> SortOn<Self::SortKey> {
         self.sort
     }
 }
-impl HidableColumns for TorrentsPageTemplate {
+impl HidableColumns for ReplacedTorrentsPageTemplate {
     fn add_column(&self, size: &str) {
         self.cols.borrow_mut().push(size.to_owned());
     }

@@ -5,5 +5,6 @@ pub mod events;
 pub mod index;
 pub mod list;
 pub mod lists;
+pub mod replaced;
 pub mod selected;
 pub mod torrents;

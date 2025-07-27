@@ -263,11 +263,19 @@ impl<T: Key> TableHeader<T> {
 }
 
 pub fn table_styles(cols: u64) -> String {
+    table_styles_rows(cols, 1)
+}
+pub fn table_styles_rows(cols: u64, rows: u64) -> String {
     let mut styles = format!("grid-template-columns: repeat({cols}, auto);");
 
-    for i in 1..=cols {
-        styles.push_str(&format!("& > div:nth-child({}n+{})", cols * 2, cols + i));
-        if i < cols {
+    let grid = cols * rows;
+    for i in 1..=grid {
+        styles.push_str(&format!(
+            "& > div:nth-child({}n+{})",
+            grid * 2,
+            grid + i + cols
+        ));
+        if i < grid {
             styles.push(',');
         }
     }
