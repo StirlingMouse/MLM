@@ -1411,7 +1411,6 @@ dependencies = [
  "unidecode",
  "urlencoding",
  "uuid",
- "windows-services",
 ]
 
 [[package]]
@@ -3191,15 +3190,6 @@ name = "windows-result"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56f42bd332cc6c8eac5af113fc0c1fd6a8fd2aa08a0119358686e5160d0586c6"
-dependencies = [
- "windows-link",
-]
-
-[[package]]
-name = "windows-services"
-version = "0.24.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9089524f2581700a26ab666b2594f4dd9774e588788b064eb05ae09e798c41f7"
 dependencies = [
  "windows-link",
 ]

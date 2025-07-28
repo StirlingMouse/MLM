@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 mod autograbber;
 mod cleaner;
 mod config;
@@ -30,7 +32,6 @@ use goodreads::run_goodreads_import;
 use stats::{Stats, Triggers};
 use time::OffsetDateTime;
 use tokio::{
-    runtime::Runtime,
     select,
     sync::{Mutex, watch},
     time::sleep,
@@ -40,38 +41,8 @@ use web::start_webserver;
 
 use crate::{config::Config, linker::link_torrents_to_library, mam::MaM, qbittorrent::QbitError};
 
-#[cfg(target_family = "windows")]
-fn main() -> Result<()> {
-    use windows_services::Command;
-
-    windows_services::Service::new()
-        // .can_stop()
-        .run(|command| match command {
-            Command::Start => {
-                if let Err(err) = windows_main() {
-                    error!("App error: {err}");
-                }
-            }
-            _ => unimplemented!(),
-        });
-    Ok(())
-}
-
-#[cfg(target_family = "windows")]
-fn windows_main() -> Result<()> {
-    let rt = Runtime::new()?;
-
-    rt.block_on(app_main())
-}
-
-#[cfg(not(target_family = "windows"))]
-fn main() -> Result<()> {
-    let rt = Runtime::new()?;
-
-    rt.block_on(app_main())
-}
-
-async fn app_main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let config_file = env::var("CONFIG_FILE").unwrap_or("config.toml".to_owned());
