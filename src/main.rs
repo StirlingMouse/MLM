@@ -30,19 +30,48 @@ use goodreads::run_goodreads_import;
 use stats::{Stats, Triggers};
 use time::OffsetDateTime;
 use tokio::{
+    runtime::Runtime,
     select,
     sync::{Mutex, watch},
     time::sleep,
 };
 use tracing::{error, info};
-#[cfg(target_family = "windows")]
-use tray::start_tray_icon;
 use web::start_webserver;
 
 use crate::{config::Config, linker::link_torrents_to_library, mam::MaM, qbittorrent::QbitError};
 
-#[tokio::main]
-async fn main() -> Result<()> {
+#[cfg(target_family = "windows")]
+fn main() -> Result<()> {
+    use windows_services::Command;
+
+    windows_services::Service::new()
+        // .can_stop()
+        .run(|command| match command {
+            Command::Start => {
+                if let Err(err) = windows_main() {
+                    error!("App error: {err}");
+                }
+            }
+            _ => unimplemented!(),
+        });
+    Ok(())
+}
+
+#[cfg(target_family = "windows")]
+fn windows_main() -> Result<()> {
+    let rt = Runtime::new()?;
+
+    rt.block_on(app_main())
+}
+
+#[cfg(not(target_family = "windows"))]
+fn main() -> Result<()> {
+    let rt = Runtime::new()?;
+
+    rt.block_on(app_main())
+}
+
+async fn app_main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let config_file = env::var("CONFIG_FILE").unwrap_or("config.toml".to_owned());
@@ -61,12 +90,12 @@ async fn main() -> Result<()> {
     // return Ok(());
     let db = Arc::new(db);
 
+    #[cfg(target_family = "windows")]
+    let _tray = tray::start_tray_icon(config_file, config.clone())?;
+
     let mam = MaM::new(&config, db.clone()).await?;
     let mam = Arc::new(mam);
     let stats: Arc<Mutex<Stats>> = Default::default();
-
-    #[cfg(target_family = "windows")]
-    let _tray = start_tray_icon(config_file, config.clone())?;
 
     let (search_tx, mut search_rx) = watch::channel(());
     let (linker_tx, linker_rx) = watch::channel(());
