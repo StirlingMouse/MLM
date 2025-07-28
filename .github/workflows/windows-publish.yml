@@ -48,7 +48,13 @@ jobs:
           echo "ASSET=$asset" >> $GITHUB_ENV
           mv "target/${{ matrix.target }}/release/$binary_name.exe" "$asset"
 
-      - name: Upload the binaries
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ASSET }} 
+          path: ${{ env.ASSET }} 
+
+      - name: Create release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v1
         with:
