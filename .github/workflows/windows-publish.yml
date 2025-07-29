@@ -2,7 +2,7 @@ name: Windows
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "windows" ]
     # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
   pull_request:
@@ -34,19 +34,29 @@ jobs:
           perl-version: "5.32"
           distribution: strawberry
 
-      - name: Build
+      # - name: Build
+      #   if: github.ref_type != 'tag'
+      #   run: |
+      #     cargo build --release
+
+      - name: Create Installer
+        # if: github.ref_type == 'tag'
         run: |
-          cargo build --release --target ${{ matrix.target }}
+          cargo install cargo-packager
+          cargo packager --release
 
       - name: Prepare files
         shell: bash
         run: |
+          ls -al target
+          ls -al target/*
+          ls -al target/*/*
           binary_name="mlm"
-          version="${GITHUB_REF#refs/tags/}"
+          version="${GITHUB_REF#refs/tags/v}"
           version="${version#refs/heads/}"
           asset="$binary_name-$version.exe"
           echo "ASSET=$asset" >> $GITHUB_ENV
-          mv "target/${{ matrix.target }}/release/$binary_name.exe" "$asset"
+          mv "target/release/$binary_name.exe" "$asset"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -54,16 +64,15 @@ jobs:
           name: ${{ env.ASSET }} 
           path: ${{ env.ASSET }} 
 
-      - name: Create Installer
-        if: github.ref_type == 'tag'
+      - name: Prepare Installer
+        # if: github.ref_type == 'tag'
         shell: bash
         run: |
-          cargo install cargo-packager
-          cargo packager --release
-          version="${GITHUB_REF#refs/tags/}"
-          asset="mlm_$version_x64-setup.exe"
+          # version="${GITHUB_REF#refs/tags/v}"
+          version="0.1.0"
+          asset="mlm_${version}_x64-setup.exe"
           echo "ASSET=$asset" >> $GITHUB_ENV
-          mv "target/${{ matrix.target }}/release/$asset" "$asset"
+          mv "target/release/$asset" "$asset"
 
       - name: Create release
         if: github.ref_type == 'tag'
