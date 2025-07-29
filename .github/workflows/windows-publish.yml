@@ -8,6 +8,9 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: write
+
 jobs:
   build-and-upload:
     name: Build and upload
@@ -34,13 +37,7 @@ jobs:
           perl-version: "5.32"
           distribution: strawberry
 
-      # - name: Build
-      #   if: github.ref_type != 'tag'
-      #   run: |
-      #     cargo build --release
-
-      - name: Create Installer
-        # if: github.ref_type == 'tag'
+      - name: Build
         run: |
           cargo install cargo-packager
           cargo packager --release
@@ -54,29 +51,28 @@ jobs:
           binary_name="mlm"
           version="${GITHUB_REF#refs/tags/v}"
           version="${version#refs/heads/}"
-          asset="$binary_name-$version.exe"
-          echo "ASSET=$asset" >> $GITHUB_ENV
-          mv "target/release/$binary_name.exe" "$asset"
+          app="$binary_name-$version.exe"
+          installer="$binary_name-$version-x64-setup.exe"
+          echo "APP=$app" >> $GITHUB_ENV
+          echo "INSTALLER=$installer" >> $GITHUB_ENV
+          mv "target/release/${binary_name}_"*"-setup.exe" "$installer"
+          mv "target/release/$binary_name.exe" "$app"
 
-      - name: Upload artifacts
+      - name: Upload app
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ASSET }} 
-          path: ${{ env.ASSET }} 
+          name: ${{ env.APP }} 
+          path: ${{ env.APP }} 
 
-      - name: Prepare Installer
-        # if: github.ref_type == 'tag'
-        shell: bash
-        run: |
-          # version="${GITHUB_REF#refs/tags/v}"
-          version="0.1.0"
-          asset="mlm_${version}_x64-setup.exe"
-          echo "ASSET=$asset" >> $GITHUB_ENV
-          mv "target/release/$asset" "$asset"
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.INSTALLER }} 
+          path: ${{ env.INSTALLER }} 
 
       - name: Create release
         if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
-            ${{ env.ASSET }}
+            ${{ env.INSTALLER }}
