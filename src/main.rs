@@ -189,34 +189,55 @@ async fn app_main() -> Result<()> {
         MaM::new(&config, db.clone()).await.map(Arc::new)
     };
     if let Ok(mam) = &mam {
-        if let Some(qbit_conf) = config.qbittorrent.first() {
+        {
             let config = config.clone();
             let db = db.clone();
             let mam = mam.clone();
             let stats = stats.clone();
-            let qbit = qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
-                .await
-                .map_err(QbitError)?;
             tokio::spawn(async move {
-                loop {
-                    if downloader_rx.changed().await.is_err() {
-                        break;
-                    }
-                    {
-                        let mut stats = stats.lock().await;
-                        stats.downloader_run_at = Some(OffsetDateTime::now_utc());
-                        stats.downloader_result = None;
-                    }
-                    let result = grab_selected_torrents(&config, &db, &qbit, &mam)
-                        .await
-                        .context("grab_selected_torrents");
+                if let Some(qbit_conf) = config.qbittorrent.first() {
+                    let mut qbit: Option<qbit::Api> = None;
+                    loop {
+                        if downloader_rx.changed().await.is_err() {
+                            break;
+                        }
+                        if qbit.is_none() {
+                            match qbit::Api::login(
+                                &qbit_conf.url,
+                                &qbit_conf.username,
+                                &qbit_conf.password,
+                            )
+                            .await
+                            .map_err(QbitError)
+                            {
+                                Ok(q) => qbit = Some(q),
+                                Err(err) => {
+                                    error!("Error logging in to qbit {}: {err}", qbit_conf.url);
+                                    let mut stats = stats.lock().await;
+                                    stats.downloader_run_at = Some(OffsetDateTime::now_utc());
+                                    stats.downloader_result = Some(Err(err.into()));
+                                }
+                            };
+                        }
+                        let Some(qbit) = &qbit else {
+                            continue;
+                        };
+                        {
+                            let mut stats = stats.lock().await;
+                            stats.downloader_run_at = Some(OffsetDateTime::now_utc());
+                            stats.downloader_result = None;
+                        }
+                        let result = grab_selected_torrents(&config, &db, qbit, &mam)
+                            .await
+                            .context("grab_selected_torrents");
 
-                    if let Err(err) = &result {
-                        error!("Error grabbing selected torrents: {err:?}");
-                    }
-                    {
-                        let mut stats = stats.lock().await;
-                        stats.downloader_result = Some(result);
+                        if let Err(err) = &result {
+                            error!("Error grabbing selected torrents: {err:?}");
+                        }
+                        {
+                            let mut stats = stats.lock().await;
+                            stats.downloader_result = Some(result);
+                        }
                     }
                 }
             });
