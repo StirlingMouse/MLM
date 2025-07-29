@@ -51,11 +51,14 @@ pub async fn start_webserver(
     config: Arc<Config>,
     db: Arc<Database<'static>>,
     stats: Arc<Mutex<Stats>>,
-    mam: Arc<MaM<'static>>,
+    mam: Arc<Result<Arc<MaM<'static>>>>,
     triggers: Triggers,
 ) -> Result<()> {
     let app = Router::new()
-        .route("/", get(index_page).with_state((stats, mam.clone())))
+        .route(
+            "/",
+            get(index_page).with_state((config.clone(), stats, mam.clone())),
+        )
         .route("/", post(index_page_post).with_state(triggers))
         .route("/torrents", get(torrents_page).with_state(db.clone()))
         .route(

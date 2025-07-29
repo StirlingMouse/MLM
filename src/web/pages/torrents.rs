@@ -1,6 +1,7 @@
 use std::str::FromStr;
 use std::{cell::RefCell, sync::Arc};
 
+use anyhow::Result;
 use askama::Template;
 use axum::{
     extract::{OriginalUri, Query, State},
@@ -111,7 +112,11 @@ pub async fn torrents_page(
 }
 
 pub async fn torrents_page_post(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, Arc<MaM<'static>>)>,
+    State((config, db, mam)): State<(
+        Arc<Config>,
+        Arc<Database<'static>>,
+        Arc<Result<Arc<MaM<'static>>>>,
+    )>,
     uri: OriginalUri,
     Form(form): Form<TorrentsPageForm>,
 ) -> Result<Redirect, AppError> {
@@ -125,11 +130,17 @@ pub async fn torrents_page_post(
             }
         }
         "refresh" => {
+            let Ok(mam) = mam.as_ref() else {
+                return Err(anyhow::Error::msg("mam_id error").into());
+            };
             for torrent in form.torrents {
                 refresh_metadata(&db, &mam, torrent).await?;
             }
         }
         "refresh-relink" => {
+            let Ok(mam) = mam.as_ref() else {
+                return Err(anyhow::Error::msg("mam_id error").into());
+            };
             for torrent in form.torrents {
                 refresh_metadata_relink(&config, &db, &mam, torrent).await?;
             }

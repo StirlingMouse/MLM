@@ -1,4 +1,4 @@
-use std::{process::exit, sync::Arc};
+use std::{path::PathBuf, process::exit, sync::Arc};
 
 use anyhow::Result;
 use tracing::error;
@@ -6,7 +6,7 @@ use tray_item::{IconSource, TrayItem};
 
 use crate::config::Config;
 
-pub fn start_tray_icon(config_file: String, config: Arc<Config>) -> Result<TrayItem> {
+pub fn start_tray_icon(config_file: PathBuf, config: Arc<Config>) -> Result<TrayItem> {
     let mut tray = TrayItem::new("MLM", IconSource::Resource("tray-icon"))?;
     tray.add_label("MLM").unwrap();
     tray.add_menu_item("Open Webpage", move || {
@@ -20,8 +20,6 @@ pub fn start_tray_icon(config_file: String, config: Arc<Config>) -> Result<TrayI
         }
     })?;
     tray.inner_mut().add_separator()?;
-    tray.add_menu_item("Quit", || {
-        exit(0)
-    })?;
+    tray.add_menu_item("Quit", || exit(0))?;
     Ok(tray)
 }

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::Result;
 use askama::Template;
 use axum::{
     extract::{Query, State},
@@ -20,7 +21,11 @@ use crate::{
 };
 
 pub async fn selected_page(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, Arc<MaM<'static>>)>,
+    State((config, db, mam)): State<(
+        Arc<Config>,
+        Arc<Database<'static>>,
+        Arc<Result<Arc<MaM<'static>>>>,
+    )>,
     Query(sort): Query<SortOn<SelectedPageSort>>,
     Query(filter): Query<Vec<(SelectedPageFilter, String)>>,
 ) -> std::result::Result<Html<String>, AppError> {
@@ -72,8 +77,12 @@ pub async fn selected_page(
             if sort.asc { ord.reverse() } else { ord }
         });
     }
+    let unsats = match mam.as_ref() {
+        Ok(mam) => mam.user_info().await.map(|u| u.unsat).ok(),
+        _ => None,
+    };
     let template = SelectedPageTemplate {
-        unsats: mam.user_info().await.map(|u| u.unsat).ok(),
+        unsats,
         unsat_buffer: config.unsat_buffer,
         sort,
         torrents,

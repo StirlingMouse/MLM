@@ -47,6 +47,7 @@ pub struct Config {
     #[serde(rename = "tag")]
     pub tags: Vec<TagFilter>,
 
+    #[serde(default)]
     pub qbittorrent: Vec<QbitConfig>,
 
     #[serde(default)]

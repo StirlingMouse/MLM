@@ -8,6 +8,17 @@
 {% block content %}
 <p>{% if let Some(username) = username %}Hi {{ username }}! {% endif %}Welcome to MLM, select a page above</p>
 
+{% if let Some(mam_error) = mam_error %}
+<p class=missing>
+mam_id is invalid, all features are disabled: {{ mam_error }}
+</p>
+{% endif %}
+{% if has_no_qbits %}
+<p class=missing>
+no qbittorrent instances configured, all features are disabled
+</p>
+{% endif %}
+
 <form method=post class="infoboxes">
 <div class="infobox">
   <h2>Autograbber</h2>

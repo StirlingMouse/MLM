@@ -1,5 +1,6 @@
 use std::{ops::Deref, sync::Arc};
 
+use anyhow::Result;
 use askama::Template;
 use axum::{
     extract::{OriginalUri, Query, State},
@@ -32,7 +33,11 @@ pub async fn config_page(
 }
 
 pub async fn config_page_post(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, Arc<MaM<'static>>)>,
+    State((config, db, mam)): State<(
+        Arc<Config>,
+        Arc<Database<'static>>,
+        Arc<Result<Arc<MaM<'static>>>>,
+    )>,
     uri: OriginalUri,
     Form(form): Form<ConfigPageForm>,
 ) -> Result<Redirect, AppError> {
@@ -63,6 +68,9 @@ pub async fn config_page_post(
                     }
                     Err(err) => {
                         info!("need to ask mam due to: {err}");
+                        let Ok(mam) = mam.as_ref() else {
+                            return Err(anyhow::Error::msg("mam_id error").into());
+                        };
                         let Some(mam_torrent) = mam.get_torrent_info(&torrent.hash).await? else {
                             continue;
                         };

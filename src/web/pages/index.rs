@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::Result;
 use askama::Template;
 use axum::{
     extract::{OriginalUri, State},
@@ -10,6 +11,7 @@ use serde::Deserialize;
 use tokio::sync::Mutex;
 
 use crate::{
+    config::Config,
     data::Timestamp,
     mam::MaM,
     stats::{Stats, Triggers},
@@ -17,11 +19,21 @@ use crate::{
 };
 
 pub async fn index_page(
-    State((stats, mam)): State<(Arc<Mutex<Stats>>, Arc<MaM<'static>>)>,
+    State((config, stats, mam)): State<(
+        Arc<Config>,
+        Arc<Mutex<Stats>>,
+        Arc<Result<Arc<MaM<'static>>>>,
+    )>,
 ) -> std::result::Result<Html<String>, AppError> {
     let stats = stats.lock().await;
+    let username = match mam.as_ref() {
+        Ok(mam) => mam.cached_user_info().await.map(|u| u.username),
+        Err(_) => None,
+    };
     let template = IndexPageTemplate {
-        username: mam.cached_user_info().await.map(|u| u.username),
+        mam_error: mam.as_ref().as_ref().err().map(|e| format!("{e}")),
+        has_no_qbits: config.qbittorrent.is_empty(),
+        username,
         autograbber_run_at: stats.autograbber_run_at.map(Into::into),
         autograbber_result: stats
             .autograbber_result
@@ -80,6 +92,8 @@ pub async fn index_page_post(
 #[derive(Template)]
 #[template(path = "pages/index.html")]
 struct IndexPageTemplate {
+    mam_error: Option<String>,
+    has_no_qbits: bool,
     username: Option<String>,
     autograbber_run_at: Option<Timestamp>,
     autograbber_result: Option<Result<(), String>>,
