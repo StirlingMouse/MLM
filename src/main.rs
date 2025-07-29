@@ -23,6 +23,7 @@ use std::{
     fs::{self, create_dir_all},
     io,
     path::PathBuf,
+    process,
     sync::Arc,
     time::Duration,
 };
@@ -59,20 +60,21 @@ use crate::{config::Config, linker::link_torrents_to_library, mam::MaM, qbittorr
 async fn main() {
     if let Err(err) = app_main().await {
         error!("AppError: {err:?}");
+        eprintln!("{:?}", err);
+        process::exit(1);
     }
 }
 
 async fn app_main() -> Result<()> {
     let log_dir = env::var("MLM_LOG_DIR")
-        .ok()
-        .and_then(|path| {
+        .map(|path| {
             if path.is_empty() {
                 None
             } else {
                 Some(PathBuf::from(path))
             }
         })
-        .or_else(|| {
+        .unwrap_or_else(|_| {
             #[cfg(all(debug_assertions, not(windows)))]
             return None;
             #[allow(unused)]
