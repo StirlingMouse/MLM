@@ -56,7 +56,13 @@ use web::start_webserver;
 use crate::{config::Config, linker::link_torrents_to_library, mam::MaM, qbittorrent::QbitError};
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() {
+    if let Err(err) = app_main().await {
+        error!("AppError: {err:?}");
+    }
+}
+
+async fn app_main() -> Result<()> {
     let log_dir = env::var("MLM_LOG_DIR")
         .ok()
         .and_then(|path| {
@@ -67,7 +73,7 @@ async fn main() -> Result<()> {
             }
         })
         .or_else(|| {
-            #[cfg(debug_assertions)]
+            #[cfg(all(debug_assertions, not(windows)))]
             return None;
             #[allow(unused)]
             Some(
@@ -82,6 +88,7 @@ async fn main() -> Result<()> {
         .with_writer(io::stderr);
 
     let file_layer = log_dir
+        .as_ref()
         .map(|log_dir| {
             Result::<_>::Ok(
                 tracing_subscriber::fmt::layer().pretty().with_writer(
@@ -165,7 +172,7 @@ async fn main() -> Result<()> {
     let db = Arc::new(db);
 
     #[cfg(target_family = "windows")]
-    let _tray = tray::start_tray_icon(config_file, config.clone())?;
+    let _tray = tray::start_tray_icon(log_dir, config_file, config.clone())?;
 
     let stats: Arc<Mutex<Stats>> = Default::default();
 
