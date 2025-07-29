@@ -1,0 +1,6 @@
+[book]
+authors = ["Stirling Mouse"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Myanonamouse Library Manager"
