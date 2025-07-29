@@ -21,6 +21,7 @@ mod web;
 use std::{
     env,
     fs::{self, create_dir_all},
+    io,
     path::PathBuf,
     sync::Arc,
     time::Duration,
@@ -44,13 +45,78 @@ use tokio::{
     time::sleep,
 };
 use tracing::{error, info};
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_panic::panic_hook;
+use tracing_subscriber::{
+    EnvFilter, Layer as _, fmt::time::LocalTime, layer::SubscriberExt as _,
+    util::SubscriberInitExt as _,
+};
 use web::start_webserver;
 
 use crate::{config::Config, linker::link_torrents_to_library, mam::MaM, qbittorrent::QbitError};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    let log_dir = env::var("MLM_LOG_DIR")
+        .ok()
+        .and_then(|path| {
+            if path.is_empty() {
+                None
+            } else {
+                Some(PathBuf::from(path))
+            }
+        })
+        .or_else(|| {
+            #[cfg(debug_assertions)]
+            return None;
+            #[allow(unused)]
+            Some(
+                data_local_dir()
+                    .map(|d| d.join("MLM").join("logs"))
+                    .unwrap_or_else(|| "logs".into()),
+            )
+        });
+
+    let stderr_layer = tracing_subscriber::fmt::layer()
+        .pretty()
+        .with_writer(io::stderr);
+
+    let file_layer = log_dir
+        .map(|log_dir| {
+            Result::<_>::Ok(
+                tracing_subscriber::fmt::layer().pretty().with_writer(
+                    RollingFileAppender::builder()
+                        .rotation(Rotation::DAILY)
+                        .filename_prefix("mlm")
+                        .filename_suffix("log")
+                        .build(&log_dir)?,
+                ),
+            )
+        })
+        .transpose()?;
+
+    tracing_subscriber::registry()
+        .with(
+            stderr_layer.with_timer(LocalTime::rfc_3339()).with_filter(
+                EnvFilter::builder()
+                    .with_default_directive("mlm=trace".parse()?)
+                    .with_env_var("MLM_LOG")
+                    .from_env_lossy(),
+            ),
+        )
+        .with(file_layer.map(|file_layer| {
+            file_layer
+                .with_timer(LocalTime::rfc_3339())
+                .with_ansi(false)
+                .with_filter(
+                    EnvFilter::builder()
+                        .with_default_directive("mlm=trace".parse().unwrap())
+                        .with_env_var("MLM_LOG")
+                        .from_env_lossy(),
+                )
+        }))
+        .try_init()?;
+    std::panic::set_hook(Box::new(panic_hook));
 
     let config_file = env::var("MLM_CONFIG_FILE")
         .map(PathBuf::from)
@@ -86,7 +152,7 @@ async fn main() -> Result<()> {
     }
     let config: Config = Figment::new()
         .merge(Toml::file_exact(&config_file))
-        .merge(Env::prefixed("MLM_"))
+        .merge(Env::prefixed("MLM_CONF_"))
         .extract()?;
     let config = Arc::new(config);
 
