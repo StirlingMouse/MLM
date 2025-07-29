@@ -36,6 +36,7 @@ use time::{
 };
 use tokio::sync::{Mutex, watch::error::SendError};
 use tower::ServiceBuilder;
+#[allow(unused)]
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{

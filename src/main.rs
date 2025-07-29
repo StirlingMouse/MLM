@@ -98,7 +98,7 @@ async fn app_main() -> Result<()> {
                         .rotation(Rotation::DAILY)
                         .filename_prefix("mlm")
                         .filename_suffix("log")
-                        .build(&log_dir)?,
+                        .build(log_dir)?,
                 ),
             )
         })
