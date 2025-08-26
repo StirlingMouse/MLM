@@ -514,7 +514,7 @@ pub struct MaM<'a> {
 impl<'a> MaM<'a> {
     pub async fn new(config: &Config, db: Arc<Database<'a>>) -> Result<MaM<'a>> {
         let jar: CookieStoreRwLock = Default::default();
-        let url = "https://www.myanonamouse.net".parse::<Url>().unwrap();
+        let url = "https://www.myanonamouse.net/json".parse::<Url>().unwrap();
 
         let stored_mam_id = db
             .r_transaction()
