@@ -6,11 +6,22 @@
 <h1>Goodreads Lists</h1>
 <p>Goodreads lists can be used to autograb want to read books</p>
 
-{% for list in lists %}
+{% for (config, list) in lists %}
   <div>
-    <a href="/lists/{{ list.id }}"><h2>{{ list.title }}</h2></a>
+    <a href="/lists/{{ list.id }}"><h3>{{ config.name.as_deref().unwrap_or(list.title) }}</h3></a>
+    Last updated: {% if let Some(updated_at) = list.updated_at %}{{ self::time(updated_at) }}{% else %}<i>never</i>{% endif %}
   </div>
 {% endfor %}
+{% if !inactive_lists.is_empty() %}
+<h2>Inactive Lists</h2>
+<p>Lists that have been removed from the config but are still in the database. They won't be refreshed or have books searched for at MaM.</p>
+{% for list in inactive_lists %}
+  <div>
+    <a href="/lists/{{ list.id }}"><h3>{{ list.title }}</h3></a>
+    Last updated: {% if let Some(updated_at) = list.updated_at %}{{ self::time(updated_at) }}{% else %}<i>never</i>{% endif %}
+  </div>
+{% endfor %}
+{% endif %}
 {% if lists.is_empty() %}
 <p><i>You have no Goodreads lists</i>
 {% endif %}

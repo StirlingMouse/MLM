@@ -7,7 +7,6 @@ use native_db::Database;
 use once_cell::sync::Lazy;
 use quick_xml::de::from_reader;
 use regex::Regex;
-use reqwest::Url;
 use scraper::{Html, Selector};
 use serde::Deserialize;
 use tokio::sync::watch::Sender;
@@ -26,7 +25,7 @@ use crate::{
 };
 
 pub static SERIES_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(.*?) \((.*?),? #(\d+)\)$").unwrap());
+    Lazy::new(|| Regex::new(r"(.*?) \((.*?),? #(\d+(?:\.\d+)?)\)$").unwrap());
 
 #[instrument(skip_all)]
 pub async fn run_goodreads_import(
@@ -52,24 +51,16 @@ pub async fn run_goodreads_import(
             let mut rss: Rss = from_reader(&content[..])?;
             trace!("Scanning Goodreads list {}", rss.channel.title);
 
-            let link: Url = list.url.parse()?;
-            let user_id = link
-                .path_segments()
-                .iter_mut()
-                .flatten()
-                .next_back()
-                .ok_or(anyhow::Error::msg("Failed to get goodreads user id"))?;
-            let (_, shelf) = link
-                .query_pairs()
-                .find(|(name, _)| name == "shelf")
-                .unwrap_or_default();
-            let list_id = format!("{user_id}:{shelf}");
+            let list_id = list.list_id()?;
 
             if !list.dry_run {
                 let rw = db.rw_transaction()?;
                 rw.upsert(List {
                     id: list_id.clone(),
                     title: rss.channel.title,
+                    updated_at: Some(Timestamp::now()),
+                    // TODO: Parse
+                    build_date: Some(Timestamp::now()),
                 })?;
                 rw.commit()?;
             }
@@ -520,7 +511,7 @@ struct Item {
     guid: String,
     title: String,
     author_name: Option<String>,
-    series: Option<(String, u64)>,
+    series: Option<(String, f64)>,
     book_large_image_url: Option<String>,
     // book_description: String,
     isbn: Option<String>,
@@ -586,6 +577,7 @@ impl Item {
             allow_ebook: list.allow_ebook(),
             ebook_torrent: None,
             created_at: Timestamp::now(),
+            marked_done_at: None,
         }
     }
 }

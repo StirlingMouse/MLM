@@ -67,7 +67,10 @@ pub async fn start_webserver(
             post(torrents_page_post).with_state((config.clone(), db.clone(), mam.clone())),
         )
         .route("/events", get(event_page).with_state(db.clone()))
-        .route("/lists", get(lists_page).with_state(db.clone()))
+        .route(
+            "/lists",
+            get(lists_page).with_state((config.clone(), db.clone())),
+        )
         .route("/lists/{list_id}", get(list_page).with_state(db.clone()))
         .route("/errors", get(errors_page).with_state(db.clone()))
         .route(

@@ -13,6 +13,9 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
     let mut models = Models::new();
     models.define::<v1::Config>().unwrap();
 
+    models.define::<v5::List>().unwrap();
+    models.define::<v5::ListItem>().unwrap();
+
     models.define::<v4::SelectedTorrent>().unwrap();
     models.define::<v4::Event>().unwrap();
     models.define::<v4::List>().unwrap();
@@ -51,10 +54,10 @@ pub type ErroredTorrentId = v1::ErroredTorrentId;
 pub type Event = v4::Event;
 pub type EventKey = v4::EventKey;
 pub type EventType = v4::EventType;
-pub type List = v4::List;
-pub type ListKey = v4::ListKey;
-pub type ListItem = v4::ListItem;
-pub type ListItemKey = v4::ListItemKey;
+pub type List = v5::List;
+pub type ListKey = v5::ListKey;
+pub type ListItem = v5::ListItem;
+pub type ListItemKey = v5::ListItemKey;
 pub type ListItemTorrent = v4::ListItemTorrent;
 pub type TorrentMeta = v3::TorrentMeta;
 pub type MainCat = v1::MainCat;
@@ -1127,6 +1130,117 @@ pub mod v4 {
                     library_path,
                     files,
                 },
+            }
+        }
+    }
+
+    impl From<v5::List> for List {
+        fn from(t: v5::List) -> Self {
+            Self {
+                id: t.id,
+                title: t.title,
+            }
+        }
+    }
+
+    impl From<v5::ListItem> for ListItem {
+        fn from(t: v5::ListItem) -> Self {
+            Self {
+                guid: t.guid,
+                list_id: t.list_id,
+                title: t.title,
+                authors: t.authors,
+                series: t
+                    .series
+                    .into_iter()
+                    .map(|(name, num)| (name, num as u64))
+                    .collect(),
+                cover_url: t.cover_url,
+                book_url: t.book_url,
+                isbn: t.isbn,
+                prefer_format: t.prefer_format,
+                allow_audio: t.allow_audio,
+                audio_torrent: t.audio_torrent,
+                allow_ebook: t.allow_ebook,
+                ebook_torrent: t.ebook_torrent,
+                created_at: t.created_at,
+            }
+        }
+    }
+}
+
+pub mod v5 {
+    use super::*;
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 7, version = 5, from = v4::List)]
+    #[native_db]
+    pub struct List {
+        #[primary_key]
+        pub id: String,
+        #[secondary_key]
+        pub title: String,
+        pub updated_at: Option<Timestamp>,
+        pub build_date: Option<Timestamp>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 8, version = 5, from = v4::ListItem)]
+    #[native_db]
+    pub struct ListItem {
+        #[primary_key]
+        pub guid: (String, String),
+        #[secondary_key]
+        pub list_id: String,
+        pub title: String,
+        pub authors: Vec<String>,
+        pub series: Vec<(String, f64)>,
+        pub cover_url: String,
+        pub book_url: Option<String>,
+        pub isbn: Option<u64>,
+        pub prefer_format: Option<MainCat>,
+        pub allow_audio: bool,
+        pub audio_torrent: Option<ListItemTorrent>,
+        pub allow_ebook: bool,
+        pub ebook_torrent: Option<ListItemTorrent>,
+        #[secondary_key]
+        pub created_at: Timestamp,
+        pub marked_done_at: Option<Timestamp>,
+    }
+
+    impl From<v4::List> for List {
+        fn from(t: v4::List) -> Self {
+            Self {
+                id: t.id,
+                title: t.title,
+                updated_at: None,
+                build_date: None,
+            }
+        }
+    }
+
+    impl From<v4::ListItem> for ListItem {
+        fn from(t: v4::ListItem) -> Self {
+            Self {
+                guid: t.guid,
+                list_id: t.list_id,
+                title: t.title,
+                authors: t.authors,
+                series: t
+                    .series
+                    .into_iter()
+                    .map(|(name, num)| (name, num as f64))
+                    .collect(),
+                cover_url: t.cover_url,
+                book_url: t.book_url,
+                isbn: t.isbn,
+                prefer_format: t.prefer_format,
+                allow_audio: t.allow_audio,
+                audio_torrent: t.audio_torrent,
+                allow_ebook: t.allow_ebook,
+                ebook_torrent: t.ebook_torrent,
+                created_at: t.created_at,
+                marked_done_at: None,
             }
         }
     }

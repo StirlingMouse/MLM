@@ -77,6 +77,7 @@ pub struct TorrentFilter {
 #[serde(deny_unknown_fields)]
 pub struct GoodreadsList {
     pub url: String,
+    pub name: Option<String>,
     #[serde(default)]
     #[serde(deserialize_with = "parse_opt")]
     pub prefer_format: Option<MainCat>,

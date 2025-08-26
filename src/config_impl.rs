@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
-use anyhow::ensure;
+use anyhow::{Result, ensure};
+use reqwest::Url;
 use time::UtcDateTime;
 use tracing::error;
 
@@ -172,6 +173,22 @@ impl Cost {
 }
 
 impl GoodreadsList {
+    pub fn list_id(&self) -> Result<String, anyhow::Error> {
+        let link: Url = self.url.parse()?;
+        let user_id = link
+            .path_segments()
+            .iter_mut()
+            .flatten()
+            .next_back()
+            .ok_or(anyhow::Error::msg("Failed to get goodreads user id"))?;
+        let (_, shelf) = link
+            .query_pairs()
+            .find(|(name, _)| name == "shelf")
+            .unwrap_or_default();
+        let list_id = format!("{user_id}:{shelf}");
+        Ok(list_id)
+    }
+
     pub fn allow_audio(&self) -> bool {
         self.grab.iter().any(|g| {
             g.filter
