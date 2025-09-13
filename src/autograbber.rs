@@ -3,8 +3,8 @@ use std::{ops::RangeInclusive, sync::Arc, time::Duration};
 use crate::{
     config::{Config, Cost, SortBy, TorrentFilter, Type},
     data::{
-        self, ErroredTorrentId, Event, EventType, SelectedTorrent, Timestamp, TorrentCost,
-        TorrentMeta,
+        self, DuplicateTorrent, ErroredTorrentId, Event, EventType, SelectedTorrent, Timestamp,
+        TorrentCost, TorrentMeta,
     },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{
@@ -380,6 +380,11 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         );
                         continue 'torrent;
                     } else {
+                        if let Err(err) =
+                            add_duplicate_torrent(rw, None, title_search.clone(), old.meta.clone())
+                        {
+                            error!("Error writing duplicate torrent: {err}");
+                        }
                         info!(
                             "Unselecting torrent \"{}\" with formats {:?}",
                             old.meta.title, old.meta.filetypes
@@ -398,6 +403,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             }?;
             for old in old_library {
                 if old.meta.mam_id == meta.mam_id {
+                    // Found the same torrent again, update metadata if it has changed
                     if old.meta != meta {
                         let mut old = old;
                         old.meta = meta;
@@ -592,7 +598,7 @@ fn add_duplicate_torrent(
     title_search: String,
     meta: TorrentMeta,
 ) -> Result<()> {
-    rw.upsert(data::DuplicateTorrent {
+    rw.upsert(DuplicateTorrent {
         mam_id: meta.mam_id,
         title_search,
         meta,
