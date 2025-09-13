@@ -1,7 +1,7 @@
 use std::{ops::RangeInclusive, sync::Arc, time::Duration};
 
 use crate::{
-    config::{Config, Cost, TorrentFilter, Type},
+    config::{Config, Cost, SortBy, TorrentFilter, Type},
     data::{
         self, ErroredTorrentId, Event, EventType, SelectedTorrent, Timestamp, TorrentCost,
         TorrentMeta,
@@ -139,10 +139,18 @@ pub async fn search_torrents(
         (_, Cost::Free) => Some(SearchKind::Free),
         _ => None,
     };
-    let sort_type = match torrent_filter.kind {
-        Type::New => "dateDesc",
-        _ => "",
-    };
+    let sort_type = torrent_filter
+        .sort_by
+        .map(|sort_by| match sort_by {
+            SortBy::LowSeeders => "seedersAsc",
+            SortBy::LowSnatches => "snatchedAsc",
+            SortBy::OldestFirst => "dateAsc",
+            SortBy::Random => "random",
+        })
+        .unwrap_or(match torrent_filter.kind {
+            Type::New => "dateDesc",
+            _ => "",
+        });
     let (flags_is_hide, flags) = torrent_filter.filter.flags.as_search_bitfield();
     let paginate = matches!(torrent_filter.kind, Type::Bookmarks | Type::Freeleech);
 
@@ -242,6 +250,7 @@ pub async fn search_torrents(
         torrents,
         torrent_filter.cost,
         torrent_filter.unsat_buffer,
+        torrent_filter.category.clone(),
         torrent_filter.dry_run,
     )
     .await
@@ -255,6 +264,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
     torrents: T,
     cost: Cost,
     unsat_buffer: Option<u64>,
+    filter_category: Option<String>,
     dry_run: bool,
 ) -> Result<()> {
     'torrent: for torrent in torrents {
@@ -430,7 +440,9 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             .iter()
             .filter(|t| t.filter.matches(&torrent))
             .collect();
-        let category = tags.iter().find_map(|t| t.category.clone());
+        let category = filter_category
+            .clone()
+            .or_else(|| tags.iter().find_map(|t| t.category.clone()));
         let tags = tags.iter().flat_map(|t| t.tags.clone()).collect();
         let cost = if torrent.vip > 0 {
             TorrentCost::Vip

@@ -235,6 +235,7 @@ async fn search_item(
             [audiobook.0.clone()].into_iter(),
             audiobook.3,
             list.unsat_buffer,
+            None,
             list.dry_run,
         )
         .await
@@ -247,6 +248,7 @@ async fn search_item(
             [ebook.0.clone()].into_iter(),
             ebook.3,
             list.unsat_buffer,
+            None,
             list.dry_run,
         )
         .await

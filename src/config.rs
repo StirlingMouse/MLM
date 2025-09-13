@@ -65,12 +65,23 @@ pub struct TorrentFilter {
     pub query: Option<String>,
     #[serde(default)]
     pub search_in: Vec<SearchIn>,
+    pub sort_by: Option<SortBy>,
     #[serde(flatten)]
     pub filter: Filter,
 
     pub unsat_buffer: Option<u64>,
     #[serde(default)]
     pub dry_run: bool,
+    pub category: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum SortBy {
+    LowSeeders,
+    LowSnatches,
+    OldestFirst,
+    Random,
 }
 
 #[derive(Clone, Debug, Deserialize)]
