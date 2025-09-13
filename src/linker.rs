@@ -1,13 +1,13 @@
-use std::{
-    fs::{self, create_dir_all, File, Metadata},
-    io::{BufWriter, ErrorKind, Write},
-    path::{Component, Path, PathBuf},
-    sync::Arc,
-};
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::MetadataExt as _;
 #[cfg(target_family = "windows")]
 use std::os::windows::fs::MetadataExt as _;
+use std::{
+    fs::{self, File, Metadata, create_dir_all},
+    io::{BufWriter, ErrorKind, Write},
+    path::{Component, Path, PathBuf},
+    sync::Arc,
+};
 
 use anyhow::{Context, Result, bail};
 use file_id::get_file_id;
@@ -103,8 +103,16 @@ async fn match_torrent(
     library: &Library,
 ) -> Result<()> {
     let files = qbit.1.files(hash, None).await.map_err(QbitError)?;
-    let selected_audio_format = select_format(&config.audio_types, &files);
-    let selected_ebook_format = select_format(&config.ebook_types, &files);
+    let selected_audio_format = select_format(
+        &library.tag_filters().audio_types,
+        &config.audio_types,
+        &files,
+    );
+    let selected_ebook_format = select_format(
+        &library.tag_filters().ebook_types,
+        &config.ebook_types,
+        &files,
+    );
 
     if selected_audio_format.is_none() && selected_ebook_format.is_none() {
         bail!("Could not find any wanted formats in torrent");
@@ -223,8 +231,16 @@ pub async fn refresh_metadata_relink(
         bail!("Could not find matching library for torrent");
     };
     let files = qbit.files(&hash, None).await.map_err(QbitError)?;
-    let selected_audio_format = select_format(&config.audio_types, &files);
-    let selected_ebook_format = select_format(&config.ebook_types, &files);
+    let selected_audio_format = select_format(
+        &library.tag_filters().audio_types,
+        &config.audio_types,
+        &files,
+    );
+    let selected_ebook_format = select_format(
+        &library.tag_filters().ebook_types,
+        &config.ebook_types,
+        &files,
+    );
 
     if selected_audio_format.is_none() && selected_ebook_format.is_none() {
         bail!("Could not find any wanted formats in torrent");
@@ -441,17 +457,24 @@ fn create_metadata(mam_torrent: &MaMTorrent, meta: &TorrentMeta) -> serde_json::
     metadata
 }
 
-fn select_format(wanted_formats: &[String], files: &[TorrentContent]) -> Option<String> {
-    wanted_formats
+fn select_format(
+    overridden_wanted_formats: &Option<Vec<String>>,
+    wanted_formats: &[String],
+    files: &[TorrentContent],
+) -> Option<String> {
+    overridden_wanted_formats
+        .as_deref()
+        .unwrap_or(wanted_formats)
         .iter()
         .map(|ext| {
+            let ext = ext.to_lowercase();
             if ext.starts_with(".") {
                 ext.clone()
             } else {
                 format!(".{ext}")
             }
         })
-        .find(|ext| files.iter().any(|f| f.name.ends_with(ext)))
+        .find(|ext| files.iter().any(|f| f.name.to_lowercase().ends_with(ext)))
 }
 
 #[instrument(skip_all)]

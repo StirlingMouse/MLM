@@ -223,6 +223,8 @@ pub struct LibraryTagFilters {
     pub allow_tags: Vec<String>,
     #[serde(default)]
     pub deny_tags: Vec<String>,
+    pub audio_types: Option<Vec<String>>,
+    pub ebook_types: Option<Vec<String>>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Default)]
