@@ -6,7 +6,7 @@ use time::UtcDateTime;
 use tracing::error;
 
 use crate::{
-    config::{Cost, Filter, GoodreadsList, Library, LibraryLinkMethod, LibraryTagFilters},
+    config::{Filter, GoodreadsList, Library, LibraryLinkMethod, LibraryTagFilters},
     data::{Category, Language, MainCat, Size, Torrent},
     mam::{DATE_TIME_FORMAT, MaMTorrent},
     mam_enums::Flags,

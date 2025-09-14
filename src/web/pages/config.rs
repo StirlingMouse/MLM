@@ -56,6 +56,7 @@ pub async fn config_page_post(
             let qbit = qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
                 .await
                 .map_err(QbitError)?;
+            // println!("{:?}", qbit.categories)
             let torrents = db.r_transaction()?.scan().primary::<Torrent>()?;
             for torrent in torrents.all()? {
                 let torrent = torrent?;
@@ -82,7 +83,7 @@ pub async fn config_page_post(
                     qbit.set_category(Some(vec![torrent.hash.as_str()]), category)
                         .await
                         .map_err(QbitError)?;
-                    println!(
+                    info!(
                         "set category {} on torrent {}",
                         category, torrent.meta.title
                     );

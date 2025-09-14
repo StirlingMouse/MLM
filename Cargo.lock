@@ -1916,7 +1916,7 @@ dependencies = [
 [[package]]
 name = "qbit"
 version = "0.1.2"
-source = "git+https://github.com/StirlingMouse/qbittorrent-webui-api.git#efa4359d5258991a9e152b768ccf613b8ffbb32a"
+source = "git+https://github.com/StirlingMouse/qbittorrent-webui-api.git#172b7f94897f5e5b5716303e7e0b5e87229db15c"
 dependencies = [
  "reqwest",
  "serde",
