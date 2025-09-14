@@ -374,6 +374,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         if let Err(err) = add_duplicate_torrent(rw, None, title_search, meta) {
                             error!("Error writing duplicate torrent: {err}");
                         }
+                        rw_opt.unwrap().commit()?;
                         trace!(
                             "Skipping torrent {} as we have {} selected",
                             mam_id, old.meta.mam_id
@@ -427,6 +428,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         {
                             error!("Error writing duplicate torrent: {err}");
                         }
+                        rw_opt.unwrap().commit()?;
                         trace!(
                             "Skipping torrent {} as we have {} in libary",
                             mam_id, old.meta.mam_id
