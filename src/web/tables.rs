@@ -3,10 +3,7 @@ use std::{
     ops::RangeInclusive,
 };
 
-use askama::{
-    Template,
-    filters::{self, HtmlSafe},
-};
+use askama::{Template, filters::HtmlSafe};
 use serde::{Deserialize, Serialize};
 
 use super::Conditional;

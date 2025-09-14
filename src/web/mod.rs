@@ -41,9 +41,8 @@ use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
     config::{Config, Filter},
-    data::Timestamp,
+    data::{AudiobookCategory, EbookCategory, Timestamp},
     mam::{DATE_FORMAT, MaM},
-    mam_enums::{AudiobookCategory, EbookCategory},
     qbittorrent::QbitError,
     stats::{Stats, Triggers},
 };

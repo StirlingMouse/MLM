@@ -184,7 +184,7 @@ pub async fn refresh_metadata(
         .await
         .context("get_mam_info")?
     else {
-        bail!("Could not find torrent on mam");
+        bail!("Could not find torrent \"{}\" on mam", torrent.meta.title);
     };
     let meta = mam_torrent.as_meta().context("as_meta")?;
 

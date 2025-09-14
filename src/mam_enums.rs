@@ -5,6 +5,8 @@ use serde::{
     de::{self, SeqAccess, Visitor},
 };
 
+use crate::data::{AudiobookCategory, Category, EbookCategory, MainCat};
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum SearchIn {
@@ -100,6 +102,7 @@ impl Categories {
 fn categories_parser<'de, T, D>(deserializer: D) -> Result<Option<Vec<T>>, D::Error>
 where
     T: Deserialize<'de>,
+    T: TryFrom<String, Error = String>,
     D: Deserializer<'de>,
 {
     // This is a Visitor that forwards string types to T's `FromStr` impl and
@@ -112,6 +115,7 @@ where
     impl<'de, T> Visitor<'de> for CategoriesParser<T>
     where
         T: Deserialize<'de>,
+        T: TryFrom<String, Error = String>,
     {
         type Value = Option<Vec<T>>;
 
@@ -126,57 +130,22 @@ where
             Ok(if value { None } else { Some(vec![]) })
         }
 
-        fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
         where
             A: SeqAccess<'de>,
         {
-            Ok(Some(Deserialize::deserialize(
-                de::value::SeqAccessDeserializer::new(seq),
-            )?))
+            let mut values = vec![];
+            loop {
+                let elm: Option<String> = seq.next_element()?;
+                let Some(elm) = elm else {
+                    return Ok(Some(values));
+                };
+                values.push(T::try_from(elm).map_err(serde::de::Error::custom)?);
+            }
         }
     }
 
     deserializer.deserialize_any(CategoriesParser(PhantomData))
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(try_from = "String")]
-pub enum AudiobookCategory {
-    ActionAdventure,
-    Art,
-    Biographical,
-    Business,
-    ComputerInternet,
-    Crafts,
-    CrimeThriller,
-    Fantasy,
-    Food,
-    GeneralFiction,
-    GeneralNonFic,
-    HistoricalFiction,
-    History,
-    HomeGarden,
-    Horror,
-    Humor,
-    Instructional,
-    Juvenile,
-    Language,
-    LiteraryClassics,
-    MathScienceTech,
-    Medical,
-    Mystery,
-    Nature,
-    Philosophy,
-    PolSocRelig,
-    Recreation,
-    Romance,
-    ScienceFiction,
-    SelfHelp,
-    TravelAdventure,
-    TrueCrime,
-    UrbanFantasy,
-    Western,
-    YoungAdult,
 }
 
 impl AudiobookCategory {
@@ -374,50 +343,6 @@ impl TryFrom<String> for AudiobookCategory {
             None => Err(format!("invalid category {value}")),
         }
     }
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(try_from = "String")]
-pub enum EbookCategory {
-    ActionAdventure,
-    Art,
-    Biographical,
-    Business,
-    ComicsGraphicnovels,
-    ComputerInternet,
-    Crafts,
-    CrimeThriller,
-    Fantasy,
-    Food,
-    GeneralFiction,
-    GeneralNonFiction,
-    HistoricalFiction,
-    History,
-    HomeGarden,
-    Horror,
-    Humor,
-    IllusionMagic,
-    Instructional,
-    Juvenile,
-    Language,
-    LiteraryClassics,
-    MagazinesNewspapers,
-    MathScienceTech,
-    Medical,
-    MixedCollections,
-    Mystery,
-    Nature,
-    Philosophy,
-    PolSocRelig,
-    Recreation,
-    Romance,
-    ScienceFiction,
-    SelfHelp,
-    TravelAdventure,
-    TrueCrime,
-    UrbanFantasy,
-    Western,
-    YoungAdult,
 }
 
 impl EbookCategory {
@@ -636,6 +561,15 @@ impl TryFrom<String> for EbookCategory {
         match l {
             Some(l) => Ok(l),
             None => Err(format!("invalid category {value}")),
+        }
+    }
+}
+
+impl Category {
+    pub fn from_id(main_cat: MainCat, category: u64) -> Option<Category> {
+        match main_cat {
+            MainCat::Audio => AudiobookCategory::from_id(category).map(Category::Audio),
+            MainCat::Ebook => EbookCategory::from_id(category).map(Category::Ebook),
         }
     }
 }

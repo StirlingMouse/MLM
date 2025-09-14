@@ -14,9 +14,8 @@ use tracing::info;
 
 use crate::{
     config::{Config, Cost, Library, TorrentFilter, Type},
-    data::Torrent,
+    data::{AudiobookCategory, EbookCategory, Torrent},
     mam::{DATE_FORMAT, MaM},
-    mam_enums::{AudiobookCategory, EbookCategory},
     qbittorrent::QbitError,
     web::{AppError, filter, yaml_items},
 };

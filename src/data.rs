@@ -13,6 +13,11 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
     let mut models = Models::new();
     models.define::<v1::Config>().unwrap();
 
+    models.define::<v6::Torrent>().unwrap();
+    models.define::<v6::SelectedTorrent>().unwrap();
+    models.define::<v6::DuplicateTorrent>().unwrap();
+    models.define::<v6::ErroredTorrent>().unwrap();
+
     models.define::<v5::Torrent>().unwrap();
     models.define::<v5::List>().unwrap();
     models.define::<v5::ListItem>().unwrap();
@@ -44,13 +49,13 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
 });
 
 pub type Config = v1::Config;
-pub type Torrent = v5::Torrent;
-pub type TorrentKey = v5::TorrentKey;
-pub type SelectedTorrent = v4::SelectedTorrent;
-pub type SelectedTorrentKey = v4::SelectedTorrentKey;
-pub type DuplicateTorrent = v3::DuplicateTorrent;
-pub type ErroredTorrent = v3::ErroredTorrent;
-pub type ErroredTorrentKey = v3::ErroredTorrentKey;
+pub type Torrent = v6::Torrent;
+pub type TorrentKey = v6::TorrentKey;
+pub type SelectedTorrent = v6::SelectedTorrent;
+pub type SelectedTorrentKey = v6::SelectedTorrentKey;
+pub type DuplicateTorrent = v6::DuplicateTorrent;
+pub type ErroredTorrent = v6::ErroredTorrent;
+pub type ErroredTorrentKey = v6::ErroredTorrentKey;
 pub type ErroredTorrentId = v1::ErroredTorrentId;
 pub type Event = v4::Event;
 pub type EventKey = v4::EventKey;
@@ -60,7 +65,7 @@ pub type ListKey = v5::ListKey;
 pub type ListItem = v5::ListItem;
 pub type ListItemKey = v5::ListItemKey;
 pub type ListItemTorrent = v4::ListItemTorrent;
-pub type TorrentMeta = v3::TorrentMeta;
+pub type TorrentMeta = v6::TorrentMeta;
 pub type MainCat = v1::MainCat;
 pub type Uuid = v3::Uuid;
 pub type Timestamp = v3::Timestamp;
@@ -69,6 +74,9 @@ pub type Size = v3::Size;
 pub type TorrentCost = v4::TorrentCost;
 pub type TorrentStatus = v4::TorrentStatus;
 pub type LibraryMismatch = v5::LibraryMismatch;
+pub type AudiobookCategory = v6::AudiobookCategory;
+pub type EbookCategory = v6::EbookCategory;
+pub type Category = v6::Category;
 
 #[instrument(skip_all)]
 pub fn migrate(db: &Database<'_>) -> Result<()> {
@@ -77,7 +85,7 @@ pub fn migrate(db: &Database<'_>) -> Result<()> {
     rw.migrate::<Torrent>()?;
     rw.migrate::<SelectedTorrent>()?;
     rw.migrate::<DuplicateTorrent>()?;
-    recover_migrate::<v2::ErroredTorrent, ErroredTorrent>(&rw)?;
+    // recover_migrate::<v2::ErroredTorrent, v3::ErroredTorrent>(&rw)?;
     rw.migrate::<ErroredTorrent>()?;
     recover_migrate::<v3::Event, Event>(&rw)?;
     rw.migrate::<Event>()?;
@@ -940,6 +948,47 @@ pub mod v3 {
             }
         }
     }
+
+    impl From<v6::DuplicateTorrent> for DuplicateTorrent {
+        fn from(t: v6::DuplicateTorrent) -> Self {
+            Self {
+                mam_id: t.mam_id,
+                title_search: t.title_search,
+                meta: t.meta.into(),
+                created_at: t.created_at,
+                duplicate_of: t.duplicate_of,
+                request_replace: t.request_replace,
+            }
+        }
+    }
+
+    impl From<v6::ErroredTorrent> for ErroredTorrent {
+        fn from(t: v6::ErroredTorrent) -> Self {
+            Self {
+                id: t.id,
+                title: t.title,
+                error: t.error,
+                meta: t.meta.map(|t| t.into()),
+                created_at: t.created_at,
+            }
+        }
+    }
+
+    impl From<v6::TorrentMeta> for TorrentMeta {
+        fn from(t: v6::TorrentMeta) -> Self {
+            Self {
+                mam_id: t.mam_id,
+                main_cat: t.main_cat,
+                language: t.language,
+                filetypes: t.filetypes,
+                size: t.size,
+                title: t.title,
+                authors: t.authors,
+                narrators: t.narrators,
+                series: t.series,
+            }
+        }
+    }
 }
 
 pub mod v4 {
@@ -958,7 +1007,7 @@ pub mod v4 {
         pub tags: Vec<String>,
         #[secondary_key]
         pub title_search: String,
-        pub meta: TorrentMeta,
+        pub meta: v3::TorrentMeta,
         pub created_at: Timestamp,
     }
 
@@ -1186,6 +1235,22 @@ pub mod v4 {
             }
         }
     }
+
+    impl From<v6::SelectedTorrent> for SelectedTorrent {
+        fn from(t: v6::SelectedTorrent) -> Self {
+            Self {
+                mam_id: t.mam_id,
+                dl_link: t.dl_link,
+                unsat_buffer: t.unsat_buffer,
+                cost: t.cost,
+                category: t.category,
+                tags: t.tags,
+                title_search: t.title_search,
+                meta: t.meta.into(),
+                created_at: t.created_at,
+            }
+        }
+    }
 }
 
 pub mod v5 {
@@ -1203,7 +1268,7 @@ pub mod v5 {
         pub selected_ebook_format: Option<String>,
         #[secondary_key]
         pub title_search: String,
-        pub meta: TorrentMeta,
+        pub meta: v3::TorrentMeta,
         #[secondary_key]
         pub created_at: Timestamp,
         pub replaced_with: Option<(String, Timestamp)>,
@@ -1305,6 +1370,270 @@ pub mod v5 {
                 ebook_torrent: t.ebook_torrent,
                 created_at: t.created_at,
                 marked_done_at: None,
+            }
+        }
+    }
+
+    impl From<v6::Torrent> for Torrent {
+        fn from(t: v6::Torrent) -> Self {
+            Self {
+                hash: t.hash,
+                library_path: t.library_path,
+                library_files: t.library_files,
+                selected_audio_format: t.selected_audio_format,
+                selected_ebook_format: t.selected_ebook_format,
+                title_search: t.title_search,
+                meta: t.meta.into(),
+                created_at: t.created_at,
+                replaced_with: t.replaced_with,
+                request_matadata_update: t.request_matadata_update,
+                library_mismatch: t.library_mismatch,
+            }
+        }
+    }
+}
+
+pub mod v6 {
+    use super::*;
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 2, version = 6, from = v5::Torrent)]
+    #[native_db]
+    pub struct Torrent {
+        #[primary_key]
+        pub hash: String,
+        pub library_path: Option<PathBuf>,
+        pub library_files: Vec<PathBuf>,
+        pub selected_audio_format: Option<String>,
+        pub selected_ebook_format: Option<String>,
+        #[secondary_key]
+        pub title_search: String,
+        pub meta: TorrentMeta,
+        #[secondary_key]
+        pub created_at: Timestamp,
+        pub replaced_with: Option<(String, Timestamp)>,
+        pub request_matadata_update: bool,
+        pub library_mismatch: Option<LibraryMismatch>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 3, version = 6, from = v4::SelectedTorrent)]
+    #[native_db]
+    pub struct SelectedTorrent {
+        #[primary_key]
+        pub mam_id: u64,
+        pub dl_link: String,
+        pub unsat_buffer: Option<u64>,
+        pub cost: TorrentCost,
+        pub category: Option<String>,
+        pub tags: Vec<String>,
+        #[secondary_key]
+        pub title_search: String,
+        pub meta: TorrentMeta,
+        pub created_at: Timestamp,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 4, version = 6, from = v3::DuplicateTorrent)]
+    #[native_db]
+    pub struct DuplicateTorrent {
+        #[primary_key]
+        pub mam_id: u64,
+        #[secondary_key]
+        pub title_search: String,
+        pub meta: TorrentMeta,
+        pub created_at: Timestamp,
+        pub duplicate_of: Option<String>,
+        pub request_replace: bool,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 5, version = 6, from = v3::ErroredTorrent)]
+    #[native_db]
+    pub struct ErroredTorrent {
+        #[primary_key]
+        pub id: ErroredTorrentId,
+        pub title: String,
+        pub error: String,
+        pub meta: Option<TorrentMeta>,
+        #[secondary_key]
+        pub created_at: Timestamp,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+    pub struct TorrentMeta {
+        pub mam_id: u64,
+        pub main_cat: MainCat,
+        pub cat: Option<Category>,
+        pub language: Option<Language>,
+        pub filetypes: Vec<String>,
+        pub size: Size,
+        pub title: String,
+        pub authors: Vec<String>,
+        pub narrators: Vec<String>,
+        pub series: Vec<(String, String)>,
+    }
+
+    #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+    pub enum AudiobookCategory {
+        ActionAdventure,
+        Art,
+        Biographical,
+        Business,
+        ComputerInternet,
+        Crafts,
+        CrimeThriller,
+        Fantasy,
+        Food,
+        GeneralFiction,
+        GeneralNonFic,
+        HistoricalFiction,
+        History,
+        HomeGarden,
+        Horror,
+        Humor,
+        Instructional,
+        Juvenile,
+        Language,
+        LiteraryClassics,
+        MathScienceTech,
+        Medical,
+        Mystery,
+        Nature,
+        Philosophy,
+        PolSocRelig,
+        Recreation,
+        Romance,
+        ScienceFiction,
+        SelfHelp,
+        TravelAdventure,
+        TrueCrime,
+        UrbanFantasy,
+        Western,
+        YoungAdult,
+    }
+
+    #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+    pub enum EbookCategory {
+        ActionAdventure,
+        Art,
+        Biographical,
+        Business,
+        ComicsGraphicnovels,
+        ComputerInternet,
+        Crafts,
+        CrimeThriller,
+        Fantasy,
+        Food,
+        GeneralFiction,
+        GeneralNonFiction,
+        HistoricalFiction,
+        History,
+        HomeGarden,
+        Horror,
+        Humor,
+        IllusionMagic,
+        Instructional,
+        Juvenile,
+        Language,
+        LiteraryClassics,
+        MagazinesNewspapers,
+        MathScienceTech,
+        Medical,
+        MixedCollections,
+        Mystery,
+        Nature,
+        Philosophy,
+        PolSocRelig,
+        Recreation,
+        Romance,
+        ScienceFiction,
+        SelfHelp,
+        TravelAdventure,
+        TrueCrime,
+        UrbanFantasy,
+        Western,
+        YoungAdult,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+    pub enum Category {
+        Audio(AudiobookCategory),
+        Ebook(EbookCategory),
+    }
+
+    impl From<v5::Torrent> for Torrent {
+        fn from(t: v5::Torrent) -> Self {
+            Self {
+                hash: t.hash,
+                library_path: t.library_path,
+                library_files: t.library_files,
+                selected_audio_format: t.selected_audio_format,
+                selected_ebook_format: t.selected_ebook_format,
+                title_search: t.title_search,
+                meta: t.meta.into(),
+                created_at: t.created_at,
+                replaced_with: t.replaced_with,
+                request_matadata_update: t.request_matadata_update,
+                library_mismatch: t.library_mismatch,
+            }
+        }
+    }
+
+    impl From<v4::SelectedTorrent> for SelectedTorrent {
+        fn from(t: v4::SelectedTorrent) -> Self {
+            Self {
+                mam_id: t.mam_id,
+                dl_link: t.dl_link,
+                unsat_buffer: t.unsat_buffer,
+                cost: t.cost,
+                category: t.category,
+                tags: t.tags,
+                title_search: t.title_search,
+                meta: t.meta.into(),
+                created_at: t.created_at,
+            }
+        }
+    }
+
+    impl From<v3::DuplicateTorrent> for DuplicateTorrent {
+        fn from(t: v3::DuplicateTorrent) -> Self {
+            Self {
+                mam_id: t.mam_id,
+                title_search: t.title_search,
+                meta: t.meta.into(),
+                created_at: t.created_at,
+                duplicate_of: t.duplicate_of,
+                request_replace: t.request_replace,
+            }
+        }
+    }
+
+    impl From<v3::ErroredTorrent> for ErroredTorrent {
+        fn from(t: v3::ErroredTorrent) -> Self {
+            Self {
+                id: t.id,
+                title: t.title,
+                error: t.error,
+                meta: t.meta.map(|t| t.into()),
+                created_at: t.created_at,
+            }
+        }
+    }
+
+    impl From<v3::TorrentMeta> for TorrentMeta {
+        fn from(t: v3::TorrentMeta) -> Self {
+            Self {
+                mam_id: t.mam_id,
+                main_cat: t.main_cat,
+                cat: None,
+                language: t.language,
+                filetypes: t.filetypes,
+                size: t.size,
+                title: t.title,
+                authors: t.authors,
+                narrators: t.narrators,
+                series: t.series,
             }
         }
     }

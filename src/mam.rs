@@ -25,7 +25,7 @@ use unidecode::unidecode;
 
 use crate::{
     config::Config,
-    data::{self, Language},
+    data::{self, Category, Language},
     mam_enums::SearchIn,
 };
 
@@ -378,6 +378,8 @@ impl MaMTorrent {
             })
             .collect::<Result<Vec<_>>>()?;
         let main_cat = data::MainCat::from_id(self.main_cat).map_err(MetaError::UnknownMainCat)?;
+        let cat = Category::from_id(main_cat, self.category)
+            .ok_or_else(|| MetaError::UnknownCat(self.catname.clone()))?;
         let language = Language::from_id(self.language)
             .ok_or_else(|| MetaError::UnknownLanguage(self.language, self.lang_code.clone()))?;
         let filetypes = self
@@ -390,6 +392,7 @@ impl MaMTorrent {
         Ok(data::TorrentMeta {
             mam_id: self.id,
             main_cat,
+            cat: Some(cat),
             language: Some(language),
             filetypes,
             size,
@@ -409,6 +412,8 @@ impl MaMTorrent {
 pub enum MetaError {
     #[error("{0}")]
     UnknownMainCat(String),
+    #[error("Unknown category: {0}")]
+    UnknownCat(String),
     #[error("Unknown language id {0}, code: {1}")]
     UnknownLanguage(u8, String),
     #[error("{0}")]

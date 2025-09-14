@@ -10,8 +10,7 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    data::{List, ListItem, ListItemKey, TorrentStatus},
-    mam_enums::{AudiobookCategory, EbookCategory},
+    data::{AudiobookCategory, EbookCategory, List, ListItem, ListItemKey, TorrentStatus},
     web::{AppError, time},
 };
 
