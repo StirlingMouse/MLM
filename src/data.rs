@@ -13,6 +13,7 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
     let mut models = Models::new();
     models.define::<v1::Config>().unwrap();
 
+    models.define::<v5::Torrent>().unwrap();
     models.define::<v5::List>().unwrap();
     models.define::<v5::ListItem>().unwrap();
 
@@ -43,8 +44,8 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
 });
 
 pub type Config = v1::Config;
-pub type Torrent = v3::Torrent;
-pub type TorrentKey = v3::TorrentKey;
+pub type Torrent = v5::Torrent;
+pub type TorrentKey = v5::TorrentKey;
 pub type SelectedTorrent = v4::SelectedTorrent;
 pub type SelectedTorrentKey = v4::SelectedTorrentKey;
 pub type DuplicateTorrent = v3::DuplicateTorrent;
@@ -67,6 +68,7 @@ pub type Language = v3::Language;
 pub type Size = v3::Size;
 pub type TorrentCost = v4::TorrentCost;
 pub type TorrentStatus = v4::TorrentStatus;
+pub type LibraryMismatch = v5::LibraryMismatch;
 
 #[instrument(skip_all)]
 pub fn migrate(db: &Database<'_>) -> Result<()> {
@@ -823,6 +825,23 @@ pub mod v3 {
         }
     }
 
+    impl From<v5::Torrent> for Torrent {
+        fn from(t: v5::Torrent) -> Self {
+            Self {
+                hash: t.hash,
+                library_path: t.library_path,
+                library_files: t.library_files,
+                selected_audio_format: t.selected_audio_format,
+                selected_ebook_format: t.selected_ebook_format,
+                title_search: t.title_search,
+                meta: t.meta,
+                created_at: t.created_at,
+                replaced_with: t.replaced_with,
+                request_matadata_update: t.request_matadata_update,
+            }
+        }
+    }
+
     impl From<v4::SelectedTorrent> for SelectedTorrent {
         fn from(t: v4::SelectedTorrent) -> Self {
             Self {
@@ -1173,6 +1192,33 @@ pub mod v5 {
     use super::*;
 
     #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 2, version = 5, from = v3::Torrent)]
+    #[native_db]
+    pub struct Torrent {
+        #[primary_key]
+        pub hash: String,
+        pub library_path: Option<PathBuf>,
+        pub library_files: Vec<PathBuf>,
+        pub selected_audio_format: Option<String>,
+        pub selected_ebook_format: Option<String>,
+        #[secondary_key]
+        pub title_search: String,
+        pub meta: TorrentMeta,
+        #[secondary_key]
+        pub created_at: Timestamp,
+        pub replaced_with: Option<(String, Timestamp)>,
+        pub request_matadata_update: bool,
+        pub library_mismatch: Option<LibraryMismatch>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+    pub enum LibraryMismatch {
+        NewPath(PathBuf),
+        NoLibrary,
+        TorrentRemoved,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
     #[native_model(id = 7, version = 5, from = v4::List)]
     #[native_db]
     pub struct List {
@@ -1206,6 +1252,24 @@ pub mod v5 {
         #[secondary_key]
         pub created_at: Timestamp,
         pub marked_done_at: Option<Timestamp>,
+    }
+
+    impl From<v3::Torrent> for Torrent {
+        fn from(t: v3::Torrent) -> Self {
+            Self {
+                hash: t.hash,
+                library_path: t.library_path,
+                library_files: t.library_files,
+                selected_audio_format: t.selected_audio_format,
+                selected_ebook_format: t.selected_ebook_format,
+                title_search: t.title_search,
+                meta: t.meta,
+                created_at: t.created_at,
+                replaced_with: t.replaced_with,
+                request_matadata_update: t.request_matadata_update,
+                library_mismatch: None,
+            }
+        }
     }
 
     impl From<v4::List> for List {

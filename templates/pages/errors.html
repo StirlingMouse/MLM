@@ -14,14 +14,14 @@
 <h1>Torrent Errors</h1>
 <p>Errors encountered while either grabbing, linking or cleaning torrents</p>
 <div class="ErrorsTable table">
-  {{ table_header(Some(ErrorsPageSort::Step), "Step") | safe }}
-  {{ table_header(Some(ErrorsPageSort::Title), "Title") | safe }}
-  {{ table_header(Some(ErrorsPageSort::Error), "Error") | safe }}
-  {{ table_header(Some(ErrorsPageSort::CreatedAt), "When") | safe }}
-  {{ table_header(None, "") | safe }}
+  {{ table_header(Some(ErrorsPageSort::Step), "Step") }}
+  {{ table_header(Some(ErrorsPageSort::Title), "Title") }}
+  {{ table_header(Some(ErrorsPageSort::Error), "Error") }}
+  {{ table_header(Some(ErrorsPageSort::CreatedAt), "When") }}
+  {{ table_header(None, "") }}
 {% for error in errors %}
-  <div>{{ self::item(ErrorsPageFilter::Step, error.id.step()) | safe }}</div>
-  <div>{{ self::item(ErrorsPageFilter::Title, error.title) | safe }}</div>
+  <div>{{ self::item(ErrorsPageFilter::Step, error.id.step()) }}</div>
+  <div>{{ self::item(ErrorsPageFilter::Title, error.title) }}</div>
   <div>{{ error.error }}</div>
   <div>{{ self::time(error.created_at) }}</div>
   <div>

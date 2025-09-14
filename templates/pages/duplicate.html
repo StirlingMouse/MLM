@@ -14,21 +14,21 @@
 <h1>Duplicate Torrents</h1>
 <p>Torrents that the autograbber did not select due to a pre-existing torrent in your library</p>
 <div class="DuplicateTable table">
-  {{ table_header(Some(DuplicatePageSort::Kind), "Type") | safe }}
-  {{ table_header(Some(DuplicatePageSort::Title), "Title") | safe }}
-  {{ table_header(Some(DuplicatePageSort::Authors), "Authors") | safe }}
-  {{ table_header(Some(DuplicatePageSort::Narrators), "Narrators") | safe }}
-  {{ table_header(Some(DuplicatePageSort::Series), "Series") | safe }}
-  {{ table_header(None, "Filetypes") | safe }}
-  {{ table_header(Some(DuplicatePageSort::CreatedAt), "Added At") | safe }}
-  {{ table_header(None, "") | safe }}
+  {{ table_header(Some(DuplicatePageSort::Kind), "Type") }}
+  {{ table_header(Some(DuplicatePageSort::Title), "Title") }}
+  {{ table_header(Some(DuplicatePageSort::Authors), "Authors") }}
+  {{ table_header(Some(DuplicatePageSort::Narrators), "Narrators") }}
+  {{ table_header(Some(DuplicatePageSort::Series), "Series") }}
+  {{ table_header(None, "Filetypes") }}
+  {{ table_header(Some(DuplicatePageSort::CreatedAt), "Added At") }}
+  {{ table_header(None, "") }}
 {% for torrent in torrents %}
-  <div>{{ self::item(DuplicatePageFilter::Kind, torrent.meta.main_cat.as_str()) | safe }}</div>
-  <div>{{ self::item(DuplicatePageFilter::Title, torrent.meta.title) | safe }}</div>
-  <div>{{ self::items(DuplicatePageFilter::Author, torrent.meta.authors) | safe }}</div>
-  <div>{{ self::items(DuplicatePageFilter::Narrator, torrent.meta.narrators) | safe }}</div>
-  <div>{{ self::series(DuplicatePageFilter::Series, torrent.meta.series) | safe }}</div>
-  <div>{{ self::items(DuplicatePageFilter::Filetype, torrent.meta.filetypes) | safe }}</div>
+  <div>{{ self::item(DuplicatePageFilter::Kind, torrent.meta.main_cat.as_str()) }}</div>
+  <div>{{ self::item(DuplicatePageFilter::Title, torrent.meta.title) }}</div>
+  <div>{{ self::items(DuplicatePageFilter::Author, torrent.meta.authors) }}</div>
+  <div>{{ self::items(DuplicatePageFilter::Narrator, torrent.meta.narrators) }}</div>
+  <div>{{ self::series(DuplicatePageFilter::Series, torrent.meta.series) }}</div>
+  <div>{{ self::items(DuplicatePageFilter::Filetype, torrent.meta.filetypes) }}</div>
   <div>{{ self::time(torrent.created_at) }}</div>
   <div><a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a></div>
 {% endfor %}

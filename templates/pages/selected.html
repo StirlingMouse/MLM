@@ -17,24 +17,24 @@
 <p>Unsats: {{ unsats.count }} / {{ unsats.limit }}{% if !torrents.is_empty() %}<br>Queued Torrents: {{ torrents.len() }}{% endif %}</p>
 {% endif %}
 <div class="SelectedTable table">
-  {{ table_header(Some(SelectedPageSort::Kind), "Type") | safe }}
-  {{ table_header(Some(SelectedPageSort::Title), "Title") | safe }}
-  {{ table_header(Some(SelectedPageSort::Authors), "Authors") | safe }}
-  {{ table_header(Some(SelectedPageSort::Narrators), "Narrators") | safe }}
-  {{ table_header(Some(SelectedPageSort::Series), "Series") | safe }}
-  {{ table_header(None, "Filetypes") | safe }}
-  {{ table_header(Some(SelectedPageSort::Cost), "Cost") | safe }}
-  {{ table_header(Some(SelectedPageSort::Buffer), "Required Unsats") | safe }}
-  {{ table_header(Some(SelectedPageSort::CreatedAt), "Added At") | safe }}
-  {{ table_header(None, "") | safe }}
+  {{ table_header(Some(SelectedPageSort::Kind), "Type") }}
+  {{ table_header(Some(SelectedPageSort::Title), "Title") }}
+  {{ table_header(Some(SelectedPageSort::Authors), "Authors") }}
+  {{ table_header(Some(SelectedPageSort::Narrators), "Narrators") }}
+  {{ table_header(Some(SelectedPageSort::Series), "Series") }}
+  {{ table_header(None, "Filetypes") }}
+  {{ table_header(Some(SelectedPageSort::Cost), "Cost") }}
+  {{ table_header(Some(SelectedPageSort::Buffer), "Required Unsats") }}
+  {{ table_header(Some(SelectedPageSort::CreatedAt), "Added At") }}
+  {{ table_header(None, "") }}
 {% for torrent in torrents %}
-  <div>{{ self::item(SelectedPageFilter::Kind, torrent.meta.main_cat.as_str()) | safe }}</div>
-  <div>{{ self::item(SelectedPageFilter::Title, torrent.meta.title) | safe }}</div>
-  <div>{{ self::items(SelectedPageFilter::Author, torrent.meta.authors) | safe }}</div>
-  <div>{{ self::items(SelectedPageFilter::Narrator, torrent.meta.narrators) | safe }}</div>
-  <div>{{ self::series(SelectedPageFilter::Series, torrent.meta.series) | safe }}</div>
-  <div>{{ self::items(SelectedPageFilter::Filetype, torrent.meta.filetypes) | safe }}</div>
-  <div>{{ self::item(SelectedPageFilter::Cost, torrent.cost.as_str()) | safe }}</div>
+  <div>{{ self::item(SelectedPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</div>
+  <div>{{ self::item(SelectedPageFilter::Title, torrent.meta.title) }}</div>
+  <div>{{ self::items(SelectedPageFilter::Author, torrent.meta.authors) }}</div>
+  <div>{{ self::items(SelectedPageFilter::Narrator, torrent.meta.narrators) }}</div>
+  <div>{{ self::series(SelectedPageFilter::Series, torrent.meta.series) }}</div>
+  <div>{{ self::items(SelectedPageFilter::Filetype, torrent.meta.filetypes) }}</div>
+  <div>{{ self::item(SelectedPageFilter::Cost, torrent.cost.as_str()) }}</div>
   <div>{{ torrent.unsat_buffer.unwrap_or(*unsat_buffer) }}</div>
   <div>{{ self::time(torrent.created_at) }}</div>
   <div><a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a></div>

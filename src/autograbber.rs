@@ -560,6 +560,7 @@ async fn grab_torrent(
             created_at: Timestamp::now(),
             replaced_with: None,
             request_matadata_update: false,
+            library_mismatch: None,
         })
         .or_else(|err| {
             if let db_type::Error::DuplicateKey { .. } = err {

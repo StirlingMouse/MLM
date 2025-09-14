@@ -17,7 +17,7 @@ body {
 }
 
 a {
-        color: var(--text);
+        color: currentColor;
         text-decoration-color: transparent;
 
         &:hover {
@@ -250,6 +250,9 @@ form {
 }
 
 .missing {
+        color: var(--warn);
+}
+.warn {
         color: var(--warn);
 }
 

@@ -3,7 +3,10 @@ use std::{
     ops::RangeInclusive,
 };
 
-use askama::Template;
+use askama::{
+    Template,
+    filters::{self, HtmlSafe},
+};
 use serde::{Deserialize, Serialize};
 
 use super::Conditional;
@@ -221,6 +224,8 @@ pub struct AllColumnHeader<'a> {
     name: &'a str,
 }
 
+impl<'a> HtmlSafe for AllColumnHeader<'a> {}
+
 /// ```askama
 /// {% match key %}
 /// {% when Some(key) %}
@@ -247,6 +252,7 @@ pub struct TableHeader<T: Key> {
     key: Option<T>,
     label: String,
 }
+impl<T: Key> HtmlSafe for TableHeader<T> {}
 
 impl<T: Key> TableHeader<T> {
     pub fn link(&self) -> String {
@@ -292,7 +298,9 @@ pub fn table_styles_rows(cols: u64, rows: u64) -> String {
 pub struct ItemFilter<'a, T: Key> {
     field: T,
     label: &'a str,
+    value: Option<&'a str>,
 }
+impl<'a, T: Key> HtmlSafe for ItemFilter<'a, T> {}
 
 impl<'a, T: Key> ItemFilter<'a, T> {
     pub fn link(&self) -> String {
@@ -300,12 +308,28 @@ impl<'a, T: Key> ItemFilter<'a, T> {
             sort_by: Some(self.field),
             asc: false,
         };
-        format!("?{}={}", key, &urlencoding::encode(self.label))
+        format!(
+            "?{}={}",
+            key,
+            &urlencoding::encode(self.value.unwrap_or(self.label))
+        )
     }
 }
 
 pub fn item<T: Key>(field: T, label: &str) -> ItemFilter<T> {
-    ItemFilter { field, label }
+    ItemFilter {
+        field,
+        label,
+        value: None,
+    }
+}
+
+pub fn item_v<'a, T: Key>(field: T, label: &'a str, value: &'a str) -> ItemFilter<'a, T> {
+    ItemFilter {
+        field,
+        label,
+        value: Some(value),
+    }
 }
 
 /// ```askama
@@ -319,6 +343,7 @@ pub struct ItemFilters<'a, T: Key> {
     field: T,
     labels: &'a [String],
 }
+impl<'a, T: Key> HtmlSafe for ItemFilters<'a, T> {}
 
 pub fn items<'a, T: Key>(field: T, labels: &'a [String]) -> ItemFilters<'a, T> {
     ItemFilters { field, labels }

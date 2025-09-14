@@ -174,6 +174,8 @@ struct Series<'a, T: Key> {
     series: &'a Vec<(String, String)>,
 }
 
+impl<'a, T: Key> HtmlSafe for Series<'a, T> {}
+
 fn series<T: Key>(field: T, series: &Vec<(String, String)>) -> Series<'_, T> {
     Series { field, series }
 }
@@ -199,6 +201,8 @@ fn filter<'a>(filter: &'a Filter) -> FilterTemplate<'a> {
 struct Conditional<T: Template> {
     template: Option<T>,
 }
+
+impl<T: Template> HtmlSafe for Conditional<T> {}
 
 /// ```askama
 /// <a href="https://www.myanonamouse.net/t/{{ id }}" class=torrent target=_blank>{{ title }}</a>

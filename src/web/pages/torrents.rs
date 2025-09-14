@@ -15,14 +15,14 @@ use sublime_fuzzy::FuzzySearch;
 use crate::{
     cleaner::clean_torrent,
     config::Config,
-    data::{Language, Torrent, TorrentKey},
+    data::{Language, LibraryMismatch, Torrent, TorrentKey},
     linker::{refresh_metadata, refresh_metadata_relink},
     mam::MaM,
     web::{
         AppError, series,
         tables::{
-            HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable, item, items,
-            table_styles,
+            HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable, item, item_v,
+            items, table_styles,
         },
         time,
     },
@@ -70,6 +70,20 @@ pub async fn torrents_page(
                     }
                     TorrentsPageFilter::Filetype => t.meta.filetypes.contains(value),
                     TorrentsPageFilter::Linked => t.library_path.is_some() == (value == "true"),
+                    TorrentsPageFilter::LibraryMismatch => {
+                        if value.is_empty() {
+                            t.library_mismatch.is_some()
+                        } else {
+                            match t.library_mismatch {
+                                Some(LibraryMismatch::NewPath(ref path)) => {
+                                    value == "new_path" || value.as_str() == path.to_string_lossy()
+                                }
+                                Some(LibraryMismatch::NoLibrary) => value == "no_library",
+                                Some(LibraryMismatch::TorrentRemoved) => value == "torrent_removed",
+                                None => false,
+                            }
+                        }
+                    }
                     TorrentsPageFilter::Query => true,
                     TorrentsPageFilter::SortBy => true,
                     TorrentsPageFilter::Asc => true,
@@ -249,6 +263,7 @@ pub enum TorrentsPageFilter {
     Language,
     Filetype,
     Linked,
+    LibraryMismatch,
     Query,
     // Workaround sort decode failure
     SortBy,

@@ -60,35 +60,35 @@
 </div>
 <div class="TorrentsTable table">
   {{ table_header_all("torrent", "30px") | safe }}
-  {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", "84px") | safe }}
-  {{ table_header_s(Some(TorrentsPageSort::Title), "Title", "2fr") | safe }}
-  {{ table_header_if(show.authors, Some(TorrentsPageSort::Authors), "Authors", "1fr") | safe }}
-  {{ table_header_if(show.narrators, Some(TorrentsPageSort::Narrators), "Narrators", "1fr") | safe }}
-  {{ table_header_if(show.series, Some(TorrentsPageSort::Series), "Series", "1fr") | safe }}
-  {{ table_header_if(show.language, Some(TorrentsPageSort::Language), "Language", "100px") | safe }}
-  {{ table_header_if(show.filetypes, None, "Filetypes", "100px") | safe }}
-  {{ table_header_if(!show.path, Some(TorrentsPageSort::Linked), "Linked", "80px") | safe }}
-  {{ table_header_if(show.path, Some(TorrentsPageSort::Linked), "Path", "2fr") | safe }}
-  {{ table_header_s(Some(TorrentsPageSort::CreatedAt), "Added At", "157px") | safe }}
-  {{ table_header_s(None, "", "44px") | safe }}
+  {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", "84px") }}
+  {{ table_header_s(Some(TorrentsPageSort::Title), "Title", "2fr") }}
+  {{ table_header_if(show.authors, Some(TorrentsPageSort::Authors), "Authors", "1fr") }}
+  {{ table_header_if(show.narrators, Some(TorrentsPageSort::Narrators), "Narrators", "1fr") }}
+  {{ table_header_if(show.series, Some(TorrentsPageSort::Series), "Series", "1fr") }}
+  {{ table_header_if(show.language, Some(TorrentsPageSort::Language), "Language", "100px") }}
+  {{ table_header_if(show.filetypes, None, "Filetypes", "100px") }}
+  {{ table_header_if(!show.path, Some(TorrentsPageSort::Linked), "Linked", "80px") }}
+  {{ table_header_if(show.path, Some(TorrentsPageSort::Linked), "Path", "2fr") }}
+  {{ table_header_s(Some(TorrentsPageSort::CreatedAt), "Added At", "157px") }}
+  {{ table_header_s(None, "", "44px") }}
 {% for torrent in torrents %}
   <div><input type=checkbox name=torrent value={{torrent.hash}}></div>
-  <div>{{ self::item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) | safe }}</div>
-  <div>{{ self::item(TorrentsPageFilter::Title, torrent.meta.title) | safe }}</div>
+  <div>{{ self::item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</div>
+  <div>{{ self::item(TorrentsPageFilter::Title, torrent.meta.title) }}</div>
   {% if show.authors %}
-  <div>{{ self::items(TorrentsPageFilter::Author, torrent.meta.authors) | safe }}</div>
+  <div>{{ self::items(TorrentsPageFilter::Author, torrent.meta.authors) }}</div>
   {% endif %}
   {% if show.narrators %}
-  <div>{{ self::items(TorrentsPageFilter::Narrator, torrent.meta.narrators) | safe }}</div>
+  <div>{{ self::items(TorrentsPageFilter::Narrator, torrent.meta.narrators) }}</div>
   {% endif %}
   {% if show.series %}
-  <div>{{ self::series(TorrentsPageFilter::Series, torrent.meta.series) | safe }}</div>
+  <div>{{ self::series(TorrentsPageFilter::Series, torrent.meta.series) }}</div>
   {% endif %}
   {% if show.language %}
-  <div>{{ self::item(TorrentsPageFilter::Language, torrent.meta.language.map(Language::to_str).unwrap_or_default()) | safe }}</div>
+  <div>{{ self::item(TorrentsPageFilter::Language, torrent.meta.language.map(Language::to_str).unwrap_or_default()) }}</div>
   {% endif %}
   {% if show.filetypes %}
-  <div>{{ self::items(TorrentsPageFilter::Filetype, torrent.meta.filetypes) | safe }}</div>
+  <div>{{ self::items(TorrentsPageFilter::Filetype, torrent.meta.filetypes) }}</div>
   {% endif %}
   {% if show.path %}
   <div>
@@ -97,11 +97,33 @@
       {{ path.to_string_lossy() }}
     {% when None %}
     {% endmatch %}
+    {% match torrent.library_mismatch %}
+    {% when Some(LibraryMismatch::NewPath(path)) %}
+      <span class=warn title="Wanted library dir: {{ path.to_string_lossy() }}">
+        {{ self::item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "new_path") }}
+      </span>
+    {% when Some(LibraryMismatch::NoLibrary) %}
+      <span class=warn title="No longer wanted in library">{{ self::item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "no_library") }}</span>
+    {% when Some(LibraryMismatch::TorrentRemoved) %}
+      <span class=warn title="Torrent has been removed">{{ self::item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "torrent_removed") }}</span>
+    {% when None %}
+    {% endmatch %}
   </div>
   {% else %}
     <div {% if let Some(path) = torrent.library_path %}title="{{ path.to_string_lossy() }}"{% endif %}>
-    {{ self::item(TorrentsPageFilter::Linked, &torrent.library_path.is_some().to_string()) | safe }}
-  </div>
+      {{ self::item(TorrentsPageFilter::Linked, &torrent.library_path.is_some().to_string()) }}
+      {% match torrent.library_mismatch %}
+      {% when Some(LibraryMismatch::NewPath(path)) %}
+        <span class=warn title="Wanted library dir: {{ path.to_string_lossy() }}">
+          {{ self::item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "new_path") }}
+        </span>
+      {% when Some(LibraryMismatch::NoLibrary) %}
+        <span class=warn title="No longer wanted in library">{{ self::item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "no_library") }}</span>
+      {% when Some(LibraryMismatch::TorrentRemoved) %}
+        <span class=warn title="Torrent has been removed">{{ self::item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "torrent_removed") }}</span>
+      {% when None %}
+      {% endmatch %}
+    </div>
   {% endif %}
   <div>{{ self::time(torrent.created_at) }}</div>
   <div><a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a></div>

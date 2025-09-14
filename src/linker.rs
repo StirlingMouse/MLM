@@ -25,7 +25,9 @@ use tracing::{Level, debug, instrument, span, trace};
 use crate::{
     cleaner::remove_library_files,
     config::{Config, Library, LibraryLinkMethod, QbitConfig},
-    data::{self, ErroredTorrentId, Event, EventType, Size, Timestamp, Torrent, TorrentMeta},
+    data::{
+        ErroredTorrentId, Event, EventType, LibraryMismatch, Size, Timestamp, Torrent, TorrentMeta,
+    },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{MaM, MaMTorrent, clean_value, normalize_title},
     qbittorrent::QbitError,
@@ -52,15 +54,43 @@ pub async fn link_torrents_to_library(
         let Some(hash) = &torrent.hash else {
             continue;
         };
-        {
-            let r = db.r_transaction()?;
-            let torrent: Option<data::Torrent> = r.get().primary(hash.clone())?;
-            if torrent.is_some_and(|t| t.library_path.is_some() || t.replaced_with.is_some()) {
-                continue;
-            }
-        }
         if torrent.progress < 1.0 {
             continue;
+        }
+        {
+            let r = db.r_transaction()?;
+            let t: Option<Torrent> = r.get().primary(hash.clone())?;
+            if let Some(mut t) = t {
+                if let Some(library_path) = &t.library_path {
+                    let Some(library) = find_library(&config, &torrent) else {
+                        if t.library_mismatch != Some(LibraryMismatch::NoLibrary) {
+                            println!("no library: {library_path:?}",);
+                            t.library_mismatch = Some(LibraryMismatch::NoLibrary);
+                            let rw = db.rw_transaction()?;
+                            rw.upsert(t)?;
+                            rw.commit()?;
+                        }
+                        continue;
+                    };
+                    if !library_path.starts_with(library.library_dir()) {
+                        let wanted = Some(LibraryMismatch::NewPath(library.library_dir().clone()));
+                        if t.library_mismatch != wanted {
+                            println!(
+                                "path differs: {library_path:?} != {:?}",
+                                library.library_dir()
+                            );
+                            t.library_mismatch = wanted;
+                            let rw = db.rw_transaction()?;
+                            rw.upsert(t)?;
+                            rw.commit()?;
+                        }
+                    }
+                    continue;
+                }
+                if t.replaced_with.is_some() {
+                    continue;
+                }
+            }
         }
         let Some(library) = find_library(&config, &torrent) else {
             trace!(
@@ -375,7 +405,7 @@ async fn link_torrent(
 
     {
         let rw = db.rw_transaction()?;
-        rw.upsert(data::Torrent {
+        rw.upsert(Torrent {
             hash: hash.to_owned(),
             library_path: Some(dir.clone()),
             library_files,
@@ -386,6 +416,7 @@ async fn link_torrent(
             created_at: Timestamp::now(),
             replaced_with: None,
             request_matadata_update: false,
+            library_mismatch: None,
         })?;
         rw.commit()?;
     }

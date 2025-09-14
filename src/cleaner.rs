@@ -5,7 +5,11 @@ use native_db::Database;
 use tracing::{debug, info, instrument, trace};
 
 use crate::{
-    config::Config, data::{self, ErroredTorrentId, Event, EventType, Timestamp, Torrent}, linker::file_size, logging::{update_errored_torrent, write_event, TorrentMetaError}, qbittorrent::QbitError
+    config::Config,
+    data::{self, ErroredTorrentId, Event, EventType, Timestamp, Torrent},
+    linker::file_size,
+    logging::{TorrentMetaError, update_errored_torrent, write_event},
+    qbittorrent::QbitError,
 };
 
 #[instrument(skip_all)]
@@ -171,6 +175,7 @@ pub async fn clean_torrent(config: &Config, db: &Database<'_>, mut remove: Torre
     let mam_id = remove.meta.mam_id;
     let library_path = remove.library_path.take();
     let mut library_files = remove.library_files.clone();
+    remove.library_mismatch = None;
     library_files.sort();
     {
         let rw = db.rw_transaction()?;
