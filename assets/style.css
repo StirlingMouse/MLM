@@ -43,6 +43,11 @@ nav > a {
         display: flex;
         align-items: baseline;
         justify-content: space-between;
+        gap: 8px;
+
+        h1 {
+                flex: 1;
+        }
 }
 
 .actions {
@@ -63,6 +68,50 @@ form {
 
                 &[data-prompt] {
                         color: var(--warn);
+                }
+
+                &:hover {
+                        background: var(--color-3);
+                }
+                &:focus-ring {
+                        background: var(--color-3);
+                }
+        }
+        
+        input[type=text] {
+                appearance: none;
+                padding: 4px 8px;
+                border: none;
+                border-radius: 2px;
+                font-size: inherit;
+                color: var(--text);
+                background: var(--above);
+                cursor: pointer;
+                width: max(220px, 20vw);
+
+                &:focus {
+                        background: var(--color-3);
+                        outline: 2px solid var(--accent);
+                }
+        }
+        button[is="clear-button"] {
+                position: absolute;
+                display: none;
+                margin-top: 4px;
+                margin-left: -4px;
+                transform: translateX(-100%);
+                align-items: center;
+                justify-content: center;
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                font-size: inherit;
+                color: var(--text);
+                cursor: pointer;
+
+                &::after {
+                  content: "⨯";
+                  transform: translateY(-2px);
                 }
 
                 &:hover {

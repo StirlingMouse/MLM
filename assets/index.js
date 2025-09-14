@@ -1,3 +1,11 @@
+document.body.addEventListener('formdata', e => {
+        const formData = e.formData;
+        const show = formData.getAll('show')
+        if (show.length > 1) formData.set('show', show.join(','))
+        const query = formData.get('query')
+        if (query === '') formData.delete('query')
+})
+
 document.body.addEventListener('click', e => {
         if (e.target instanceof HTMLButtonElement) {
                 if (e.target.dataset.prompt) {

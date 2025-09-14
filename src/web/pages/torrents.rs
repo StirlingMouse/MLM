@@ -10,6 +10,7 @@ use axum::{
 use axum_extra::extract::Form;
 use native_db::Database;
 use serde::{Deserialize, Serialize};
+use sublime_fuzzy::FuzzySearch;
 
 use crate::{
     cleaner::clean_torrent,
@@ -38,16 +39,23 @@ pub async fn torrents_page(
         .r_transaction()?
         .scan()
         .secondary::<Torrent>(TorrentKey::created_at)?;
+    let query = filter
+        .iter()
+        .find(|(field, _)| field == &TorrentsPageFilter::Query)
+        .and_then(|(_, value)| if value.is_empty() { None } else { Some(value) });
+    let show = show.show.unwrap_or_default();
+
     let mut torrents = torrents
         .all()?
         .rev()
-        .filter(|t| {
+        .filter_map(|t| {
             let Ok(t) = t else {
-                return true;
+                return Some(t.map(|t| (t, 0)));
             };
             if t.replaced_with.is_some() {
-                return false;
+                return None;
             }
+            let mut torrent_score = 0;
             for (field, value) in filter.iter() {
                 let ok = match field {
                     TorrentsPageFilter::Kind => t.meta.main_cat.as_str() == value,
@@ -62,6 +70,7 @@ pub async fn torrents_page(
                     }
                     TorrentsPageFilter::Filetype => t.meta.filetypes.contains(value),
                     TorrentsPageFilter::Linked => t.library_path.is_some() == (value == "true"),
+                    TorrentsPageFilter::Query => true,
                     TorrentsPageFilter::SortBy => true,
                     TorrentsPageFilter::Asc => true,
                     TorrentsPageFilter::Show => true,
@@ -69,15 +78,40 @@ pub async fn torrents_page(
                     TorrentsPageFilter::PageSize => true,
                 };
                 if !ok {
-                    return false;
+                    return None;
+                }
+                if field == &TorrentsPageFilter::Query && !value.is_empty() {
+                    torrent_score += score(value, &t.meta.title);
+                    if show.authors {
+                        for author in &t.meta.authors {
+                            torrent_score += score(value, author);
+                        }
+                    }
+                    if show.narrators {
+                        for narrator in &t.meta.narrators {
+                            torrent_score += score(value, narrator);
+                        }
+                    }
+                    if show.series {
+                        for (series_name, _) in &t.meta.series {
+                            torrent_score += score(value, series_name);
+                        }
+                    }
                 }
             }
-            true
+            if query.is_some() && torrent_score < 10 {
+                return None;
+            }
+            Some(Ok((t, torrent_score)))
         })
         .collect::<Result<Vec<_>, _>>()?;
 
     let paging = paging.default_page_size(500, torrents.len());
 
+    if sort.sort_by.is_none() && query.is_some() {
+        torrents.sort_by_key(|(_, score)| -*score);
+    }
+    let mut torrents = torrents.into_iter().map(|(t, _)| t).collect::<Vec<_>>();
     if let Some(sort_by) = &sort.sort_by {
         torrents.sort_by(|a, b| {
             let ord = match sort_by {
@@ -104,11 +138,19 @@ pub async fn torrents_page(
     let template = TorrentsPageTemplate {
         paging: paging.unwrap_or_default(),
         sort,
-        show: show.show.unwrap_or_default(),
+        show,
         cols: Default::default(),
+        query: query.map(|q| q.as_str()).unwrap_or("").to_owned(),
         torrents,
     };
     Ok::<_, AppError>(Html(template.to_string()))
+}
+
+fn score(query: &str, target: &str) -> isize {
+    FuzzySearch::new(query, target)
+        .case_insensitive()
+        .best_match()
+        .map_or(0, |m| m.score())
 }
 
 pub async fn torrents_page_post(
@@ -177,10 +219,11 @@ struct TorrentsPageTemplate {
     sort: SortOn<TorrentsPageSort>,
     show: TorrentsPageColumns,
     cols: RefCell<Vec<String>>,
+    query: String,
     torrents: Vec<Torrent>,
 }
 
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum TorrentsPageSort {
     Kind,
@@ -206,6 +249,7 @@ pub enum TorrentsPageFilter {
     Language,
     Filetype,
     Linked,
+    Query,
     // Workaround sort decode failure
     SortBy,
     Asc,

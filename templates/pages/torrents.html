@@ -11,15 +11,13 @@
 {% endblock %}
 
 {% block content %}
-<form method=post>
-<div class="row">
+<form class="row">
   <h1>Torrents</h1>
-  <div class="actions actions_torrent">
-    <button name=action value=refresh>refresh metadata</button>
-    <button name=action value=refresh-relink>refresh metadata and relink</button>
-    <button name=action value=clean data-prompt="Are you sure you want to clean the selected torrents?">clean torrent</button>
-    <button name=action value=remove data-prompt="Are you sure you want to remove the selected torrents?">remove torrent from MLM</button>
-  </div>
+  <label>
+    <input type="submit" style="display:none">
+    Search: <input type=text value="{{ query }}" name=query>
+    <button is="clear-button" type="button"></button>
+  </label>
   <div class="table_options">
     <div class="option_group">
       Columns:
@@ -52,6 +50,13 @@
       Page size: {{ paging.selector([100, 500, 1000, 5000]) | safe }}
     </div>
   </div>
+</form>
+<form method=post>
+<div class="actions actions_torrent">
+  <button name=action value=refresh>refresh metadata</button>
+  <button name=action value=refresh-relink>refresh metadata and relink</button>
+  <button name=action value=clean data-prompt="Are you sure you want to clean the selected torrents?">clean torrent</button>
+  <button name=action value=remove data-prompt="Are you sure you want to remove the selected torrents?">remove torrent from MLM</button>
 </div>
 <div class="TorrentsTable table">
   {{ table_header_all("torrent", "30px") | safe }}
