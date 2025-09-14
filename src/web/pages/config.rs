@@ -10,7 +10,7 @@ use axum_extra::extract::Form;
 use native_db::Database;
 use reqwest::Url;
 use serde::Deserialize;
-use tracing::{error, info};
+use tracing::info;
 
 use crate::{
     config::{Config, Cost, Library, TorrentFilter, Type},
