@@ -86,8 +86,22 @@ form {
                 font-size: inherit;
                 color: var(--text);
                 background: var(--above);
-                cursor: pointer;
                 width: max(220px, 20vw);
+
+                &:focus {
+                        background: var(--color-3);
+                        outline: 2px solid var(--accent);
+                }
+        }
+        input[type=number] {
+                appearance: none;
+                padding: 4px 8px;
+                border: none;
+                border-radius: 2px;
+                font-size: inherit;
+                color: var(--text);
+                background: var(--above);
+                width: 40px;
 
                 &:focus {
                         background: var(--color-3);

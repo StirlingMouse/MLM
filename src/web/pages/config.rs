@@ -10,7 +10,7 @@ use axum_extra::extract::Form;
 use native_db::Database;
 use reqwest::Url;
 use serde::Deserialize;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::{
     config::{Config, Cost, Library, TorrentFilter, Type},
@@ -51,12 +51,11 @@ pub async fn config_page_post(
                 .ok_or(anyhow::Error::msg("invalid tag_filter"))?;
             let qbit_conf = config
                 .qbittorrent
-                .first()
+                .get(form.qbit_index.unwrap_or_default())
                 .ok_or(anyhow::Error::msg("requires a qbit config"))?;
             let qbit = qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
                 .await
                 .map_err(QbitError)?;
-            // println!("{:?}", qbit.categories)
             let torrents = db.r_transaction()?.scan().primary::<Torrent>()?;
             for torrent in torrents.all()? {
                 let torrent = torrent?;
@@ -119,6 +118,7 @@ pub struct ConfigPageQuery {
 #[derive(Debug, Deserialize)]
 pub struct ConfigPageForm {
     action: String,
+    qbit_index: Option<usize>,
     tag_filter: Option<usize>,
 }
 
