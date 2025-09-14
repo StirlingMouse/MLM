@@ -7,7 +7,7 @@ use tracing::error;
 
 use crate::{
     config::{Cost, Filter, GoodreadsList, Library, LibraryLinkMethod, LibraryTagFilters},
-    data::{Language, MainCat, Size, Torrent},
+    data::{Category, Language, MainCat, Size, Torrent},
     mam::{DATE_TIME_FORMAT, MaMTorrent},
     mam_enums::Flags,
 };
@@ -125,15 +125,29 @@ impl Filter {
                 return Ok(false);
             }
         }
-        if self.categories.audio.as_ref().is_some_and(|c| c.is_empty())
-            && torrent.meta.main_cat == MainCat::Audio
-        {
-            return Ok(false);
-        }
-        if self.categories.ebook.as_ref().is_some_and(|c| c.is_empty())
-            && torrent.meta.main_cat == MainCat::Ebook
-        {
-            return Ok(false);
+        if let Some(cat) = &torrent.meta.cat {
+            match cat {
+                Category::Audio(category) => {
+                    if self
+                        .categories
+                        .audio
+                        .as_ref()
+                        .is_none_or(|cats| !cats.contains(category))
+                    {
+                        return Ok(false);
+                    }
+                }
+                Category::Ebook(category) => {
+                    if self
+                        .categories
+                        .ebook
+                        .as_ref()
+                        .is_none_or(|cats| !cats.contains(category))
+                    {
+                        return Ok(false);
+                    }
+                }
+            }
         }
 
         ensure!(self.flags.as_bitfield() == 0, "has flags");
@@ -149,26 +163,28 @@ impl Filter {
         ensure!(self.min_snatched.is_none(), "has min_snatched");
         ensure!(self.max_snatched.is_none(), "has max_snatched");
 
-        ensure!(
-            self.categories.audio.as_ref().is_none_or(|c| c.is_empty()),
-            "has advanced audio selection"
-        );
-        ensure!(
-            self.categories.ebook.as_ref().is_none_or(|c| c.is_empty()),
-            "has advanced ebook selection"
-        );
+        if torrent.meta.cat.is_none() {
+            if self.categories.audio.as_ref().is_some_and(|c| c.is_empty())
+                && torrent.meta.main_cat == MainCat::Audio
+            {
+                return Ok(false);
+            }
+            if self.categories.ebook.as_ref().is_some_and(|c| c.is_empty())
+                && torrent.meta.main_cat == MainCat::Ebook
+            {
+                return Ok(false);
+            }
+            ensure!(
+                self.categories.audio.as_ref().is_none_or(|c| c.is_empty()),
+                "has advanced audio selection and no stored category"
+            );
+            ensure!(
+                self.categories.ebook.as_ref().is_none_or(|c| c.is_empty()),
+                "has advanced ebook selection and no stored category"
+            );
+        }
 
         Ok(true)
-    }
-}
-
-impl Cost {
-    pub fn wedge(self) -> bool {
-        match self {
-            Cost::Wedge => true,
-            Cost::TryWedge => true,
-            _ => false,
-        }
     }
 }
 

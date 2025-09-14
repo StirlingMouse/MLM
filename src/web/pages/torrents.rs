@@ -12,6 +12,7 @@ use native_db::Database;
 use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
 
+use crate::data::Category;
 use crate::{
     cleaner::clean_torrent,
     config::Config,
@@ -344,5 +345,15 @@ impl Sortable for TorrentsPageTemplate {
 impl HidableColumns for TorrentsPageTemplate {
     fn add_column(&self, size: &str) {
         self.cols.borrow_mut().push(size.to_owned());
+    }
+}
+
+impl Torrent {
+    pub fn cat_name(&self) -> &str {
+        match self.meta.cat {
+            Some(Category::Audio(cat)) => cat.to_str(),
+            Some(Category::Ebook(cat)) => cat.to_str(),
+            None => "N/A",
+        }
     }
 }

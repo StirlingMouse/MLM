@@ -331,6 +331,46 @@ impl AudiobookCategory {
             AudiobookCategory::YoungAdult => 111,
         }
     }
+
+    pub fn to_str(self) -> &'static str {
+        match self {
+            AudiobookCategory::ActionAdventure => "Action/Adventure",
+            AudiobookCategory::Art => "Art",
+            AudiobookCategory::Biographical => "Biographical",
+            AudiobookCategory::Business => "Business",
+            AudiobookCategory::ComputerInternet => "Computer/Internet",
+            AudiobookCategory::Crafts => "Crafts",
+            AudiobookCategory::CrimeThriller => "Crime/Thriller",
+            AudiobookCategory::Fantasy => "Fantasy",
+            AudiobookCategory::Food => "Food",
+            AudiobookCategory::GeneralFiction => "General Fiction",
+            AudiobookCategory::GeneralNonFic => "General Non-fic",
+            AudiobookCategory::HistoricalFiction => "Historical Fiction",
+            AudiobookCategory::History => "History",
+            AudiobookCategory::HomeGarden => "Home/Garden",
+            AudiobookCategory::Horror => "Horror",
+            AudiobookCategory::Humor => "Humor",
+            AudiobookCategory::Instructional => "Instructional",
+            AudiobookCategory::Juvenile => "Juvenile",
+            AudiobookCategory::Language => "Language",
+            AudiobookCategory::LiteraryClassics => "Literary Classics",
+            AudiobookCategory::MathScienceTech => "Math/Science/Tech",
+            AudiobookCategory::Medical => "Medical",
+            AudiobookCategory::Mystery => "Mystery",
+            AudiobookCategory::Nature => "Nature",
+            AudiobookCategory::Philosophy => "Philosophy",
+            AudiobookCategory::PolSocRelig => "Pol/Soc/Relig",
+            AudiobookCategory::Recreation => "Recreation",
+            AudiobookCategory::Romance => "Romance",
+            AudiobookCategory::ScienceFiction => "Science Fiction",
+            AudiobookCategory::SelfHelp => "Self-Help",
+            AudiobookCategory::TravelAdventure => "Travel/Adventure",
+            AudiobookCategory::TrueCrime => "True Crime",
+            AudiobookCategory::UrbanFantasy => "Urban Fantasy",
+            AudiobookCategory::Western => "Western",
+            AudiobookCategory::YoungAdult => "Young Adult",
+        }
+    }
 }
 
 impl TryFrom<String> for AudiobookCategory {
@@ -551,6 +591,50 @@ impl EbookCategory {
             EbookCategory::YoungAdult => 112,
         }
     }
+
+    pub fn to_str(self) -> &'static str {
+        match self {
+            EbookCategory::ActionAdventure => "Action/Adventure",
+            EbookCategory::Art => "Art",
+            EbookCategory::Biographical => "Biographical",
+            EbookCategory::Business => "Business",
+            EbookCategory::ComicsGraphicnovels => "Comics/Graphic Novels",
+            EbookCategory::ComputerInternet => "Computer/Internet",
+            EbookCategory::Crafts => "Crafts",
+            EbookCategory::CrimeThriller => "Crime/Thriller",
+            EbookCategory::Fantasy => "Fantasy",
+            EbookCategory::Food => "Food",
+            EbookCategory::GeneralFiction => "General Fiction",
+            EbookCategory::GeneralNonFiction => "General Non-fic",
+            EbookCategory::HistoricalFiction => "Historical Fiction",
+            EbookCategory::History => "History",
+            EbookCategory::HomeGarden => "Home/Garden",
+            EbookCategory::Horror => "Horror",
+            EbookCategory::Humor => "Humor",
+            EbookCategory::IllusionMagic => "Illusion/Magic",
+            EbookCategory::Instructional => "Instructional",
+            EbookCategory::Juvenile => "Juvenile",
+            EbookCategory::Language => "Language",
+            EbookCategory::LiteraryClassics => "Literary Classics",
+            EbookCategory::MagazinesNewspapers => "Magazines/Newspapers",
+            EbookCategory::MathScienceTech => "Math/Science/Tech",
+            EbookCategory::Medical => "Medical",
+            EbookCategory::MixedCollections => "Mixed Collections",
+            EbookCategory::Mystery => "Mystery",
+            EbookCategory::Nature => "Nature",
+            EbookCategory::Philosophy => "Philosophy",
+            EbookCategory::PolSocRelig => "Pol/Soc/Relig",
+            EbookCategory::Recreation => "Recreation",
+            EbookCategory::Romance => "Romance",
+            EbookCategory::ScienceFiction => "Science Fiction",
+            EbookCategory::SelfHelp => "Self-Help",
+            EbookCategory::TravelAdventure => "Travel/Adventure",
+            EbookCategory::TrueCrime => "True Crime",
+            EbookCategory::UrbanFantasy => "Urban Fantasy",
+            EbookCategory::Western => "Western",
+            EbookCategory::YoungAdult => "Young Adult",
+        }
+    }
 }
 
 impl TryFrom<String> for EbookCategory {
@@ -736,31 +820,6 @@ impl UserClass {
             "User" => Some(UserClass::User),
             "Mous" => Some(UserClass::Mouse),
             _ => None,
-        }
-    }
-
-    pub fn unsats(&self) -> u64 {
-        match self {
-            UserClass::Dev
-            | UserClass::SysOp
-            | UserClass::SrAdministrator
-            | UserClass::Administrator
-            | UserClass::UploaderCoordinator
-            | UserClass::SrModerator
-            | UserClass::Moderator
-            | UserClass::TorrentMod
-            | UserClass::ForumMod
-            | UserClass::SupportStaff
-            | UserClass::EntryLevelStaff
-            | UserClass::Uploader
-            | UserClass::Mouseketeer
-            | UserClass::Supporter
-            | UserClass::Elite
-            | UserClass::EliteVip => 200,
-            UserClass::Vip => 150,
-            UserClass::PowerUser => 100,
-            UserClass::User => 20,
-            UserClass::Mouse => 0,
         }
     }
 }
