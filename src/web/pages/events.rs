@@ -12,7 +12,7 @@ use crate::{
     data::{Event, EventKey, EventType, Torrent, TorrentCost},
     web::{
         AppError, Conditional, TorrentLink,
-        tables::{Key, table_styles},
+        tables::{Key, Pagination, PaginationParams, table_styles},
         time,
     },
 };
@@ -20,6 +20,7 @@ use crate::{
 pub async fn event_page(
     State(db): State<Arc<Database<'static>>>,
     Query(filter): Query<Vec<(EventPageFilter, String)>>,
+    Query(paging): Query<PaginationParams>,
 ) -> std::result::Result<Html<String>, AppError> {
     let events = db
         .r_transaction()?
@@ -27,24 +28,36 @@ pub async fn event_page(
         .secondary::<Event>(EventKey::created_at)?;
     let events = events.all()?.rev();
     let mut events_with_torrent = Vec::with_capacity(events.size_hint().0);
-    let events = events.filter(|t| {
-        let Ok(t) = t else {
-            return true;
-        };
-        for (field, value) in filter.iter() {
-            let ok = match field {
-                EventPageFilter::Show => match t.event {
-                    EventType::Grabbed { .. } => value == "grabber",
-                    EventType::Linked { .. } => value == "linker",
-                    EventType::Cleaned { .. } => value == "cleaner",
-                },
+    let mut events = events
+        .filter(|t| {
+            let Ok(t) = t else {
+                return true;
             };
-            if !ok {
-                return false;
+            for (field, value) in filter.iter() {
+                let ok = match field {
+                    EventPageFilter::Show => match t.event {
+                        EventType::Grabbed { .. } => value == "grabber",
+                        EventType::Linked { .. } => value == "linker",
+                        EventType::Cleaned { .. } => value == "cleaner",
+                    },
+                    EventPageFilter::From => true,
+                    EventPageFilter::PageSize => true,
+                };
+                if !ok {
+                    return false;
+                }
             }
-        }
-        true
-    });
+            true
+        })
+        .collect::<Vec<_>>();
+    let paging = paging.default_page_size(500, events.len());
+    if let Some(paging) = &paging {
+        events = events
+            .into_iter()
+            .skip(paging.from)
+            .take(paging.page_size)
+            .collect();
+    }
     for event in events {
         let event = event?;
         if let Some(hash) = &event.hash {
@@ -61,6 +74,7 @@ pub async fn event_page(
         }
     }
     let template = EventPageTemplate {
+        paging: paging.unwrap_or_default(),
         show: filter.iter().find_map(|f| {
             if f.0 == EventPageFilter::Show {
                 Some(f.1.as_str())
@@ -76,6 +90,7 @@ pub async fn event_page(
 #[derive(Template)]
 #[template(path = "pages/events.html")]
 struct EventPageTemplate<'a> {
+    paging: Pagination,
     show: Option<&'a str>,
     events: Vec<(Event, Option<Torrent>, Option<Torrent>)>,
 }
@@ -102,6 +117,9 @@ impl<'a> EventPageTemplate<'a> {
 #[serde(rename_all = "snake_case")]
 pub enum EventPageFilter {
     Show,
+    // Workaround sort decode failure
+    From,
+    PageSize,
 }
 
 impl Key for EventPageFilter {}

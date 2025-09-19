@@ -223,6 +223,7 @@ form {
 .table {
         display: grid;
         --alternate: var(--above);
+        word-break: break-word;
 
         & > .header, & > div {
                 display: block;

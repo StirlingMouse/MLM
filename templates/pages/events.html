@@ -33,6 +33,9 @@
       <input type=radio name=show {% if show == Some("cleaner") %}checked{% endif %} value="cleaner">
     </label>
   </div>
+  <div class="option_group">
+    Page size: {{ paging.selector([100, 500, 1000, 5000]) | safe }}
+  </div>
 </div>
 
 <div class="EventsTable table">
@@ -88,4 +91,5 @@
 <p><i>No events yet</i>
 {% endif %}
 </div>
+{{ paging | safe }}
 {% endblock %}
