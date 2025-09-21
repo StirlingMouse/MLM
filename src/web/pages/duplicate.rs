@@ -9,10 +9,10 @@ use native_db::Database;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    data::DuplicateTorrent,
+    data::{DuplicateTorrent, Torrent},
     web::{
         AppError, series,
-        tables::{Key, SortOn, Sortable, item, items, table_styles},
+        tables::{Key, SortOn, Sortable, item, items, table_styles_rows},
         time,
     },
 };
@@ -22,7 +22,7 @@ pub async fn duplicate_page(
     Query(sort): Query<SortOn<DuplicatePageSort>>,
     Query(filter): Query<Vec<(DuplicatePageFilter, String)>>,
 ) -> std::result::Result<Html<String>, AppError> {
-    let mut torrents = db
+    let mut duplicate_torrents = db
         .r_transaction()?
         .scan()
         .primary::<DuplicateTorrent>()?
@@ -52,7 +52,7 @@ pub async fn duplicate_page(
         })
         .collect::<Result<Vec<_>, native_db::db_type::Error>>()?;
     if let Some(sort_by) = &sort.sort_by {
-        torrents.sort_by(|a, b| {
+        duplicate_torrents.sort_by(|a, b| {
             let ord = match sort_by {
                 DuplicatePageSort::Kind => a.meta.main_cat.cmp(&b.meta.main_cat),
                 DuplicatePageSort::Title => a.meta.title.cmp(&b.meta.title),
@@ -64,6 +64,16 @@ pub async fn duplicate_page(
             if sort.asc { ord.reverse() } else { ord }
         });
     }
+    let mut torrents = vec![];
+    for torrent in duplicate_torrents {
+        let Some(with) = &torrent.duplicate_of else {
+            continue;
+        };
+        let Some(duplicate) = db.r_transaction()?.get().primary(with.clone())? else {
+            continue;
+        };
+        torrents.push((torrent, duplicate));
+    }
     let template = DuplicatePageTemplate { sort, torrents };
     Ok::<_, AppError>(Html(template.to_string()))
 }
@@ -72,7 +82,7 @@ pub async fn duplicate_page(
 #[template(path = "pages/duplicate.html")]
 struct DuplicatePageTemplate {
     sort: SortOn<DuplicatePageSort>,
-    torrents: Vec<DuplicateTorrent>,
+    torrents: Vec<(DuplicateTorrent, Torrent)>,
 }
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
