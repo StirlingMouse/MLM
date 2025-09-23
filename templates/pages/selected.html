@@ -5,7 +5,7 @@
 {% block head %}
   <style>
     .SelectedTable {
-      {{self::table_styles(11) | safe}}
+      {{self::table_styles(12) | safe}}
     }
   </style>
 {% endblock %}
@@ -30,6 +30,7 @@
   {{ table_header(Some(SelectedPageSort::Authors), "Authors") }}
   {{ table_header(Some(SelectedPageSort::Narrators), "Narrators") }}
   {{ table_header(Some(SelectedPageSort::Series), "Series") }}
+  {{ table_header(Some(SelectedPageSort::Size), "Size") }}
   {{ table_header(None, "Filetypes") }}
   {{ table_header(Some(SelectedPageSort::Cost), "Cost") }}
   {{ table_header(Some(SelectedPageSort::Buffer), "Required Unsats") }}
@@ -42,6 +43,7 @@
   <div>{{ self::items(SelectedPageFilter::Author, torrent.meta.authors) }}</div>
   <div>{{ self::items(SelectedPageFilter::Narrator, torrent.meta.narrators) }}</div>
   <div>{{ self::series(SelectedPageFilter::Series, torrent.meta.series) }}</div>
+  <div>{{ torrent.meta.size }}</div>
   <div>{{ self::items(SelectedPageFilter::Filetype, torrent.meta.filetypes) }}</div>
   <div>{{ self::item(SelectedPageFilter::Cost, torrent.cost.as_str()) }}</div>
   <div>{{ torrent.unsat_buffer.unwrap_or(*unsat_buffer) }}</div>

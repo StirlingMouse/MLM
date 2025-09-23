@@ -143,6 +143,7 @@ pub async fn torrents_page(
                 TorrentsPageSort::Narrators => a.meta.narrators.cmp(&b.meta.narrators),
                 TorrentsPageSort::Series => a.meta.series.cmp(&b.meta.series),
                 TorrentsPageSort::Language => a.meta.language.cmp(&b.meta.language),
+                TorrentsPageSort::Size => a.meta.size.cmp(&b.meta.size),
                 TorrentsPageSort::Linked => a.library_path.cmp(&b.library_path),
                 TorrentsPageSort::CreatedAt => a.created_at.cmp(&b.created_at),
             };
@@ -198,7 +199,7 @@ pub async fn torrents_page_post(
                 return Err(anyhow::Error::msg("mam_id error").into());
             };
             for torrent in form.torrents {
-                refresh_metadata(&db, &mam, torrent).await?;
+                refresh_metadata(&db, mam, torrent).await?;
             }
         }
         "refresh-relink" => {
@@ -206,7 +207,7 @@ pub async fn torrents_page_post(
                 return Err(anyhow::Error::msg("mam_id error").into());
             };
             for torrent in form.torrents {
-                refresh_metadata_relink(&config, &db, &mam, torrent).await?;
+                refresh_metadata_relink(&config, &db, mam, torrent).await?;
             }
         }
         "remove" => {
@@ -254,6 +255,7 @@ pub enum TorrentsPageSort {
     Narrators,
     Series,
     Language,
+    Size,
     Linked,
     CreatedAt,
 }
@@ -291,6 +293,7 @@ struct TorrentsPageColumns {
     narrators: bool,
     series: bool,
     language: bool,
+    size: bool,
     filetypes: bool,
     path: bool,
 }
@@ -307,6 +310,7 @@ impl Default for TorrentsPageColumns {
             narrators: true,
             series: true,
             language: false,
+            size: true,
             filetypes: true,
             path: false,
         }
@@ -322,6 +326,7 @@ impl TryFrom<String> for TorrentsPageColumns {
             narrators: false,
             series: false,
             language: false,
+            size: false,
             filetypes: false,
             path: false,
         };
@@ -331,6 +336,7 @@ impl TryFrom<String> for TorrentsPageColumns {
                 "narrator" => columns.narrators = true,
                 "series" => columns.series = true,
                 "language" => columns.language = true,
+                "size" => columns.size = true,
                 "filetype" => columns.filetypes = true,
                 "path" => columns.path = true,
                 "" => {}

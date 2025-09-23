@@ -39,6 +39,10 @@
         <input type=checkbox name=show {% if show.language %}checked{% endif %} value="language">
       </label>
       <label>
+        Size
+        <input type=checkbox name=show {% if show.size %}checked{% endif %} value="size">
+      </label>
+      <label>
         Filetypes
         <input type=checkbox name=show {% if show.filetypes %}checked{% endif %} value="filetype">
       </label>
@@ -57,6 +61,7 @@
   {{ table_header_if(show.narrators, Some(TorrentsPageSort::Narrators), "Narrators", "1fr") }}
   {{ table_header_if(show.series, Some(TorrentsPageSort::Series), "Series", "1fr") }}
   {{ table_header_if(show.language, Some(TorrentsPageSort::Language), "Language", "100px") }}
+  {{ table_header_if(show.size, Some(TorrentsPageSort::Size), "Size", "80px") }}
   {{ table_header_if(show.filetypes, None, "Filetypes", "100px") }}
   {{ table_header_s(Some(TorrentsPageSort::Replaced), "Replaced", "157px") }}
   {{ table_header_s(Some(TorrentsPageSort::CreatedAt), "Added At", "157px") }}
@@ -76,6 +81,9 @@
   {% endif %}
   {% if show.language %}
   <div>{{ self::item(TorrentsPageFilter::Language, torrent.meta.language.map(Language::to_str).unwrap_or_default()) }}</div>
+  {% endif %}
+  {% if show.size %}
+  <div>{{ torrent.meta.size }}</div>
   {% endif %}
   {% if show.filetypes %}
   <div>{{ self::items(TorrentsPageFilter::Filetype, torrent.meta.filetypes) }}</div>
@@ -100,6 +108,9 @@
   {% endif %}
   {% if show.language %}
   <div>{{ self::item(TorrentsPageFilter::Language, replacement.meta.language.map(Language::to_str).unwrap_or_default()) }}</div>
+  {% endif %}
+  {% if show.size %}
+  <div>{{ replacement.meta.size }}</div>
   {% endif %}
   {% if show.filetypes %}
   <div>{{ self::items(TorrentsPageFilter::Filetype, replacement.meta.filetypes) }}</div>

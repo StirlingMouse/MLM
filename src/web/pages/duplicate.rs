@@ -66,6 +66,7 @@ pub async fn duplicate_page(
                 DuplicatePageSort::Authors => a.meta.authors.cmp(&b.meta.authors),
                 DuplicatePageSort::Narrators => a.meta.narrators.cmp(&b.meta.narrators),
                 DuplicatePageSort::Series => a.meta.series.cmp(&b.meta.series),
+                DuplicatePageSort::Size => a.meta.size.cmp(&b.meta.size),
                 DuplicatePageSort::CreatedAt => a.created_at.cmp(&b.created_at),
             };
             if sort.asc { ord.reverse() } else { ord }
@@ -246,6 +247,7 @@ pub enum DuplicatePageSort {
     Authors,
     Narrators,
     Series,
+    Size,
     CreatedAt,
 }
 

@@ -66,12 +66,14 @@
   {% when EventType::Cleaned { library_path, files } %}
     Cleaned {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}<br />
     {% if let Some(torrent) = torrent %}
+    size: {{ torrent.meta.size }}<br />
     formats: {{ torrent.meta.filetypes.join(", ") }}<br />
     {% endif %}
     from: {{ library_path.to_string_lossy() }}<br />
     {% if let Some(r) = replacement %}
     <br />replaced with: {{ torrent_title(&replacement) | safe }}<br />
     {% if let Some(replacement) = replacement %}
+    size: {{ replacement.meta.size }}<br />
     formats: {{ replacement.meta.filetypes.join(", ") }}<br />
     {% endif %}
     {% if let Some(library_path) = r.library_path %}

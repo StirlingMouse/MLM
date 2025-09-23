@@ -69,6 +69,7 @@ pub async fn selected_page(
                 SelectedPageSort::Authors => a.meta.authors.cmp(&b.meta.authors),
                 SelectedPageSort::Narrators => a.meta.narrators.cmp(&b.meta.narrators),
                 SelectedPageSort::Series => a.meta.series.cmp(&b.meta.series),
+                SelectedPageSort::Size => a.meta.size.cmp(&b.meta.size),
                 SelectedPageSort::Cost => a.cost.cmp(&b.cost),
                 SelectedPageSort::Buffer => a
                     .unsat_buffer
@@ -153,6 +154,7 @@ pub enum SelectedPageSort {
     Authors,
     Narrators,
     Series,
+    Size,
     Cost,
     Buffer,
     CreatedAt,
