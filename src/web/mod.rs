@@ -78,7 +78,7 @@ pub async fn start_webserver(
         )
         .route(
             "/selected",
-            post(selected_torrents_page_post).with_state((config.clone(), db.clone(), mam.clone())),
+            post(selected_torrents_page_post).with_state(db.clone()),
         )
         .route(
             "/replaced",

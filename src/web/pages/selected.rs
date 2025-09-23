@@ -93,11 +93,7 @@ pub async fn selected_page(
 }
 
 pub async fn selected_torrents_page_post(
-    State((config, db, mam)): State<(
-        Arc<Config>,
-        Arc<Database<'static>>,
-        Arc<Result<Arc<MaM<'static>>>>,
-    )>,
+    State(db): State<Arc<Database<'static>>>,
     uri: OriginalUri,
     Form(form): Form<TorrentsPageForm>,
 ) -> Result<Redirect, AppError> {
@@ -113,6 +109,17 @@ pub async fn selected_torrents_page_post(
                 rw.commit()?;
             }
         }
+        "update" => {
+            for torrent in form.torrents {
+                let rw = db.rw_transaction()?;
+                let Some(mut torrent) = rw.get().primary::<SelectedTorrent>(torrent)? else {
+                    return Err(anyhow::Error::msg("Could not find torrent").into());
+                };
+                torrent.unsat_buffer = Some(form.unsats.unwrap_or_default());
+                rw.upsert(torrent)?;
+                rw.commit()?;
+            }
+        }
         action => {
             eprintln!("unknown action: {action}");
         }
@@ -124,6 +131,7 @@ pub async fn selected_torrents_page_post(
 #[derive(Debug, Deserialize)]
 pub struct TorrentsPageForm {
     action: String,
+    unsats: Option<u64>,
     #[serde(default, rename = "torrent")]
     torrents: Vec<u64>,
 }
