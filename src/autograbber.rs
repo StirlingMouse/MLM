@@ -67,6 +67,7 @@ pub async fn grab_selected_torrents(
         r.scan()
             .primary::<data::SelectedTorrent>()?
             .all()?
+            .filter(|t| t.as_ref().is_ok_and(|t| t.removed_at.is_none()))
             .collect::<Result<Vec<_>, native_db::db_type::Error>>()
     }?;
     if selected_torrents.is_empty() {
@@ -371,7 +372,9 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         .position(|t| old.meta.filetypes.contains(t));
                     if old_preference <= preference {
                         let mam_id = meta.mam_id;
-                        if let Err(err) = add_duplicate_torrent(rw, None, title_search, meta) {
+                        if let Err(err) =
+                            add_duplicate_torrent(rw, None, torrent.dl.clone(), title_search, meta)
+                        {
                             error!("Error writing duplicate torrent: {err}");
                         }
                         rw_opt.unwrap().commit()?;
@@ -381,9 +384,13 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         );
                         continue 'torrent;
                     } else {
-                        if let Err(err) =
-                            add_duplicate_torrent(rw, None, title_search.clone(), old.meta.clone())
-                        {
+                        if let Err(err) = add_duplicate_torrent(
+                            rw,
+                            None,
+                            torrent.dl.clone(),
+                            title_search.clone(),
+                            old.meta.clone(),
+                        ) {
                             error!("Error writing duplicate torrent: {err}");
                         }
                         info!(
@@ -423,9 +430,13 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         .position(|t| old.meta.filetypes.contains(t));
                     if old_preference <= preference {
                         let mam_id = meta.mam_id;
-                        if let Err(err) =
-                            add_duplicate_torrent(rw, Some(old.hash), title_search, meta)
-                        {
+                        if let Err(err) = add_duplicate_torrent(
+                            rw,
+                            Some(old.hash),
+                            torrent.dl.clone(),
+                            title_search,
+                            meta,
+                        ) {
                             error!("Error writing duplicate torrent: {err}");
                         }
                         rw_opt.unwrap().commit()?;
@@ -483,6 +494,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 title_search,
                 meta,
                 created_at: Timestamp::now(),
+                removed_at: None,
             })?;
             rw_opt.unwrap().commit()?;
         }
@@ -598,16 +610,17 @@ async fn grab_torrent(
 fn add_duplicate_torrent(
     rw: &RwTransaction<'_>,
     duplicate_of: Option<String>,
+    dl_link: Option<String>,
     title_search: String,
     meta: TorrentMeta,
 ) -> Result<()> {
     rw.upsert(DuplicateTorrent {
         mam_id: meta.mam_id,
+        dl_link,
         title_search,
         meta,
         created_at: Timestamp::now(),
         duplicate_of,
-        request_replace: false,
     })?;
     Ok(())
 }

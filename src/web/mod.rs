@@ -24,7 +24,7 @@ use pages::{
     list::list_page,
     lists::lists_page,
     replaced::{replaced_torrents_page, replaced_torrents_page_post},
-    selected::selected_page,
+    selected::{selected_page, selected_torrents_page_post},
     torrents::{torrents_page, torrents_page_post},
 };
 use reqwest::header;
@@ -75,6 +75,10 @@ pub async fn start_webserver(
         .route(
             "/selected",
             get(selected_page).with_state((config.clone(), db.clone(), mam.clone())),
+        )
+        .route(
+            "/selected",
+            post(selected_torrents_page_post).with_state((config.clone(), db.clone(), mam.clone())),
         )
         .route(
             "/replaced",

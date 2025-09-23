@@ -13,6 +13,9 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
     let mut models = Models::new();
     models.define::<v1::Config>().unwrap();
 
+    models.define::<v7::SelectedTorrent>().unwrap();
+    models.define::<v7::DuplicateTorrent>().unwrap();
+
     models.define::<v6::Torrent>().unwrap();
     models.define::<v6::SelectedTorrent>().unwrap();
     models.define::<v6::DuplicateTorrent>().unwrap();
@@ -51,9 +54,9 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
 pub type Config = v1::Config;
 pub type Torrent = v6::Torrent;
 pub type TorrentKey = v6::TorrentKey;
-pub type SelectedTorrent = v6::SelectedTorrent;
-pub type SelectedTorrentKey = v6::SelectedTorrentKey;
-pub type DuplicateTorrent = v6::DuplicateTorrent;
+pub type SelectedTorrent = v7::SelectedTorrent;
+pub type SelectedTorrentKey = v7::SelectedTorrentKey;
+pub type DuplicateTorrent = v7::DuplicateTorrent;
 pub type ErroredTorrent = v6::ErroredTorrent;
 pub type ErroredTorrentKey = v6::ErroredTorrentKey;
 pub type ErroredTorrentId = v1::ErroredTorrentId;
@@ -118,25 +121,6 @@ where
     }
 
     Ok(())
-}
-
-impl MainCat {
-    pub(crate) fn from_id(main_cat: u64) -> Result<MainCat, String> {
-        match main_cat {
-            13 => Ok(MainCat::Audio),
-            14 => Ok(MainCat::Ebook),
-            15 => Err("Unsupported main_cat Musicology".to_string()),
-            16 => Err("Unsupported main_cat Radio".to_string()),
-            id => Err(format!("Unknown main_cat {id}")),
-        }
-    }
-
-    pub(crate) fn as_str(&self) -> &str {
-        match self {
-            MainCat::Audio => "Audiobook",
-            MainCat::Ebook => "Ebook",
-        }
-    }
 }
 
 pub mod v1 {
@@ -1634,6 +1618,101 @@ pub mod v6 {
                 authors: t.authors,
                 narrators: t.narrators,
                 series: t.series,
+            }
+        }
+    }
+
+    impl From<v7::SelectedTorrent> for SelectedTorrent {
+        fn from(t: v7::SelectedTorrent) -> Self {
+            Self {
+                mam_id: t.mam_id,
+                dl_link: t.dl_link,
+                unsat_buffer: t.unsat_buffer,
+                cost: t.cost,
+                category: t.category,
+                tags: t.tags,
+                title_search: t.title_search,
+                meta: t.meta,
+                created_at: t.created_at,
+            }
+        }
+    }
+
+    impl From<v7::DuplicateTorrent> for DuplicateTorrent {
+        fn from(t: v7::DuplicateTorrent) -> Self {
+            Self {
+                mam_id: t.mam_id,
+                title_search: t.title_search,
+                meta: t.meta.into(),
+                created_at: t.created_at,
+                duplicate_of: t.duplicate_of,
+                request_replace: false,
+            }
+        }
+    }
+}
+
+pub mod v7 {
+    use super::*;
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 3, version = 7, from = v6::SelectedTorrent)]
+    #[native_db]
+    pub struct SelectedTorrent {
+        #[primary_key]
+        pub mam_id: u64,
+        pub dl_link: String,
+        pub unsat_buffer: Option<u64>,
+        pub cost: TorrentCost,
+        pub category: Option<String>,
+        pub tags: Vec<String>,
+        #[secondary_key]
+        pub title_search: String,
+        pub meta: TorrentMeta,
+        pub created_at: Timestamp,
+        pub removed_at: Option<Timestamp>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 4, version = 7, from = v6::DuplicateTorrent)]
+    #[native_db]
+    pub struct DuplicateTorrent {
+        #[primary_key]
+        pub mam_id: u64,
+        pub dl_link: Option<String>,
+        #[secondary_key]
+        pub title_search: String,
+        pub meta: TorrentMeta,
+        pub created_at: Timestamp,
+        pub duplicate_of: Option<String>,
+    }
+
+    impl From<v6::SelectedTorrent> for SelectedTorrent {
+        fn from(t: v6::SelectedTorrent) -> Self {
+            Self {
+                mam_id: t.mam_id,
+                dl_link: t.dl_link,
+                unsat_buffer: t.unsat_buffer,
+                cost: t.cost,
+                category: t.category,
+                tags: t.tags,
+                title_search: t.title_search,
+                meta: t.meta,
+                created_at: t.created_at,
+                removed_at: None,
+            }
+        }
+    }
+
+    impl From<v6::DuplicateTorrent> for DuplicateTorrent {
+        fn from(t: v6::DuplicateTorrent) -> Self {
+            Self {
+                mam_id: t.mam_id,
+                dl_link: None,
+                title_search: t.title_search,
+                meta: t.meta,
+                created_at: t.created_at,
+                duplicate_of: t.duplicate_of,
             }
         }
     }

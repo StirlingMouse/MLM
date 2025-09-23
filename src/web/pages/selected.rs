@@ -3,15 +3,16 @@ use std::sync::Arc;
 use anyhow::Result;
 use askama::Template;
 use axum::{
-    extract::{Query, State},
-    response::Html,
+    extract::{OriginalUri, Query, State},
+    response::{Html, Redirect},
 };
+use axum_extra::extract::Form;
 use native_db::Database;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     config::Config,
-    data::SelectedTorrent,
+    data::{SelectedTorrent, Timestamp},
     mam::{MaM, Unsats},
     web::{
         AppError, series,
@@ -34,6 +35,7 @@ pub async fn selected_page(
         .scan()
         .primary::<SelectedTorrent>()?
         .all()?
+        .filter(|t| t.as_ref().is_ok_and(|t| t.removed_at.is_none()))
         .filter(|t| {
             let Ok(t) = t else {
                 return true;
@@ -88,6 +90,42 @@ pub async fn selected_page(
         torrents,
     };
     Ok::<_, AppError>(Html(template.to_string()))
+}
+
+pub async fn selected_torrents_page_post(
+    State((config, db, mam)): State<(
+        Arc<Config>,
+        Arc<Database<'static>>,
+        Arc<Result<Arc<MaM<'static>>>>,
+    )>,
+    uri: OriginalUri,
+    Form(form): Form<TorrentsPageForm>,
+) -> Result<Redirect, AppError> {
+    match form.action.as_str() {
+        "remove" => {
+            for torrent in form.torrents {
+                let rw = db.rw_transaction()?;
+                let Some(mut torrent) = rw.get().primary::<SelectedTorrent>(torrent)? else {
+                    return Err(anyhow::Error::msg("Could not find torrent").into());
+                };
+                torrent.removed_at = Some(Timestamp::now());
+                rw.upsert(torrent)?;
+                rw.commit()?;
+            }
+        }
+        action => {
+            eprintln!("unknown action: {action}");
+        }
+    }
+
+    Ok(Redirect::to(&uri.to_string()))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TorrentsPageForm {
+    action: String,
+    #[serde(default, rename = "torrent")]
+    torrents: Vec<u64>,
 }
 
 #[derive(Template)]

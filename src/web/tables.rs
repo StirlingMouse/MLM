@@ -164,6 +164,9 @@ pub trait Sortable {
             label: label.to_owned(),
         }
     }
+    fn table_header_all_s<'a>(&self, name: &'a str) -> AllColumnHeader<'a> {
+        AllColumnHeader { name }
+    }
 }
 
 pub trait HidableColumns: Sortable {

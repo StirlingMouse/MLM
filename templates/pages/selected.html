@@ -5,18 +5,25 @@
 {% block head %}
   <style>
     .SelectedTable {
-      {{self::table_styles(10) | safe}}
+      {{self::table_styles(11) | safe}}
     }
   </style>
 {% endblock %}
 
 {% block content %}
-<h1>Selected Torrents</h1>
+<form method=post>
+<div class="row">
+  <h1>Selected Torrents</h1>
+  <div class="actions actions_torrent">
+    <button name=action value=remove>unselect for download</button>
+  </div>
+</div>
 <p>Torrents that the autograbber has selected and will be downloaded</p>
 {% if let Some(unsats) = unsats %}
 <p>Unsats: {{ unsats.count }} / {{ unsats.limit }}{% if !torrents.is_empty() %}<br>Queued Torrents: {{ torrents.len() }}{% endif %}</p>
 {% endif %}
 <div class="SelectedTable table">
+  {{ table_header_all_s("torrent") }}
   {{ table_header(Some(SelectedPageSort::Kind), "Type") }}
   {{ table_header(Some(SelectedPageSort::Title), "Title") }}
   {{ table_header(Some(SelectedPageSort::Authors), "Authors") }}
@@ -28,6 +35,7 @@
   {{ table_header(Some(SelectedPageSort::CreatedAt), "Added At") }}
   {{ table_header(None, "") }}
 {% for torrent in torrents %}
+  <div><input type=checkbox name=torrent value={{torrent.mam_id}}></div>
   <div>{{ self::item(SelectedPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</div>
   <div>{{ self::item(SelectedPageFilter::Title, torrent.meta.title) }}</div>
   <div>{{ self::items(SelectedPageFilter::Author, torrent.meta.authors) }}</div>
@@ -43,4 +51,5 @@
 <p><i>There are currently no torrents selected for downloading</i>
 {% endif %}
 </div>
+</form>
 {% endblock %}
