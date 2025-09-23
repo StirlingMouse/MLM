@@ -5,15 +5,23 @@
 {% block head %}
   <style>
     .DuplicateTable {
-      {{self::table_styles_rows(9, 2) | safe}}
+      {{self::table_styles_rows(10, 2) | safe}}
     }
   </style>
 {% endblock %}
 
 {% block content %}
-<h1>Duplicate Torrents</h1>
+<form method=post>
+<div class="row">
+  <h1>Duplicate Torrents</h1>
+  <div class="actions actions_torrent">
+    <button name=action value=replace>replace original</button>
+    <button name=action value=remove>remove dupliacte</button>
+  </div>
+</div>
 <p>Torrents that the autograbber did not select due to a pre-existing torrent in your library</p>
 <div class="DuplicateTable table">
+  {{ table_header_all_s("torrent") }}
   {{ table_header(Some(DuplicatePageSort::Kind), "Type") }}
   {{ table_header(Some(DuplicatePageSort::Title), "Title") }}
   {{ table_header(Some(DuplicatePageSort::Authors), "Authors") }}
@@ -24,6 +32,7 @@
   {{ table_header(Some(DuplicatePageSort::CreatedAt), "Added At") }}
   {{ table_header(None, "") }}
 {% for (torrent, duplicate_of) in torrents %}
+  <div><input type=checkbox name=torrent value={{torrent.mam_id}}></div>
   <div>{{ self::item(DuplicatePageFilter::Kind, torrent.meta.main_cat.as_str()) }}</div>
   <div>{{ self::item(DuplicatePageFilter::Title, torrent.meta.title) }}</div>
   <div>{{ self::items(DuplicatePageFilter::Author, torrent.meta.authors) }}</div>
@@ -33,6 +42,7 @@
   <div></div>
   <div>{{ self::time(torrent.created_at) }}</div>
   <div><a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a></div>
+  <div></div>
   <div>duplicate of:</div>
   <div>{{ self::item(DuplicatePageFilter::Title, duplicate_of.meta.title) }}</div>
   <div>{{ self::items(DuplicatePageFilter::Author, duplicate_of.meta.authors) }}</div>
@@ -49,4 +59,5 @@
 <p><i>There are currently no duplicate torrents</i>
 {% endif %}
 </div>
+</form>
 {% endblock %}

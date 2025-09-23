@@ -60,6 +60,13 @@ pub async fn torrents_page(
             for (field, value) in filter.iter() {
                 let ok = match field {
                     TorrentsPageFilter::Kind => t.meta.main_cat.as_str() == value,
+                    TorrentsPageFilter::Category => {
+                        if value.is_empty() {
+                            t.meta.cat.is_none()
+                        } else {
+                            false
+                        }
+                    }
                     TorrentsPageFilter::Title => &t.meta.title == value,
                     TorrentsPageFilter::Author => t.meta.authors.contains(value),
                     TorrentsPageFilter::Narrator => t.meta.narrators.contains(value),
@@ -257,6 +264,7 @@ impl Key for TorrentsPageSort {}
 #[serde(rename_all = "snake_case")]
 pub enum TorrentsPageFilter {
     Kind,
+    Category,
     Title,
     Author,
     Narrator,

@@ -17,7 +17,7 @@ use native_db::Database;
 use once_cell::sync::Lazy;
 use pages::{
     config::{config_page, config_page_post},
-    duplicate::duplicate_page,
+    duplicate::{duplicate_page, duplicate_torrents_page_post},
     errors::errors_page,
     events::event_page,
     index::{index_page, index_page_post},
@@ -42,7 +42,7 @@ use tower_http::services::{ServeDir, ServeFile};
 use crate::{
     config::{Config, Filter},
     data::{AudiobookCategory, EbookCategory, Timestamp},
-    mam::{DATE_FORMAT, MaM},
+    mam::{DATE_FORMAT, MaM, MetaError},
     qbittorrent::QbitError,
     stats::{Stats, Triggers},
 };
@@ -89,6 +89,14 @@ pub async fn start_webserver(
             post(replaced_torrents_page_post).with_state((config.clone(), db.clone(), mam.clone())),
         )
         .route("/duplicate", get(duplicate_page).with_state(db.clone()))
+        .route(
+            "/duplicate",
+            post(duplicate_torrents_page_post).with_state((
+                config.clone(),
+                db.clone(),
+                mam.clone(),
+            )),
+        )
         .route("/config", get(config_page).with_state(config.clone()))
         .route(
             "/config",
@@ -227,6 +235,8 @@ enum AppError {
     QbitError(#[from] QbitError),
     #[error("Send Error: {0:?}")]
     SendError(#[from] SendError<()>),
+    #[error("Meta Error: {0:?}")]
+    MetaError(#[from] MetaError),
     #[error("Error: {0:?}")]
     Generic(#[from] anyhow::Error),
     #[error("Page Not Found")]

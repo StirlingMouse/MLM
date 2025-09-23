@@ -239,7 +239,7 @@ pub fn remove_library_files(remove: &Torrent) -> Result<()> {
             }
         }
         fs::remove_dir(library_path).ok();
+        trace!("files removed");
     }
-    trace!("files removed");
     Ok(())
 }

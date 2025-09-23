@@ -666,6 +666,13 @@ impl MainCat {
             MainCat::Ebook => "Ebook",
         }
     }
+
+    pub fn as_id(&self) -> u8 {
+        match self {
+            MainCat::Audio => 13,
+            MainCat::Ebook => 14,
+        }
+    }
 }
 
 impl Category {
