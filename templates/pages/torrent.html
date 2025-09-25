@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}MLM - {{ torrent.meta.title }}{% endblock %}
+
+{% block content %}
+<div class="row">
+  <h1>{{ torrent.meta.title }}</h1>
+</div>
+<p>By {{ self::items(TorrentsPageFilter::Author, torrent.meta.authors) }}</p>
+{% if !torrent.meta.series.is_empty() %}
+  <p>Series: {{ self::series(TorrentsPageFilter::Series, torrent.meta.series) }}</p>
+{% endif %}
+{% if !torrent.meta.narrators.is_empty() %}
+  <p>Narrator: {{ self::items(TorrentsPageFilter::Narrator, torrent.meta.narrators) }}</p>
+{% endif %}
+{% if let Some(language) = torrent.meta.language %}
+  <p>Language: {{ language | json }}</p>
+{% endif %}
+{% if let Some(book) = book %}
+  <a href="{{ abs_url }}/audiobookshelf/item/{{ book.id }}" target=_blank>Open in ABS</a>
+  {# <h3>Chapters:</h3> #}
+  {# {% for chapter in book.media.chapters %} #}
+  {# <ul> #}
+  {#   <li>{{ chapter.title }} {{ chapter.end - chapter.start }}</li> #}
+  {# </ul> #}
+  {# {% endfor %} #}
+{% endif %}
+{% if let Some(mam_torrent) = mam_torrent %}
+  <a href="https://www.myanonamouse.net/t/{{ mam_torrent.id }}" target=_blank>Open in MaM</a>
+  <p>{{ mam_torrent.tags }}</p>
+  {# {% if let Some(description) = mam_torrent.description %} #}
+  {#   <p>{{ description }}</p> #}
+  {# {% endif %} #}
+  {# {% if let Some(thumbnail) = mam_torrent.thumbnail %} #}
+  {#   <img src="{{ thumbnail }}> #}
+  {# {% endif %} #}
+{% endif %}
+{% if let Some(mam_meta) = mam_meta %}
+{% if &torrent.meta != mam_meta %}
+  {% if torrent.meta.title != mam_meta.title %}
+    <p>New title: {{ mam_meta.title }}</p>
+  {% endif %}
+  {% if torrent.meta.authors != mam_meta.authors %}
+    <p>New authors: {{ mam_meta.authors.join(", ") }}</p>
+  {% endif %}
+  {% if torrent.meta.series != mam_meta.series %}
+    <p>New series: {{ self::series(TorrentsPageFilter::Series, mam_meta.series) }}</p>
+  {% endif %}
+  {% if torrent.meta.narrators != mam_meta.narrators %}
+    <p>New narrators: {{ mam_meta.narrators.join(", ") }}</p>
+  {% endif %}
+{% endif %}
+{% endif %}
+
+{% endblock %}

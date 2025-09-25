@@ -137,6 +137,8 @@ pub struct SearchQuery<'a> {
     /// If this value is set, will return the isbn field (though often blank).
     #[serde(skip_serializing_if = "is_false")]
     pub isbn: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    pub thumbnail: bool,
     /// int in range of 5 to 100, telling how many results to return
     #[serde(skip_serializing_if = "is_zero")]
     pub perpage: u64,
@@ -351,6 +353,7 @@ pub struct MaMTorrent {
     #[serde(deserialize_with = "string_or_number")]
     pub tags: String,
     pub times_completed: u64,
+    pub thumbnail: Option<String>,
     #[serde(deserialize_with = "parse_title")]
     pub title: String,
     pub vip: u64,
@@ -634,6 +637,7 @@ impl<'a> MaM<'a> {
             .search(&SearchQuery {
                 description: true,
                 isbn: true,
+                thumbnail: true,
                 tor: Tor {
                     hash,
                     ..Default::default()

@@ -115,6 +115,7 @@ pub async fn duplicate_torrents_page_post(
                 let page_results = mam
                     .search(&SearchQuery {
                         description: false,
+                        thumbnail: false,
                         dl_link: true,
                         isbn: false,
                         perpage: 100,

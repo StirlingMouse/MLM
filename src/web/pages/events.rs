@@ -99,7 +99,7 @@ impl<'a> EventPageTemplate<'a> {
     fn torrent_title(&'a self, torrent: &'a Option<Torrent>) -> Conditional<TorrentLink<'a>> {
         Conditional {
             template: torrent.as_ref().map(|t| TorrentLink {
-                id: t.meta.mam_id,
+                hash: &t.hash,
                 title: &t.meta.title,
             }),
         }

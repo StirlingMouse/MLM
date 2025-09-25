@@ -19,10 +19,10 @@ use qbit::{
     parameters::TorrentListParams,
 };
 use regex::Regex;
-use serde_json::json;
 use tracing::{Level, debug, instrument, span, trace};
 
 use crate::{
+    audiobookshelf as abs,
     cleaner::remove_library_files,
     config::{Config, Library, LibraryLinkMethod, QbitConfig},
     data::{
@@ -188,7 +188,7 @@ pub async fn refresh_metadata(
     };
     let meta = mam_torrent.as_meta().context("as_meta")?;
 
-    let metadata = create_metadata(&mam_torrent, &meta);
+    let metadata = abs::create_metadata(&mam_torrent, &meta);
     if let (Some(libary_path), serde_json::Value::Object(new)) = (&torrent.library_path, metadata) {
         let metadata_path = libary_path.join("metadata.json");
         if metadata_path.exists() {
@@ -343,7 +343,7 @@ async fn link_torrent(
     let dir = library.library_dir().join(dir);
     trace!("out_dir: {:?}", dir);
 
-    let metadata = create_metadata(&mam_torrent, meta);
+    let metadata = abs::create_metadata(&mam_torrent, meta);
     create_dir_all(&dir)?;
 
     let mut library_files = vec![];
@@ -458,34 +458,6 @@ fn find_library<'a>(config: &'a Config, torrent: &TorrentInfo) -> Option<&'a Lib
                 .iter()
                 .any(|tag| torrent.tags.split(", ").any(|t| t == tag.as_str()))
         })
-}
-
-fn create_metadata(mam_torrent: &MaMTorrent, meta: &TorrentMeta) -> serde_json::Value {
-    let mut titles = mam_torrent.title.splitn(2, ":");
-    let title = titles.next().unwrap();
-    let subtitle = titles.next().map(|t| t.trim());
-    let isbn_raw: &str = mam_torrent.isbn.as_deref().unwrap_or("");
-    let isbn = if isbn_raw.is_empty() || isbn_raw.starts_with("ASIN:") {
-        None
-    } else {
-        Some(isbn_raw)
-    };
-    let asin = isbn_raw.strip_prefix("ASIN:");
-
-    let metadata = json!({
-        "authors": &meta.authors,
-        "narrators": &meta.narrators,
-        "series": &meta.series.iter().map(|(series_name, series_num)| {
-            if series_num.is_empty() { series_name.clone() } else { format!("{series_name} #{series_num}") }
-        }).collect::<Vec<_>>(),
-        "title": title,
-        "subtitle": subtitle,
-        "description": mam_torrent.description,
-        "isbn": isbn,
-        "asin": asin,
-    });
-
-    metadata
 }
 
 fn select_format(

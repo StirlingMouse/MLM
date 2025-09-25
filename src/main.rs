@@ -1,5 +1,6 @@
 #![windows_subsystem = "windows"]
 
+mod audiobookshelf;
 mod autograbber;
 mod cleaner;
 mod config;

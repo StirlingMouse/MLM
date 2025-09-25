@@ -7,4 +7,5 @@ pub mod list;
 pub mod lists;
 pub mod replaced;
 pub mod selected;
+pub mod torrent;
 pub mod torrents;

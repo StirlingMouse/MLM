@@ -13,6 +13,7 @@ use crate::{
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub mam_id: String,
+    pub audiobookshelf: Option<AudiobookShelfConfig>,
     #[serde(default = "default_host")]
     pub web_host: String,
     #[serde(default = "default_port")]
@@ -53,6 +54,13 @@ pub struct Config {
     #[serde(default)]
     #[serde(rename = "library")]
     pub libraries: Vec<Library>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AudiobookShelfConfig {
+    pub url: String,
+    pub token: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]

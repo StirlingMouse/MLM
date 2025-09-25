@@ -25,6 +25,7 @@ use pages::{
     lists::lists_page,
     replaced::{replaced_torrents_page, replaced_torrents_page_post},
     selected::{selected_page, selected_torrents_page_post},
+    torrent::torrent_page,
     torrents::{torrents_page, torrents_page_post},
 };
 use reqwest::header;
@@ -64,6 +65,10 @@ pub async fn start_webserver(
         .route(
             "/torrents",
             post(torrents_page_post).with_state((config.clone(), db.clone(), mam.clone())),
+        )
+        .route(
+            "/torrents/{hash}",
+            get(torrent_page).with_state((config.clone(), db.clone(), mam.clone())),
         )
         .route("/events", get(event_page).with_state(db.clone()))
         .route(
@@ -216,12 +221,12 @@ struct Conditional<T: Template> {
 impl<T: Template> HtmlSafe for Conditional<T> {}
 
 /// ```askama
-/// <a href="https://www.myanonamouse.net/t/{{ id }}" class=torrent target=_blank>{{ title }}</a>
+/// <a href="/torrents/{{ hash }}" class=torrent>{{ title }}</a>
 /// ```
 #[derive(Template)]
 #[template(ext = "html", in_doc = true)]
 struct TorrentLink<'a> {
-    id: u64,
+    hash: &'a str,
     title: &'a str,
 }
 
