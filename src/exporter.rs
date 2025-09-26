@@ -11,11 +11,11 @@ use crate::data;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ExportV1 {
-    config: Vec<data::v1::Config>,
-    torrents: Vec<data::v1::Torrent>,
-    selected_torrents: Vec<data::v1::SelectedTorrent>,
-    duplicate_torrents: Vec<data::v1::DuplicateTorrent>,
-    errored_torrents: Vec<data::v1::ErroredTorrent>,
+    config: Vec<data::Config>,
+    torrents: Vec<data::Torrent>,
+    selected_torrents: Vec<data::SelectedTorrent>,
+    duplicate_torrents: Vec<data::DuplicateTorrent>,
+    errored_torrents: Vec<data::ErroredTorrent>,
 }
 
 pub fn export_db(db: &Database<'_>) -> Result<()> {

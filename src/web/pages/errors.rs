@@ -105,9 +105,9 @@ impl Sortable for ErrorsPageTemplate {
 impl ErroredTorrentId {
     pub fn step(&self) -> &str {
         match self {
-            crate::data::v1::ErroredTorrentId::Grabber(_) => "auto grabber",
-            crate::data::v1::ErroredTorrentId::Linker(_) => "library linker",
-            crate::data::v1::ErroredTorrentId::Cleaner(_) => "library cleaner",
+            ErroredTorrentId::Grabber(_) => "auto grabber",
+            ErroredTorrentId::Linker(_) => "library linker",
+            ErroredTorrentId::Cleaner(_) => "library cleaner",
         }
     }
 }

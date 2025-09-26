@@ -4,8 +4,10 @@ use serde::{Deserialize, Serialize};
 use time::Date;
 
 use crate::{
-    data::{Language, MainCat, Size},
-    data_impl::{parse, parse_opt, parse_opt_date, parse_vec},
+    data::{
+        Language, MainCat, Size,
+        impls::{parse, parse_opt, parse_opt_date, parse_vec},
+    },
     mam_enums::{Categories, Flags, SearchIn},
 };
 
