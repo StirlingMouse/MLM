@@ -110,7 +110,7 @@ async fn app_main() -> Result<()> {
         .with(
             stderr_layer.with_timer(LocalTime::rfc_3339()).with_filter(
                 EnvFilter::builder()
-                    .with_default_directive("mlm=trace".parse()?)
+                    .with_default_directive("mlm=debug".parse()?)
                     .with_env_var("MLM_LOG")
                     .from_env_lossy(),
             ),
@@ -121,7 +121,7 @@ async fn app_main() -> Result<()> {
                 .with_ansi(false)
                 .with_filter(
                     EnvFilter::builder()
-                        .with_default_directive("mlm=trace".parse().unwrap())
+                        .with_default_directive("mlm=debug".parse().unwrap())
                         .with_env_var("MLM_LOG")
                         .from_env_lossy(),
                 )
