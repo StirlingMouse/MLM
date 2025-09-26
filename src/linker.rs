@@ -11,6 +11,7 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 use file_id::get_file_id;
+use itertools::Itertools as _;
 use log::error;
 use native_db::Database;
 use once_cell::sync::Lazy;
@@ -206,11 +207,31 @@ pub async fn refresh_metadata(
         }
     }
 
-    torrent.meta = meta.clone();
-    {
-        let rw = db.rw_transaction()?;
-        rw.upsert(torrent.clone())?;
-        rw.commit()?;
+    if torrent.meta != meta {
+        let hash = torrent.hash.clone();
+        let mam_id = meta.mam_id;
+        let diff = torrent.meta.diff(&meta);
+        trace!(
+            "Updating meta for torrent {}, diff:\n{}",
+            mam_id,
+            diff.iter()
+                .map(|field| format!("  {}: {} -> {}", field.field, field.from, field.to))
+                .join("\n")
+        );
+        torrent.meta = meta.clone();
+        {
+            let rw = db.rw_transaction()?;
+            rw.upsert(torrent.clone())?;
+            rw.commit()?;
+        }
+        write_event(
+            db,
+            Event::new(
+                Some(hash),
+                Some(mam_id),
+                EventType::Updated { fields: diff },
+            ),
+        );
     }
     Ok((torrent, mam_torrent))
 }
@@ -407,6 +428,7 @@ async fn link_torrent(
         let rw = db.rw_transaction()?;
         rw.upsert(Torrent {
             hash: hash.to_owned(),
+            abs_id: None,
             library_path: Some(dir.clone()),
             library_files,
             selected_audio_format,

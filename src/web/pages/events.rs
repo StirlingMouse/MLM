@@ -39,6 +39,7 @@ pub async fn event_page(
                         EventType::Grabbed { .. } => value == "grabber",
                         EventType::Linked { .. } => value == "linker",
                         EventType::Cleaned { .. } => value == "cleaner",
+                        EventType::Updated { .. } => value == "updated",
                     },
                     EventPageFilter::From => true,
                     EventPageFilter::PageSize => true,

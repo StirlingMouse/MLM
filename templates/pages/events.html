@@ -32,6 +32,10 @@
       Cleaner
       <input type=radio name=show {% if show == Some("cleaner") %}checked{% endif %} value="cleaner">
     </label>
+    <label>
+      Updated
+      <input type=radio name=show {% if show == Some("updated") %}checked{% endif %} value="updated">
+    </label>
   </div>
   <div class="option_group">
     Page size: {{ paging.selector([100, 500, 1000, 5000]) | safe }}
@@ -84,6 +88,13 @@
     <ul>
     {% for file in files %}
       <li>{{ file.to_string_lossy() }}</li>
+    {% endfor %}
+    </ul>
+  {% when EventType::Updated { fields } %}
+    Updated {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}<br />
+    <ul>
+    {% for field in fields %}
+      <li>{{ field.field }}: {{ field.from }} -> {{ field.to }}</li>
     {% endfor %}
     </ul>
   {% endmatch %}

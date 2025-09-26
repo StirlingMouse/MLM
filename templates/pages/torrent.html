@@ -14,7 +14,7 @@
   <p>Narrator: {{ self::items(TorrentsPageFilter::Narrator, torrent.meta.narrators) }}</p>
 {% endif %}
 {% if let Some(language) = torrent.meta.language %}
-  <p>Language: {{ language | json }}</p>
+  <p>Language: {{ language.to_str() }}</p>
 {% endif %}
 {% if let Some(book) = book %}
   <a href="{{ abs_url }}/audiobookshelf/item/{{ book.id }}" target=_blank>Open in ABS</a>

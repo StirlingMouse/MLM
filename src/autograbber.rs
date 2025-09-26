@@ -14,6 +14,7 @@ use crate::{
     qbittorrent::QbitError,
 };
 use anyhow::{Context, Error, Result};
+use itertools::Itertools as _;
 use lava_torrent::torrent::v1::Torrent;
 use native_db::{Database, db_type, transaction::RwTransaction};
 use qbit::parameters::TorrentAddUrls;
@@ -413,10 +414,31 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 if old.meta.mam_id == meta.mam_id {
                     // Found the same torrent again, update metadata if it has changed
                     if old.meta != meta {
+                        let hash = old.hash.clone();
+                        let mam_id = meta.mam_id;
+                        let diff = old.meta.diff(&meta);
+                        trace!(
+                            "Updating meta for torrent {}, diff:\n{}",
+                            mam_id,
+                            diff.iter()
+                                .map(|field| format!(
+                                    "  {}: {} -> {}",
+                                    field.field, field.from, field.to
+                                ))
+                                .join("\n")
+                        );
                         let mut old = old;
                         old.meta = meta;
                         rw.upsert(old)?;
                         rw_opt.unwrap().commit()?;
+                        write_event(
+                            db,
+                            Event::new(
+                                Some(hash),
+                                Some(mam_id),
+                                EventType::Updated { fields: diff },
+                            ),
+                        );
                     }
                     continue 'torrent;
                 }
@@ -565,6 +587,7 @@ async fn grab_torrent(
         let rw = db.rw_transaction()?;
         rw.insert(data::Torrent {
             hash: hash.clone(),
+            abs_id: None,
             library_path: None,
             library_files: Default::default(),
             selected_audio_format: None,

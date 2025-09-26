@@ -1,12 +1,16 @@
 use std::str::FromStr;
 
+use itertools::Itertools as _;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Deserializer};
 use time::Date;
 
 use crate::{
-    data::{Language, ListItem, MainCat, Size, Torrent, TorrentCost, TorrentMeta, TorrentStatus},
+    data::{
+        Category, Language, ListItem, MainCat, Size, Torrent, TorrentCost, TorrentMeta,
+        TorrentMetaDiff, TorrentMetaField, TorrentStatus,
+    },
     mam::DATE_FORMAT,
 };
 
@@ -65,6 +69,112 @@ impl TorrentMeta {
             && self.authors.iter().any(|a| other.authors.contains(a))
             && ((self.narrators.is_empty() && other.narrators.is_empty())
                 || self.narrators.iter().any(|a| other.narrators.contains(a)))
+    }
+
+    pub(crate) fn diff(&self, other: &TorrentMeta) -> Vec<TorrentMetaDiff> {
+        let mut diff = vec![];
+        if self.mam_id != other.mam_id {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::MamId,
+                from: self.mam_id.to_string(),
+                to: other.mam_id.to_string(),
+            });
+        }
+        if self.main_cat != other.main_cat {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::MainCat,
+                from: self.main_cat.as_str().to_string(),
+                to: other.main_cat.as_str().to_string(),
+            });
+        }
+        if self.cat != other.cat {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::Cat,
+                from: self
+                    .cat
+                    .as_ref()
+                    .map(|cat| cat.as_str().to_string())
+                    .unwrap_or_default(),
+                to: other
+                    .cat
+                    .as_ref()
+                    .map(|cat| cat.as_str().to_string())
+                    .unwrap_or_default(),
+            });
+        }
+        if self.language != other.language {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::Language,
+                from: self
+                    .language
+                    .map(|language| language.to_str().to_string())
+                    .unwrap_or_default(),
+                to: other
+                    .language
+                    .map(|language| language.to_str().to_string())
+                    .unwrap_or_default(),
+            });
+        }
+        if self.filetypes != other.filetypes {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::Filetypes,
+                from: self.filetypes.join(", ").to_string(),
+                to: other.filetypes.join(", ").to_string(),
+            });
+        }
+        if self.size != other.size {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::Size,
+                from: self.size.to_string(),
+                to: other.size.to_string(),
+            });
+        }
+        if self.title != other.title {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::Title,
+                from: self.title.to_string(),
+                to: other.title.to_string(),
+            });
+        }
+        if self.authors != other.authors {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::Authors,
+                from: self.authors.join(", ").to_string(),
+                to: other.authors.join(", ").to_string(),
+            });
+        }
+        if self.narrators != other.narrators {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::Narrators,
+                from: self.narrators.join(", ").to_string(),
+                to: other.narrators.join(", ").to_string(),
+            });
+        }
+        if self.series != other.series {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::Series,
+                from: self.series.iter().map(format_serie).join(", ").to_string(),
+                to: other.series.iter().map(format_serie).join(", ").to_string(),
+            });
+        }
+        diff
+    }
+}
+
+impl std::fmt::Display for TorrentMetaField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TorrentMetaField::MamId => write!(f, "mam_id"),
+            TorrentMetaField::MainCat => write!(f, "main_cat"),
+            TorrentMetaField::Cat => write!(f, "cat"),
+            TorrentMetaField::Language => write!(f, "language"),
+            TorrentMetaField::Filetypes => write!(f, "filetypes"),
+            TorrentMetaField::Size => write!(f, "size"),
+            TorrentMetaField::Title => write!(f, "title"),
+            TorrentMetaField::Authors => write!(f, "authors"),
+            TorrentMetaField::Narrators => write!(f, "narrators"),
+            TorrentMetaField::Series => write!(f, "series"),
+        }
     }
 }
 
@@ -185,6 +295,15 @@ impl TryFrom<String> for MainCat {
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         value.parse()
+    }
+}
+
+impl Category {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Category::Audio(cat) => cat.to_str(),
+            Category::Ebook(cat) => cat.to_str(),
+        }
     }
 }
 
@@ -498,6 +617,15 @@ impl TryFrom<String> for Language {
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         value.parse()
+    }
+}
+
+pub fn format_serie(series: &(String, String)) -> String {
+    let (name, num) = series;
+    if num.is_empty() {
+        name.clone()
+    } else {
+        format!("{name} #{num}")
     }
 }
 

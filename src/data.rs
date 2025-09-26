@@ -15,6 +15,7 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
 
     models.define::<v7::SelectedTorrent>().unwrap();
     models.define::<v7::DuplicateTorrent>().unwrap();
+    models.define::<v7::Event>().unwrap();
 
     models.define::<v6::Torrent>().unwrap();
     models.define::<v6::SelectedTorrent>().unwrap();
@@ -60,15 +61,17 @@ pub type DuplicateTorrent = v7::DuplicateTorrent;
 pub type ErroredTorrent = v6::ErroredTorrent;
 pub type ErroredTorrentKey = v6::ErroredTorrentKey;
 pub type ErroredTorrentId = v1::ErroredTorrentId;
-pub type Event = v4::Event;
-pub type EventKey = v4::EventKey;
-pub type EventType = v4::EventType;
+pub type Event = v7::Event;
+pub type EventKey = v7::EventKey;
+pub type EventType = v7::EventType;
 pub type List = v5::List;
 pub type ListKey = v5::ListKey;
 pub type ListItem = v5::ListItem;
 pub type ListItemKey = v5::ListItemKey;
 pub type ListItemTorrent = v4::ListItemTorrent;
 pub type TorrentMeta = v6::TorrentMeta;
+pub type TorrentMetaDiff = v7::TorrentMetaDiff;
+pub type TorrentMetaField = v7::TorrentMetaField;
 pub type MainCat = v1::MainCat;
 pub type Uuid = v3::Uuid;
 pub type Timestamp = v3::Timestamp;
@@ -90,7 +93,7 @@ pub fn migrate(db: &Database<'_>) -> Result<()> {
     rw.migrate::<DuplicateTorrent>()?;
     // recover_migrate::<v2::ErroredTorrent, v3::ErroredTorrent>(&rw)?;
     rw.migrate::<ErroredTorrent>()?;
-    recover_migrate::<v3::Event, Event>(&rw)?;
+    // recover_migrate::<v3::Event, v4::Event>(&rw)?;
     rw.migrate::<Event>()?;
     rw.migrate::<List>()?;
     rw.migrate::<ListItem>()?;
@@ -100,6 +103,7 @@ pub fn migrate(db: &Database<'_>) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::result_large_err)]
 fn recover_migrate<Old, New>(rw: &RwTransaction<'_>) -> Result<(), db_type::Error>
 where
     Old: From<New> + Clone + ToInput,
@@ -1235,6 +1239,35 @@ pub mod v4 {
             }
         }
     }
+
+    impl From<v7::Event> for Event {
+        fn from(t: v7::Event) -> Self {
+            Self {
+                id: t.id,
+                hash: t.hash,
+                mam_id: t.mam_id,
+                created_at: t.created_at,
+                event: t.event.into(),
+            }
+        }
+    }
+
+    impl From<v7::EventType> for EventType {
+        fn from(t: v7::EventType) -> Self {
+            match t {
+                v7::EventType::Grabbed { cost, wedged } => Self::Grabbed { cost, wedged },
+                v7::EventType::Linked { library_path } => Self::Linked { library_path },
+                v7::EventType::Cleaned {
+                    library_path,
+                    files,
+                } => Self::Cleaned {
+                    library_path,
+                    files,
+                },
+                v7::EventType::Updated { .. } => unimplemented!(),
+            }
+        }
+    }
 }
 
 pub mod v5 {
@@ -1643,7 +1676,7 @@ pub mod v6 {
             Self {
                 mam_id: t.mam_id,
                 title_search: t.title_search,
-                meta: t.meta.into(),
+                meta: t.meta,
                 created_at: t.created_at,
                 duplicate_of: t.duplicate_of,
                 request_replace: false,
@@ -1687,6 +1720,60 @@ pub mod v7 {
         pub duplicate_of: Option<String>,
     }
 
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[native_model(id = 6, version = 7, from = v4::Event)]
+    #[native_db]
+    pub struct Event {
+        #[primary_key]
+        pub id: Uuid,
+        #[secondary_key]
+        pub hash: Option<String>,
+        #[secondary_key]
+        pub mam_id: Option<u64>,
+        #[secondary_key]
+        pub created_at: Timestamp,
+        pub event: EventType,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    pub enum EventType {
+        Grabbed {
+            cost: Option<TorrentCost>,
+            wedged: bool,
+        },
+        Linked {
+            library_path: PathBuf,
+        },
+        Cleaned {
+            library_path: PathBuf,
+            files: Vec<PathBuf>,
+        },
+        Updated {
+            fields: Vec<TorrentMetaDiff>,
+        },
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    pub struct TorrentMetaDiff {
+        pub field: TorrentMetaField,
+        pub from: String,
+        pub to: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    pub enum TorrentMetaField {
+        MamId,
+        MainCat,
+        Cat,
+        Language,
+        Filetypes,
+        Size,
+        Title,
+        Authors,
+        Narrators,
+        Series,
+    }
+
     impl From<v6::SelectedTorrent> for SelectedTorrent {
         fn from(t: v6::SelectedTorrent) -> Self {
             Self {
@@ -1713,6 +1800,34 @@ pub mod v7 {
                 meta: t.meta,
                 created_at: t.created_at,
                 duplicate_of: t.duplicate_of,
+            }
+        }
+    }
+
+    impl From<v4::Event> for Event {
+        fn from(t: v4::Event) -> Self {
+            Self {
+                id: t.id,
+                hash: t.hash,
+                mam_id: t.mam_id,
+                created_at: t.created_at,
+                event: t.event.into(),
+            }
+        }
+    }
+
+    impl From<v4::EventType> for EventType {
+        fn from(t: v4::EventType) -> Self {
+            match t {
+                v4::EventType::Grabbed { cost, wedged } => Self::Grabbed { cost, wedged },
+                v4::EventType::Linked { library_path } => Self::Linked { library_path },
+                v4::EventType::Cleaned {
+                    library_path,
+                    files,
+                } => Self::Cleaned {
+                    library_path,
+                    files,
+                },
             }
         }
     }
