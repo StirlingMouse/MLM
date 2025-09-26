@@ -64,3 +64,22 @@ struct TorrentPageTemplate {
     mam_torrent: Option<MaMTorrent>,
     mam_meta: Option<TorrentMeta>,
 }
+
+fn duration(seconds: f64) -> String {
+    let mut seconds = seconds as u64;
+    let hours = seconds / 3600;
+    seconds -= hours * 3600;
+    let minutes = seconds / 60;
+    seconds -= minutes * 60;
+    let mut duration = vec![];
+    if hours > 0 {
+        duration.push(format!("{hours}h"));
+    }
+    if minutes > 0 {
+        duration.push(format!("{minutes}m"));
+    }
+    if seconds > 0 {
+        duration.push(format!("{seconds}s"));
+    }
+    return duration.join(" ");
+}
