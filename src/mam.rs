@@ -637,7 +637,7 @@ impl<'a> MaM<'a> {
             .search(&SearchQuery {
                 description: true,
                 isbn: true,
-                thumbnail: true,
+                thumbnail: false,
                 tor: Tor {
                     hash,
                     ..Default::default()

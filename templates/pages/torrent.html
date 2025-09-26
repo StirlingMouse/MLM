@@ -55,9 +55,6 @@
       <p>{{ description | safe }}</p>
     {% endif %}
   </details>
-  {# {% if let Some(thumbnail) = mam_torrent.thumbnail %} #}
-  {#   <img src="{{ thumbnail }}> #}
-  {# {% endif %} #}
 {% endif %}
 {% if let Some(mam_meta) = mam_meta %}
 {% if &torrent.meta != mam_meta %}
