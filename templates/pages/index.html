@@ -63,6 +63,15 @@ no qbittorrent instances configured, all features are disabled
   <p>Result: {% match downloader_result %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
   {% endif %}
 </div>
+
+<div class="infobox">
+  <h2>Audiobookshelf Matcher</h2>
+  <p>Last run: {% match audiobookshelf_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
+  <button name=action value=run_abs_matcher>run now</button>
+  {% if audiobookshelf_run_at.is_some() %}
+  <p>Result: {% match audiobookshelf_result %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
+  {% endif %}
+</div>
 </form>
 
 <hr>

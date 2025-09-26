@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use anyhow::Result;
 use askama::Template;
 use axum::{
     extract::{Path, State},
@@ -12,16 +11,12 @@ use crate::{
     audiobookshelf::{Abs, LibraryItem},
     config::Config,
     data::{Torrent, TorrentMeta},
-    mam::{MaM, MaMTorrent},
-    web::{AppError, pages::torrents::TorrentsPageFilter, series, tables::items},
+    mam::MaMTorrent,
+    web::{AppError, MaMState, pages::torrents::TorrentsPageFilter, series, tables::items},
 };
 
 pub async fn torrent_page(
-    State((config, db, mam)): State<(
-        Arc<Config>,
-        Arc<Database<'static>>,
-        Arc<Result<Arc<MaM<'static>>>>,
-    )>,
+    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
     Path(hash): Path<String>,
 ) -> std::result::Result<Html<String>, AppError> {
     let abs = config.audiobookshelf.as_ref().map(Abs::new);

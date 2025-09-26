@@ -15,9 +15,9 @@ use tracing::info;
 use crate::{
     config::{Config, Cost, Library, TorrentFilter, Type},
     data::{AudiobookCategory, EbookCategory, Torrent},
-    mam::{DATE_FORMAT, MaM},
+    mam::DATE_FORMAT,
     qbittorrent::QbitError,
-    web::{AppError, filter, yaml_items},
+    web::{AppError, MaMState, filter, yaml_items},
 };
 
 pub async fn config_page(
@@ -32,11 +32,7 @@ pub async fn config_page(
 }
 
 pub async fn config_page_post(
-    State((config, db, mam)): State<(
-        Arc<Config>,
-        Arc<Database<'static>>,
-        Arc<Result<Arc<MaM<'static>>>>,
-    )>,
+    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
     uri: OriginalUri,
     Form(form): Form<ConfigPageForm>,
 ) -> Result<Redirect, AppError> {

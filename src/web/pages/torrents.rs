@@ -13,12 +13,12 @@ use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
 
 use crate::data::Category;
+use crate::web::MaMState;
 use crate::{
     cleaner::clean_torrent,
     config::Config,
     data::{Language, LibraryMismatch, Torrent, TorrentKey},
     linker::{refresh_metadata, refresh_metadata_relink},
-    mam::MaM,
     web::{
         AppError, series,
         tables::{
@@ -30,7 +30,7 @@ use crate::{
 };
 
 pub async fn torrents_page(
-    State(db): State<Arc<Database<'static>>>,
+    State((config, db)): State<(Arc<Config>, Arc<Database<'static>>)>,
     Query(sort): Query<SortOn<TorrentsPageSort>>,
     Query(filter): Query<Vec<(TorrentsPageFilter, String)>>,
     Query(show): Query<TorrentsPageColumnsQuery>,
@@ -159,6 +159,7 @@ pub async fn torrents_page(
     }
 
     let template = TorrentsPageTemplate {
+        abs_url: config.audiobookshelf.as_ref().map(|abs| abs.url.clone()),
         paging: paging.unwrap_or_default(),
         sort,
         show,
@@ -177,11 +178,7 @@ fn score(query: &str, target: &str) -> isize {
 }
 
 pub async fn torrents_page_post(
-    State((config, db, mam)): State<(
-        Arc<Config>,
-        Arc<Database<'static>>,
-        Arc<Result<Arc<MaM<'static>>>>,
-    )>,
+    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
     uri: OriginalUri,
     Form(form): Form<TorrentsPageForm>,
 ) -> Result<Redirect, AppError> {
@@ -238,6 +235,7 @@ pub struct TorrentsPageForm {
 #[derive(Template)]
 #[template(path = "pages/torrents.html")]
 struct TorrentsPageTemplate {
+    abs_url: Option<String>,
     paging: Pagination,
     sort: SortOn<TorrentsPageSort>,
     show: TorrentsPageColumns,

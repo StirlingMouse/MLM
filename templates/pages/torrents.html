@@ -75,7 +75,7 @@
   {{ table_header_if(!show.path, Some(TorrentsPageSort::Linked), "Linked", "80px") }}
   {{ table_header_if(show.path, Some(TorrentsPageSort::Linked), "Path", "2fr") }}
   {{ table_header_s(Some(TorrentsPageSort::CreatedAt), "Added At", "157px") }}
-  {{ table_header_s(None, "", "88px") }}
+  {{ table_header_s(None, "", "132px") }}
 {% for torrent in torrents %}
   <div><input type=checkbox name=torrent value={{torrent.hash}}></div>
   <div><span title="{{ torrent.cat_name() }}">{{ self::item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</span></div>
@@ -137,6 +137,9 @@
   <div>
     <a href="/torrents/{{ torrent.hash }}">open</a>
     <a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a>
+    {% if let (Some(abs_url), Some(abs_id)) = (abs_url.as_ref(), torrent.abs_id.as_ref()) %}
+      <a href="{{ abs_url }}/audiobookshelf/item/{{ abs_id }}" target=_blank>ABS</a>
+    {% endif %}
   </div>
 {% endfor %}
 </div>

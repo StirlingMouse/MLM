@@ -14,6 +14,8 @@ pub struct Stats {
     pub goodreads_result: Option<Result<()>>,
     pub downloader_run_at: Option<OffsetDateTime>,
     pub downloader_result: Option<Result<()>>,
+    pub audiobookshelf_run_at: Option<OffsetDateTime>,
+    pub audiobookshelf_result: Option<Result<()>>,
 }
 
 #[derive(Clone)]
@@ -22,4 +24,5 @@ pub struct Triggers {
     pub linker_tx: Sender<()>,
     pub goodreads_tx: Sender<()>,
     pub downloader_tx: Sender<()>,
+    pub audiobookshelf_tx: Sender<()>,
 }

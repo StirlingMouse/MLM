@@ -59,6 +59,11 @@ pub async fn index_page(
             .downloader_result
             .as_ref()
             .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+        audiobookshelf_run_at: stats.audiobookshelf_run_at.map(Into::into),
+        audiobookshelf_result: stats
+            .audiobookshelf_result
+            .as_ref()
+            .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
     };
     Ok::<_, AppError>(Html(template.to_string()))
 }
@@ -80,6 +85,9 @@ pub async fn index_page_post(
         }
         "run_downloader" => {
             triggers.downloader_tx.send(())?;
+        }
+        "run_abs_matcher" => {
+            triggers.audiobookshelf_tx.send(())?;
         }
         action => {
             eprintln!("unknown action: {action}");
@@ -105,6 +113,8 @@ struct IndexPageTemplate {
     goodreads_result: Option<Result<(), String>>,
     downloader_run_at: Option<Timestamp>,
     downloader_result: Option<Result<(), String>>,
+    audiobookshelf_run_at: Option<Timestamp>,
+    audiobookshelf_result: Option<Result<(), String>>,
 }
 
 #[derive(Debug, Deserialize)]

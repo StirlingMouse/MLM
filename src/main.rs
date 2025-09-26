@@ -30,6 +30,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use audiobookshelf::match_torrents_to_abs;
 use autograbber::{grab_selected_torrents, run_autograbbers};
 use cleaner::run_library_cleaner;
 use dirs::{config_dir, data_local_dir};
@@ -183,6 +184,7 @@ async fn app_main() -> Result<()> {
     let (linker_tx, linker_rx) = watch::channel(());
     let (goodreads_tx, mut goodreads_rx) = watch::channel(());
     let (downloader_tx, mut downloader_rx) = watch::channel(());
+    let (audiobookshelf_tx, mut audiobookshelf_rx) = watch::channel(());
 
     let mam = if config.mam_id.is_empty() {
         Err(anyhow::Error::msg("No mam_id set"))
@@ -399,11 +401,47 @@ async fn app_main() -> Result<()> {
         }
     }
 
+    if let Some(config) = &config.audiobookshelf {
+        let config = config.clone();
+        let db = db.clone();
+        let stats = stats.clone();
+        tokio::spawn(async move {
+            loop {
+                {
+                    let mut stats = stats.lock().await;
+                    stats.audiobookshelf_run_at = Some(OffsetDateTime::now_utc());
+                    stats.audiobookshelf_result = None;
+                }
+                let result = match_torrents_to_abs(&config, db.clone())
+                    .await
+                    .context("audiobookshelf_matcher");
+                if let Err(err) = &result {
+                    error!("Error running audiobookshelf matcher: {err:?}");
+                }
+                {
+                    let mut stats = stats.lock().await;
+                    stats.audiobookshelf_result = Some(result);
+                }
+                select! {
+                    () = sleep(Duration::from_secs(60 * config.interval)) => {},
+                    result = audiobookshelf_rx.changed() => {
+                        if let Err(err) = result {
+                            error!("Error listening on audiobookshelf_rx: {err:?}");
+                            let mut stats = stats.lock().await;
+                            stats.audiobookshelf_result = Some(Err(err.into()));
+                        }
+                    },
+                }
+            }
+        });
+    }
+
     let triggers = Triggers {
         search_tx,
         linker_tx,
         goodreads_tx,
         downloader_tx,
+        audiobookshelf_tx,
     };
 
     start_webserver(config, db, stats, Arc::new(mam), triggers).await?;

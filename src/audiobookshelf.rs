@@ -1,11 +1,12 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::Result;
 use axum::http::HeaderMap;
+use native_db::Database;
 use reqwest::{Url, header::AUTHORIZATION};
 use serde::Deserialize;
 use serde_json::json;
-use tracing::error;
+use tracing::{debug, error, instrument, trace};
 
 use crate::{
     config::AudiobookShelfConfig,
@@ -119,7 +120,7 @@ pub struct Media {
     pub library_item_id: String,
     pub metadata: Metadata,
     #[serde(rename = "coverPath")]
-    pub cover_path: String,
+    pub cover_path: Option<String>,
     pub tags: Vec<String>,
     #[serde(rename = "audioFiles")]
     pub audio_files: Vec<AudioFile>,
@@ -315,6 +316,40 @@ pub struct Metadata4 {
     pub birthtime_ms: i64,
 }
 
+#[instrument(skip_all)]
+pub async fn match_torrents_to_abs(
+    config: &AudiobookShelfConfig,
+    db: Arc<Database<'_>>,
+) -> Result<()> {
+    let abs = Abs::new(config)?;
+    let torrents = db.r_transaction()?.scan().primary::<Torrent>()?;
+    let torrents = torrents.all()?.filter(|t| {
+        t.as_ref()
+            .is_ok_and(|t| t.abs_id.is_none() && t.library_path.is_some())
+    });
+
+    for torrent in torrents {
+        let mut torrent = torrent?;
+        let Some(book) = abs.get_book(&torrent).await? else {
+            trace!(
+                "Could not find ABS entry for torrent {} {}",
+                torrent.meta.mam_id, torrent.meta.title
+            );
+            continue;
+        };
+        debug!(
+            "Matched ABS entry with torrent {} {}",
+            torrent.meta.mam_id, torrent.meta.title
+        );
+        torrent.abs_id = Some(book.id);
+        let rw = db.rw_transaction()?;
+        rw.upsert(torrent)?;
+        rw.commit()?;
+    }
+
+    Ok(())
+}
+
 pub struct Abs {
     base_url: String,
     client: reqwest::Client,
@@ -358,7 +393,9 @@ impl Abs {
             let mut url: Url = format!("{}/api/libraries/{}/search", self.base_url, library.id)
                 .parse()
                 .unwrap();
-            url.query_pairs_mut().append_pair("q", &torrent.meta.title);
+            let mut titles = torrent.meta.title.splitn(2, ":");
+            let title = titles.next().unwrap();
+            url.query_pairs_mut().append_pair("q", title);
             let resp = self
                 .client
                 .get(url)

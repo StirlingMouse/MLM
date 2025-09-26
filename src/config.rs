@@ -61,6 +61,8 @@ pub struct Config {
 pub struct AudiobookShelfConfig {
     pub url: String,
     pub token: String,
+    #[serde(default = "default_abs_interval")]
+    pub interval: u64,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -268,6 +270,10 @@ fn default_link_interval() -> u64 {
 
 fn default_goodreads_interval() -> u64 {
     60
+}
+
+fn default_abs_interval() -> u64 {
+    10
 }
 
 fn default_audio_types() -> Vec<String> {

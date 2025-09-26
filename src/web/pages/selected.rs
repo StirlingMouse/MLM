@@ -13,20 +13,16 @@ use serde::{Deserialize, Serialize};
 use crate::{
     config::Config,
     data::{SelectedTorrent, Timestamp},
-    mam::{MaM, Unsats},
+    mam::Unsats,
     web::{
-        AppError, series,
+        AppError, MaMState, series,
         tables::{Key, SortOn, Sortable, item, items, table_styles},
         time,
     },
 };
 
 pub async fn selected_page(
-    State((config, db, mam)): State<(
-        Arc<Config>,
-        Arc<Database<'static>>,
-        Arc<Result<Arc<MaM<'static>>>>,
-    )>,
+    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
     Query(sort): Query<SortOn<SelectedPageSort>>,
     Query(filter): Query<Vec<(SelectedPageFilter, String)>>,
 ) -> std::result::Result<Html<String>, AppError> {

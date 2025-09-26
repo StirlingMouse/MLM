@@ -11,11 +11,11 @@ use axum_extra::extract::Form;
 use native_db::Database;
 use serde::{Deserialize, Serialize};
 
+use crate::web::MaMState;
 use crate::{
     config::Config,
     data::{Language, Torrent, TorrentKey},
     linker::{refresh_metadata, refresh_metadata_relink},
-    mam::MaM,
     web::{
         AppError, series,
         tables::{
@@ -128,11 +128,7 @@ pub async fn replaced_torrents_page(
 }
 
 pub async fn replaced_torrents_page_post(
-    State((config, db, mam)): State<(
-        Arc<Config>,
-        Arc<Database<'static>>,
-        Arc<Result<Arc<MaM<'static>>>>,
-    )>,
+    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
     uri: OriginalUri,
     Form(form): Form<TorrentsPageForm>,
 ) -> Result<Redirect, AppError> {

@@ -48,6 +48,8 @@ use crate::{
     stats::{Stats, Triggers},
 };
 
+pub type MaMState = Arc<Result<Arc<MaM<'static>>>>;
+
 pub async fn start_webserver(
     config: Arc<Config>,
     db: Arc<Database<'static>>,
@@ -61,7 +63,10 @@ pub async fn start_webserver(
             get(index_page).with_state((config.clone(), stats, mam.clone())),
         )
         .route("/", post(index_page_post).with_state(triggers))
-        .route("/torrents", get(torrents_page).with_state(db.clone()))
+        .route(
+            "/torrents",
+            get(torrents_page).with_state((config.clone(), db.clone())),
+        )
         .route(
             "/torrents",
             post(torrents_page_post).with_state((config.clone(), db.clone(), mam.clone())),

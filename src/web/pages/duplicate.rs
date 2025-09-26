@@ -15,10 +15,10 @@ use crate::{
     cleaner::clean_torrent,
     config::Config,
     data::{DuplicateTorrent, SelectedTorrent, Timestamp, Torrent, TorrentCost},
-    mam::{MaM, SearchQuery, Tor, normalize_title},
+    mam::{SearchQuery, Tor, normalize_title},
     mam_enums::SearchIn,
     web::{
-        AppError, series,
+        AppError, MaMState, series,
         tables::{Key, SortOn, Sortable, item, items, table_styles_rows},
         time,
     },
@@ -87,11 +87,7 @@ pub async fn duplicate_page(
 }
 
 pub async fn duplicate_torrents_page_post(
-    State((config, db, mam)): State<(
-        Arc<Config>,
-        Arc<Database<'static>>,
-        Arc<Result<Arc<MaM<'static>>>>,
-    )>,
+    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
     uri: OriginalUri,
     Form(form): Form<TorrentsPageForm>,
 ) -> Result<Redirect, AppError> {
