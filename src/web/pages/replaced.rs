@@ -11,7 +11,7 @@ use axum_extra::extract::Form;
 use native_db::Database;
 use serde::{Deserialize, Serialize};
 
-use crate::web::MaMState;
+use crate::web::{MaMState, Page};
 use crate::{
     config::Config,
     data::{Language, Torrent, TorrentKey},
@@ -183,6 +183,8 @@ struct ReplacedTorrentsPageTemplate {
     cols: RefCell<Vec<String>>,
     torrents: Vec<(Torrent, Torrent)>,
 }
+
+impl Page for ReplacedTorrentsPageTemplate {}
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

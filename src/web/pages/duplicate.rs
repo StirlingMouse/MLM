@@ -19,7 +19,7 @@ use crate::{
     mam::{SearchQuery, Tor, normalize_title},
     mam_enums::SearchIn,
     web::{
-        AppError, MaMState, series,
+        AppError, MaMState, Page, series,
         tables::{Key, SortOn, Sortable, item, items, table_styles_rows},
         time,
     },
@@ -245,6 +245,8 @@ struct DuplicatePageTemplate {
     sort: SortOn<DuplicatePageSort>,
     torrents: Vec<(DuplicateTorrent, Torrent)>,
 }
+
+impl Page for DuplicatePageTemplate {}
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

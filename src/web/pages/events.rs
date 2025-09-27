@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     data::{Event, EventKey, EventType, Torrent, TorrentCost},
     web::{
-        AppError, Conditional, TorrentLink,
+        AppError, Conditional, Page, TorrentLink,
         tables::{Key, Pagination, PaginationParams, table_styles},
         time,
     },
@@ -95,6 +95,8 @@ struct EventPageTemplate<'a> {
     show: Option<&'a str>,
     events: Vec<(Event, Option<Torrent>, Option<Torrent>)>,
 }
+
+impl<'a> Page for EventPageTemplate<'a> {}
 
 impl<'a> EventPageTemplate<'a> {
     fn torrent_title(&'a self, torrent: &'a Option<Torrent>) -> Conditional<TorrentLink<'a>> {

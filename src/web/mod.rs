@@ -134,6 +134,12 @@ pub async fn start_webserver(
     Ok(())
 }
 
+pub trait Page {
+    fn build_date(&self) -> &'static str {
+        env!("DATE")
+    }
+}
+
 async fn set_static_cache_control(request: Request<Body>, next: Next) -> Response {
     let mut response = next.run(request).await;
     response.headers_mut().insert(

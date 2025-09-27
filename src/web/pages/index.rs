@@ -15,7 +15,7 @@ use crate::{
     data::Timestamp,
     mam::MaM,
     stats::{Stats, Triggers},
-    web::{AppError, time},
+    web::{AppError, Page, time},
 };
 
 pub async fn index_page(
@@ -116,6 +116,8 @@ struct IndexPageTemplate {
     audiobookshelf_run_at: Option<Timestamp>,
     audiobookshelf_result: Option<Result<(), String>>,
 }
+
+impl Page for IndexPageTemplate {}
 
 #[derive(Debug, Deserialize)]
 pub struct IndexPageForm {

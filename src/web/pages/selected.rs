@@ -15,7 +15,7 @@ use crate::{
     data::{SelectedTorrent, Timestamp},
     mam::Unsats,
     web::{
-        AppError, MaMState, series,
+        AppError, MaMState, Page, series,
         tables::{Key, SortOn, Sortable, item, items, table_styles},
         time,
     },
@@ -141,6 +141,8 @@ struct SelectedPageTemplate {
     sort: SortOn<SelectedPageSort>,
     torrents: Vec<SelectedTorrent>,
 }
+
+impl Page for SelectedPageTemplate {}
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

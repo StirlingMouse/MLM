@@ -11,9 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     data::{ErroredTorrent, ErroredTorrentId, ErroredTorrentKey},
     web::{
-        AppError,
-        tables::{Key, SortOn, Sortable, item, table_styles},
-        time,
+        tables::{item, table_styles, Key, SortOn, Sortable}, time, AppError, Page
     },
 };
 
@@ -70,6 +68,8 @@ struct ErrorsPageTemplate {
     sort: SortOn<ErrorsPageSort>,
     errors: Vec<ErroredTorrent>,
 }
+
+impl Page for ErrorsPageTemplate {}
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

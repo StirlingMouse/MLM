@@ -17,7 +17,7 @@ use crate::{
     data::{AudiobookCategory, EbookCategory, Torrent},
     mam::DATE_FORMAT,
     qbittorrent::QbitError,
-    web::{AppError, MaMState, filter, yaml_items},
+    web::{AppError, MaMState, Page, filter, yaml_items},
 };
 
 pub async fn config_page(
@@ -124,6 +124,8 @@ struct ConfigPageTemplate {
     config: Arc<Config>,
     show_apply_tags: bool,
 }
+
+impl Page for ConfigPageTemplate {}
 
 impl TorrentFilter {
     fn mam_search(&self) -> String {

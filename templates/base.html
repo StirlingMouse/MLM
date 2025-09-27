@@ -2,9 +2,9 @@
 <html lang="en">
   <head>
     <title>{% block title %}{{ title }} - MLM{% endblock %}</title>
-    <link rel="stylesheet" href="/assets/style.css">
-    <script src="/assets/elements.js"></script>
-    <script async defer type="module" src="/assets/index.js"></script>
+    <link rel="stylesheet" href="/assets/style.css?{{ build_date() }}">
+    <script src="/assets/elements.js?{{ build_date() }}"></script>
+    <script async defer type="module" src="/assets/index.js?{{ build_date() }}"></script>
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon.png">
     {% block head %}{% endblock %}
   </head>

@@ -8,7 +8,7 @@ use native_db::Database;
 use crate::{
     config::{Config, GoodreadsList},
     data::{List, ListKey},
-    web::{AppError, time},
+    web::{AppError, Page, time},
 };
 
 pub async fn lists_page(
@@ -54,3 +54,5 @@ struct ListsPageTemplate {
     lists: Vec<(GoodreadsList, List)>,
     inactive_lists: Vec<List>,
 }
+
+impl Page for ListsPageTemplate {}

@@ -12,7 +12,7 @@ use crate::{
     config::Config,
     data::{Torrent, TorrentMeta},
     mam::MaMTorrent,
-    web::{AppError, MaMState, pages::torrents::TorrentsPageFilter, series, tables::items},
+    web::{AppError, MaMState, Page, pages::torrents::TorrentsPageFilter, series, tables::items},
 };
 
 pub async fn torrent_page(
@@ -64,6 +64,8 @@ struct TorrentPageTemplate {
     mam_torrent: Option<MaMTorrent>,
     mam_meta: Option<TorrentMeta>,
 }
+
+impl Page for TorrentPageTemplate {}
 
 fn duration(seconds: f64) -> String {
     let mut seconds = seconds as u64;

@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
 
 use crate::data::Category;
-use crate::web::MaMState;
+use crate::web::{MaMState, Page};
 use crate::{
     cleaner::clean_torrent,
     config::Config,
@@ -243,6 +243,8 @@ struct TorrentsPageTemplate {
     query: String,
     torrents: Vec<Torrent>,
 }
+
+impl Page for TorrentsPageTemplate {}
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]

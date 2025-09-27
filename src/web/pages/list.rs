@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     data::{AudiobookCategory, EbookCategory, List, ListItem, ListItemKey, TorrentStatus},
-    web::{AppError, time},
+    web::{AppError, Page, time},
 };
 
 pub async fn list_page(
@@ -71,6 +71,8 @@ struct ListPageTemplate<'a> {
     list: List,
     items: Vec<ListItem>,
 }
+
+impl<'a> Page for ListPageTemplate<'a> {}
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

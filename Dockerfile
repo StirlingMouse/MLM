@@ -16,6 +16,7 @@ WORKDIR /app
 RUN --mount=type=cache,target=/usr/local/cargo/registry cargo build --release
 
 # Copy our sources
+COPY build.rs /app
 COPY ./src /app/src
 COPY ./templates /app/templates
 
