@@ -328,10 +328,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             let old_selected = rw.get().primary::<data::SelectedTorrent>(meta.mam_id)?;
             if let Some(old) = old_selected {
                 if old.meta != meta {
-                    let mut old = old;
-                    old.meta = meta;
-                    rw.upsert(old)?;
-                    rw_opt.unwrap().commit()?;
+                    update_selected_torrent_meta(db, rw_opt.unwrap(), old, meta)?;
                 }
                 continue 'torrent;
             }
@@ -342,11 +339,9 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 .primary::<data::Torrent>()?
                 .all()?
                 .find(|t| t.as_ref().is_ok_and(|t| t.meta.mam_id == meta.mam_id));
-            if let Some(mut old) = old_library.transpose()? {
+            if let Some(old) = old_library.transpose()? {
                 if old.meta != meta {
-                    old.meta = meta;
-                    rw.upsert(old)?;
-                    rw_opt.unwrap().commit()?;
+                    update_torrent_meta(db, rw_opt.unwrap(), old, meta)?;
                 }
                 continue 'torrent;
             }
@@ -361,10 +356,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             for old in old_selected {
                 if old.mam_id == meta.mam_id {
                     if old.meta != meta {
-                        let mut old = old;
-                        old.meta = meta;
-                        rw.upsert(old)?;
-                        rw_opt.unwrap().commit()?;
+                        update_selected_torrent_meta(db, rw_opt.unwrap(), old, meta)?;
                     }
                     continue 'torrent;
                 }
@@ -417,33 +409,8 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             }?;
             for old in old_library {
                 if old.meta.mam_id == meta.mam_id {
-                    // Found the same torrent again, update metadata if it has changed
                     if old.meta != meta {
-                        let hash = old.hash.clone();
-                        let mam_id = meta.mam_id;
-                        let diff = old.meta.diff(&meta);
-                        debug!(
-                            "Updating meta for torrent {}, diff:\n{}",
-                            mam_id,
-                            diff.iter()
-                                .map(|field| format!(
-                                    "  {}: {} -> {}",
-                                    field.field, field.from, field.to
-                                ))
-                                .join("\n")
-                        );
-                        let mut old = old;
-                        old.meta = meta;
-                        rw.upsert(old)?;
-                        rw_opt.unwrap().commit()?;
-                        write_event(
-                            db,
-                            Event::new(
-                                Some(hash),
-                                Some(mam_id),
-                                EventType::Updated { fields: diff },
-                            ),
-                        );
+                        update_torrent_meta(db, rw_opt.unwrap(), old, meta)?;
                     }
                     continue 'torrent;
                 }
@@ -636,6 +603,63 @@ async fn grab_torrent(
         ),
     );
 
+    Ok(())
+}
+
+pub fn update_torrent_meta(
+    db: &Database<'_>,
+    rw: RwTransaction<'_>,
+    torrent: data::Torrent,
+    meta: TorrentMeta,
+) -> Result<()> {
+    let hash = torrent.hash.clone();
+    let mam_id = meta.mam_id;
+    let diff = torrent.meta.diff(&meta);
+    debug!(
+        "Updating meta for torrent {}, diff:\n{}",
+        mam_id,
+        diff.iter()
+            .map(|field| format!("  {}: {} -> {}", field.field, field.from, field.to))
+            .join("\n")
+    );
+    let mut torrent = torrent;
+    torrent.meta = meta;
+    rw.upsert(torrent)?;
+    rw.commit()?;
+    write_event(
+        db,
+        Event::new(
+            Some(hash),
+            Some(mam_id),
+            EventType::Updated { fields: diff },
+        ),
+    );
+    Ok(())
+}
+
+pub fn update_selected_torrent_meta(
+    db: &Database<'_>,
+    rw: RwTransaction<'_>,
+    torrent: SelectedTorrent,
+    meta: TorrentMeta,
+) -> Result<()> {
+    let mam_id = meta.mam_id;
+    let diff = torrent.meta.diff(&meta);
+    debug!(
+        "Updating meta for selected torrent {}, diff:\n{}",
+        mam_id,
+        diff.iter()
+            .map(|field| format!("  {}: {} -> {}", field.field, field.from, field.to))
+            .join("\n")
+    );
+    let mut torrent = torrent;
+    torrent.meta = meta;
+    rw.upsert(torrent)?;
+    rw.commit()?;
+    write_event(
+        db,
+        Event::new(None, Some(mam_id), EventType::Updated { fields: diff }),
+    );
     Ok(())
 }
 

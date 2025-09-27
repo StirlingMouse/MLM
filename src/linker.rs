@@ -11,7 +11,6 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 use file_id::get_file_id;
-use itertools::Itertools as _;
 use log::error;
 use native_db::Database;
 use once_cell::sync::Lazy;
@@ -24,6 +23,7 @@ use tracing::{Level, debug, instrument, span, trace};
 
 use crate::{
     audiobookshelf as abs,
+    autograbber::update_torrent_meta,
     cleaner::remove_library_files,
     config::{Config, Library, LibraryLinkMethod, QbitConfig},
     data::{
@@ -208,30 +208,8 @@ pub async fn refresh_metadata(
     }
 
     if torrent.meta != meta {
-        let hash = torrent.hash.clone();
-        let mam_id = meta.mam_id;
-        let diff = torrent.meta.diff(&meta);
-        trace!(
-            "Updating meta for torrent {}, diff:\n{}",
-            mam_id,
-            diff.iter()
-                .map(|field| format!("  {}: {} -> {}", field.field, field.from, field.to))
-                .join("\n")
-        );
-        torrent.meta = meta.clone();
-        {
-            let rw = db.rw_transaction()?;
-            rw.upsert(torrent.clone())?;
-            rw.commit()?;
-        }
-        write_event(
-            db,
-            Event::new(
-                Some(hash),
-                Some(mam_id),
-                EventType::Updated { fields: diff },
-            ),
-        );
+        update_torrent_meta(db, db.rw_transaction()?, torrent.clone(), meta.clone())?;
+        torrent.meta = meta;
     }
     Ok((torrent, mam_torrent))
 }

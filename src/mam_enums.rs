@@ -5,7 +5,7 @@ use serde::{
     de::{self, SeqAccess, Visitor},
 };
 
-use crate::data::{AudiobookCategory, Category, EbookCategory, MainCat};
+use crate::data::{AudiobookCategory, EbookCategory};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
@@ -147,7 +147,6 @@ where
 
     deserializer.deserialize_any(CategoriesParser(PhantomData))
 }
-
 
 #[derive(Clone, Default, Debug, Deserialize)]
 #[serde(try_from = "HashMap<String, bool>")]
