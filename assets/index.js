@@ -22,19 +22,24 @@ document.body.addEventListener('click', e => {
                 const show = link.get('show') ?? current.get('show')
                 const from = link.get('from') ?? current.get('from')
                 const page_size = link.get('page_size') ?? current.get('page_size')
-                const filter = [...link.entries(), ...current.entries()]
-                        .find(([key,]) => key !== 'sort_by' && key !== 'asc' && key !== 'show' && key !== 'from' && key !== 'page_size')
+                const filters = [...link.entries(), ...current.entries()]
+                        .filter(([key,]) => key !== 'sort_by' && key !== 'asc' && key !== 'show' && key !== 'from' && key !== 'page_size')
                 const combined = new URLSearchParams()
                 if (sortBy) combined.set('sort_by', sortBy)
                 if (asc) combined.set('asc', asc)
                 if (show) combined.set('show', show)
                 if (from) combined.set('from', from)
                 if (page_size) combined.set('page_size', page_size)
-                if (filter) combined.set(filter[0], filter[1])
+                if (e.shiftKey) {
+                        for (const filter of filters) combined.set(filter[0], filter[1])
+                } else {
+                        const filter = filters[0]
+                        if (filter) combined.set(filter[0], filter[1])
+                }
                 const target = new URL(e.target.href)
-                target.search = combined
+                target.search = combined.toString()
                 e.preventDefault()
-                location.href = target
+                location.href = target.toString()
         }
 })
 
