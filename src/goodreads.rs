@@ -41,9 +41,11 @@ pub async fn run_goodreads_import(
         user_info.unsat
     );
 
+    let mut selected_torrents = 0;
     for list in &config.goodreads_lists {
-        let max_torrents =
-            max_torrents.saturating_sub(list.unsat_buffer.unwrap_or(config.unsat_buffer));
+        let max_torrents = max_torrents
+            .saturating_sub(list.unsat_buffer.unwrap_or(config.unsat_buffer))
+            .saturating_sub(selected_torrents);
 
         if max_torrents > 0 {
             let content = reqwest::get(&list.url).await?.bytes().await?;
@@ -115,9 +117,10 @@ pub async fn run_goodreads_import(
                     }
                 };
                 trace!("Searching for book {} from Goodreads list", item.title);
-                search_item(&config, &db, &mam, &list, &item, db_item)
-                    .await
-                    .context("search goodreads book")?;
+                selected_torrents +=
+                    search_item(&config, &db, &mam, &list, &item, db_item, max_torrents)
+                        .await
+                        .context("search goodreads book")?;
             }
         }
     }
@@ -135,9 +138,10 @@ async fn search_item(
     list: &&crate::config::GoodreadsList,
     item: &Item,
     mut db_item: ListItem,
-) -> Result<()> {
+    max_torrents: u64,
+) -> Result<u64> {
     if !db_item.want_audio() && !db_item.want_ebook() {
-        return Ok(());
+        return Ok(0);
     }
 
     let has_updates = search_library(config, db, &mut db_item, item).context("search_library")?;
@@ -147,7 +151,7 @@ async fn search_item(
         rw.commit()?;
     }
     if !db_item.want_audio() && !db_item.want_ebook() {
-        return Ok(());
+        return Ok(0);
     }
 
     let mut torrents = vec![];
@@ -228,8 +232,9 @@ async fn search_item(
         rw.commit()?;
     }
 
+    let mut selected_torrents = 0;
     if let Some(audiobook) = audiobook {
-        select_torrents(
+        selected_torrents += select_torrents(
             config,
             db,
             [audiobook.0.clone()].into_iter(),
@@ -237,12 +242,13 @@ async fn search_item(
             list.unsat_buffer,
             None,
             list.dry_run,
+            max_torrents,
         )
         .await
         .context("select_torrents")?;
     }
     if let Some(ebook) = ebook {
-        select_torrents(
+        selected_torrents += select_torrents(
             config,
             db,
             [ebook.0.clone()].into_iter(),
@@ -250,12 +256,13 @@ async fn search_item(
             list.unsat_buffer,
             None,
             list.dry_run,
+            max_torrents,
         )
         .await
         .context("select_torrents")?;
     }
 
-    Ok(())
+    Ok(selected_torrents)
 }
 
 #[instrument(skip_all)]

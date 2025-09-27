@@ -35,11 +35,13 @@ pub async fn run_autograbbers(
         user_info.unsat
     );
 
+    let mut selected_torrents = 0;
     for autograb_config in &config.autograbs {
         let max_torrents = max_torrents
-            .saturating_sub(autograb_config.unsat_buffer.unwrap_or(config.unsat_buffer));
+            .saturating_sub(autograb_config.unsat_buffer.unwrap_or(config.unsat_buffer))
+            .saturating_sub(selected_torrents);
         if max_torrents > 0 {
-            search_torrents(
+            selected_torrents += search_torrents(
                 config.clone(),
                 db.clone(),
                 autograb_config,
@@ -131,7 +133,7 @@ pub async fn search_torrents(
     torrent_filter: &TorrentFilter,
     mam: Arc<MaM<'_>>,
     max_torrents: u64,
-) -> Result<()> {
+) -> Result<u64> {
     let target = match torrent_filter.kind {
         Type::Bookmarks => Some(SearchTarget::Bookmarks),
         _ => None,
@@ -161,7 +163,7 @@ pub async fn search_torrents(
         let mut page_results = mam
             .search(&SearchQuery {
                 dl_link: true,
-                perpage: 100.min(max_torrents),
+                perpage: 100,
                 tor: Tor {
                     start_number: results.as_ref().map_or(0, |r| r.data.len() as u64),
                     target,
@@ -254,6 +256,7 @@ pub async fn search_torrents(
         torrent_filter.unsat_buffer,
         torrent_filter.category.clone(),
         torrent_filter.dry_run,
+        max_torrents,
     )
     .await
     .context("select_torrents")
@@ -268,7 +271,9 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
     unsat_buffer: Option<u64>,
     filter_category: Option<String>,
     dry_run: bool,
-) -> Result<()> {
+    max_torrents: u64,
+) -> Result<u64> {
+    let mut selected_torrents = 0;
     'torrent: for torrent in torrents {
         let meta = match torrent.as_meta() {
             Ok(it) => it,
@@ -417,7 +422,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         let hash = old.hash.clone();
                         let mam_id = meta.mam_id;
                         let diff = old.meta.diff(&meta);
-                        trace!(
+                        debug!(
                             "Updating meta for torrent {}, diff:\n{}",
                             mam_id,
                             diff.iter()
@@ -503,6 +508,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             torrent.title, torrent.filetype, cost, category, tags
         );
         if let Some(rw) = &rw_opt {
+            selected_torrents += 1;
             rw.insert(data::SelectedTorrent {
                 mam_id: torrent.id,
                 dl_link: torrent
@@ -519,10 +525,13 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 removed_at: None,
             })?;
             rw_opt.unwrap().commit()?;
+            if selected_torrents >= max_torrents {
+                break;
+            }
         }
     }
 
-    Ok(())
+    Ok(selected_torrents)
 }
 
 #[instrument(skip_all)]
