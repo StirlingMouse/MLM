@@ -251,6 +251,7 @@ pub async fn search_torrents(
     select_torrents(
         &config,
         &db,
+        &mam,
         torrents,
         torrent_filter.cost,
         torrent_filter.unsat_buffer,
@@ -266,6 +267,7 @@ pub async fn search_torrents(
 pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
     config: &Config,
     db: &Database<'_>,
+    mam: &MaM<'_>,
     torrents: T,
     cost: Cost,
     unsat_buffer: Option<u64>,
@@ -328,7 +330,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             let old_selected = rw.get().primary::<data::SelectedTorrent>(meta.mam_id)?;
             if let Some(old) = old_selected {
                 if old.meta != meta {
-                    update_selected_torrent_meta(db, rw_opt.unwrap(), old, meta)?;
+                    update_selected_torrent_meta(db, rw_opt.unwrap(), mam, old, meta).await?;
                 }
                 continue 'torrent;
             }
@@ -356,7 +358,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             for old in old_selected {
                 if old.mam_id == meta.mam_id {
                     if old.meta != meta {
-                        update_selected_torrent_meta(db, rw_opt.unwrap(), old, meta)?;
+                        update_selected_torrent_meta(db, rw_opt.unwrap(), mam, old, meta).await?;
                     }
                     continue 'torrent;
                 }
@@ -637,9 +639,10 @@ pub fn update_torrent_meta(
     Ok(())
 }
 
-pub fn update_selected_torrent_meta(
+async fn update_selected_torrent_meta(
     db: &Database<'_>,
     rw: RwTransaction<'_>,
+    mam: &MaM<'_>,
     torrent: SelectedTorrent,
     meta: TorrentMeta,
 ) -> Result<()> {
@@ -652,15 +655,23 @@ pub fn update_selected_torrent_meta(
             .map(|field| format!("  {}: {} -> {}", field.field, field.from, field.to))
             .join("\n")
     );
+    let hash = get_mam_torrent_hash(mam, &torrent.dl_link).await.ok();
     let mut torrent = torrent;
     torrent.meta = meta;
     rw.upsert(torrent)?;
     rw.commit()?;
     write_event(
         db,
-        Event::new(None, Some(mam_id), EventType::Updated { fields: diff }),
+        Event::new(hash, Some(mam_id), EventType::Updated { fields: diff }),
     );
     Ok(())
+}
+
+pub async fn get_mam_torrent_hash(mam: &MaM<'_>, dl_link: &str) -> Result<String> {
+    let torrent_file_bytes = mam.get_torrent_file(dl_link).await?;
+    let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
+    let hash = torrent_file.info_hash();
+    Ok(hash)
 }
 
 fn add_duplicate_torrent(

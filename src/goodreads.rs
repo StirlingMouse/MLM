@@ -237,6 +237,7 @@ async fn search_item(
         selected_torrents += select_torrents(
             config,
             db,
+            mam,
             [audiobook.0.clone()].into_iter(),
             audiobook.3,
             list.unsat_buffer,
@@ -251,6 +252,7 @@ async fn search_item(
         selected_torrents += select_torrents(
             config,
             db,
+            mam,
             [ebook.0.clone()].into_iter(),
             ebook.3,
             list.unsat_buffer,
