@@ -1999,7 +1999,7 @@ dependencies = [
 [[package]]
 name = "qbit"
 version = "0.2.0"
-source = "git+https://github.com/StirlingMouse/qbittorrent-webui-api.git#2c2a82a1108f835bb5e7b74312b9e85a4a26ec70"
+source = "git+https://github.com/StirlingMouse/qbittorrent-webui-api.git#17caaa36c3a1bda239713c6d490dfe23405807ac"
 dependencies = [
  "bytes",
  "derive_builder",

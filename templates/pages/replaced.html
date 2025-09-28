@@ -20,7 +20,7 @@
     <button name=action value=remove data-prompt="Are you sure you want to remove the selected torrents?">remove torrent from MLM</button>
   </div>
   <div class="table_options">
-    <div class="option_group">
+    <div class="option_group query">
       Columns:
       <label>
         Authors
@@ -47,7 +47,7 @@
         <input type=checkbox name=show {% if show.filetypes %}checked{% endif %} value="filetype">
       </label>
     </div>
-    <div class="option_group">
+    <div class="option_group query">
       Page size: {{ paging.selector([100, 500, 1000, 5000]) | safe }}
     </div>
   </div>

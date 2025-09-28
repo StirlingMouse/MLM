@@ -23,7 +23,10 @@
 {% endif %}
 <p>Size: {{ torrent.meta.size }}</p>
 {% if let Some(library_path) = torrent.library_path %}
-  <p>Linked Path: {{ library_path.to_string_lossy() }}</p>
+  <div class=row style="justify-content:flex-start">
+    Linked Path: {{ library_path.to_string_lossy() }}
+    <form method=post><button name=action value=refresh-relink>refresh metadata and relink</button></form>
+  </div>
 {% endif %}
 <details>
   <summary>Files</summary>
@@ -35,8 +38,22 @@
 </details>
 {% if let Some(qbit) = qbit_data %}
   <p>Status: {{ "{:#?}" | format(qbit.torrent.state) }}</p>
-  <p>Category: {{ qbit.torrent.category }}</p>
-  <p>Tags: {{ qbit.torrent.tags }}</p>
+  <form method=post class=row style="justify-content:flex-start">
+    Category: <select name=category>
+      {% for cat in qbit.categories.keys() %}
+        <option {% if cat == &qbit.torrent.category %}selected{% endif %}>{{ cat }}</option>
+      {% endfor %}
+    </select>
+    Tags: <div class=option_group>
+      {% for tag in qbit.tags %}
+        <label>
+          {{ tag }}
+          <input type=checkbox name=tags {% if qbit.torrent_tags.contains(tag.as_str()) %}checked{% endif %} value="{{tag}}">
+        </label>
+      {% endfor %}
+    </div>
+    <button type=submit name=action value=qbit>save</button>
+  </form>
   <p>Uploaded: {{ Size::from_bytes(*(&qbit.torrent.uploaded as u64)) }}</p>
   {% if let Some(tracker) = qbit.trackers.last() %}
   {% if !tracker.msg.is_empty() %}
@@ -83,5 +100,4 @@
   {% endif %}
 {% endif %}
 {% endif %}
-
 {% endblock %}

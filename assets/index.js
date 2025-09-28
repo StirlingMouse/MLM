@@ -45,7 +45,7 @@ document.body.addEventListener('click', e => {
 
 document.body.addEventListener('change', e => {
         const toggles = e.target.closest('.option_group')
-        if (toggles) {
+        if (toggles?.classList.contains('query')) {
                 setTimeout(() => {
                         const value = e.target.tagName === 'SELECT'
                                 ? [e.target.value]
@@ -60,8 +60,8 @@ document.body.addEventListener('change', e => {
                                 params.delete(e.target.name)
                         }
                         const target = new URL(location.href)
-                        target.search = params
-                        location.href = target
+                        target.search = params.toString()
+                        location.href = target.toString()
                 })
                 return
         }

@@ -14,7 +14,7 @@
 {% block content %}
 <div class="row">
   <h1>Events</h1>
-  <div class="option_group">
+  <div class="option_group query">
     Show:
     <label>
       All
@@ -37,7 +37,7 @@
       <input type=radio name=show {% if show == Some("updated") %}checked{% endif %} value="updated">
     </label>
   </div>
-  <div class="option_group">
+  <div class="option_group query">
     Page size: {{ paging.selector([100, 500, 1000, 5000]) | safe }}
   </div>
 </div>

@@ -108,6 +108,16 @@ form {
                         outline: 2px solid var(--accent);
                 }
         }
+
+        select {
+                appearance: base-select;
+                border: none;
+                padding: 2px 4px;
+                background: var(--above);
+                color: var(--text);
+                border-radius: 2px;
+        }
+
         button[is="clear-button"] {
                 position: absolute;
                 display: none;
@@ -150,22 +160,13 @@ form {
                 padding: 2px 4px;
                 background: var(--above);
                 border-radius: 2px;
-                &:has([checked]) {
+                &:has(:checked) {
                         background: var(--accent);
                 }
         }
 
         input {
                 display: none;
-        }
-
-        select {
-                appearance: base-select;
-                border: none;
-                padding: 2px 4px;
-                background: var(--above);
-                color: var(--text);
-                border-radius: 2px;
         }
 }
 

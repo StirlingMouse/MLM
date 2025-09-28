@@ -19,7 +19,7 @@
     <button is="clear-button" type="button"></button>
   </label>
   <div class="table_options">
-    <div class="option_group">
+    <div class="option_group query">
       Columns:
       <label>
         Authors
@@ -50,7 +50,7 @@
         <input type=checkbox name=show {% if show.path %}checked{% endif %} value="path">
       </label>
     </div>
-    <div class="option_group">
+    <div class="option_group query">
       Page size: {{ paging.selector([100, 500, 1000, 5000]) | safe }}
     </div>
   </div>
