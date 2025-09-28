@@ -135,6 +135,8 @@ pub async fn search_torrents(
 ) -> Result<u64> {
     let target = match torrent_filter.kind {
         Type::Bookmarks => Some(SearchTarget::Bookmarks),
+        Type::Mine => Some(SearchTarget::Mine),
+        Type::Uploader(id) => Some(SearchTarget::Uploader(id)),
         _ => None,
     };
     let kind = match (torrent_filter.kind, torrent_filter.cost) {
@@ -155,7 +157,10 @@ pub async fn search_torrents(
             _ => "",
         });
     let (flags_is_hide, flags) = torrent_filter.filter.flags.as_search_bitfield();
-    let paginate = matches!(torrent_filter.kind, Type::Bookmarks | Type::Freeleech);
+    let paginate = matches!(
+        torrent_filter.kind,
+        Type::Bookmarks | Type::Freeleech | Type::Mine
+    );
 
     let mut results: Option<SearchResult> = None;
     loop {
@@ -333,6 +338,9 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 }
                 continue 'torrent;
             }
+        }
+        if cost == Cost::MetadataOnly {
+            continue 'torrent;
         }
         if let Some(rw) = &rw_opt {
             let old_library = rw

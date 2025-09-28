@@ -170,6 +170,8 @@ pub enum Type {
     Bookmarks,
     Freeleech,
     New,
+    Mine,
+    Uploader(u64),
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -180,6 +182,7 @@ pub enum Cost {
     Wedge,
     TryWedge,
     All,
+    MetadataOnly,
 }
 
 #[derive(Clone, Debug, Deserialize)]

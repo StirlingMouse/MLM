@@ -13,7 +13,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use reqwest::Url;
 use reqwest_cookie_store::CookieStoreRwLock;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use time::{
     UtcDateTime,
@@ -257,7 +257,7 @@ pub struct Tor<'a> {
     pub start_number: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum SearchTarget {
     Bookmarks,
@@ -265,6 +265,23 @@ pub enum SearchTarget {
     Mine,
     AllReseed,
     MyReseed,
+    Uploader(u64),
+}
+
+impl Serialize for SearchTarget {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            SearchTarget::Bookmarks => serializer.serialize_str("bookmarks"),
+            SearchTarget::New => serializer.serialize_str("torrents"),
+            SearchTarget::Mine => serializer.serialize_str("mine"),
+            SearchTarget::AllReseed => serializer.serialize_str("allRseed"),
+            SearchTarget::MyReseed => serializer.serialize_str("myReseed"),
+            SearchTarget::Uploader(id) => serializer.serialize_str(&format!("u{id}")),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
