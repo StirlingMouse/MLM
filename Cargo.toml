@@ -30,7 +30,7 @@ native_db = "0.8.2"
 native_model = "0.4.20"
 once_cell = "1.21.3"
 openssl = { version = "0.10.73", features = ["vendored"] }
-# qbit = "=0.1.1"
+# qbit = "=0.2.0"
 qbit = { git = "https://github.com/StirlingMouse/qbittorrent-webui-api.git" }
 # qbit = { path = "../qbittorrent-webui-api" }
 quick-xml = { version = "0.38.0", features = ["serialize"] }

@@ -16,7 +16,6 @@ use crate::{
     config::{Config, Cost, Library, TorrentFilter, Type},
     data::{AudiobookCategory, EbookCategory, Torrent},
     mam::DATE_FORMAT,
-    qbittorrent::QbitError,
     web::{AppError, MaMState, Page, filter, yaml_items},
 };
 
@@ -49,9 +48,12 @@ pub async fn config_page_post(
                 .qbittorrent
                 .get(form.qbit_index.unwrap_or_default())
                 .ok_or(anyhow::Error::msg("requires a qbit config"))?;
-            let qbit = qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
-                .await
-                .map_err(QbitError)?;
+            let qbit = qbit::Api::new_login_username_password(
+                &qbit_conf.url,
+                &qbit_conf.username,
+                &qbit_conf.password,
+            )
+            .await?;
             let torrents = db.r_transaction()?.scan().primary::<Torrent>()?;
             for torrent in torrents.all()? {
                 let torrent = torrent?;
@@ -76,8 +78,7 @@ pub async fn config_page_post(
                 };
                 if let Some(category) = &tag_filter.category {
                     qbit.set_category(Some(vec![torrent.hash.as_str()]), category)
-                        .await
-                        .map_err(QbitError)?;
+                        .await?;
                     info!(
                         "set category {} on torrent {}",
                         category, torrent.meta.title
@@ -89,8 +90,7 @@ pub async fn config_page_post(
                         Some(vec![torrent.hash.as_str()]),
                         tag_filter.tags.iter().map(Deref::deref).collect(),
                     )
-                    .await
-                    .map_err(QbitError)?;
+                    .await?;
                     println!(
                         "set tags {:?} on torrent {}",
                         tag_filter.tags, torrent.meta.title

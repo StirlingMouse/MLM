@@ -55,7 +55,7 @@ use tracing_subscriber::{
 };
 use web::start_webserver;
 
-use crate::{config::Config, linker::link_torrents_to_library, mam::MaM, qbittorrent::QbitError};
+use crate::{config::Config, linker::link_torrents_to_library, mam::MaM};
 
 #[tokio::main]
 async fn main() {
@@ -204,13 +204,12 @@ async fn app_main() -> Result<()> {
                             break;
                         }
                         if qbit.is_none() {
-                            match qbit::Api::login(
+                            match qbit::Api::new_login_username_password(
                                 &qbit_conf.url,
                                 &qbit_conf.username,
                                 &qbit_conf.password,
                             )
                             .await
-                            .map_err(QbitError)
                             {
                                 Ok(q) => qbit = Some(q),
                                 Err(err) => {
@@ -337,13 +336,12 @@ async fn app_main() -> Result<()> {
                 let stats = stats.clone();
                 let mut linker_rx = linker_rx.clone();
                 tokio::spawn(async move {
-                    let qbit = match qbit::Api::login(
+                    let qbit = match qbit::Api::new_login_username_password(
                         &qbit_conf.url,
                         &qbit_conf.username,
                         &qbit_conf.password,
                     )
                     .await
-                    .map_err(QbitError)
                     {
                         Ok(qbit) => qbit,
                         Err(err) => {

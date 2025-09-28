@@ -15,7 +15,7 @@ use log::error;
 use native_db::Database;
 use once_cell::sync::Lazy;
 use qbit::{
-    models::{TorrentContent, TorrentInfo},
+    models::{Torrent as QbitTorrent, TorrentContent},
     parameters::TorrentListParams,
 };
 use regex::Regex;
@@ -31,7 +31,6 @@ use crate::{
     },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{MaM, MaMTorrent, clean_value, normalize_title},
-    qbittorrent::QbitError,
 };
 
 pub static DISK_PATTERN: Lazy<Regex> =
@@ -46,21 +45,17 @@ pub async fn link_torrents_to_library(
 ) -> Result<()> {
     let torrents = qbit
         .1
-        .torrents(TorrentListParams::default())
+        .torrents(Some(TorrentListParams::default()))
         .await
-        .map_err(QbitError)
         .context("qbit main data")?;
 
     for torrent in torrents {
-        let Some(hash) = &torrent.hash else {
-            continue;
-        };
         if torrent.progress < 1.0 {
             continue;
         }
         {
             let r = db.r_transaction()?;
-            let t: Option<Torrent> = r.get().primary(hash.clone())?;
+            let t: Option<Torrent> = r.get().primary(torrent.hash.clone())?;
             if let Some(mut t) = t {
                 if let Some(library_path) = &t.library_path {
                     let Some(library) = find_library(&config, &torrent) else {
@@ -106,7 +101,7 @@ pub async fn link_torrents_to_library(
             db.clone(),
             qbit,
             mam.clone(),
-            hash,
+            &torrent.hash,
             &torrent,
             library,
         )
@@ -114,7 +109,7 @@ pub async fn link_torrents_to_library(
         .context("match_torrent");
         update_errored_torrent(
             &db,
-            ErroredTorrentId::Linker(hash.clone()),
+            ErroredTorrentId::Linker(torrent.hash.clone()),
             torrent.name,
             result,
         )
@@ -130,10 +125,10 @@ async fn match_torrent(
     qbit: (&QbitConfig, &qbit::Api),
     mam: Arc<MaM<'_>>,
     hash: &str,
-    torrent: &TorrentInfo,
+    torrent: &QbitTorrent,
     library: &Library,
 ) -> Result<()> {
-    let files = qbit.1.files(hash, None).await.map_err(QbitError)?;
+    let files = qbit.1.files(hash, None).await?;
     let selected_audio_format = select_format(
         &library.tag_filters().audio_types,
         &config.audio_types,
@@ -223,9 +218,12 @@ pub async fn refresh_metadata_relink(
 ) -> Result<()> {
     let mut torrent = None;
     for qbit_conf in &config.qbittorrent {
-        let qbit = match qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
-            .await
-            .map_err(QbitError)
+        let qbit = match qbit::Api::new_login_username_password(
+            &qbit_conf.url,
+            &qbit_conf.username,
+            &qbit_conf.password,
+        )
+        .await
         {
             Ok(qbit) => qbit,
             Err(err) => {
@@ -234,12 +232,11 @@ pub async fn refresh_metadata_relink(
             }
         };
         let mut torrents = match qbit
-            .torrents(TorrentListParams {
+            .torrents(Some(TorrentListParams {
                 hashes: Some(vec![hash.clone()]),
                 ..TorrentListParams::default()
-            })
+            }))
             .await
-            .map_err(QbitError)
         {
             Ok(torrents) => torrents,
             Err(err) => {
@@ -259,7 +256,7 @@ pub async fn refresh_metadata_relink(
     let Some(library) = find_library(config, &qbit_torrent) else {
         bail!("Could not find matching library for torrent");
     };
-    let files = qbit.files(&hash, None).await.map_err(QbitError)?;
+    let files = qbit.files(&hash, None).await?;
     let selected_audio_format = select_format(
         &library.tag_filters().audio_types,
         &config.audio_types,
@@ -299,7 +296,7 @@ async fn link_torrent(
     config: &Config,
     db: &Database<'_>,
     hash: &str,
-    torrent: &TorrentInfo,
+    torrent: &QbitTorrent,
     files: Vec<TorrentContent>,
     selected_audio_format: Option<String>,
     selected_ebook_format: Option<String>,
@@ -433,7 +430,7 @@ async fn link_torrent(
     Ok(())
 }
 
-fn find_library<'a>(config: &'a Config, torrent: &TorrentInfo) -> Option<&'a Library> {
+fn find_library<'a>(config: &'a Config, torrent: &QbitTorrent) -> Option<&'a Library> {
     config
         .libraries
         .iter()

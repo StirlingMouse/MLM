@@ -11,13 +11,12 @@ use crate::{
         DATE_FORMAT, MaM, MaMTorrent, MetaError, RateLimitError, SearchKind, SearchQuery,
         SearchResult, SearchTarget, Tor, WedgeBuyError, normalize_title,
     },
-    qbittorrent::QbitError,
 };
 use anyhow::{Context, Error, Result};
 use itertools::Itertools as _;
 use lava_torrent::torrent::v1::Torrent;
 use native_db::{Database, db_type, transaction::RwTransaction};
-use qbit::parameters::TorrentAddUrls;
+use qbit::parameters::{AddTorrent, AddTorrentType, TorrentFile};
 use tokio::{sync::watch::Sender, time::sleep};
 use tracing::{debug, error, info, instrument, trace, warn};
 
@@ -545,8 +544,11 @@ async fn grab_torrent(
     let torrent_file_bytes = mam.get_torrent_file(&torrent.dl_link).await?;
     let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
     let hash = torrent_file.info_hash();
-    qbit.add_torrent(TorrentAddUrls {
-        torrents: vec![torrent_file_bytes.iter().copied().collect()],
+    qbit.add_torrent(AddTorrent {
+        torrents: AddTorrentType::Files(vec![TorrentFile {
+            filename: format!("{}.torrent", torrent.mam_id),
+            data: torrent_file_bytes.iter().copied().collect(),
+        }]),
         stopped: config.add_torrents_stopped,
         category: torrent.category.clone(),
         tags: if torrent.tags.is_empty() {
@@ -554,10 +556,9 @@ async fn grab_torrent(
         } else {
             Some(torrent.tags.clone())
         },
-        ..TorrentAddUrls::default(vec![])
+        ..Default::default()
     })
-    .await
-    .map_err(QbitError)?;
+    .await?;
 
     let mam_id = torrent.mam_id;
     let cost = Some(torrent.cost);

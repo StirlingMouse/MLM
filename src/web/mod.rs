@@ -44,7 +44,6 @@ use crate::{
     config::{Config, Filter},
     data::{AudiobookCategory, EbookCategory, Timestamp},
     mam::{DATE_FORMAT, MaM, MetaError},
-    qbittorrent::QbitError,
     stats::{Stats, Triggers},
 };
 
@@ -248,7 +247,7 @@ enum AppError {
     #[error("Could not render template: {0}")]
     Render(#[from] askama::Error),
     #[error("Qbit Error: {0:?}")]
-    QbitError(#[from] QbitError),
+    QbitError(#[from] qbit::Error),
     #[error("Send Error: {0:?}")]
     SendError(#[from] SendError<()>),
     #[error("Meta Error: {0:?}")]

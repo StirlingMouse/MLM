@@ -6,14 +6,14 @@ use axum::{
     response::Html,
 };
 use native_db::Database;
-use qbit::models::{TorrentInfo, Tracker};
+use qbit::models::{Torrent as QbitTorrent, Tracker};
 
 use crate::{
     audiobookshelf::{Abs, LibraryItem},
     config::Config,
     data::{Size, Torrent, TorrentMeta},
     mam::MaMTorrent,
-    qbittorrent::{self, QbitError},
+    qbittorrent::{self},
     web::{AppError, MaMState, Page, pages::torrents::TorrentsPageFilter, series, tables::items},
 };
 
@@ -37,9 +37,9 @@ pub async fn torrent_page(
 
     let mut qbit_data = None;
     if let Some((qbit_torrent, qbit)) = qbittorrent::get_torrent(&config, &torrent.hash).await? {
-        let trackers = qbit.trackers(&torrent.hash).await.map_err(QbitError)?;
+        let trackers = qbit.trackers(&torrent.hash).await?;
         // let categories = qbit.categories().await.map_err(QbitError)?;
-        let tags = qbit.tags().await.map_err(QbitError)?;
+        let tags = qbit.tags().await?;
 
         qbit_data = Some(QbitData {
             torrent: qbit_torrent,
@@ -88,7 +88,7 @@ impl Page for TorrentPageTemplate {}
 
 #[derive(Debug)]
 struct QbitData {
-    torrent: TorrentInfo,
+    torrent: QbitTorrent,
     trackers: Vec<Tracker>,
     categories: Vec<String>,
     tags: Vec<String>,

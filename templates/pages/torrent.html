@@ -34,7 +34,7 @@
   </ul>
 </details>
 {% if let Some(qbit) = qbit_data %}
-  <p>Status: {{ qbit.torrent.state }}</p>
+  <p>Status: {{ "{:#?}" | format(qbit.torrent.state) }}</p>
   <p>Category: {{ qbit.torrent.category }}</p>
   <p>Tags: {{ qbit.torrent.tags }}</p>
   <p>Uploaded: {{ Size::from_bytes(*(&qbit.torrent.uploaded as u64)) }}</p>

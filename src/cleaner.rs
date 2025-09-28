@@ -9,7 +9,6 @@ use crate::{
     data::{self, ErroredTorrentId, Event, EventType, Timestamp, Torrent},
     linker::file_size,
     logging::{TorrentMetaError, update_errored_torrent, write_event},
-    qbittorrent::QbitError,
 };
 
 #[instrument(skip_all)]
@@ -147,14 +146,16 @@ async fn process_batch(
 pub async fn clean_torrent(config: &Config, db: &Database<'_>, mut remove: Torrent) -> Result<()> {
     for qbit_conf in config.qbittorrent.iter() {
         if let Some(on_cleaned) = &qbit_conf.on_cleaned {
-            let qbit = qbit::Api::login(&qbit_conf.url, &qbit_conf.username, &qbit_conf.password)
-                .await
-                .map_err(QbitError)?;
+            let qbit = qbit::Api::new_login_username_password(
+                &qbit_conf.url,
+                &qbit_conf.username,
+                &qbit_conf.password,
+            )
+            .await?;
 
             if let Some(category) = &on_cleaned.category {
                 qbit.set_category(Some(vec![&remove.hash]), category)
-                    .await
-                    .map_err(QbitError)?;
+                    .await?;
             }
 
             if !on_cleaned.tags.is_empty() {
@@ -162,8 +163,7 @@ pub async fn clean_torrent(config: &Config, db: &Database<'_>, mut remove: Torre
                     Some(vec![&remove.hash]),
                     on_cleaned.tags.iter().map(Deref::deref).collect(),
                 )
-                .await
-                .map_err(QbitError)?;
+                .await?;
             }
         }
         trace!("qbit updated");
