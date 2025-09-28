@@ -33,6 +33,17 @@
   {% endfor %}
   </ul>
 </details>
+{% if let Some(qbit) = qbit_data %}
+  <p>Status: {{ qbit.torrent.state }}</p>
+  <p>Category: {{ qbit.torrent.category }}</p>
+  <p>Tags: {{ qbit.torrent.tags }}</p>
+  <p>Uploaded: {{ Size::from_bytes(*(&qbit.torrent.uploaded as u64)) }}</p>
+  {% if let Some(tracker) = qbit.trackers.last() %}
+  {% if !tracker.msg.is_empty() %}
+    <p>Tracker Msg: {{ tracker.msg }}</p>
+  {% endif %}
+  {% endif %}
+{% endif %}
 {% if let Some(book) = book %}
   <a href="{{ abs_url }}/audiobookshelf/item/{{ book.id }}" target=_blank>Open in ABS</a>
   {% if !book.media.chapters.is_empty() %}

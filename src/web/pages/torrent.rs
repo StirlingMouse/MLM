@@ -6,12 +6,14 @@ use axum::{
     response::Html,
 };
 use native_db::Database;
+use qbit::models::{TorrentInfo, Tracker};
 
 use crate::{
     audiobookshelf::{Abs, LibraryItem},
     config::Config,
-    data::{Torrent, TorrentMeta},
+    data::{Size, Torrent, TorrentMeta},
     mam::MaMTorrent,
+    qbittorrent::{self, QbitError},
     web::{AppError, MaMState, Page, pages::torrents::TorrentsPageFilter, series, tables::items},
 };
 
@@ -33,6 +35,20 @@ pub async fn torrent_page(
     let mam_torrent = mam.get_torrent_info(&torrent.hash).await?;
     let mam_meta = mam_torrent.as_ref().map(|t| t.as_meta()).transpose()?;
 
+    let mut qbit_data = None;
+    if let Some((qbit_torrent, qbit)) = qbittorrent::get_torrent(&config, &torrent.hash).await? {
+        let trackers = qbit.trackers(&torrent.hash).await.map_err(QbitError)?;
+        // let categories = qbit.categories().await.map_err(QbitError)?;
+        let tags = qbit.tags().await.map_err(QbitError)?;
+
+        qbit_data = Some(QbitData {
+            torrent: qbit_torrent,
+            trackers,
+            categories: vec![],
+            tags,
+        });
+    }
+
     println!("book: {:?}", book);
     println!("mam_torrent: {:?}", mam_torrent);
     println!(
@@ -40,6 +56,7 @@ pub async fn torrent_page(
         Some(&torrent.meta) == mam_meta.as_ref(),
         mam_meta
     );
+    println!("qbit: {:?}", qbit_data);
 
     let template = TorrentPageTemplate {
         abs_url: config
@@ -51,6 +68,7 @@ pub async fn torrent_page(
         book,
         mam_torrent,
         mam_meta,
+        qbit_data,
     };
     Ok::<_, AppError>(Html(template.to_string()))
 }
@@ -63,9 +81,18 @@ struct TorrentPageTemplate {
     book: Option<LibraryItem>,
     mam_torrent: Option<MaMTorrent>,
     mam_meta: Option<TorrentMeta>,
+    qbit_data: Option<QbitData>,
 }
 
 impl Page for TorrentPageTemplate {}
+
+#[derive(Debug)]
+struct QbitData {
+    torrent: TorrentInfo,
+    trackers: Vec<Tracker>,
+    categories: Vec<String>,
+    tags: Vec<String>,
+}
 
 fn duration(seconds: f64) -> String {
     let mut seconds = seconds as u64;
