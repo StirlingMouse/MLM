@@ -109,15 +109,6 @@ form {
                 }
         }
 
-        select {
-                appearance: base-select;
-                border: none;
-                padding: 2px 4px;
-                background: var(--above);
-                color: var(--text);
-                border-radius: 2px;
-        }
-
         button[is="clear-button"] {
                 position: absolute;
                 display: none;
@@ -145,6 +136,15 @@ form {
                         background: var(--color-3);
                 }
         }
+}
+
+select {
+        appearance: base-select;
+        border: none;
+        padding: 2px 4px;
+        background: var(--above);
+        color: var(--text);
+        border-radius: 2px;
 }
 
 .table_options {
