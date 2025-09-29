@@ -1,4 +1,4 @@
-use super::{v3, v4, v5, v6};
+use super::{v3, v4, v5, v6, v8};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -184,6 +184,126 @@ impl From<v4::EventType> for EventType {
                 library_path,
                 files,
             },
+        }
+    }
+}
+
+impl From<v8::Torrent> for Torrent {
+    fn from(t: v8::Torrent) -> Self {
+        let library_mismatch = match (t.library_mismatch, t.client_status) {
+            (Some(v8::LibraryMismatch::NewLibraryDir(path_buf)), _) => {
+                Some(v5::LibraryMismatch::NewPath(path_buf))
+            }
+            (Some(v8::LibraryMismatch::NoLibrary), _) => Some(v5::LibraryMismatch::NoLibrary),
+            (_, Some(v8::ClientStatus::NotInClient)) => Some(v5::LibraryMismatch::TorrentRemoved),
+            (None, _) => None,
+            (Some(v8::LibraryMismatch::NewPath(_)), _) => unimplemented!(),
+        };
+
+        Self {
+            hash: t.hash,
+            abs_id: None,
+            library_path: t.library_path,
+            library_files: t.library_files,
+            selected_audio_format: t.selected_audio_format,
+            selected_ebook_format: t.selected_ebook_format,
+            title_search: t.title_search,
+            meta: t.meta.into(),
+            created_at: t.created_at,
+            replaced_with: t.replaced_with,
+            request_matadata_update: t.request_matadata_update,
+            library_mismatch,
+        }
+    }
+}
+
+impl From<v8::SelectedTorrent> for SelectedTorrent {
+    fn from(t: v8::SelectedTorrent) -> Self {
+        Self {
+            mam_id: t.mam_id,
+            dl_link: t.dl_link,
+            unsat_buffer: t.unsat_buffer,
+            cost: t.cost,
+            category: t.category,
+            tags: t.tags,
+            title_search: t.title_search,
+            meta: t.meta.into(),
+            created_at: t.created_at,
+            removed_at: None,
+        }
+    }
+}
+
+impl From<v8::DuplicateTorrent> for DuplicateTorrent {
+    fn from(t: v8::DuplicateTorrent) -> Self {
+        Self {
+            mam_id: t.mam_id,
+            dl_link: None,
+            title_search: t.title_search,
+            meta: t.meta.into(),
+            created_at: t.created_at,
+            duplicate_of: t.duplicate_of,
+        }
+    }
+}
+
+impl From<v8::Event> for Event {
+    fn from(t: v8::Event) -> Self {
+        Self {
+            id: t.id,
+            hash: t.hash,
+            mam_id: t.mam_id,
+            created_at: t.created_at,
+            event: t.event.into(),
+        }
+    }
+}
+
+impl From<v8::EventType> for EventType {
+    fn from(t: v8::EventType) -> Self {
+        match t {
+            v8::EventType::Grabbed { cost, wedged } => Self::Grabbed { cost, wedged },
+            v8::EventType::Linked { library_path } => Self::Linked { library_path },
+            v8::EventType::Cleaned {
+                library_path,
+                files,
+            } => Self::Cleaned {
+                library_path,
+                files,
+            },
+            v8::EventType::Updated { fields } => Self::Updated {
+                fields: fields
+                    .into_iter()
+                    .filter_map(|f| {
+                        Some(TorrentMetaDiff {
+                            field: f.field.try_into().ok()?,
+                            from: f.from,
+                            to: f.to,
+                        })
+                    })
+                    .collect(),
+            },
+            v8::EventType::RemovedFromMam => unimplemented!(),
+        }
+    }
+}
+
+impl TryFrom<v8::TorrentMetaField> for TorrentMetaField {
+    type Error = ();
+
+    fn try_from(value: v8::TorrentMetaField) -> Result<Self, Self::Error> {
+        match value {
+            v8::TorrentMetaField::MamId => Ok(TorrentMetaField::MamId),
+            v8::TorrentMetaField::MainCat => Ok(TorrentMetaField::MainCat),
+            v8::TorrentMetaField::Cat => Ok(TorrentMetaField::Cat),
+            v8::TorrentMetaField::Language => Ok(TorrentMetaField::Language),
+            v8::TorrentMetaField::Flags => Err(()),
+            v8::TorrentMetaField::Filetypes => Ok(TorrentMetaField::Filetypes),
+            v8::TorrentMetaField::Size => Ok(TorrentMetaField::Size),
+            v8::TorrentMetaField::Title => Ok(TorrentMetaField::Title),
+            v8::TorrentMetaField::Authors => Ok(TorrentMetaField::Authors),
+            v8::TorrentMetaField::Narrators => Ok(TorrentMetaField::Narrators),
+            v8::TorrentMetaField::Series => Ok(TorrentMetaField::Series),
         }
     }
 }

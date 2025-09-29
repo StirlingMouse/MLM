@@ -1,4 +1,4 @@
-use super::{v1, v3, v4, v5, v7};
+use super::{v1, v3, v4, v5, v7, v8};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -289,6 +289,35 @@ impl From<v7::DuplicateTorrent> for DuplicateTorrent {
             created_at: t.created_at,
             duplicate_of: t.duplicate_of,
             request_replace: false,
+        }
+    }
+}
+
+impl From<v8::ErroredTorrent> for ErroredTorrent {
+    fn from(t: v8::ErroredTorrent) -> Self {
+        Self {
+            id: t.id,
+            title: t.title,
+            error: t.error,
+            meta: t.meta.map(|t| t.into()),
+            created_at: t.created_at,
+        }
+    }
+}
+
+impl From<v8::TorrentMeta> for TorrentMeta {
+    fn from(t: v8::TorrentMeta) -> Self {
+        Self {
+            mam_id: t.mam_id,
+            main_cat: t.main_cat,
+            cat: None,
+            language: t.language,
+            filetypes: t.filetypes,
+            size: t.size,
+            title: t.title,
+            authors: t.authors,
+            narrators: t.narrators,
+            series: t.series,
         }
     }
 }

@@ -25,7 +25,7 @@ use unidecode::unidecode;
 
 use crate::{
     config::Config,
-    data::{self, Category, Language},
+    data::{self, Category, FlagBits, Language},
     mam_enums::SearchIn,
 };
 
@@ -414,6 +414,7 @@ impl MaMTorrent {
             main_cat,
             cat: Some(cat),
             language: Some(language),
+            flags: Some(FlagBits::new(self.browseflags)),
             filetypes,
             size,
             title: self.title.to_owned(),

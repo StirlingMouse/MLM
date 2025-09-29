@@ -148,22 +148,7 @@ impl Filter {
                     }
                 }
             }
-        }
-
-        ensure!(self.flags.as_bitfield() == 0, "has flags");
-        ensure!(self.min_size.bytes() == 0, "has min_size");
-        ensure!(self.max_size.bytes() == 0, "has max_size");
-        ensure!(self.exclude_uploader.is_empty(), "has exclude_uploader");
-        ensure!(self.uploaded_after.is_none(), "has uploaded_after");
-        ensure!(self.uploaded_before.is_none(), "has uploaded_before");
-        ensure!(self.min_seeders.is_none(), "has min_seeders");
-        ensure!(self.max_seeders.is_none(), "has max_seeders");
-        ensure!(self.min_leechers.is_none(), "has min_leechers");
-        ensure!(self.max_leechers.is_none(), "has max_leechers");
-        ensure!(self.min_snatched.is_none(), "has min_snatched");
-        ensure!(self.max_snatched.is_none(), "has max_snatched");
-
-        if torrent.meta.cat.is_none() {
+        } else {
             if self.categories.audio.as_ref().is_some_and(|c| c.is_empty())
                 && torrent.meta.main_cat == MainCat::Audio
             {
@@ -183,6 +168,29 @@ impl Filter {
                 "has advanced ebook selection and no stored category"
             );
         }
+        if let Some(flags) = torrent.meta.flags {
+            let flags: Flags = flags.into();
+            if !self.flags.matches(&flags) {
+                return Ok(false);
+            }
+        } else {
+            ensure!(
+                self.flags.as_bitfield() == 0,
+                "has flags selection and no stored flags"
+            );
+        }
+
+        ensure!(self.min_size.bytes() == 0, "has min_size");
+        ensure!(self.max_size.bytes() == 0, "has max_size");
+        ensure!(self.exclude_uploader.is_empty(), "has exclude_uploader");
+        ensure!(self.uploaded_after.is_none(), "has uploaded_after");
+        ensure!(self.uploaded_before.is_none(), "has uploaded_before");
+        ensure!(self.min_seeders.is_none(), "has min_seeders");
+        ensure!(self.max_seeders.is_none(), "has max_seeders");
+        ensure!(self.min_leechers.is_none(), "has min_leechers");
+        ensure!(self.max_leechers.is_none(), "has max_leechers");
+        ensure!(self.min_snatched.is_none(), "has min_snatched");
+        ensure!(self.max_snatched.is_none(), "has max_snatched");
 
         Ok(true)
     }
@@ -253,7 +261,7 @@ impl Library {
 mod tests {
     use time::macros::date;
 
-    use crate::mam_enums::AudiobookCategory;
+    use crate::data::AudiobookCategory;
 
     use super::*;
 

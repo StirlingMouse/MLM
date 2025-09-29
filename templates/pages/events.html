@@ -36,6 +36,10 @@
       Updated
       <input type=radio name=show {% if show == Some("updated") %}checked{% endif %} value="updated">
     </label>
+    <label>
+      Removed
+      <input type=radio name=show {% if show == Some("removed") %}checked{% endif %} value="removed">
+    </label>
   </div>
   <div class="option_group query">
     Page size: {{ paging.selector([100, 500, 1000, 5000]) | safe }}
@@ -97,6 +101,8 @@
       <li>{{ field.field }}: {{ field.from }} -> {{ field.to }}</li>
     {% endfor %}
     </ul>
+  {% when EventType::RemovedFromMam %}
+    {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }} was removed from MaM<br />
   {% endmatch %}
   </div>
 {% endfor %}

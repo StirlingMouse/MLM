@@ -27,10 +27,11 @@ use crate::{
     cleaner::remove_library_files,
     config::{Config, Library, LibraryLinkMethod, QbitConfig},
     data::{
-        ErroredTorrentId, Event, EventType, LibraryMismatch, Size, Timestamp, Torrent, TorrentMeta,
+        ClientStatus, ErroredTorrentId, Event, EventType, LibraryMismatch, Size, Timestamp,
+        Torrent, TorrentMeta,
     },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
-    mam::{MaM, MaMTorrent, clean_value, normalize_title},
+    mam::{MaM, MaMTorrent, normalize_title},
 };
 
 pub static DISK_PATTERN: Lazy<Regex> =
@@ -57,10 +58,29 @@ pub async fn link_torrents_to_library(
             let r = db.r_transaction()?;
             let t: Option<Torrent> = r.get().primary(torrent.hash.clone())?;
             if let Some(mut t) = t {
+                if t.client_status.is_none() {
+                    let trackers = qbit.1.trackers(&torrent.hash).await?;
+                    if let Some(mam_tracker) = trackers.last() {
+                        if mam_tracker.msg == "torrent not registered with this tracker" {
+                            let rw = db.rw_transaction()?;
+                            t.client_status = Some(ClientStatus::RemovedFromMam);
+                            rw.upsert(t.clone())?;
+                            rw.commit()?;
+                            write_event(
+                                &db,
+                                Event::new(
+                                    Some(torrent.hash.clone()),
+                                    Some(t.mam_id),
+                                    EventType::RemovedFromMam,
+                                ),
+                            );
+                        }
+                    }
+                }
                 if let Some(library_path) = &t.library_path {
                     let Some(library) = find_library(&config, &torrent) else {
                         if t.library_mismatch != Some(LibraryMismatch::NoLibrary) {
-                            println!("no library: {library_path:?}",);
+                            debug!("no library: {library_path:?}",);
                             t.library_mismatch = Some(LibraryMismatch::NoLibrary);
                             let rw = db.rw_transaction()?;
                             rw.upsert(t)?;
@@ -69,16 +89,52 @@ pub async fn link_torrents_to_library(
                         continue;
                     };
                     if !library_path.starts_with(library.library_dir()) {
-                        let wanted = Some(LibraryMismatch::NewPath(library.library_dir().clone()));
+                        let wanted = Some(LibraryMismatch::NewLibraryDir(
+                            library.library_dir().clone(),
+                        ));
                         if t.library_mismatch != wanted {
-                            println!(
-                                "path differs: {library_path:?} != {:?}",
+                            debug!(
+                                "library differs: {library_path:?} != {:?}",
                                 library.library_dir()
                             );
                             t.library_mismatch = wanted;
                             let rw = db.rw_transaction()?;
                             rw.upsert(t)?;
                             rw.commit()?;
+                        }
+                    } else {
+                        let dir =
+                            library_dir(config.exclude_narrator_in_library_dir, library, &t.meta);
+                        let mut is_wrong = Some(library_path) != dir.as_ref();
+                        let wanted = match dir {
+                            Some(dir) => Some(LibraryMismatch::NewPath(dir)),
+                            None => Some(LibraryMismatch::NoLibrary),
+                        };
+
+                        if t.library_mismatch != wanted {
+                            if is_wrong {
+                                // Try another attempt at matching with exclude_narrator flipped
+                                let dir_2 = library_dir(
+                                    !config.exclude_narrator_in_library_dir,
+                                    library,
+                                    &t.meta,
+                                );
+                                if Some(library_path) == dir_2.as_ref() {
+                                    is_wrong = false
+                                }
+                            }
+                            if is_wrong {
+                                debug!("path differs: {library_path:?} != {:?}", wanted);
+                                t.library_mismatch = wanted;
+                                let rw = db.rw_transaction()?;
+                                rw.upsert(t)?;
+                                rw.commit()?;
+                            } else if t.library_mismatch != None {
+                                t.library_mismatch = None;
+                                let rw = db.rw_transaction()?;
+                                rw.upsert(t)?;
+                                rw.commit()?;
+                            }
                         }
                     }
                     continue;
@@ -185,8 +241,9 @@ pub async fn refresh_metadata(
     let meta = mam_torrent.as_meta().context("as_meta")?;
 
     let metadata = abs::create_metadata(&mam_torrent, &meta);
-    if let (Some(libary_path), serde_json::Value::Object(new)) = (&torrent.library_path, metadata) {
-        let metadata_path = libary_path.join("metadata.json");
+    if let (Some(library_path), serde_json::Value::Object(new)) = (&torrent.library_path, metadata)
+    {
+        let metadata_path = library_path.join("metadata.json");
         if metadata_path.exists() {
             let existing = fs::read_to_string(&metadata_path)?;
             let mut existing: serde_json::Map<String, serde_json::Value> =
@@ -304,40 +361,12 @@ async fn link_torrent(
     mam_torrent: MaMTorrent,
     meta: &TorrentMeta,
 ) -> Result<()> {
-    let Some((_, author)) = mam_torrent.author_info.first_key_value() else {
+    let Some(mut dir) = library_dir(config.exclude_narrator_in_library_dir, library, meta) else {
         bail!("Torrent has no author");
     };
-    let author = clean_value(author)?;
-    let series = mam_torrent.series_info.first_key_value();
-
-    let mut dir = match series {
-        Some((_, (series_name, series_num))) => {
-            let series_name = clean_value(series_name)?;
-            PathBuf::from(author)
-                .join(&series_name)
-                .join(if series_num.is_empty() {
-                    mam_torrent.title.clone()
-                } else {
-                    format!("{series_name} #{series_num} - {}", mam_torrent.title)
-                })
-        }
-        None => PathBuf::from(author).join(&mam_torrent.title),
-    };
-    if let Some(narrator) = &meta.narrators.first() {
-        let mut force_narrator = false;
-        if config.exclude_narrator_in_library_dir && library.library_dir().join(&dir).exists() {
-            force_narrator = true;
-        }
-        if !config.exclude_narrator_in_library_dir || force_narrator {
-            dir.set_file_name(format!(
-                "{} {{{}}}",
-                dir.file_name().unwrap().to_string_lossy(),
-                narrator
-            ));
-        }
+    if config.exclude_narrator_in_library_dir && !meta.narrators.is_empty() && dir.exists() {
+        dir = library_dir(false, library, meta).unwrap();
     }
-    let dir = library.library_dir().join(dir);
-    trace!("out_dir: {:?}", dir);
 
     let metadata = abs::create_metadata(&mam_torrent, meta);
     create_dir_all(&dir)?;
@@ -403,6 +432,7 @@ async fn link_torrent(
         let rw = db.rw_transaction()?;
         rw.upsert(Torrent {
             hash: hash.to_owned(),
+            mam_id: meta.mam_id,
             abs_id: None,
             library_path: Some(dir.clone()),
             library_files,
@@ -414,6 +444,7 @@ async fn link_torrent(
             replaced_with: None,
             request_matadata_update: false,
             library_mismatch: None,
+            client_status: None,
         })?;
         rw.commit()?;
     }
@@ -455,6 +486,37 @@ fn find_library<'a>(config: &'a Config, torrent: &QbitTorrent) -> Option<&'a Lib
                 .iter()
                 .any(|tag| torrent.tags.split(", ").any(|t| t == tag.as_str()))
         })
+}
+
+fn library_dir(
+    exclude_narrator_in_library_dir: bool,
+    library: &Library,
+    meta: &TorrentMeta,
+) -> Option<PathBuf> {
+    let author = meta.authors.first()?;
+    let mut dir = match meta.series.first() {
+        Some((series_name, series_num)) => {
+            PathBuf::from(author)
+                .join(&series_name)
+                .join(if series_num.is_empty() {
+                    meta.title.clone()
+                } else {
+                    format!("{series_name} #{series_num} - {}", meta.title)
+                })
+        }
+        None => PathBuf::from(author).join(&meta.title),
+    };
+    if let Some(narrator) = meta.narrators.first() {
+        if !exclude_narrator_in_library_dir {
+            dir.set_file_name(format!(
+                "{} {{{}}}",
+                dir.file_name().unwrap().to_string_lossy(),
+                narrator
+            ));
+        }
+    }
+    let dir = library.library_dir().join(dir);
+    Some(dir)
 }
 
 fn select_format(

@@ -4,7 +4,7 @@ use crate::{
     config::{Config, Cost, SortBy, TorrentFilter, Type},
     data::{
         self, DuplicateTorrent, ErroredTorrentId, Event, EventType, SelectedTorrent, Timestamp,
-        TorrentCost, TorrentMeta,
+        TorrentCost, TorrentKey, TorrentMeta,
     },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{
@@ -345,9 +345,9 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
         if let Some(rw) = &rw_opt {
             let old_library = rw
                 .scan()
-                .primary::<data::Torrent>()?
-                .all()?
-                .find(|t| t.as_ref().is_ok_and(|t| t.meta.mam_id == meta.mam_id));
+                .secondary::<data::Torrent>(TorrentKey::mam_id)?
+                .range(meta.mam_id..=meta.mam_id)?
+                .next();
             if let Some(old) = old_library.transpose()? {
                 if old.meta != meta {
                     update_torrent_meta(db, rw_opt.unwrap(), old, meta)?;
@@ -574,6 +574,7 @@ async fn grab_torrent(
         let rw = db.rw_transaction()?;
         rw.insert(data::Torrent {
             hash: hash.clone(),
+            mam_id: torrent.meta.mam_id,
             abs_id: None,
             library_path: None,
             library_files: Default::default(),
@@ -585,6 +586,7 @@ async fn grab_torrent(
             replaced_with: None,
             request_matadata_update: false,
             library_mismatch: None,
+            client_status: None,
         })
         .or_else(|err| {
             if let db_type::Error::DuplicateKey { .. } = err {

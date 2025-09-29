@@ -40,6 +40,7 @@ pub async fn event_page(
                         EventType::Linked { .. } => value == "linker",
                         EventType::Cleaned { .. } => value == "cleaner",
                         EventType::Updated { .. } => value == "updated",
+                        EventType::RemovedFromMam { .. } => value == "removed",
                     },
                     EventPageFilter::From => true,
                     EventPageFilter::PageSize => true,

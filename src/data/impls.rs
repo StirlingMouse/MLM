@@ -12,9 +12,10 @@ use crate::{
         TorrentMetaDiff, TorrentMetaField, TorrentStatus,
     },
     mam::DATE_FORMAT,
+    mam_enums::Flags,
 };
 
-use super::{AudiobookCategory, EbookCategory};
+use super::{AudiobookCategory, EbookCategory, FlagBits};
 
 pub fn parse<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
@@ -117,6 +118,19 @@ impl TorrentMeta {
                     .unwrap_or_default(),
             });
         }
+        if self.flags != other.flags {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::Flags,
+                from: self
+                    .flags
+                    .map(|flags| format!("{}", Flags::from(flags)))
+                    .unwrap_or_default(),
+                to: other
+                    .flags
+                    .map(|flags| format!("{}", Flags::from(flags)))
+                    .unwrap_or_default(),
+            });
+        }
         if self.filetypes != other.filetypes {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Filetypes,
@@ -170,6 +184,7 @@ impl std::fmt::Display for TorrentMetaField {
             TorrentMetaField::MainCat => write!(f, "main_cat"),
             TorrentMetaField::Cat => write!(f, "cat"),
             TorrentMetaField::Language => write!(f, "language"),
+            TorrentMetaField::Flags => write!(f, "flags"),
             TorrentMetaField::Filetypes => write!(f, "filetypes"),
             TorrentMetaField::Size => write!(f, "size"),
             TorrentMetaField::Title => write!(f, "title"),
@@ -1153,6 +1168,18 @@ impl TryFrom<String> for Language {
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         value.parse()
+    }
+}
+
+impl From<Flags> for FlagBits {
+    fn from(value: Flags) -> Self {
+        FlagBits::new(value.as_bitfield())
+    }
+}
+
+impl From<FlagBits> for Flags {
+    fn from(value: FlagBits) -> Self {
+        Flags::from_bitfield(value.0)
     }
 }
 

@@ -12,7 +12,7 @@ use native_db::Database;
 use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
 
-use crate::data::Category;
+use crate::data::{Category, ClientStatus};
 use crate::web::{MaMState, Page};
 use crate::{
     cleaner::clean_torrent,
@@ -83,15 +83,23 @@ pub async fn torrents_page(
                             t.library_mismatch.is_some()
                         } else {
                             match t.library_mismatch {
+                                Some(LibraryMismatch::NewLibraryDir(ref path)) => {
+                                    value == "new_library"
+                                        || value.as_str() == path.to_string_lossy()
+                                }
                                 Some(LibraryMismatch::NewPath(ref path)) => {
                                     value == "new_path" || value.as_str() == path.to_string_lossy()
                                 }
                                 Some(LibraryMismatch::NoLibrary) => value == "no_library",
-                                Some(LibraryMismatch::TorrentRemoved) => value == "torrent_removed",
                                 None => false,
                             }
                         }
                     }
+                    TorrentsPageFilter::ClientStatus => match t.client_status {
+                        Some(ClientStatus::NotInClient) => value == "not_in_client",
+                        Some(ClientStatus::RemovedFromMam) => value == "removed_from_mam",
+                        None => false,
+                    },
                     TorrentsPageFilter::Query => true,
                     TorrentsPageFilter::SortBy => true,
                     TorrentsPageFilter::Asc => true,
@@ -275,6 +283,7 @@ pub enum TorrentsPageFilter {
     Filetype,
     Linked,
     LibraryMismatch,
+    ClientStatus,
     Query,
     // Workaround sort decode failure
     SortBy,

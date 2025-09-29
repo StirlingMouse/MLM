@@ -261,6 +261,32 @@ impl TryFrom<HashMap<String, bool>> for Flags {
     }
 }
 
+impl std::fmt::Display for Flags {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut flags = vec![];
+        if self.crude_language == Some(true) {
+            flags.push("crude language");
+        }
+        if self.violence == Some(true) {
+            flags.push("violence");
+        }
+        if self.some_explicit == Some(true) {
+            flags.push("some explicit");
+        }
+        if self.explicit == Some(true) {
+            flags.push("explicit");
+        }
+        if self.abridged == Some(true) {
+            flags.push("abridged");
+        }
+        if self.lgbt == Some(true) {
+            flags.push("lgbt");
+        }
+        write!(f, "{}", flags.join(", "))?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(try_from = "String")]
 pub enum UserClass {
