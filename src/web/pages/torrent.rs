@@ -15,7 +15,7 @@ use qbit::models::{Category, Torrent as QbitTorrent, Tracker};
 use serde::Deserialize;
 
 use crate::{
-    audiobookshelf::{Abs, LibraryItem},
+    audiobookshelf::{Abs, LibraryItemMinified},
     config::Config,
     data::{Size, Torrent, TorrentMeta},
     linker::refresh_metadata_relink,
@@ -156,7 +156,7 @@ pub struct TorrentPageForm {
 struct TorrentPageTemplate {
     abs_url: String,
     torrent: Torrent,
-    book: Option<LibraryItem>,
+    book: Option<LibraryItemMinified>,
     mam_torrent: Option<MaMTorrent>,
     mam_meta: Option<TorrentMeta>,
     qbit_data: Option<QbitData>,

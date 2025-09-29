@@ -68,16 +68,16 @@
 {% endif %}
 {% if let Some(book) = book %}
   <a href="{{ abs_url }}/audiobookshelf/item/{{ book.id }}" target=_blank>Open in ABS</a>
-  {% if !book.media.chapters.is_empty() %}
-  <details>
-    <summary>Chapters</summary>
-    <table>
-    {% for chapter in book.media.chapters %}
-      <tr><td>{{ chapter.title }}</td><td style="text-align: right">{{ self::duration(chapter.end - chapter.start) }}</td></tr>
-    {% endfor %}
-    </table>
-  </details>
-  {% endif %}
+  {# {% if !book.media.chapters.is_empty() %} #}
+  {# <details> #}
+  {#   <summary>Chapters</summary> #}
+  {#   <table> #}
+  {#   {% for chapter in book.media.chapters %} #}
+  {#     <tr><td>{{ chapter.title }}</td><td style="text-align: right">{{ self::duration(chapter.end - chapter.start) }}</td></tr> #}
+  {#   {% endfor %} #}
+  {#   </table> #}
+  {# </details> #}
+  {# {% endif %} #}
 {% endif %}
 {% if let Some(mam_torrent) = mam_torrent %}
   <a href="https://www.myanonamouse.net/t/{{ mam_torrent.id }}" target=_blank>Open in MaM</a>
