@@ -57,7 +57,12 @@
   <p>Uploaded: {{ Size::from_bytes(*(&qbit.torrent.uploaded as u64)) }}</p>
   {% if let Some(tracker) = qbit.trackers.last() %}
   {% if !tracker.msg.is_empty() %}
-    <p>Tracker Msg: {{ tracker.msg }}</p>
+    <form method=post class=row style="justify-content:flex-start">
+      Tracker Msg: {{ tracker.msg }}
+      {% if tracker.msg == "torrent not registered with this tracker" %}
+        <button type=submit name=action value=remove-torrent>remove seeding files</button>
+      {% endif %}
+    </form>
   {% endif %}
   {% endif %}
 {% endif %}

@@ -65,7 +65,7 @@
   {{ table_header_if(show.filetypes, None, "Filetypes", "100px") }}
   {{ table_header_s(Some(TorrentsPageSort::Replaced), "Replaced", "157px") }}
   {{ table_header_s(Some(TorrentsPageSort::CreatedAt), "Added At", "157px") }}
-  {{ table_header_s(None, "", "44px") }}
+  {{ table_header_s(None, "", "88px") }}
 {% for (torrent, replacement) in torrents %}
   <div><input type=checkbox name=torrent value={{torrent.hash}}></div>
   <div>{{ self::item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</div>
@@ -92,7 +92,10 @@
     {% if let Some((_, replaced_at)) = torrent.replaced_with %}{{ self::time(replaced_at) }}{% endif %}
   </div>
   <div>{{ self::time(torrent.created_at) }}</div>
-  <div><a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a></div>
+  <div>
+    <a href="/torrents/{{ torrent.hash }}">open</a>
+    <a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a>
+  </div>
 
   <div></div>
   <div>replaced with:</div>
@@ -119,7 +122,10 @@
     {% if let Some((_, replaced_at)) = replacement.replaced_with %}{{ self::time(replaced_at) }}{% endif %}
   </div>
   <div>{{ self::time(replacement.created_at) }}</div>
-  <div><a href="https://www.myanonamouse.net/t/{{ replacement.meta.mam_id }}" target=_blank>MaM</a></div>
+  <div>
+    <a href="/torrents/{{ replacement.hash }}">open</a>
+    <a href="https://www.myanonamouse.net/t/{{ replacement.meta.mam_id }}" target=_blank>MaM</a>
+  </div>
 {% endfor %}
 </div>
 {% if torrents.is_empty() %}

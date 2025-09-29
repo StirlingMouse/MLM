@@ -119,6 +119,21 @@ pub async fn torrent_page_post(
                 .await?;
             }
         }
+        "remove-torrent" => {
+            // let Some(torrent) = db.r_transaction()?.get().primary(hash)? else {
+            //     return Err(anyhow::Error::msg("Could not find torrent").into());
+            // };
+            // remove_library_files(&torrent)?;
+            for qbit_conf in config.qbittorrent.iter() {
+                let qbit = qbit::Api::new_login_username_password(
+                    &qbit_conf.url,
+                    &qbit_conf.username,
+                    &qbit_conf.password,
+                )
+                .await?;
+                qbit.delete(vec![&hash], true).await?;
+            }
+        }
         action => {
             eprintln!("unknown action: {action}");
         }
