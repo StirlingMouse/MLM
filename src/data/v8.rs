@@ -1,4 +1,4 @@
-use super::{v1, v3, v4, v5, v6, v7};
+use super::{v1, v3, v4, v5, v6, v7, v9};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -308,6 +308,91 @@ impl From<v7::TorrentMetaField> for TorrentMetaField {
             v7::TorrentMetaField::Authors => TorrentMetaField::Authors,
             v7::TorrentMetaField::Narrators => TorrentMetaField::Narrators,
             v7::TorrentMetaField::Series => TorrentMetaField::Series,
+        }
+    }
+}
+
+impl From<v9::Torrent> for Torrent {
+    fn from(t: v9::Torrent) -> Self {
+        Self {
+            hash: t.hash,
+            mam_id: t.meta.mam_id,
+            abs_id: t.abs_id,
+            library_path: t.library_path,
+            library_files: t.library_files,
+            selected_audio_format: t.selected_audio_format,
+            selected_ebook_format: t.selected_ebook_format,
+            title_search: t.title_search,
+            meta: t.meta.into(),
+            created_at: t.created_at,
+            replaced_with: t.replaced_with,
+            request_matadata_update: t.request_matadata_update,
+            library_mismatch: t.library_mismatch,
+            client_status: t.client_status,
+        }
+    }
+}
+
+impl From<v9::SelectedTorrent> for SelectedTorrent {
+    fn from(t: v9::SelectedTorrent) -> Self {
+        Self {
+            mam_id: t.mam_id,
+            dl_link: t.dl_link,
+            unsat_buffer: t.unsat_buffer,
+            cost: t.cost,
+            category: t.category,
+            tags: t.tags,
+            title_search: t.title_search,
+            meta: t.meta.into(),
+            created_at: t.created_at,
+            removed_at: t.removed_at,
+        }
+    }
+}
+
+impl From<v9::DuplicateTorrent> for DuplicateTorrent {
+    fn from(t: v9::DuplicateTorrent) -> Self {
+        Self {
+            mam_id: t.mam_id,
+            dl_link: t.dl_link,
+            title_search: t.title_search,
+            meta: t.meta.into(),
+            created_at: t.created_at,
+            duplicate_of: t.duplicate_of,
+        }
+    }
+}
+
+impl From<v9::ErroredTorrent> for ErroredTorrent {
+    fn from(t: v9::ErroredTorrent) -> Self {
+        Self {
+            id: t.id,
+            title: t.title,
+            error: t.error,
+            meta: t.meta.map(|t| t.into()),
+            created_at: t.created_at,
+        }
+    }
+}
+
+impl From<v9::TorrentMeta> for TorrentMeta {
+    fn from(t: v9::TorrentMeta) -> Self {
+        Self {
+            mam_id: t.mam_id,
+            main_cat: t.main_cat,
+            cat: t.cat,
+            language: t.language,
+            flags: t.flags,
+            filetypes: t.filetypes,
+            size: t.size,
+            title: t.title,
+            authors: t.authors,
+            narrators: t.narrators,
+            series: t
+                .series
+                .into_iter()
+                .map(|series| (series.name, format!("{}", series.entries)))
+                .collect(),
         }
     }
 }

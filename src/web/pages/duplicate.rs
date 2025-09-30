@@ -45,9 +45,7 @@ pub async fn duplicate_page(
                     DuplicatePageFilter::Title => &t.meta.title == value,
                     DuplicatePageFilter::Author => t.meta.authors.contains(value),
                     DuplicatePageFilter::Narrator => t.meta.narrators.contains(value),
-                    DuplicatePageFilter::Series => {
-                        t.meta.series.iter().any(|(name, _)| name == value)
-                    }
+                    DuplicatePageFilter::Series => t.meta.series.iter().any(|s| &s.name == value),
                     DuplicatePageFilter::Filetype => t.meta.filetypes.contains(value),
                     DuplicatePageFilter::SortBy => true,
                     DuplicatePageFilter::Asc => true,

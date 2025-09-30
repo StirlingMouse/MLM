@@ -10,7 +10,7 @@ use tracing::{debug, error, instrument, trace};
 
 use crate::{
     config::AudiobookShelfConfig,
-    data::{Torrent, TorrentMeta},
+    data::{Torrent, TorrentMeta, impls::format_serie},
     mam::MaMTorrent,
 };
 
@@ -583,9 +583,7 @@ pub fn create_metadata(mam_torrent: &MaMTorrent, meta: &TorrentMeta) -> serde_js
     let metadata = json!({
         "authors": &meta.authors,
         "narrators": &meta.narrators,
-        "series": &meta.series.iter().map(|(series_name, series_num)| {
-            if series_num.is_empty() { series_name.clone() } else { format!("{series_name} #{series_num}") }
-        }).collect::<Vec<_>>(),
+        "series": &meta.series.iter().map(format_serie).collect::<Vec<_>>(),
         "title": title,
         "subtitle": subtitle,
         "description": mam_torrent.description,

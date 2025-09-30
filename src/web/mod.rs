@@ -42,7 +42,7 @@ use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
     config::{Config, Filter},
-    data::{AudiobookCategory, EbookCategory, Timestamp},
+    data::{AudiobookCategory, EbookCategory, Series, Timestamp},
     mam::{DATE_FORMAT, MaM, MetaError},
     stats::{Stats, Triggers},
 };
@@ -193,21 +193,21 @@ fn time(time: &Timestamp) -> String {
 }
 
 /// ```askama
-/// {% for (name, num) in series %}
-/// {{ self::item(*field, name) | safe }}{% if !num.is_empty() %} #{{ num }}{% endif %}{% if !loop.last %}, {% endif %}
+/// {% for s in series %}
+/// {{ self::item(*field, s.name) | safe }}{% if !s.entries.0.is_empty() %} #{{ s.entries }}{% endif %}{% if !loop.last %}, {% endif %}
 /// {% endfor %}
 /// ```
 #[derive(Template)]
 #[template(ext = "html", in_doc = true)]
-struct Series<'a, T: Key> {
+struct SeriesTmpl<'a, T: Key> {
     field: T,
-    series: &'a Vec<(String, String)>,
+    series: &'a Vec<Series>,
 }
 
-impl<'a, T: Key> HtmlSafe for Series<'a, T> {}
+impl<'a, T: Key> HtmlSafe for SeriesTmpl<'a, T> {}
 
-fn series<T: Key>(field: T, series: &Vec<(String, String)>) -> Series<'_, T> {
-    Series { field, series }
+fn series<T: Key>(field: T, series: &Vec<Series>) -> SeriesTmpl<'_, T> {
+    SeriesTmpl { field, series }
 }
 
 #[derive(Template)]

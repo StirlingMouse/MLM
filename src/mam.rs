@@ -25,7 +25,7 @@ use unidecode::unidecode;
 
 use crate::{
     config::Config,
-    data::{self, Category, FlagBits, Language},
+    data::{self, Category, FlagBits, Language, Series, SeriesEntries},
     mam_enums::SearchIn,
 };
 
@@ -394,7 +394,13 @@ impl MaMTorrent {
             .values()
             .map(|(series_name, series_num)| {
                 let series_name = clean_value(series_name)?;
-                Ok((series_name, series_num.clone()))
+                Series::try_from((series_name.clone(), series_num.clone())).or_else(|err| {
+                    warn!("error parsing series num: {err}");
+                    Ok(Series {
+                        name: series_name,
+                        entries: SeriesEntries::new(vec![]),
+                    })
+                })
             })
             .collect::<Result<Vec<_>>>()?;
         let main_cat = data::MainCat::from_id(self.main_cat).map_err(MetaError::UnknownMainCat)?;

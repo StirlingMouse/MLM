@@ -42,9 +42,7 @@ pub async fn selected_page(
                     SelectedPageFilter::Title => &t.meta.title == value,
                     SelectedPageFilter::Author => t.meta.authors.contains(value),
                     SelectedPageFilter::Narrator => t.meta.narrators.contains(value),
-                    SelectedPageFilter::Series => {
-                        t.meta.series.iter().any(|(name, _)| name == value)
-                    }
+                    SelectedPageFilter::Series => t.meta.series.iter().any(|s| &s.name == value),
                     SelectedPageFilter::Filetype => t.meta.filetypes.contains(value),
                     SelectedPageFilter::Cost => t.cost.as_str() == value,
                     SelectedPageFilter::SortBy => true,

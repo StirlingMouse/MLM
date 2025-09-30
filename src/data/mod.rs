@@ -7,6 +7,7 @@ mod v5;
 mod v6;
 mod v7;
 mod v8;
+mod v9;
 
 use anyhow::Result;
 use native_db::Models;
@@ -18,6 +19,11 @@ use tracing::{info, instrument};
 pub static MODELS: Lazy<Models> = Lazy::new(|| {
     let mut models = Models::new();
     models.define::<v1::Config>().unwrap();
+
+    models.define::<v9::Torrent>().unwrap();
+    models.define::<v9::SelectedTorrent>().unwrap();
+    models.define::<v9::DuplicateTorrent>().unwrap();
+    models.define::<v9::ErroredTorrent>().unwrap();
 
     models.define::<v8::Torrent>().unwrap();
     models.define::<v8::SelectedTorrent>().unwrap();
@@ -66,13 +72,13 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
 });
 
 pub type Config = v1::Config;
-pub type Torrent = v8::Torrent;
-pub type TorrentKey = v8::TorrentKey;
-pub type SelectedTorrent = v8::SelectedTorrent;
-pub type SelectedTorrentKey = v8::SelectedTorrentKey;
-pub type DuplicateTorrent = v8::DuplicateTorrent;
-pub type ErroredTorrent = v8::ErroredTorrent;
-pub type ErroredTorrentKey = v8::ErroredTorrentKey;
+pub type Torrent = v9::Torrent;
+pub type TorrentKey = v9::TorrentKey;
+pub type SelectedTorrent = v9::SelectedTorrent;
+pub type SelectedTorrentKey = v9::SelectedTorrentKey;
+pub type DuplicateTorrent = v9::DuplicateTorrent;
+pub type ErroredTorrent = v9::ErroredTorrent;
+pub type ErroredTorrentKey = v9::ErroredTorrentKey;
 pub type ErroredTorrentId = v1::ErroredTorrentId;
 pub type Event = v8::Event;
 pub type EventKey = v8::EventKey;
@@ -82,12 +88,15 @@ pub type ListKey = v5::ListKey;
 pub type ListItem = v5::ListItem;
 pub type ListItemKey = v5::ListItemKey;
 pub type ListItemTorrent = v4::ListItemTorrent;
-pub type TorrentMeta = v8::TorrentMeta;
+pub type TorrentMeta = v9::TorrentMeta;
 pub type TorrentMetaDiff = v8::TorrentMetaDiff;
 pub type TorrentMetaField = v8::TorrentMetaField;
 pub type MainCat = v1::MainCat;
 pub type Uuid = v3::Uuid;
 pub type Timestamp = v3::Timestamp;
+pub type Series = v9::Series;
+pub type SeriesEntries = v9::SeriesEntries;
+pub type SeriesEntry = v9::SeriesEntry;
 pub type Language = v3::Language;
 pub type FlagBits = v8::FlagBits;
 pub type Size = v3::Size;

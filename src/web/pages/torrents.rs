@@ -70,9 +70,7 @@ pub async fn torrents_page(
                     TorrentsPageFilter::Title => &t.meta.title == value,
                     TorrentsPageFilter::Author => t.meta.authors.contains(value),
                     TorrentsPageFilter::Narrator => t.meta.narrators.contains(value),
-                    TorrentsPageFilter::Series => {
-                        t.meta.series.iter().any(|(name, _)| name == value)
-                    }
+                    TorrentsPageFilter::Series => t.meta.series.iter().any(|s| &s.name == value),
                     TorrentsPageFilter::Language => {
                         t.meta.language == Language::from_str(value).ok()
                     }
@@ -123,8 +121,8 @@ pub async fn torrents_page(
                         }
                     }
                     if show.series {
-                        for (series_name, _) in &t.meta.series {
-                            torrent_score += score(value, series_name);
+                        for s in &t.meta.series {
+                            torrent_score += score(value, &s.name);
                         }
                     }
                 }

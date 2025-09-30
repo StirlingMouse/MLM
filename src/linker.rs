@@ -495,13 +495,13 @@ fn library_dir(
 ) -> Option<PathBuf> {
     let author = meta.authors.first()?;
     let mut dir = match meta.series.first() {
-        Some((series_name, series_num)) => {
+        Some(series) => {
             PathBuf::from(author)
-                .join(&series_name)
-                .join(if series_num.is_empty() {
+                .join(&series.name)
+                .join(if series.entries.0.is_empty() {
                     meta.title.clone()
                 } else {
-                    format!("{series_name} #{series_num} - {}", meta.title)
+                    format!("{} #{} - {}", series.name, series.entries, meta.title)
                 })
         }
         None => PathBuf::from(author).join(&meta.title),
