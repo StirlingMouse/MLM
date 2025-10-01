@@ -3,6 +3,7 @@ use std::{cell::RefCell, sync::Arc};
 
 use anyhow::Result;
 use askama::Template;
+use axum::response::{IntoResponse, Response};
 use axum::{
     extract::{OriginalUri, Query, State},
     response::{Html, Redirect},
@@ -28,11 +29,12 @@ use crate::{
 
 pub async fn replaced_torrents_page(
     State(db): State<Arc<Database<'static>>>,
+    uri: OriginalUri,
     Query(sort): Query<SortOn<TorrentsPageSort>>,
     Query(filter): Query<Vec<(TorrentsPageFilter, String)>>,
     Query(show): Query<TorrentsPageColumnsQuery>,
     Query(paging): Query<PaginationParams>,
-) -> std::result::Result<Html<String>, AppError> {
+) -> std::result::Result<Response, AppError> {
     let torrents = db
         .r_transaction()?
         .scan()
@@ -73,7 +75,10 @@ pub async fn replaced_torrents_page(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let paging = paging.default_page_size(500, replaced_torrents.len());
+    let paging = match paging.default_page_size(uri, 500, replaced_torrents.len()) {
+        Ok(paging) => paging,
+        Err(redirect) => return Ok(redirect.into_response()),
+    };
 
     if let Some(sort_by) = &sort.sort_by {
         replaced_torrents.sort_by(|a, b| {
@@ -122,7 +127,7 @@ pub async fn replaced_torrents_page(
         cols: Default::default(),
         torrents,
     };
-    Ok::<_, AppError>(Html(template.to_string()))
+    Ok::<_, AppError>(Html(template.to_string()).into_response())
 }
 
 pub async fn replaced_torrents_page_post(

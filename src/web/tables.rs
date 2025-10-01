@@ -4,6 +4,9 @@ use std::{
 };
 
 use askama::{Template, filters::HtmlSafe};
+use axum::{extract::OriginalUri, response::Redirect};
+use itertools::Itertools as _;
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
 use super::Conditional;
@@ -15,18 +18,43 @@ pub struct PaginationParams {
 }
 
 impl PaginationParams {
-    pub fn default_page_size(&self, page_size: usize, total: usize) -> Option<Pagination> {
+    pub fn default_page_size(
+        &self,
+        uri: OriginalUri,
+        page_size: usize,
+        total: usize,
+    ) -> Result<Option<Pagination>, Redirect> {
         let from = self.from.unwrap_or_default();
         let page_size = self.page_size.unwrap_or(page_size);
+        let to = from + page_size;
+        let pagination = Pagination {
+            from,
+            page_size,
+            total,
+            max_pages: 7,
+        };
+        if total < from {
+            let from = pagination.link(pagination.num_pages());
+            let base_url = Url::parse("https://a").unwrap();
+            let url = base_url.join(&uri.to_string());
+            if let Ok(mut url) = url {
+                let mut pairs = url
+                    .query_pairs()
+                    .map(|(name, value)| (name.to_string(), value.to_string()))
+                    .collect_vec();
+                let from_pair = pairs.iter().find_position(|(name, _)| name == "from");
+                if let Some((index, (name, _))) = from_pair {
+                    pairs[index] = (name.clone(), from.to_string());
+                }
+                url.query_pairs_mut().clear().extend_pairs(pairs);
+                let a = url.make_relative(&base_url);
+                return Err(Redirect::to(&url.as_str()[10..]));
+            }
+        }
         if page_size == 0 {
-            None
+            Ok(None)
         } else {
-            Some(Pagination {
-                from,
-                page_size,
-                total,
-                max_pages: 7,
-            })
+            Ok(Some(pagination))
         }
     }
 }

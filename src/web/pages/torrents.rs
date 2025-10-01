@@ -3,6 +3,7 @@ use std::{cell::RefCell, sync::Arc};
 
 use anyhow::Result;
 use askama::Template;
+use axum::response::{IntoResponse, Response};
 use axum::{
     extract::{OriginalUri, Query, State},
     response::{Html, Redirect},
@@ -31,11 +32,12 @@ use crate::{
 
 pub async fn torrents_page(
     State((config, db)): State<(Arc<Config>, Arc<Database<'static>>)>,
+    uri: OriginalUri,
     Query(sort): Query<SortOn<TorrentsPageSort>>,
     Query(filter): Query<Vec<(TorrentsPageFilter, String)>>,
     Query(show): Query<TorrentsPageColumnsQuery>,
     Query(paging): Query<PaginationParams>,
-) -> std::result::Result<Html<String>, AppError> {
+) -> std::result::Result<Response, AppError> {
     let torrents = db
         .r_transaction()?
         .scan()
@@ -53,9 +55,6 @@ pub async fn torrents_page(
             let Ok(t) = t else {
                 return Some(t.map(|t| (t, 0)));
             };
-            if t.replaced_with.is_some() {
-                return None;
-            }
             let mut torrent_score = 0;
             for (field, value) in filter.iter() {
                 let ok = match field {
@@ -134,7 +133,10 @@ pub async fn torrents_page(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let paging = paging.default_page_size(500, torrents.len());
+    let paging = match paging.default_page_size(uri, 500, torrents.len()) {
+        Ok(paging) => paging,
+        Err(redirect) => return Ok(redirect.into_response()),
+    };
 
     if sort.sort_by.is_none() && query.is_some() {
         torrents.sort_by_key(|(_, score)| -*score);
@@ -173,7 +175,7 @@ pub async fn torrents_page(
         query: query.map(|q| q.as_str()).unwrap_or("").to_owned(),
         torrents,
     };
-    Ok::<_, AppError>(Html(template.to_string()))
+    Ok::<_, AppError>(Html(template.to_string()).into_response())
 }
 
 fn score(query: &str, target: &str) -> isize {

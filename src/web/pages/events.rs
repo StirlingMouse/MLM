@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use askama::Template;
 use axum::{
-    extract::{Query, State},
-    response::Html,
+    extract::{OriginalUri, Query, State},
+    response::{Html, IntoResponse, Response},
 };
 use native_db::Database;
 use serde::{Deserialize, Serialize};
@@ -19,9 +19,10 @@ use crate::{
 
 pub async fn event_page(
     State(db): State<Arc<Database<'static>>>,
+    uri: OriginalUri,
     Query(filter): Query<Vec<(EventPageFilter, String)>>,
     Query(paging): Query<PaginationParams>,
-) -> std::result::Result<Html<String>, AppError> {
+) -> std::result::Result<Response, AppError> {
     let events = db
         .r_transaction()?
         .scan()
@@ -52,7 +53,10 @@ pub async fn event_page(
             true
         })
         .collect::<Vec<_>>();
-    let paging = paging.default_page_size(500, events.len());
+    let paging = match paging.default_page_size(uri, 500, events.len()) {
+        Ok(paging) => paging,
+        Err(redirect) => return Ok(redirect.into_response()),
+    };
     if let Some(paging) = &paging {
         events = events
             .into_iter()
@@ -86,7 +90,7 @@ pub async fn event_page(
         }),
         events: events_with_torrent,
     };
-    Ok::<_, AppError>(Html(template.to_string()))
+    Ok::<_, AppError>(Html(template.to_string()).into_response())
 }
 
 #[derive(Template)]
