@@ -281,6 +281,10 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
 ) -> Result<u64> {
     let mut selected_torrents = 0;
     'torrent: for torrent in torrents {
+        if config.ignore_torrents.contains(&torrent.id) {
+            continue;
+        }
+
         let meta = match torrent.as_meta() {
             Ok(it) => it,
             Err(err) => match err {

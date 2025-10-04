@@ -32,6 +32,8 @@ pub struct Config {
     pub link_interval: u64,
     #[serde(default = "default_goodreads_interval")]
     pub goodreads_interval: u64,
+    #[serde(default)]
+    pub ignore_torrents: Vec<u64>,
 
     #[serde(default = "default_audio_types")]
     pub audio_types: Vec<String>,

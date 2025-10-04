@@ -26,7 +26,6 @@ impl PaginationParams {
     ) -> Result<Option<Pagination>, Redirect> {
         let from = self.from.unwrap_or_default();
         let page_size = self.page_size.unwrap_or(page_size);
-        let to = from + page_size;
         let pagination = Pagination {
             from,
             page_size,
@@ -47,7 +46,6 @@ impl PaginationParams {
                     pairs[index] = (name.clone(), from.to_string());
                 }
                 url.query_pairs_mut().clear().extend_pairs(pairs);
-                let a = url.make_relative(&base_url);
                 return Err(Redirect::to(&url.as_str()[10..]));
             }
         }
