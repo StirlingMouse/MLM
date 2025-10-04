@@ -343,9 +343,6 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 continue 'torrent;
             }
         }
-        if cost == Cost::MetadataOnly {
-            continue 'torrent;
-        }
         if let Some(rw) = &rw_opt {
             let old_library = rw
                 .scan()
@@ -358,6 +355,9 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 }
                 continue 'torrent;
             }
+        }
+        if cost == Cost::MetadataOnly {
+            continue 'torrent;
         }
         if let Some(rw) = &rw_opt {
             let old_selected = {
