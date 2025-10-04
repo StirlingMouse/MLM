@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeSet, HashMap},
     ops::Deref,
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -11,14 +12,17 @@ use axum::{
 };
 use axum_extra::extract::Form;
 use native_db::Database;
-use qbit::models::{Category, Torrent as QbitTorrent, Tracker};
+use qbit::{
+    models::{Category, Torrent as QbitTorrent, Tracker},
+    parameters::TorrentState,
+};
 use serde::Deserialize;
 
 use crate::{
     audiobookshelf::{Abs, LibraryItemMinified},
     config::Config,
     data::{Size, Torrent, TorrentMeta},
-    linker::refresh_metadata_relink,
+    linker::{find_library, library_dir, refresh_metadata_relink},
     mam::MaMTorrent,
     qbittorrent::{self},
     web::{AppError, MaMState, Page, pages::torrents::TorrentsPageFilter, series, tables::items},
@@ -43,10 +47,19 @@ pub async fn torrent_page(
     let mam_meta = mam_torrent.as_ref().map(|t| t.as_meta()).transpose()?;
 
     let mut qbit_data = None;
+    let mut wanted_path = None;
     if let Some((qbit_torrent, qbit)) = qbittorrent::get_torrent(&config, &torrent.hash).await? {
         let trackers = qbit.trackers(&torrent.hash).await?;
         let categories = qbit.categories().await?;
         let tags = qbit.tags().await?;
+
+        wanted_path = find_library(&config, &qbit_torrent).and_then(|library| {
+            library_dir(
+                config.exclude_narrator_in_library_dir,
+                library,
+                &torrent.meta,
+            )
+        });
 
         qbit_data = Some(QbitData {
             torrent_tags: qbit_torrent.tags.split(", ").map(str::to_string).collect(),
@@ -77,6 +90,7 @@ pub async fn torrent_page(
         mam_torrent,
         mam_meta,
         qbit_data,
+        wanted_path,
     };
     Ok::<_, AppError>(Html(template.to_string()))
 }
@@ -94,25 +108,39 @@ pub async fn torrent_page_post(
             };
             refresh_metadata_relink(&config, &db, mam, hash).await?;
         }
+        "torrent-start" => {
+            let Some((_torrent, qbit)) = qbittorrent::get_torrent(&config, &hash).await? else {
+                return Err(anyhow::Error::msg("Could not find torrent").into());
+            };
+            qbit.start(vec![&hash]).await?;
+        }
+        "torrent-stop" => {
+            let Some((_torrent, qbit)) = qbittorrent::get_torrent(&config, &hash).await? else {
+                return Err(anyhow::Error::msg("Could not find torrent").into());
+            };
+            qbit.stop(vec![&hash]).await?;
+        }
         "qbit" => {
             let Some((torrent, qbit)) = qbittorrent::get_torrent(&config, &hash).await? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
 
             qbit.set_category(Some(vec![&hash]), &form.category).await?;
-            if !form.tags.is_empty() {
-                qbit.add_tags(
-                    Some(vec![&hash]),
-                    form.tags.iter().map(Deref::deref).collect(),
-                )
-                .await?;
-            }
             let mut torrent_tags = torrent.tags.split(", ").collect::<BTreeSet<&str>>();
             for tag in &form.tags {
                 torrent_tags.remove(tag.as_str());
             }
             if !torrent_tags.is_empty() {
+                println!("remove tags {torrent_tags:?}");
                 qbit.remove_tags(
+                    Some(vec![&hash]),
+                    form.tags.iter().map(Deref::deref).collect(),
+                )
+                .await?;
+            }
+            if !form.tags.is_empty() {
+                println!("add tags {:?}", form.tags);
+                qbit.add_tags(
                     Some(vec![&hash]),
                     form.tags.iter().map(Deref::deref).collect(),
                 )
@@ -160,6 +188,7 @@ struct TorrentPageTemplate {
     mam_torrent: Option<MaMTorrent>,
     mam_meta: Option<TorrentMeta>,
     qbit_data: Option<QbitData>,
+    wanted_path: Option<PathBuf>,
 }
 
 impl Page for TorrentPageTemplate {}

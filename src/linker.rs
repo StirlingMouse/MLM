@@ -461,7 +461,7 @@ async fn link_torrent(
     Ok(())
 }
 
-fn find_library<'a>(config: &'a Config, torrent: &QbitTorrent) -> Option<&'a Library> {
+pub fn find_library<'a>(config: &'a Config, torrent: &QbitTorrent) -> Option<&'a Library> {
     config
         .libraries
         .iter()
@@ -488,7 +488,7 @@ fn find_library<'a>(config: &'a Config, torrent: &QbitTorrent) -> Option<&'a Lib
         })
 }
 
-fn library_dir(
+pub fn library_dir(
     exclude_narrator_in_library_dir: bool,
     library: &Library,
     meta: &TorrentMeta,

@@ -28,6 +28,17 @@
     <form method=post><button name=action value=refresh-relink>refresh metadata and relink</button></form>
   </div>
 {% endif %}
+{% if wanted_path != torrent.library_path %}
+  {% if let Some(wanted_path) = wanted_path %}
+    <div class=row style="justify-content:flex-start">
+      Wanted Path: {{ wanted_path.to_string_lossy() }}
+    </div>
+  {% else %}
+    <div class=row style="justify-content:flex-start">
+      No longer wanted in library
+    </div>
+  {% endif %}
+{% endif %}
 <details>
   <summary>Files</summary>
   <ul>
@@ -37,7 +48,43 @@
   </ul>
 </details>
 {% if let Some(qbit) = qbit_data %}
-  <p>Status: {{ "{:#?}" | format(qbit.torrent.state) }}</p>
+  <form method=post class=row style="justify-content:flex-start">
+    Status: {{ "{:#?}" | format(qbit.torrent.state) }}
+    {% match qbit.torrent.state %}
+    {% when TorrentState::Error %}
+    {% when TorrentState::MissingFiles %}
+    {% when TorrentState::Moving %}
+    {% when TorrentState::Unknown %}
+    {% when TorrentState::Allocating %}
+    {% when TorrentState::CheckingResumeData %}
+    {% when TorrentState::Uploading %}
+      <button name=action value=torrent-stop>stop</button>
+    {% when TorrentState::StoppedUploading %}
+      <button name=action value=torrent-start>start</button>
+    {% when TorrentState::QueuedUploading %}
+      <button name=action value=torrent-stop>stop</button>
+    {% when TorrentState::StalledUploading %}
+      <button name=action value=torrent-stop>stop</button>
+    {% when TorrentState::CheckingUploading %}
+    {% when TorrentState::ForcedUploading %}
+      <button name=action value=torrent-stop>stop</button>
+    {% when TorrentState::Downloading %}
+      <button name=action value=torrent-stop>stop</button>
+    {% when TorrentState::MetadataDownloading %}
+      <button name=action value=torrent-stop>stop</button>
+    {% when TorrentState::ForcedMetadataDownloading %}
+      <button name=action value=torrent-stop>stop</button>
+    {% when TorrentState::StoppedDownloading %}
+      <button name=action value=torrent-start>start</button>
+    {% when TorrentState::QueuedDownloading %}
+      <button name=action value=torrent-stop>stop</button>
+    {% when TorrentState::StalledDownloading %}
+      <button name=action value=torrent-stop>stop</button>
+    {% when TorrentState::CheckingDownloading %}
+    {% when TorrentState::ForcedDownloading %}
+      <button name=action value=torrent-stop>stop</button>
+    {% endmatch %}
+  </form>
   <form method=post class=row style="justify-content:flex-start">
     Category: <select name=category>
       {% for cat in qbit.categories.keys() %}
@@ -56,14 +103,18 @@
   </form>
   <p>Uploaded: {{ Size::from_bytes(*(&qbit.torrent.uploaded as u64)) }}</p>
   {% if let Some(tracker) = qbit.trackers.last() %}
-  {% if !tracker.msg.is_empty() %}
-    <form method=post class=row style="justify-content:flex-start">
+  <form method=post class=row style="justify-content:flex-start">
+    {% if !tracker.msg.is_empty() %}
       Tracker Msg: {{ tracker.msg }}
       {% if tracker.msg == "torrent not registered with this tracker" %}
         <button type=submit name=action value=remove-torrent>remove seeding files</button>
+      {% else %}
+        <button type=submit name=action value=remove-torrent data-prompt="Are you sure you want to remove the seeding files?">remove seeding files</button>
       {% endif %}
-    </form>
-  {% endif %}
+    {% else %}
+      <button type=submit name=action value=remove-torrent data-prompt="Are you sure you want to remove the seeding files?">remove seeding files</button>
+    {% endif %}
+  </form>
   {% endif %}
 {% endif %}
 {% if let Some(book) = book %}
