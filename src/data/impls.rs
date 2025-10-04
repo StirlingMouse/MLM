@@ -201,6 +201,9 @@ impl std::fmt::Display for TorrentMetaField {
 
 impl ListItem {
     pub fn want_audio(&self) -> bool {
+        if self.marked_done_at.is_some() {
+            return false;
+        }
         let have_audio = self
             .audio_torrent
             .as_ref()
@@ -218,6 +221,9 @@ impl ListItem {
     }
 
     pub fn want_ebook(&self) -> bool {
+        if self.marked_done_at.is_some() {
+            return false;
+        }
         let have_audio = self
             .audio_torrent
             .as_ref()

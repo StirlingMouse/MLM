@@ -21,7 +21,7 @@ use pages::{
     errors::errors_page,
     events::event_page,
     index::{index_page, index_page_post},
-    list::list_page,
+    list::{list_page, list_page_post},
     lists::lists_page,
     replaced::{replaced_torrents_page, replaced_torrents_page_post},
     selected::{selected_page, selected_torrents_page_post},
@@ -84,6 +84,10 @@ pub async fn start_webserver(
             get(lists_page).with_state((config.clone(), db.clone())),
         )
         .route("/lists/{list_id}", get(list_page).with_state(db.clone()))
+        .route(
+            "/lists/{list_id}",
+            post(list_page_post).with_state(db.clone()),
+        )
         .route("/errors", get(errors_page).with_state(db.clone()))
         .route(
             "/selected",

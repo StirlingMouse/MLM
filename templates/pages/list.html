@@ -27,7 +27,8 @@
 </div>
 
 {% for item in items %}
-  <div class=list_item>
+  <form method=post class=list_item>
+    <input type=hidden name=item_id value="{{ item.guid.1 }}">
     <img src="{{ item.cover_url }}">
     <div>
     <div class="row"><h3>{{ item.title }}</h3><a href="{{ item.mam_search() }}" target=_blank>search on MaM</a></div>
@@ -65,8 +66,11 @@
     {% elif item.want_ebook() %}
       <span class=missing>Ebook missing</span><br />
     {% endif %}
+    {% if item.want_audio() || item.want_ebook() %}
+      <button name=action value=mark-done>mark done</button>
+    {% endif %}
     </div>
-  </div>
+  </form>
 {% endfor %}
 {% if items.is_empty() %}
 <p><i>The list is empty</i>

@@ -2,15 +2,18 @@ use std::sync::Arc;
 
 use askama::Template;
 use axum::{
-    extract::{Path, Query, State},
-    response::Html,
+    extract::{OriginalUri, Path, Query, State},
+    response::{Html, Redirect},
 };
+use axum_extra::extract::Form;
 use native_db::Database;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    data::{AudiobookCategory, EbookCategory, List, ListItem, ListItemKey, TorrentStatus},
+    data::{
+        AudiobookCategory, EbookCategory, List, ListItem, ListItemKey, Timestamp, TorrentStatus,
+    },
     web::{AppError, Page, time},
 };
 
@@ -62,6 +65,36 @@ pub async fn list_page(
         items,
     };
     Ok::<_, AppError>(Html(template.to_string()))
+}
+
+pub async fn list_page_post(
+    State(db): State<Arc<Database<'static>>>,
+    Path(list_id): Path<String>,
+    uri: OriginalUri,
+    Form(form): Form<ListPageForm>,
+) -> Result<Redirect, AppError> {
+    match form.action.as_str() {
+        "mark-done" => {
+            let rw = db.rw_transaction()?;
+            let Some(mut item) = rw.get().primary::<ListItem>((list_id, form.item_id))? else {
+                return Err(anyhow::Error::msg("Could not find item").into());
+            };
+            item.marked_done_at = Some(Timestamp::now());
+            rw.upsert(item)?;
+            rw.commit()?;
+        }
+        action => {
+            eprintln!("unknown action: {action}");
+        }
+    }
+
+    Ok(Redirect::to(&uri.to_string()))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListPageForm {
+    action: String,
+    item_id: String,
 }
 
 #[derive(Template)]
