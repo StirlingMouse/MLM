@@ -193,12 +193,15 @@ pub async fn duplicate_torrents_page_post(
                 );
 
                 let rw = db.rw_transaction()?;
-                rw.remove(duplicate_torrent)?;
                 rw.insert(SelectedTorrent {
                     mam_id: mam_torrent.id,
-                    dl_link: mam_torrent.dl.clone().ok_or_else(|| {
-                        Error::msg(format!("no dl field for torrent {}", mam_torrent.id))
-                    })?,
+                    dl_link: mam_torrent
+                        .dl
+                        .clone()
+                        .or_else(|| duplicate_torrent.dl_link.clone())
+                        .ok_or_else(|| {
+                            Error::msg(format!("no dl field for torrent {}", mam_torrent.id))
+                        })?,
                     unsat_buffer: None,
                     cost,
                     category,
@@ -208,6 +211,7 @@ pub async fn duplicate_torrents_page_post(
                     created_at: Timestamp::now(),
                     removed_at: None,
                 })?;
+                rw.remove(duplicate_torrent)?;
                 rw.commit()?;
                 clean_torrent(&config, &db, duplicate_of).await?;
             }
