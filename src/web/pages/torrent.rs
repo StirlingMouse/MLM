@@ -36,6 +36,18 @@ pub async fn torrent_page(
     let Some(torrent) = db.r_transaction()?.get().primary::<Torrent>(hash)? else {
         return Err(AppError::NotFound);
     };
+    let replacement_torrent = torrent
+        .replaced_with
+        .as_ref()
+        .map(|(hash, _)| {
+            Ok::<_, native_db::db_type::Error>(
+                db.r_transaction()?
+                    .get()
+                    .primary::<Torrent>(hash.to_string())?,
+            )
+        })
+        .transpose()?
+        .flatten();
     let book = match abs {
         Some(abs) => abs?.get_book(&torrent).await?,
         None => None,
@@ -86,6 +98,7 @@ pub async fn torrent_page(
             .map(|abs| abs.url.clone())
             .unwrap_or_default(),
         torrent,
+        replacement_torrent,
         book,
         mam_torrent,
         mam_meta,
@@ -120,6 +133,15 @@ pub async fn torrent_page_post(
             };
             qbit.stop(vec![&hash]).await?;
         }
+        "clear-replacement" => {
+            let rw = db.rw_transaction()?;
+            let Some(mut torrent) = rw.get().primary::<Torrent>(hash)? else {
+                return Err(anyhow::Error::msg("Could not find torrent").into());
+            };
+            torrent.replaced_with.take();
+            rw.upsert(torrent)?;
+            rw.commit()?;
+        }
         "qbit" => {
             let Some((torrent, qbit)) = qbittorrent::get_torrent(&config, &hash).await? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
@@ -127,20 +149,30 @@ pub async fn torrent_page_post(
 
             qbit.set_category(Some(vec![&hash]), &form.category).await?;
             let mut torrent_tags = torrent.tags.split(", ").collect::<BTreeSet<&str>>();
+            if torrent.tags.is_empty() {
+                torrent_tags.clear();
+            }
+            if !form.tags.is_empty() {
+                let mut add_tags = form
+                    .tags
+                    .iter()
+                    .map(|tag| tag.as_str())
+                    .collect::<BTreeSet<&str>>();
+                for tag in &torrent_tags {
+                    add_tags.remove(tag);
+                }
+                if !add_tags.is_empty() {
+                    println!("add tags {:?}", add_tags);
+                    qbit.add_tags(Some(vec![&hash]), add_tags.into_iter().collect())
+                        .await?;
+                }
+            }
             for tag in &form.tags {
                 torrent_tags.remove(tag.as_str());
             }
             if !torrent_tags.is_empty() {
                 println!("remove tags {torrent_tags:?}");
                 qbit.remove_tags(
-                    Some(vec![&hash]),
-                    form.tags.iter().map(Deref::deref).collect(),
-                )
-                .await?;
-            }
-            if !form.tags.is_empty() {
-                println!("add tags {:?}", form.tags);
-                qbit.add_tags(
                     Some(vec![&hash]),
                     form.tags.iter().map(Deref::deref).collect(),
                 )
@@ -184,6 +216,7 @@ pub struct TorrentPageForm {
 struct TorrentPageTemplate {
     abs_url: String,
     torrent: Torrent,
+    replacement_torrent: Option<Torrent>,
     book: Option<LibraryItemMinified>,
     mam_torrent: Option<MaMTorrent>,
     mam_meta: Option<TorrentMeta>,
