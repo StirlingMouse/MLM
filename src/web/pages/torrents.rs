@@ -62,6 +62,8 @@ pub async fn torrents_page(
                     TorrentsPageFilter::Category => {
                         if value.is_empty() {
                             t.meta.cat.is_none()
+                        } else if let Some(cat) = &t.meta.cat {
+                            cat.as_str() == value
                         } else {
                             false
                         }
@@ -97,6 +99,7 @@ pub async fn torrents_page(
                         Some(ClientStatus::RemovedFromMam) => value == "removed_from_mam",
                         None => false,
                     },
+                    TorrentsPageFilter::Abs => t.abs_id.is_some() == (value == "true"),
                     TorrentsPageFilter::Query => true,
                     TorrentsPageFilter::SortBy => true,
                     TorrentsPageFilter::Asc => true,
@@ -284,6 +287,7 @@ pub enum TorrentsPageFilter {
     Linked,
     LibraryMismatch,
     ClientStatus,
+    Abs,
     Query,
     // Workaround sort decode failure
     SortBy,
