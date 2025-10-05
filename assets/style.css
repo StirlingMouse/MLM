@@ -147,6 +147,11 @@ select {
         border-radius: 2px;
 }
 
+summary {
+        cursor: pointer;
+        user-select: none;
+}
+
 .table_options {
         display: flex;
         gap: 16px;

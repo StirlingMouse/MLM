@@ -64,13 +64,15 @@
     Linked {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}<br />
     to: {{ library_path.to_string_lossy() }}<br />
     {% if let Some(torrent) = torrent %}
-    files:
-    <ul>
-    {% for file in torrent.library_files.iter().flatten() %}
-      <li>{{ file.to_string_lossy() }}</li>
-    {% endfor %}
-    </ul>
-    {% endif %}
+    <details>
+      <summary>files</summary>
+      <ul>
+      {% for file in torrent.library_files.iter().flatten() %}
+        <li>{{ file.to_string_lossy() }}</li>
+      {% endfor %}
+      </ul>
+      {% endif %}
+    </details>
   {% when EventType::Cleaned { library_path, files } %}
     Cleaned {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}<br />
     {% if let Some(torrent) = torrent %}
