@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -349,12 +350,16 @@ async fn search_grab(
     grab: &Grab,
 ) -> Result<Vec<(MaMTorrent, TorrentMeta, usize, Cost)>> {
     let (flags_is_hide, flags) = grab.filter.flags.as_search_bitfield();
+
+    let title_query = db_item.title.replace("*", "\"*\"");
+    let title_query = BAD_CHARATERS.replace_all(&title_query, " ");
+    let mut title_query = AND.replace_all(&title_query, "(and|&)");
+    if let Some((primary_title, _)) = title_query.split_once(':') {
+        title_query = Cow::from(format!("(\"{primary_title}\"|\"{title_query}\")"));
+    }
     let query = format!(
         "@title {} @author ({})",
-        AND.replace_all(
-            &BAD_CHARATERS.replace_all(&db_item.title.replace("*", "\"*\""), " "),
-            "(and|&)"
-        ),
+        title_query,
         db_item.authors.iter().map(|a| format!("\"{a}\"")).join("|")
     );
 

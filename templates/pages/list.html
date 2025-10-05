@@ -31,7 +31,13 @@
     <input type=hidden name=item_id value="{{ item.guid.1 }}">
     <img src="{{ item.cover_url }}">
     <div>
-    <div class="row"><h3>{{ item.title }}</h3><a href="{{ item.mam_search() }}" target=_blank>search on MaM</a></div>
+    <div class="row">
+      <h3>{{ item.title }}</h3>
+      <div>
+        <a href="{{ item.mam_search() }}" target=_blank>search on MaM</a>
+        {% if let Some(url) = item.book_url %}<a href="{{ url }}" target=_blank>goodreads</a>{% endif %}
+      </div>
+    </div>
     <p class=author>by {{ item.authors.join(", ") }}</p>
     {% if !item.series.is_empty() %}
       <p>{% for (name, num) in item.series %}
