@@ -570,8 +570,12 @@ impl Abs {
 
 pub fn create_metadata(mam_torrent: &MaMTorrent, meta: &TorrentMeta) -> serde_json::Value {
     let mut titles = mam_torrent.title.splitn(2, ":");
-    let title = titles.next().unwrap();
-    let subtitle = titles.next().map(|t| t.trim());
+    let mut title = titles.next().unwrap();
+    let mut subtitle = titles.next().map(|t| t.trim());
+    if title.len() < 4 {
+        title = &mam_torrent.title;
+        subtitle = None;
+    }
     let isbn_raw: &str = mam_torrent.isbn.as_deref().unwrap_or("");
     let isbn = if isbn_raw.is_empty() || isbn_raw.starts_with("ASIN:") {
         None
