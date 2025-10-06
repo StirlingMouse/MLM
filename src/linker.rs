@@ -54,94 +54,91 @@ pub async fn link_torrents_to_library(
         if torrent.progress < 1.0 {
             continue;
         }
-        {
-            let r = db.r_transaction()?;
-            let t: Option<Torrent> = r.get().primary(torrent.hash.clone())?;
-            if let Some(mut t) = t {
-                if t.client_status.is_none() {
-                    let trackers = qbit.1.trackers(&torrent.hash).await?;
-                    if let Some(mam_tracker) = trackers.last() {
-                        if mam_tracker.msg == "torrent not registered with this tracker" {
-                            let rw = db.rw_transaction()?;
-                            t.client_status = Some(ClientStatus::RemovedFromMam);
-                            rw.upsert(t.clone())?;
-                            rw.commit()?;
-                            write_event(
-                                &db,
-                                Event::new(
-                                    Some(torrent.hash.clone()),
-                                    Some(t.mam_id),
-                                    EventType::RemovedFromMam,
-                                ),
-                            );
-                        }
+        let r = db.r_transaction()?;
+        let mut existing_torrent: Option<Torrent> = r.get().primary(torrent.hash.clone())?;
+        if let Some(t) = &mut existing_torrent {
+            if t.client_status.is_none() {
+                let trackers = qbit.1.trackers(&torrent.hash).await?;
+                if let Some(mam_tracker) = trackers.last() {
+                    if mam_tracker.msg == "torrent not registered with this tracker" {
+                        let rw = db.rw_transaction()?;
+                        t.client_status = Some(ClientStatus::RemovedFromMam);
+                        rw.upsert(t.clone())?;
+                        rw.commit()?;
+                        write_event(
+                            &db,
+                            Event::new(
+                                Some(torrent.hash.clone()),
+                                Some(t.mam_id),
+                                EventType::RemovedFromMam,
+                            ),
+                        );
                     }
                 }
-                if let Some(library_path) = &t.library_path {
-                    let Some(library) = find_library(&config, &torrent) else {
-                        if t.library_mismatch != Some(LibraryMismatch::NoLibrary) {
-                            debug!("no library: {library_path:?}",);
-                            t.library_mismatch = Some(LibraryMismatch::NoLibrary);
-                            let rw = db.rw_transaction()?;
-                            rw.upsert(t)?;
-                            rw.commit()?;
-                        }
-                        continue;
+            }
+            if let Some(library_path) = &t.library_path {
+                let Some(library) = find_library(&config, &torrent) else {
+                    if t.library_mismatch != Some(LibraryMismatch::NoLibrary) {
+                        debug!("no library: {library_path:?}",);
+                        t.library_mismatch = Some(LibraryMismatch::NoLibrary);
+                        let rw = db.rw_transaction()?;
+                        rw.upsert(t.clone())?;
+                        rw.commit()?;
+                    }
+                    continue;
+                };
+                if !library_path.starts_with(library.library_dir()) {
+                    let wanted = Some(LibraryMismatch::NewLibraryDir(
+                        library.library_dir().clone(),
+                    ));
+                    if t.library_mismatch != wanted {
+                        debug!(
+                            "library differs: {library_path:?} != {:?}",
+                            library.library_dir()
+                        );
+                        t.library_mismatch = wanted;
+                        let rw = db.rw_transaction()?;
+                        rw.upsert(t.clone())?;
+                        rw.commit()?;
+                    }
+                } else {
+                    let dir = library_dir(config.exclude_narrator_in_library_dir, library, &t.meta);
+                    let mut is_wrong = Some(library_path) != dir.as_ref();
+                    let wanted = match dir {
+                        Some(dir) => Some(LibraryMismatch::NewPath(dir)),
+                        None => Some(LibraryMismatch::NoLibrary),
                     };
-                    if !library_path.starts_with(library.library_dir()) {
-                        let wanted = Some(LibraryMismatch::NewLibraryDir(
-                            library.library_dir().clone(),
-                        ));
-                        if t.library_mismatch != wanted {
-                            debug!(
-                                "library differs: {library_path:?} != {:?}",
-                                library.library_dir()
+
+                    if t.library_mismatch != wanted {
+                        if is_wrong {
+                            // Try another attempt at matching with exclude_narrator flipped
+                            let dir_2 = library_dir(
+                                !config.exclude_narrator_in_library_dir,
+                                library,
+                                &t.meta,
                             );
+                            if Some(library_path) == dir_2.as_ref() {
+                                is_wrong = false
+                            }
+                        }
+                        if is_wrong {
+                            debug!("path differs: {library_path:?} != {:?}", wanted);
                             t.library_mismatch = wanted;
                             let rw = db.rw_transaction()?;
-                            rw.upsert(t)?;
+                            rw.upsert(t.clone())?;
+                            rw.commit()?;
+                        } else if t.library_mismatch.is_some() {
+                            t.library_mismatch = None;
+                            let rw = db.rw_transaction()?;
+                            rw.upsert(t.clone())?;
                             rw.commit()?;
                         }
-                    } else {
-                        let dir =
-                            library_dir(config.exclude_narrator_in_library_dir, library, &t.meta);
-                        let mut is_wrong = Some(library_path) != dir.as_ref();
-                        let wanted = match dir {
-                            Some(dir) => Some(LibraryMismatch::NewPath(dir)),
-                            None => Some(LibraryMismatch::NoLibrary),
-                        };
-
-                        if t.library_mismatch != wanted {
-                            if is_wrong {
-                                // Try another attempt at matching with exclude_narrator flipped
-                                let dir_2 = library_dir(
-                                    !config.exclude_narrator_in_library_dir,
-                                    library,
-                                    &t.meta,
-                                );
-                                if Some(library_path) == dir_2.as_ref() {
-                                    is_wrong = false
-                                }
-                            }
-                            if is_wrong {
-                                debug!("path differs: {library_path:?} != {:?}", wanted);
-                                t.library_mismatch = wanted;
-                                let rw = db.rw_transaction()?;
-                                rw.upsert(t)?;
-                                rw.commit()?;
-                            } else if t.library_mismatch.is_some() {
-                                t.library_mismatch = None;
-                                let rw = db.rw_transaction()?;
-                                rw.upsert(t)?;
-                                rw.commit()?;
-                            }
-                        }
                     }
-                    continue;
                 }
-                if t.replaced_with.is_some() {
-                    continue;
-                }
+                continue;
+            }
+            if t.replaced_with.is_some() {
+                continue;
             }
         }
         let Some(library) = find_library(&config, &torrent) else {
@@ -160,6 +157,7 @@ pub async fn link_torrents_to_library(
             &torrent.hash,
             &torrent,
             library,
+            existing_torrent,
         )
         .await
         .context("match_torrent");
@@ -183,6 +181,7 @@ async fn match_torrent(
     hash: &str,
     torrent: &QbitTorrent,
     library: &Library,
+    existing_torrent: Option<Torrent>,
 ) -> Result<()> {
     let files = qbit.1.files(hash, None).await?;
     let selected_audio_format = select_format(
@@ -214,6 +213,7 @@ async fn match_torrent(
         selected_ebook_format,
         library,
         mam_torrent,
+        existing_torrent.as_ref(),
         &meta,
     )
     .await
@@ -340,6 +340,7 @@ pub async fn refresh_metadata_relink(
         selected_ebook_format,
         library,
         mam_torrent,
+        Some(&torrent),
         &torrent.meta,
     )
     .await
@@ -359,6 +360,7 @@ async fn link_torrent(
     selected_ebook_format: Option<String>,
     library: &Library,
     mam_torrent: MaMTorrent,
+    existing_torrent: Option<&Torrent>,
     meta: &TorrentMeta,
 ) -> Result<()> {
     let Some(mut dir) = library_dir(config.exclude_narrator_in_library_dir, library, meta) else {
@@ -433,18 +435,20 @@ async fn link_torrent(
         rw.upsert(Torrent {
             hash: hash.to_owned(),
             mam_id: meta.mam_id,
-            abs_id: None,
+            abs_id: existing_torrent.and_then(|t| t.abs_id.clone()),
             library_path: Some(dir.clone()),
             library_files,
             selected_audio_format,
             selected_ebook_format,
             title_search: normalize_title(&mam_torrent.title),
             meta: meta.clone(),
-            created_at: Timestamp::now(),
-            replaced_with: None,
+            created_at: existing_torrent
+                .map(|t| t.created_at)
+                .unwrap_or_else(Timestamp::now),
+            replaced_with: existing_torrent.and_then(|t| t.replaced_with.clone()),
             request_matadata_update: false,
             library_mismatch: None,
-            client_status: None,
+            client_status: existing_torrent.and_then(|t| t.client_status.clone()),
         })?;
         rw.commit()?;
     }
