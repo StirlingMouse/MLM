@@ -19,8 +19,8 @@ use crate::{
     mam::{SearchQuery, Tor, normalize_title},
     mam_enums::SearchIn,
     web::{
-        AppError, MaMState, Page, series,
-        tables::{Key, SortOn, Sortable, item, items, table_styles_rows},
+        AppError, MaMState, Page,
+        tables::{Key, SortOn, Sortable, table_styles_rows},
         time,
     },
 };

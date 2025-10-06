@@ -15,8 +15,8 @@ use crate::{
     data::{SelectedTorrent, Timestamp},
     mam::Unsats,
     web::{
-        AppError, MaMState, Page, series,
-        tables::{Key, SortOn, Sortable, item, items, table_styles},
+        AppError, MaMState, Page,
+        tables::{Key, SortOn, Sortable, table_styles},
         time,
     },
 };

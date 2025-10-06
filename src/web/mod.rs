@@ -30,7 +30,7 @@ use pages::{
 };
 use reqwest::header;
 use serde::Serialize;
-use tables::{Key, item};
+use tables::{ItemFilter, ItemFilters, Key};
 use time::{
     Date, UtcOffset,
     format_description::{self, OwnedFormatItem},
@@ -145,6 +145,44 @@ pub trait Page {
     fn build_date(&self) -> &'static str {
         env!("DATE")
     }
+
+    fn item_path(&self) -> &'static str {
+        ""
+    }
+
+    fn item<'a, T: Key>(&'a self, field: T, label: &'a str) -> ItemFilter<'a, T> {
+        ItemFilter {
+            field,
+            label,
+            value: None,
+            path: self.item_path(),
+        }
+    }
+
+    fn item_v<'a, T: Key>(&self, field: T, label: &'a str, value: &'a str) -> ItemFilter<'a, T> {
+        ItemFilter {
+            field,
+            label,
+            value: Some(value),
+            path: self.item_path(),
+        }
+    }
+
+    fn items<'a, T: Key>(&self, field: T, labels: &'a [String]) -> ItemFilters<'a, T> {
+        ItemFilters {
+            field,
+            labels,
+            path: self.item_path(),
+        }
+    }
+
+    fn series<'a, T: Key>(&'a self, field: T, series: &'a Vec<Series>) -> SeriesTmpl<'a, T> {
+        SeriesTmpl {
+            field,
+            series,
+            path: self.item_path(),
+        }
+    }
 }
 
 async fn set_static_cache_control(request: Request<Body>, next: Next) -> Response {
@@ -198,21 +236,29 @@ fn time(time: &Timestamp) -> String {
 
 /// ```askama
 /// {% for s in series %}
-/// {{ self::item(*field, s.name) | safe }}{% if !s.entries.0.is_empty() %} #{{ s.entries }}{% endif %}{% if !loop.last %}, {% endif %}
+/// {{ item(*field, s.name) | safe }}{% if !s.entries.0.is_empty() %} #{{ s.entries }}{% endif %}{% if !loop.last %}, {% endif %}
 /// {% endfor %}
 /// ```
 #[derive(Template)]
 #[template(ext = "html", in_doc = true)]
-struct SeriesTmpl<'a, T: Key> {
+pub struct SeriesTmpl<'a, T: Key> {
     field: T,
     series: &'a Vec<Series>,
+    path: &'a str,
+}
+
+impl<'a, T: Key> SeriesTmpl<'a, T> {
+    fn item(&'a self, field: T, label: &'a str) -> ItemFilter<'a, T> {
+        ItemFilter {
+            field,
+            label,
+            value: None,
+            path: self.path,
+        }
+    }
 }
 
 impl<'a, T: Key> HtmlSafe for SeriesTmpl<'a, T> {}
-
-fn series<T: Key>(field: T, series: &Vec<Series>) -> SeriesTmpl<'_, T> {
-    SeriesTmpl { field, series }
-}
 
 #[derive(Template)]
 #[template(path = "partials/filter.html")]

@@ -78,38 +78,38 @@
   {{ table_header_s(None, "", "132px") }}
 {% for torrent in torrents %}
   <div><input type=checkbox name=torrent value={{torrent.hash}}></div>
-  <div><span title="{{ torrent.cat_name() }}">{{ self::item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</span></div>
+  <div><span title="{{ torrent.cat_name() }}">{{ item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</span></div>
   <div>
-    {{ self::item(TorrentsPageFilter::Title, torrent.meta.title) }}
+    {{ item(TorrentsPageFilter::Title, torrent.meta.title) }}
     {% match torrent.client_status %}
     {% when Some(ClientStatus::RemovedFromMam) %}
       <span class=warn title="Torrent is removed from MaM but still seeding">
-        {{ self::item_v(TorrentsPageFilter::ClientStatus, "⚠", "removed_from_mam") }}
+        {{ item_v(TorrentsPageFilter::ClientStatus, "⚠", "removed_from_mam") }}
       </span>
     {% when Some(ClientStatus::NotInClient) %}
       <span class=warn title="Torrent is not seeding">
-        {{ self::item_v(TorrentsPageFilter::ClientStatus, "ℹ", "not_in_client") }}
+        {{ item_v(TorrentsPageFilter::ClientStatus, "ℹ", "not_in_client") }}
       </span>
     {% when None %}
     {% endmatch %}
   </div>
   {% if show.authors %}
-  <div>{{ self::items(TorrentsPageFilter::Author, torrent.meta.authors) }}</div>
+  <div>{{ items(TorrentsPageFilter::Author, torrent.meta.authors) }}</div>
   {% endif %}
   {% if show.narrators %}
-  <div>{{ self::items(TorrentsPageFilter::Narrator, torrent.meta.narrators) }}</div>
+  <div>{{ items(TorrentsPageFilter::Narrator, torrent.meta.narrators) }}</div>
   {% endif %}
   {% if show.series %}
-  <div>{{ self::series(TorrentsPageFilter::Series, torrent.meta.series) }}</div>
+  <div>{{ series(TorrentsPageFilter::Series, torrent.meta.series) }}</div>
   {% endif %}
   {% if show.language %}
-  <div>{{ self::item(TorrentsPageFilter::Language, torrent.meta.language.map(Language::to_str).unwrap_or_default()) }}</div>
+  <div>{{ item(TorrentsPageFilter::Language, torrent.meta.language.map(Language::to_str).unwrap_or_default()) }}</div>
   {% endif %}
   {% if show.size %}
   <div>{{ torrent.meta.size }}</div>
   {% endif %}
   {% if show.filetypes %}
-  <div>{{ self::items(TorrentsPageFilter::Filetype, torrent.meta.filetypes) }}</div>
+  <div>{{ items(TorrentsPageFilter::Filetype, torrent.meta.filetypes) }}</div>
   {% endif %}
   {% if show.path %}
   <div>
@@ -121,31 +121,31 @@
     {% match torrent.library_mismatch %}
     {% when Some(LibraryMismatch::NewLibraryDir(path)) %}
       <span class=warn title="Wanted library dir: {{ path.to_string_lossy() }}">
-        {{ self::item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "new_library") }}
+        {{ item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "new_library") }}
       </span>
     {% when Some(LibraryMismatch::NewPath(path)) %}
       <span class=warn title="Wanted library path: {{ path.to_string_lossy() }}">
-        {{ self::item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "new_path") }}
+        {{ item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "new_path") }}
       </span>
     {% when Some(LibraryMismatch::NoLibrary) %}
-      <span class=warn title="No longer wanted in library">{{ self::item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "no_library") }}</span>
+      <span class=warn title="No longer wanted in library">{{ item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "no_library") }}</span>
     {% when None %}
     {% endmatch %}
   </div>
   {% else %}
     <div {% if let Some(path) = torrent.library_path %}title="{{ path.to_string_lossy() }}"{% endif %}>
-      {{ self::item(TorrentsPageFilter::Linked, &torrent.library_path.is_some().to_string()) }}
+      {{ item(TorrentsPageFilter::Linked, &torrent.library_path.is_some().to_string()) }}
       {% match torrent.library_mismatch %}
       {% when Some(LibraryMismatch::NewLibraryDir(path)) %}
         <span class=warn title="Wanted library dir: {{ path.to_string_lossy() }}">
-          {{ self::item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "new_library") }}
+          {{ item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "new_library") }}
         </span>
       {% when Some(LibraryMismatch::NewPath(path)) %}
         <span class=warn title="Wanted library path: {{ path.to_string_lossy() }}">
-          {{ self::item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "new_path") }}
+          {{ item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "new_path") }}
         </span>
       {% when Some(LibraryMismatch::NoLibrary) %}
-        <span class=warn title="No longer wanted in library">{{ self::item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "no_library") }}</span>
+        <span class=warn title="No longer wanted in library">{{ item_v(TorrentsPageFilter::LibraryMismatch, "⚠", "no_library") }}</span>
       {% when None %}
       {% endmatch %}
     </div>

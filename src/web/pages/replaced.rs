@@ -18,10 +18,9 @@ use crate::{
     data::{Language, Torrent, TorrentKey},
     linker::{refresh_metadata, refresh_metadata_relink},
     web::{
-        AppError, series,
+        AppError,
         tables::{
-            HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable, item, items,
-            table_styles_rows,
+            HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable, table_styles_rows,
         },
         time,
     },

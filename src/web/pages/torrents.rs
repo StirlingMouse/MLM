@@ -21,10 +21,9 @@ use crate::{
     data::{Language, LibraryMismatch, Torrent, TorrentKey},
     linker::{refresh_metadata, refresh_metadata_relink},
     web::{
-        AppError, series,
+        AppError,
         tables::{
-            HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable, item, item_v,
-            items, table_styles,
+            HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable, table_styles,
         },
         time,
     },

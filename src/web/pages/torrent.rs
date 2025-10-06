@@ -21,12 +21,13 @@ use serde::Deserialize;
 
 use crate::{
     audiobookshelf::{Abs, LibraryItemMinified},
+    cleaner::clean_torrent,
     config::Config,
-    data::{Size, Torrent, TorrentMeta},
+    data::{ClientStatus, Size, Torrent, TorrentMeta},
     linker::{find_library, library_dir, refresh_metadata_relink},
     mam::MaMTorrent,
     qbittorrent::{self},
-    web::{AppError, MaMState, Page, pages::torrents::TorrentsPageFilter, series, tables::items},
+    web::{AppError, MaMState, Page, pages::torrents::TorrentsPageFilter},
 };
 
 pub async fn torrent_page(
@@ -93,6 +94,14 @@ pub async fn torrent_page(
     );
     println!("qbit: {:?}", qbit_data);
 
+    let mut torrent = torrent;
+    if qbit_data.is_none() && torrent.client_status != Some(ClientStatus::NotInClient) {
+        let rw = db.rw_transaction()?;
+        torrent.client_status = Some(ClientStatus::NotInClient);
+        rw.upsert(torrent.clone())?;
+        rw.commit()?;
+    }
+
     let template = TorrentPageTemplate {
         abs_url: config
             .audiobookshelf
@@ -117,11 +126,25 @@ pub async fn torrent_page_post(
     Form(form): Form<TorrentPageForm>,
 ) -> Result<Redirect, AppError> {
     match form.action.as_str() {
+        "clean" => {
+            let Some(torrent) = db.r_transaction()?.get().primary(hash)? else {
+                return Err(anyhow::Error::msg("Could not find torrent").into());
+            };
+            clean_torrent(&config, &db, torrent).await?;
+        }
         "refresh-relink" => {
             let Ok(mam) = mam.as_ref() else {
                 return Err(anyhow::Error::msg("mam_id error").into());
             };
             refresh_metadata_relink(&config, &db, mam, hash).await?;
+        }
+        "remove" => {
+            let rw = db.rw_transaction()?;
+            let Some(torrent) = rw.get().primary::<Torrent>(hash)? else {
+                return Err(anyhow::Error::msg("Could not find torrent").into());
+            };
+            rw.remove(torrent)?;
+            rw.commit()?;
         }
         "torrent-start" => {
             let Some((_torrent, qbit)) = qbittorrent::get_torrent(&config, &hash).await? else {
@@ -226,7 +249,11 @@ struct TorrentPageTemplate {
     wanted_path: Option<PathBuf>,
 }
 
-impl Page for TorrentPageTemplate {}
+impl Page for TorrentPageTemplate {
+    fn item_path(&self) -> &'static str {
+        "/torrents"
+    }
+}
 
 #[derive(Debug)]
 struct QbitData {
@@ -253,5 +280,5 @@ fn duration(seconds: f64) -> String {
     if seconds > 0 {
         duration.push(format!("{seconds}s"));
     }
-    return duration.join(" ");
+    duration.join(" ")
 }

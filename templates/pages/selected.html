@@ -38,14 +38,14 @@
   {{ table_header(None, "") }}
 {% for torrent in torrents %}
   <div><input type=checkbox name=torrent value={{torrent.mam_id}}></div>
-  <div>{{ self::item(SelectedPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</div>
-  <div>{{ self::item(SelectedPageFilter::Title, torrent.meta.title) }}</div>
-  <div>{{ self::items(SelectedPageFilter::Author, torrent.meta.authors) }}</div>
-  <div>{{ self::items(SelectedPageFilter::Narrator, torrent.meta.narrators) }}</div>
-  <div>{{ self::series(SelectedPageFilter::Series, torrent.meta.series) }}</div>
+  <div>{{ item(SelectedPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</div>
+  <div>{{ item(SelectedPageFilter::Title, torrent.meta.title) }}</div>
+  <div>{{ items(SelectedPageFilter::Author, torrent.meta.authors) }}</div>
+  <div>{{ items(SelectedPageFilter::Narrator, torrent.meta.narrators) }}</div>
+  <div>{{ series(SelectedPageFilter::Series, torrent.meta.series) }}</div>
   <div>{{ torrent.meta.size }}</div>
-  <div>{{ self::items(SelectedPageFilter::Filetype, torrent.meta.filetypes) }}</div>
-  <div>{{ self::item(SelectedPageFilter::Cost, torrent.cost.as_str()) }}</div>
+  <div>{{ items(SelectedPageFilter::Filetype, torrent.meta.filetypes) }}</div>
+  <div>{{ item(SelectedPageFilter::Cost, torrent.cost.as_str()) }}</div>
   <div>{{ torrent.unsat_buffer.unwrap_or(*unsat_buffer) }}</div>
   <div>{{ self::time(torrent.created_at) }}</div>
   <div><a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a></div>

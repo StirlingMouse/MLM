@@ -11,7 +11,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     data::{ErroredTorrent, ErroredTorrentId, ErroredTorrentKey},
     web::{
-        tables::{item, table_styles, Key, SortOn, Sortable}, time, AppError, Page
+        AppError, Page,
+        tables::{Key, SortOn, Sortable, table_styles},
+        time,
     },
 };
 

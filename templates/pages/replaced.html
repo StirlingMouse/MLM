@@ -68,25 +68,25 @@
   {{ table_header_s(None, "", "88px") }}
 {% for (torrent, replacement) in torrents %}
   <div><input type=checkbox name=torrent value={{torrent.hash}}></div>
-  <div>{{ self::item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</div>
-  <div>{{ self::item(TorrentsPageFilter::Title, torrent.meta.title) }}</div>
+  <div>{{ item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</div>
+  <div>{{ item(TorrentsPageFilter::Title, torrent.meta.title) }}</div>
   {% if show.authors %}
-  <div>{{ self::items(TorrentsPageFilter::Author, torrent.meta.authors) }}</div>
+  <div>{{ items(TorrentsPageFilter::Author, torrent.meta.authors) }}</div>
   {% endif %}
   {% if show.narrators %}
-  <div>{{ self::items(TorrentsPageFilter::Narrator, torrent.meta.narrators) }}</div>
+  <div>{{ items(TorrentsPageFilter::Narrator, torrent.meta.narrators) }}</div>
   {% endif %}
   {% if show.series %}
-  <div>{{ self::series(TorrentsPageFilter::Series, torrent.meta.series) }}</div>
+  <div>{{ series(TorrentsPageFilter::Series, torrent.meta.series) }}</div>
   {% endif %}
   {% if show.language %}
-  <div>{{ self::item(TorrentsPageFilter::Language, torrent.meta.language.map(Language::to_str).unwrap_or_default()) }}</div>
+  <div>{{ item(TorrentsPageFilter::Language, torrent.meta.language.map(Language::to_str).unwrap_or_default()) }}</div>
   {% endif %}
   {% if show.size %}
   <div>{{ torrent.meta.size }}</div>
   {% endif %}
   {% if show.filetypes %}
-  <div>{{ self::items(TorrentsPageFilter::Filetype, torrent.meta.filetypes) }}</div>
+  <div>{{ items(TorrentsPageFilter::Filetype, torrent.meta.filetypes) }}</div>
   {% endif %}
   <div>
     {% if let Some((_, replaced_at)) = torrent.replaced_with %}{{ self::time(replaced_at) }}{% endif %}
@@ -99,24 +99,24 @@
 
   <div></div>
   <div>replaced with:</div>
-  <div>{{ self::item(TorrentsPageFilter::Title, replacement.meta.title) }}</div>
+  <div>{{ item(TorrentsPageFilter::Title, replacement.meta.title) }}</div>
   {% if show.authors %}
-  <div>{{ self::items(TorrentsPageFilter::Author, replacement.meta.authors) }}</div>
+  <div>{{ items(TorrentsPageFilter::Author, replacement.meta.authors) }}</div>
   {% endif %}
   {% if show.narrators %}
-  <div>{{ self::items(TorrentsPageFilter::Narrator, replacement.meta.narrators) }}</div>
+  <div>{{ items(TorrentsPageFilter::Narrator, replacement.meta.narrators) }}</div>
   {% endif %}
   {% if show.series %}
-  <div>{{ self::series(TorrentsPageFilter::Series, replacement.meta.series) }}</div>
+  <div>{{ series(TorrentsPageFilter::Series, replacement.meta.series) }}</div>
   {% endif %}
   {% if show.language %}
-  <div>{{ self::item(TorrentsPageFilter::Language, replacement.meta.language.map(Language::to_str).unwrap_or_default()) }}</div>
+  <div>{{ item(TorrentsPageFilter::Language, replacement.meta.language.map(Language::to_str).unwrap_or_default()) }}</div>
   {% endif %}
   {% if show.size %}
   <div>{{ replacement.meta.size }}</div>
   {% endif %}
   {% if show.filetypes %}
-  <div>{{ self::items(TorrentsPageFilter::Filetype, replacement.meta.filetypes) }}</div>
+  <div>{{ items(TorrentsPageFilter::Filetype, replacement.meta.filetypes) }}</div>
   {% endif %}
   <div>
     {% if let Some((_, replaced_at)) = replacement.replaced_with %}{{ self::time(replaced_at) }}{% endif %}

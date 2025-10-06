@@ -322,9 +322,10 @@ pub fn table_styles_rows(cols: u64, rows: u64) -> String {
 #[derive(Template)]
 #[template(ext = "html", in_doc = true)]
 pub struct ItemFilter<'a, T: Key> {
-    field: T,
-    label: &'a str,
-    value: Option<&'a str>,
+    pub field: T,
+    pub label: &'a str,
+    pub value: Option<&'a str>,
+    pub path: &'a str,
 }
 impl<'a, T: Key> HtmlSafe for ItemFilter<'a, T> {}
 
@@ -335,42 +336,35 @@ impl<'a, T: Key> ItemFilter<'a, T> {
             asc: false,
         };
         format!(
-            "?{}={}",
+            "{}?{}={}",
+            self.path,
             key,
             &urlencoding::encode(self.value.unwrap_or(self.label))
         )
     }
 }
 
-pub fn item<T: Key>(field: T, label: &str) -> ItemFilter<T> {
-    ItemFilter {
-        field,
-        label,
-        value: None,
-    }
-}
-
-pub fn item_v<'a, T: Key>(field: T, label: &'a str, value: &'a str) -> ItemFilter<'a, T> {
-    ItemFilter {
-        field,
-        label,
-        value: Some(value),
-    }
-}
-
 /// ```askama
 /// {% for label in labels %}
-/// {{ self::item(*field, label) | safe }}{% if !loop.last %}, {% endif %}
+/// {{ item(*field, label) | safe }}{% if !loop.last %}, {% endif %}
 /// {% endfor %}
 /// ```
 #[derive(Template)]
 #[template(ext = "html", in_doc = true)]
 pub struct ItemFilters<'a, T: Key> {
-    field: T,
-    labels: &'a [String],
+    pub field: T,
+    pub labels: &'a [String],
+    pub path: &'a str,
+}
+
+impl<'a, T: Key> ItemFilters<'a, T> {
+    fn item(&'a self, field: T, label: &'a str) -> ItemFilter<'a, T> {
+        ItemFilter {
+            field,
+            label,
+            value: None,
+            path: self.path,
+        }
+    }
 }
 impl<'a, T: Key> HtmlSafe for ItemFilters<'a, T> {}
-
-pub fn items<'a, T: Key>(field: T, labels: &'a [String]) -> ItemFilters<'a, T> {
-    ItemFilters { field, labels }
-}

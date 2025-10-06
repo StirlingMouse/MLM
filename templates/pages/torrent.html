@@ -6,12 +6,12 @@
 <div class="row">
   <h1>{{ torrent.meta.title }}</h1>
 </div>
-<p>By {{ self::items(TorrentsPageFilter::Author, torrent.meta.authors) }}</p>
+<p>By {{ items(TorrentsPageFilter::Author, torrent.meta.authors) }}</p>
 {% if !torrent.meta.series.is_empty() %}
-  <p>Series: {{ self::series(TorrentsPageFilter::Series, torrent.meta.series) }}</p>
+  <p>Series: {{ series(TorrentsPageFilter::Series, torrent.meta.series) }}</p>
 {% endif %}
 {% if !torrent.meta.narrators.is_empty() %}
-  <p>Narrator: {{ self::items(TorrentsPageFilter::Narrator, torrent.meta.narrators) }}</p>
+  <p>Narrator: {{ items(TorrentsPageFilter::Narrator, torrent.meta.narrators) }}</p>
 {% endif %}
 {% if let Some(language) = torrent.meta.language %}
   <p>Language: {{ language.to_str() }}</p>
@@ -25,7 +25,11 @@
 {% if let Some(library_path) = torrent.library_path %}
   <div class=row style="justify-content:flex-start">
     Linked Path: {{ library_path.to_string_lossy() }}
-    <form method=post><button name=action value=refresh-relink>refresh metadata and relink</button></form>
+    <form method=post>
+      <button name=action value=refresh-relink>refresh metadata and relink</button>
+      <button name=action value=clean data-prompt="Are you sure you want to clean this torrent?">clean torrent</button>
+      <button name=action value=remove data-prompt="Are you sure you want to remove this torrents?">remove torrent from MLM</button>
+    </form>
   </div>
 {% endif %}
 {% if wanted_path != torrent.library_path %}
@@ -52,12 +56,12 @@
   <div class="row">
     <h2>Replaced with: <a href="/torrents/{{ torrent.hash }}">{{ torrent.meta.title }}</a></h2>
   </div>
-  <p>By {{ self::items(TorrentsPageFilter::Author, torrent.meta.authors) }}</p>
+  <p>By {{ items(TorrentsPageFilter::Author, torrent.meta.authors) }}</p>
   {% if !torrent.meta.series.is_empty() %}
-    <p>Series: {{ self::series(TorrentsPageFilter::Series, torrent.meta.series) }}</p>
+    <p>Series: {{ series(TorrentsPageFilter::Series, torrent.meta.series) }}</p>
   {% endif %}
   {% if !torrent.meta.narrators.is_empty() %}
-    <p>Narrator: {{ self::items(TorrentsPageFilter::Narrator, torrent.meta.narrators) }}</p>
+    <p>Narrator: {{ items(TorrentsPageFilter::Narrator, torrent.meta.narrators) }}</p>
   {% endif %}
   {% if let Some(language) = torrent.meta.language %}
     <p>Language: {{ language.to_str() }}</p>
@@ -71,7 +75,6 @@
   {% if let Some(library_path) = torrent.library_path %}
     <div class=row style="justify-content:flex-start">
       Linked Path: {{ library_path.to_string_lossy() }}
-      <form method=post><button name=action value=refresh-relink>refresh metadata and relink</button></form>
     </div>
   {% endif %}
   {% if wanted_path != torrent.library_path %}
@@ -202,7 +205,7 @@
     <p>New authors: {{ mam_meta.authors.join(", ") }}</p>
   {% endif %}
   {% if torrent.meta.series != mam_meta.series %}
-    <p>New series: {{ self::series(TorrentsPageFilter::Series, mam_meta.series) }}</p>
+    <p>New series: {{ series(TorrentsPageFilter::Series, mam_meta.series) }}</p>
   {% endif %}
   {% if torrent.meta.narrators != mam_meta.narrators %}
     <p>New narrators: {{ mam_meta.narrators.join(", ") }}</p>

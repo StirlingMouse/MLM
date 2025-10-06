@@ -34,24 +34,24 @@
   {{ table_header(None, "") }}
 {% for (torrent, duplicate_of) in torrents %}
   <div><input type=checkbox name=torrent value={{torrent.mam_id}}></div>
-  <div>{{ self::item(DuplicatePageFilter::Kind, torrent.meta.main_cat.as_str()) }}</div>
-  <div>{{ self::item(DuplicatePageFilter::Title, torrent.meta.title) }}</div>
-  <div>{{ self::items(DuplicatePageFilter::Author, torrent.meta.authors) }}</div>
-  <div>{{ self::items(DuplicatePageFilter::Narrator, torrent.meta.narrators) }}</div>
-  <div>{{ self::series(DuplicatePageFilter::Series, torrent.meta.series) }}</div>
+  <div>{{ item(DuplicatePageFilter::Kind, torrent.meta.main_cat.as_str()) }}</div>
+  <div>{{ item(DuplicatePageFilter::Title, torrent.meta.title) }}</div>
+  <div>{{ items(DuplicatePageFilter::Author, torrent.meta.authors) }}</div>
+  <div>{{ items(DuplicatePageFilter::Narrator, torrent.meta.narrators) }}</div>
+  <div>{{ series(DuplicatePageFilter::Series, torrent.meta.series) }}</div>
   <div>{{ torrent.meta.size }}</div>
-  <div>{{ self::items(DuplicatePageFilter::Filetype, torrent.meta.filetypes) }}</div>
+  <div>{{ items(DuplicatePageFilter::Filetype, torrent.meta.filetypes) }}</div>
   <div></div>
   <div>{{ self::time(torrent.created_at) }}</div>
   <div><a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a></div>
   <div></div>
   <div>duplicate of:</div>
-  <div>{{ self::item(DuplicatePageFilter::Title, duplicate_of.meta.title) }}</div>
-  <div>{{ self::items(DuplicatePageFilter::Author, duplicate_of.meta.authors) }}</div>
-  <div>{{ self::items(DuplicatePageFilter::Narrator, duplicate_of.meta.narrators) }}</div>
-  <div>{{ self::series(DuplicatePageFilter::Series, duplicate_of.meta.series) }}</div>
+  <div>{{ item(DuplicatePageFilter::Title, duplicate_of.meta.title) }}</div>
+  <div>{{ items(DuplicatePageFilter::Author, duplicate_of.meta.authors) }}</div>
+  <div>{{ items(DuplicatePageFilter::Narrator, duplicate_of.meta.narrators) }}</div>
+  <div>{{ series(DuplicatePageFilter::Series, duplicate_of.meta.series) }}</div>
   <div>{{ duplicate_of.meta.size }}</div>
-  <div>{{ self::items(DuplicatePageFilter::Filetype, duplicate_of.meta.filetypes) }}</div>
+  <div>{{ items(DuplicatePageFilter::Filetype, duplicate_of.meta.filetypes) }}</div>
   <div {% if let Some(path) = duplicate_of.library_path %}title="{{ path.to_string_lossy() }}"{% endif %}>
     {{ duplicate_of.library_path.is_some().to_string() }}
   </div>
