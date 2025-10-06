@@ -152,7 +152,11 @@ pub async fn torrents_page(
                 TorrentsPageSort::Title => a.meta.title.cmp(&b.meta.title),
                 TorrentsPageSort::Authors => a.meta.authors.cmp(&b.meta.authors),
                 TorrentsPageSort::Narrators => a.meta.narrators.cmp(&b.meta.narrators),
-                TorrentsPageSort::Series => a.meta.series.cmp(&b.meta.series),
+                TorrentsPageSort::Series => a
+                    .meta
+                    .series
+                    .cmp(&b.meta.series)
+                    .then(a.meta.main_cat.cmp(&b.meta.main_cat)),
                 TorrentsPageSort::Language => a.meta.language.cmp(&b.meta.language),
                 TorrentsPageSort::Size => a.meta.size.cmp(&b.meta.size),
                 TorrentsPageSort::Linked => a.library_path.cmp(&b.library_path),
