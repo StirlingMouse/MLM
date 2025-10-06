@@ -129,7 +129,7 @@ pub async fn link_torrents_to_library(
                                 let rw = db.rw_transaction()?;
                                 rw.upsert(t)?;
                                 rw.commit()?;
-                            } else if t.library_mismatch != None {
+                            } else if t.library_mismatch.is_some() {
                                 t.library_mismatch = None;
                                 let rw = db.rw_transaction()?;
                                 rw.upsert(t)?;
@@ -494,7 +494,12 @@ pub fn library_dir(
     meta: &TorrentMeta,
 ) -> Option<PathBuf> {
     let author = meta.authors.first()?;
-    let mut dir = match meta.series.first() {
+    let mut dir = match meta
+        .series
+        .iter()
+        .find(|s| !s.entries.0.is_empty())
+        .or(meta.series.first())
+    {
         Some(series) => {
             PathBuf::from(author)
                 .join(&series.name)
