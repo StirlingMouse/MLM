@@ -526,6 +526,11 @@ async fn grab_torrent(
         "Grabbing torrent \"{}\", with category {:?} and tags {:?}",
         torrent.meta.title, torrent.category, torrent.tags,
     );
+
+    let torrent_file_bytes = mam.get_torrent_file(&torrent.dl_link).await?;
+    let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
+    let hash = torrent_file.info_hash();
+
     let mut wedged = false;
     if torrent.cost == TorrentCost::UseWedge || torrent.cost == TorrentCost::TryWedge {
         info!("Using wedge on torrent \"{}\"", torrent.meta.title);
@@ -552,10 +557,18 @@ async fn grab_torrent(
                 }
             }
         }
+    } else if torrent.cost != TorrentCost::Ratio {
+        let Some(torrent_info) = mam.get_torrent_info(&hash).await? else {
+            return Err(anyhow::Error::msg("Could not get torrent from MaM"));
+        };
+        if !torrent_info.is_free() {
+            return Err(anyhow::Error::msg(format!(
+                "Torrent is no longer free, expected: {:?}",
+                torrent.cost
+            )));
+        }
     }
-    let torrent_file_bytes = mam.get_torrent_file(&torrent.dl_link).await?;
-    let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
-    let hash = torrent_file.info_hash();
+
     qbit.add_torrent(AddTorrent {
         torrents: AddTorrentType::Files(vec![TorrentFile {
             filename: format!("{}.torrent", torrent.mam_id),
