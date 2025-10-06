@@ -140,8 +140,8 @@
   </form>
   <form method=post class=row style="justify-content:flex-start">
     Category: <select name=category>
-      {% for cat in qbit.categories.keys() %}
-        <option {% if cat == &qbit.torrent.category %}selected{% endif %}>{{ cat }}</option>
+      {% for cat in qbit.categories %}
+        <option {% if &cat.name == &qbit.torrent.category %}selected{% endif %}>{{ cat.name }}</option>
       {% endfor %}
     </select>
     Tags: <div class=option_group>

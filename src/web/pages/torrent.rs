@@ -11,6 +11,7 @@ use axum::{
     response::{Html, Redirect},
 };
 use axum_extra::extract::Form;
+use itertools::Itertools;
 use native_db::Database;
 use qbit::{
     models::{Category, Torrent as QbitTorrent, Tracker},
@@ -62,7 +63,8 @@ pub async fn torrent_page(
     let mut wanted_path = None;
     if let Some((qbit_torrent, qbit)) = qbittorrent::get_torrent(&config, &torrent.hash).await? {
         let trackers = qbit.trackers(&torrent.hash).await?;
-        let categories = qbit.categories().await?;
+        let mut categories = qbit.categories().await?.into_values().collect_vec();
+        categories.sort_by(|a, b| a.name.cmp(&b.name));
         let tags = qbit.tags().await?;
 
         wanted_path = find_library(&config, &qbit_torrent).and_then(|library| {
@@ -230,7 +232,7 @@ impl Page for TorrentPageTemplate {}
 struct QbitData {
     torrent: QbitTorrent,
     trackers: Vec<Tracker>,
-    categories: HashMap<String, Category>,
+    categories: Vec<Category>,
     tags: Vec<String>,
     torrent_tags: BTreeSet<String>,
 }
