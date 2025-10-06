@@ -166,8 +166,6 @@ async fn app_main() -> Result<()> {
         .extract()?;
     let config = Arc::new(config);
 
-    info!("config: {config:#?}");
-
     let db = native_db::Builder::new().create(&data::MODELS, database_file)?;
     data::migrate(&db)?;
     // export_db(&db)?;
