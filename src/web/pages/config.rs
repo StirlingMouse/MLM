@@ -10,9 +10,10 @@ use axum_extra::extract::Form;
 use native_db::Database;
 use reqwest::Url;
 use serde::Deserialize;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{
+    autograbber::update_torrent_meta,
     config::{Config, Cost, Library, TorrentFilter, Type},
     data::{AudiobookCategory, EbookCategory, Torrent},
     mam::DATE_FORMAT,
@@ -69,8 +70,14 @@ pub async fn config_page_post(
                             return Err(anyhow::Error::msg("mam_id error").into());
                         };
                         let Some(mam_torrent) = mam.get_torrent_info(&torrent.hash).await? else {
+                            warn!("could not get torrent from mam");
                             continue;
                         };
+                        let new_meta = mam_torrent.as_meta()?;
+                        if new_meta != torrent.meta {
+                            let rw = db.rw_transaction()?;
+                            update_torrent_meta(&db, rw, torrent.clone(), new_meta)?;
+                        }
                         if !tag_filter.filter.matches(&mam_torrent) {
                             continue;
                         }
@@ -91,7 +98,7 @@ pub async fn config_page_post(
                         tag_filter.tags.iter().map(Deref::deref).collect(),
                     )
                     .await?;
-                    println!(
+                    info!(
                         "set tags {:?} on torrent {}",
                         tag_filter.tags, torrent.meta.title
                     );
