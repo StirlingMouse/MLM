@@ -35,21 +35,26 @@ pub async fn torrent_page(
     Path(hash): Path<String>,
 ) -> std::result::Result<Html<String>, AppError> {
     let abs = config.audiobookshelf.as_ref().map(Abs::new);
-    let Some(torrent) = db.r_transaction()?.get().primary::<Torrent>(hash)? else {
+    let Some(mut torrent) = db.r_transaction()?.get().primary::<Torrent>(hash)? else {
         return Err(AppError::NotFound);
     };
     let replacement_torrent = torrent
         .replaced_with
         .as_ref()
         .map(|(hash, _)| {
-            Ok::<_, native_db::db_type::Error>(
-                db.r_transaction()?
-                    .get()
-                    .primary::<Torrent>(hash.to_string())?,
-            )
+            db.r_transaction()?
+                .get()
+                .primary::<Torrent>(hash.to_string())
         })
         .transpose()?
         .flatten();
+
+    if replacement_torrent.is_none() && torrent.replaced_with.is_some() {
+        let rw = db.rw_transaction()?;
+        torrent.replaced_with = None;
+        rw.upsert(torrent.clone())?;
+        rw.commit()?;
+    }
     let book = match abs {
         Some(abs) => abs?.get_book(&torrent).await?,
         None => None,
@@ -94,7 +99,6 @@ pub async fn torrent_page(
     );
     println!("qbit: {:?}", qbit_data);
 
-    let mut torrent = torrent;
     if qbit_data.is_none() && torrent.client_status != Some(ClientStatus::NotInClient) {
         let rw = db.rw_transaction()?;
         torrent.client_status = Some(ClientStatus::NotInClient);
