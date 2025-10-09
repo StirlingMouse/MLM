@@ -46,9 +46,8 @@ use tokio::{
     sync::{Mutex, watch},
     time::sleep,
 };
-use tracing::{error, info};
+use tracing::error;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
-use tracing_panic::panic_hook;
 use tracing_subscriber::{
     EnvFilter, Layer as _, fmt::time::LocalTime, layer::SubscriberExt as _,
     util::SubscriberInitExt as _,
@@ -126,7 +125,8 @@ async fn app_main() -> Result<()> {
                 )
         }))
         .try_init()?;
-    std::panic::set_hook(Box::new(panic_hook));
+    #[cfg(target_family = "windows")]
+    std::panic::set_hook(Box::new(tracing_panic::panic_hook));
 
     let config_file = env::var("MLM_CONFIG_FILE")
         .map(PathBuf::from)
