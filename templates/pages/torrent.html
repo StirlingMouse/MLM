@@ -6,6 +6,12 @@
 <div class="row">
   <h1>{{ torrent.meta.title }}</h1>
 </div>
+<div class="row">
+  id: {{ torrent.mam_id }}
+  <form method=post>
+    <button name=action value=remove data-prompt="Are you sure you want to remove this torrents?">remove torrent from MLM</button>
+  </form>
+</div>
 <p>By {{ items(TorrentsPageFilter::Author, torrent.meta.authors) }}</p>
 {% if !torrent.meta.series.is_empty() %}
   <p>Series: {{ series(TorrentsPageFilter::Series, torrent.meta.series) }}</p>
@@ -28,7 +34,6 @@
     <form method=post>
       <button name=action value=refresh-relink>refresh metadata and relink</button>
       <button name=action value=clean data-prompt="Are you sure you want to clean this torrent?">clean torrent</button>
-      <button name=action value=remove data-prompt="Are you sure you want to remove this torrents?">remove torrent from MLM</button>
     </form>
   </div>
 {% endif %}
