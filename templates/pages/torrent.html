@@ -2,6 +2,15 @@
 
 {% block title %}MLM - {{ torrent.meta.title }}{% endblock %}
 
+{% block head %}
+  <style>
+    .EventsTable {
+      {{self::table_styles(2) | safe}}
+      grid-template-columns: auto 1fr;
+    }
+  </style>
+{% endblock %}
+
 {% block content %}
 <div class="row">
   <h1>{{ torrent.meta.title }}</h1>
@@ -217,4 +226,69 @@
   {% endif %}
 {% endif %}
 {% endif %}
+
+<details>
+  <summary>Events</summary>
+
+  <div class="EventsTable table">
+  {% for event in events %}
+    <div>{{ self::time(event.created_at) }}</div>
+    <div>
+    {% match event.event %}
+    {% when EventType::Grabbed { cost, wedged } %}
+      Grabbed Torrent
+      {% if wedged %} using a wedge
+      {% else %}{% match cost %}
+        {% when Some(TorrentCost::Vip) %} as VIP
+        {% when Some(TorrentCost::GlobalFreeleech) %} as Freeleech
+        {% when Some(TorrentCost::PersonalFreeleech) %} as Personal Freeleech
+        {% when Some(_) %} using ratio
+        {% when _ %}{% endmatch %}{% endif %}<br />
+    {% when EventType::Linked { library_path } %}
+      Linked Torrent<br />
+      to: {{ library_path.to_string_lossy() }}<br />
+      <details>
+        <summary>files</summary>
+        <ul>
+        {% for file in torrent.library_files.iter().flatten() %}
+          <li>{{ file.to_string_lossy() }}</li>
+        {% endfor %}
+        </ul>
+      </details>
+    {% when EventType::Cleaned { library_path, files } %}
+      Cleaned Torrent<br />
+      size: {{ torrent.meta.size }}<br />
+      formats: {{ torrent.meta.filetypes.join(", ") }}<br />
+      from: {{ library_path.to_string_lossy() }}<br />
+      {% if let Some(replacement) = replacement_torrent %}
+      <br />replaced with: {{ torrent_title(&replacement_torrent) | safe }}<br />
+      size: {{ replacement.meta.size }}<br />
+      formats: {{ replacement.meta.filetypes.join(", ") }}<br />
+      {% if let Some(library_path) = replacement.library_path %}
+      in: {{ library_path.to_string_lossy() }}<br />
+      {% endif %}
+      {% endif %}<br />
+      Removed files:
+      <ul>
+      {% for file in files %}
+        <li>{{ file.to_string_lossy() }}</li>
+      {% endfor %}
+      </ul>
+    {% when EventType::Updated { fields } %}
+      Updated Torrent<br />
+      <ul>
+      {% for field in fields %}
+        <li>{{ field.field }}: {{ field.from }} -> {{ field.to }}</li>
+      {% endfor %}
+      </ul>
+    {% when EventType::RemovedFromMam %}
+      Torrent was removed from MaM<br />
+    {% endmatch %}
+    </div>
+  {% endfor %}
+  {% if events.is_empty() %}
+  <p><i>No events yet</i>
+  {% endif %}
+  </div>
+</details>
 {% endblock %}

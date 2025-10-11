@@ -18,11 +18,14 @@ use crate::{
     audiobookshelf::{Abs, LibraryItemMinified},
     cleaner::clean_torrent,
     config::Config,
-    data::{ClientStatus, Size, Torrent, TorrentMeta},
+    data::{ClientStatus, Event, EventKey, EventType, Size, Torrent, TorrentCost, TorrentMeta},
     linker::{find_library, library_dir, refresh_metadata_relink},
     mam::MaMTorrent,
     qbittorrent::{self},
-    web::{AppError, MaMState, Page, pages::torrents::TorrentsPageFilter},
+    web::{
+        AppError, Conditional, MaMState, Page, TorrentLink, pages::torrents::TorrentsPageFilter,
+        tables::table_styles, time,
+    },
 };
 
 pub async fn torrent_page(
@@ -54,6 +57,21 @@ pub async fn torrent_page(
         Some(abs) => abs?.get_book(&torrent).await?,
         None => None,
     };
+
+    let events = db
+        .r_transaction()?
+        .scan()
+        .secondary::<Event>(EventKey::created_at)?;
+    let events = events.all()?.rev();
+    let events = events
+        .filter(|t| {
+            let Ok(t) = t else {
+                return true;
+            };
+            t.hash.as_deref() == Some(&torrent.hash)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
     let Ok(mam) = mam.as_ref() else {
         return Err(anyhow::Error::msg("mam_id error").into());
     };
@@ -109,6 +127,7 @@ pub async fn torrent_page(
             .unwrap_or_default(),
         torrent,
         replacement_torrent,
+        events,
         book,
         mam_torrent,
         mam_meta,
@@ -241,11 +260,23 @@ struct TorrentPageTemplate {
     abs_url: String,
     torrent: Torrent,
     replacement_torrent: Option<Torrent>,
+    events: Vec<Event>,
     book: Option<LibraryItemMinified>,
     mam_torrent: Option<MaMTorrent>,
     mam_meta: Option<TorrentMeta>,
     qbit_data: Option<QbitData>,
     wanted_path: Option<PathBuf>,
+}
+
+impl TorrentPageTemplate {
+    fn torrent_title<'a>(&'a self, torrent: &'a Option<Torrent>) -> Conditional<TorrentLink<'a>> {
+        Conditional {
+            template: torrent.as_ref().map(|t| TorrentLink {
+                hash: &t.hash,
+                title: &t.meta.title,
+            }),
+        }
+    }
 }
 
 impl Page for TorrentPageTemplate {

@@ -71,8 +71,8 @@
         <li>{{ file.to_string_lossy() }}</li>
       {% endfor %}
       </ul>
-      {% endif %}
     </details>
+    {% endif %}
   {% when EventType::Cleaned { library_path, files } %}
     Cleaned {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}<br />
     {% if let Some(torrent) = torrent %}

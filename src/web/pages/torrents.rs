@@ -9,7 +9,6 @@ use axum::{
     response::{Html, Redirect},
 };
 use axum_extra::extract::Form;
-use itertools::Itertools as _;
 use native_db::Database;
 use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
