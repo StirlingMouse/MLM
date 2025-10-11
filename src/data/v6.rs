@@ -82,7 +82,7 @@ pub struct TorrentMeta {
     pub series: Vec<(String, String)>,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AudiobookCategory {
     ActionAdventure,
     Art,
@@ -121,7 +121,7 @@ pub enum AudiobookCategory {
     YoungAdult,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EbookCategory {
     ActionAdventure,
     Art,
@@ -164,7 +164,7 @@ pub enum EbookCategory {
     YoungAdult,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Category {
     Audio(AudiobookCategory),
     Ebook(EbookCategory),

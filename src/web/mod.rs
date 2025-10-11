@@ -42,8 +42,9 @@ use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
     config::{Config, Filter},
-    data::{AudiobookCategory, EbookCategory, Series, Timestamp},
+    data::{AudiobookCategory, EbookCategory, Series, Timestamp, TorrentMeta},
     mam::{DATE_FORMAT, MaM, MetaError},
+    mam_enums::Flags,
     stats::{Stats, Triggers},
 };
 
@@ -269,6 +270,21 @@ impl<'a> HtmlSafe for FilterTemplate<'a> {}
 
 fn filter<'a>(filter: &'a Filter) -> FilterTemplate<'a> {
     FilterTemplate { filter }
+}
+
+#[derive(Template)]
+#[template(path = "partials/flag_icons.html")]
+pub struct FlagIconsTemplate {
+    flags: Flags,
+}
+impl HtmlSafe for FlagIconsTemplate {}
+
+impl TorrentMeta {
+    pub fn flag_icons(&self) -> FlagIconsTemplate {
+        FlagIconsTemplate {
+            flags: Flags::from_bitfield(self.flags.map_or(0, |f| f.0)),
+        }
+    }
 }
 
 /// ```askama

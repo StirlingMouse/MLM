@@ -9,6 +9,7 @@ use axum::{
     response::{Html, Redirect},
 };
 use axum_extra::extract::Form;
+use itertools::Itertools as _;
 use native_db::Database;
 use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
@@ -62,7 +63,21 @@ pub async fn torrents_page(
                         if value.is_empty() {
                             t.meta.cat.is_none()
                         } else if let Some(cat) = &t.meta.cat {
-                            cat.as_str() == value
+                            let cats = value
+                                .split(",")
+                                .filter_map(|id| id.parse().ok())
+                                .filter_map(Category::from_one_id)
+                                .collect::<Vec<_>>();
+                            cats.contains(cat) || cat.as_str() == value
+                        } else {
+                            false
+                        }
+                    }
+                    TorrentsPageFilter::Flags => {
+                        if value.is_empty() {
+                            t.meta.flags.is_none_or(|f| f.0 == 0)
+                        // } else if let Some(cat) = &t.meta.cat {
+                        //     cat.as_str() == value
                         } else {
                             false
                         }
@@ -148,6 +163,11 @@ pub async fn torrents_page(
         torrents.sort_by(|a, b| {
             let ord = match sort_by {
                 TorrentsPageSort::Kind => a.meta.main_cat.cmp(&b.meta.main_cat),
+                TorrentsPageSort::Category => a
+                    .meta
+                    .cat
+                    .partial_cmp(&b.meta.cat)
+                    .unwrap_or(std::cmp::Ordering::Less),
                 TorrentsPageSort::Title => a.meta.title.cmp(&b.meta.title),
                 TorrentsPageSort::Authors => a.meta.authors.cmp(&b.meta.authors),
                 TorrentsPageSort::Narrators => a.meta.narrators.cmp(&b.meta.narrators),
@@ -264,6 +284,7 @@ impl Page for TorrentsPageTemplate {}
 #[serde(rename_all = "lowercase")]
 pub enum TorrentsPageSort {
     Kind,
+    Category,
     Title,
     Authors,
     Narrators,
@@ -281,6 +302,7 @@ impl Key for TorrentsPageSort {}
 pub enum TorrentsPageFilter {
     Kind,
     Category,
+    Flags,
     Title,
     Author,
     Narrator,
@@ -305,6 +327,8 @@ impl Key for TorrentsPageFilter {}
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(try_from = "String")]
 struct TorrentsPageColumns {
+    category: bool,
+    flags: bool,
     authors: bool,
     narrators: bool,
     series: bool,
@@ -322,6 +346,8 @@ pub struct TorrentsPageColumnsQuery {
 impl Default for TorrentsPageColumns {
     fn default() -> Self {
         TorrentsPageColumns {
+            category: false,
+            flags: false,
             authors: true,
             narrators: true,
             series: true,
@@ -338,6 +364,8 @@ impl TryFrom<String> for TorrentsPageColumns {
 
     fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
         let mut columns = TorrentsPageColumns {
+            category: false,
+            flags: false,
             authors: false,
             narrators: false,
             series: false,
@@ -348,6 +376,8 @@ impl TryFrom<String> for TorrentsPageColumns {
         };
         for column in value.split(",") {
             match column {
+                "category" => columns.category = true,
+                "flags" => columns.flags = true,
                 "author" => columns.authors = true,
                 "narrator" => columns.narrators = true,
                 "series" => columns.series = true,

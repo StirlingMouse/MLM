@@ -161,6 +161,12 @@ summary {
         display: flex;
         gap: 4px;
 
+        & > div {
+                display: flex;
+                gap: 4px;
+                flex-wrap: wrap;
+        }
+
         label {
                 padding: 2px 4px;
                 background: var(--above);

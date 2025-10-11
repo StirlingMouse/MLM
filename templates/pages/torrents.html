@@ -21,6 +21,15 @@
   <div class="table_options">
     <div class="option_group query">
       Columns:
+      <div>
+      <label>
+        Category
+        <input type=checkbox name=show {% if show.category %}checked{% endif %} value="category">
+      </label>
+      <label>
+        Flags
+        <input type=checkbox name=show {% if show.flags %}checked{% endif %} value="flags">
+      </label>
       <label>
         Authors
         <input type=checkbox name=show {% if show.authors %}checked{% endif %} value="author">
@@ -49,6 +58,7 @@
         Path
         <input type=checkbox name=show {% if show.path %}checked{% endif %} value="path">
       </label>
+      </div>
     </div>
     <div class="option_group query">
       Page size: {{ paging.selector([100, 500, 1000, 5000]) | safe }}
@@ -64,7 +74,12 @@
 </div>
 <div class="TorrentsTable table">
   {{ table_header_all("torrent", "30px") | safe }}
+  {% if show.category %}
+  {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", "130px") }}
+  {% else %}
   {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", "84px") }}
+  {% endif %}
+  {{ table_header_if(show.flags, None, "Flags", "60px") }}
   {{ table_header_s(Some(TorrentsPageSort::Title), "Title", "2fr") }}
   {{ table_header_if(show.authors, Some(TorrentsPageSort::Authors), "Authors", "1fr") }}
   {{ table_header_if(show.narrators, Some(TorrentsPageSort::Narrators), "Narrators", "1fr") }}
@@ -78,7 +93,17 @@
   {{ table_header_s(None, "", "132px") }}
 {% for torrent in torrents %}
   <div><input type=checkbox name=torrent value={{torrent.hash}}></div>
-  <div><span title="{{ torrent.cat_name() }}">{{ item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</span></div>
+  <div>
+    <span title="{{ torrent.cat_name() }}">{{ item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</span>
+    {% if show.category %}
+    {% if let Some(cat) = torrent.meta.cat %}
+    <div>{{ item_v(TorrentsPageFilter::Category, torrent.cat_name(), &cat.as_id().to_string()) }}</div>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% if show.flags %}
+  <div>{{ torrent.meta.flag_icons() }}</div>
+  {% endif %}
   <div>
     {{ item(TorrentsPageFilter::Title, torrent.meta.title) }}
     {% match torrent.client_status %}

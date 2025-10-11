@@ -60,10 +60,23 @@ impl Category {
         }
     }
 
+    pub fn from_one_id(category: u64) -> Option<Category> {
+        AudiobookCategory::from_id(category)
+            .map(Category::Audio)
+            .or_else(|| EbookCategory::from_id(category).map(Category::Ebook))
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Category::Audio(cat) => cat.to_str(),
             Category::Ebook(cat) => cat.to_str(),
+        }
+    }
+
+    pub fn as_id(&self) -> u8 {
+        match self {
+            Category::Audio(cat) => cat.to_id(),
+            Category::Ebook(cat) => cat.to_id(),
         }
     }
 }

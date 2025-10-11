@@ -1,9 +1,4 @@
-use std::{
-    collections::{BTreeSet, HashMap},
-    ops::Deref,
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{collections::BTreeSet, ops::Deref, path::PathBuf, sync::Arc};
 
 use askama::Template;
 use axum::{
