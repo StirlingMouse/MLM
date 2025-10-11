@@ -124,6 +124,11 @@ impl Filter {
             if !self.languages.is_empty() && !self.languages.contains(language) {
                 return Ok(false);
             }
+        } else {
+            ensure!(
+                self.languages.is_empty(),
+                "has language selection and no stored language"
+            );
         }
         if let Some(cat) = &torrent.meta.cat {
             match cat {
@@ -132,7 +137,7 @@ impl Filter {
                         .categories
                         .audio
                         .as_ref()
-                        .is_none_or(|cats| !cats.contains(category))
+                        .is_some_and(|cats| !cats.contains(category))
                     {
                         return Ok(false);
                     }
@@ -142,7 +147,7 @@ impl Filter {
                         .categories
                         .ebook
                         .as_ref()
-                        .is_none_or(|cats| !cats.contains(category))
+                        .is_some_and(|cats| !cats.contains(category))
                     {
                         return Ok(false);
                     }
@@ -261,7 +266,10 @@ impl Library {
 mod tests {
     use time::macros::date;
 
-    use crate::data::AudiobookCategory;
+    use crate::{
+        data::{AudiobookCategory, FlagBits, Timestamp, TorrentMeta},
+        mam_enums::Categories,
+    };
 
     use super::*;
 
@@ -329,5 +337,759 @@ mod tests {
             ..Default::default()
         };
         assert!(filter.matches(&torrent));
+    }
+
+    mod filter_matches {
+        use super::*;
+
+        fn create_default_torrent() -> MaMTorrent {
+            MaMTorrent {
+                id: 1,
+                added: "2023-01-20 10:00:00".to_string(),
+                browseflags: Flags {
+                    violence: Some(true),
+                    ..Default::default()
+                }
+                .as_bitfield(),
+                category: AudiobookCategory::GeneralFiction.to_id() as u64,
+                language: Language::English.to_id(),
+                leechers: 5,
+                owner_name: "TestUploader".to_string(),
+                seeders: 50,
+                size: "5 GiB".to_string(),
+                times_completed: 10,
+                title: "Test Torrent".to_string(),
+                ..Default::default()
+            }
+        }
+
+        #[test]
+        fn test_default_filter_matches_all() {
+            let filter = Filter::default();
+            let torrent = create_default_torrent();
+            assert!(
+                filter.matches(&torrent),
+                "A default filter should match a default torrent."
+            );
+        }
+
+        // --- Category Filtering ---
+        #[test]
+        fn test_category_match() {
+            let filter = Filter {
+                categories: Categories {
+                    audio: Some(vec![AudiobookCategory::GeneralFiction]),
+                    ebook: Some(vec![]),
+                },
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(filter.matches(&torrent), "Should match category");
+        }
+
+        #[test]
+        fn test_category_no_match() {
+            let filter = Filter {
+                categories: Categories {
+                    audio: Some(vec![AudiobookCategory::GeneralNonFic]),
+                    ebook: Some(vec![]),
+                },
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(!filter.matches(&torrent), "Should not match category");
+        }
+
+        // --- Language Filtering ---
+        #[test]
+        fn test_language_match() {
+            let filter = Filter {
+                languages: vec![Language::English, Language::German],
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(filter.matches(&torrent), "Should match English language.");
+        }
+
+        #[test]
+        fn test_language_no_match() {
+            let filter = Filter {
+                languages: vec![Language::French, Language::German],
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(
+                !filter.matches(&torrent),
+                "Should not match, filter only contains French/German."
+            );
+        }
+
+        #[test]
+        fn test_language_parse_fail() {
+            let filter = Filter {
+                languages: vec![Language::French],
+                ..Filter::default()
+            };
+            let mut torrent = create_default_torrent();
+            torrent.language = 99; // Invalid Language
+            assert!(
+                !filter.matches(&torrent),
+                "Should not match if language ID cannot be mapped when a language filter is active."
+            );
+        }
+
+        // --- Flags Filtering ---
+        #[test]
+        fn test_flags_match() {
+            let filter = Filter {
+                flags: Flags {
+                    violence: Some(true),
+                    ..Default::default()
+                },
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(
+                filter.matches(&torrent),
+                "Should match if torrent has the required flag."
+            );
+        }
+
+        #[test]
+        fn test_flags_no_match() {
+            let filter = Filter {
+                flags: Flags {
+                    explicit: Some(true),
+                    ..Default::default()
+                },
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(
+                !filter.matches(&torrent),
+                "Should not match if torrent is missing a required flag."
+            );
+        }
+
+        // --- Size Filtering ---
+        #[test]
+        fn test_min_size_match() {
+            let filter = Filter {
+                min_size: Size::from_bytes(1_000_000_000),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(
+                filter.matches(&torrent),
+                "Torrent size 5GB should be >= 1GB min size."
+            );
+        }
+
+        #[test]
+        fn test_min_size_no_match() {
+            let filter = Filter {
+                min_size: Size::from_bytes(10_000_000_000),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(
+                !filter.matches(&torrent),
+                "Torrent size 5GB should be < 10GB min size."
+            );
+        }
+
+        #[test]
+        fn test_max_size_match() {
+            let filter = Filter {
+                max_size: Size::from_bytes(10_000_000_000),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(
+                filter.matches(&torrent),
+                "Torrent size 5GB should be <= 10GB max size."
+            );
+        }
+
+        #[test]
+        fn test_max_size_no_match() {
+            let filter = Filter {
+                max_size: Size::from_bytes(1_000_000_000),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(
+                !filter.matches(&torrent),
+                "Torrent size 5GB should be > 1GB max size."
+            );
+        }
+
+        #[test]
+        fn test_size_parsing_failure() {
+            let filter = Filter {
+                min_size: Size::from_bytes(1),
+                ..Filter::default()
+            };
+            let mut torrent = create_default_torrent();
+            torrent.size = "INVALID_SIZE".to_string();
+            assert!(
+                !filter.matches(&torrent),
+                "Should fail if torrent size cannot be parsed when size filter is active."
+            );
+        }
+
+        // --- Uploader Exclusion ---
+        #[test]
+        fn test_uploader_excluded() {
+            let filter = Filter {
+                exclude_uploader: vec!["BadUploader".to_string(), "TestUploader".to_string()],
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(
+                !filter.matches(&torrent),
+                "Should fail if uploader is in the exclusion list."
+            );
+        }
+
+        #[test]
+        fn test_uploader_not_excluded() {
+            let filter = Filter {
+                exclude_uploader: vec!["BadUploader".to_string()],
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(
+                filter.matches(&torrent),
+                "Should pass if uploader is not in the exclusion list."
+            );
+        }
+
+        // --- Date Filtering ---
+        #[test]
+        fn test_uploaded_after_match() {
+            let filter = Filter {
+                uploaded_after: Some(date!(2023 - 01 - 15)),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(
+                filter.matches(&torrent),
+                "2023-01-20 should be >= 2023-01-15"
+            );
+        }
+
+        #[test]
+        fn test_uploaded_after_no_match() {
+            let filter = Filter {
+                uploaded_after: Some(date!(2023 - 01 - 25)),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(
+                !filter.matches(&torrent),
+                "2023-01-20 should be < 2023-01-25"
+            );
+        }
+
+        #[test]
+        fn test_uploaded_before_match() {
+            let filter = Filter {
+                uploaded_before: Some(date!(2023 - 01 - 25)),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(
+                filter.matches(&torrent),
+                "2023-01-20 should be <= 2023-01-25"
+            );
+        }
+
+        #[test]
+        fn test_uploaded_before_no_match() {
+            let filter = Filter {
+                uploaded_before: Some(date!(2023 - 01 - 15)),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(
+                !filter.matches(&torrent),
+                "2023-01-20 should be > 2023-01-15"
+            );
+        }
+
+        #[test]
+        fn test_date_parsing_failure() {
+            let filter = Filter {
+                uploaded_after: Some(date!(2023 - 01 - 25)),
+                ..Filter::default()
+            };
+            let mut torrent = create_default_torrent();
+            torrent.added = "INVALID_DATE".to_string();
+            assert!(
+                !filter.matches(&torrent),
+                "Should fail if the torrent's 'added' date cannot be parsed when date filter is active."
+            );
+        }
+
+        // --- Seeder, Leecher, Snatched Filtering (Stats) ---
+        // Torrent defaults: seeders: 50, leechers: 5, times_completed: 10
+        #[test]
+        fn test_min_seeders_match() {
+            let filter = Filter {
+                min_seeders: Some(40),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent(); // seeders: 50
+            assert!(filter.matches(&torrent), "50 seeders should be >= 40.");
+        }
+
+        #[test]
+        fn test_min_seeders_no_match() {
+            let filter = Filter {
+                min_seeders: Some(60),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent(); // seeders: 50
+            assert!(!filter.matches(&torrent), "50 seeders should be < 60.");
+        }
+
+        #[test]
+        fn test_max_seeders_match() {
+            let filter = Filter {
+                max_seeders: Some(60),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent(); // seeders: 50
+            assert!(filter.matches(&torrent), "50 seeders should be <= 60.");
+        }
+
+        #[test]
+        fn test_max_seeders_no_match() {
+            let filter = Filter {
+                max_seeders: Some(40),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent(); // seeders: 50
+            assert!(!filter.matches(&torrent), "50 seeders should be > 40.");
+        }
+
+        #[test]
+        fn test_min_leechers_match() {
+            let filter = Filter {
+                min_leechers: Some(5),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent(); // leechers: 5
+            assert!(filter.matches(&torrent), "5 leechers should be >= 5.");
+        }
+
+        #[test]
+        fn test_max_leechers_no_match() {
+            let filter = Filter {
+                max_leechers: Some(4),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent(); // leechers: 5
+            assert!(!filter.matches(&torrent), "5 leechers should be > 4.");
+        }
+
+        #[test]
+        fn test_min_snatched_match() {
+            let filter = Filter {
+                min_snatched: Some(10),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent(); // times_completed: 10
+            assert!(filter.matches(&torrent), "10 completions should be >= 10.");
+        }
+
+        #[test]
+        fn test_max_snatched_no_match() {
+            let filter = Filter {
+                max_snatched: Some(9),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent(); // times_completed: 10
+            assert!(!filter.matches(&torrent), "10 completions should be > 9.");
+        }
+
+        // --- Combined Tests ---
+        #[test]
+        fn test_combined_success() {
+            let filter = Filter {
+                categories: Categories {
+                    audio: Some(vec![AudiobookCategory::GeneralFiction]),
+                    ebook: Some(vec![]),
+                },
+                languages: vec![Language::English],
+                flags: Flags {
+                    violence: Some(true),
+                    ..Default::default()
+                },
+                min_size: Size::from_bytes(1_000_000_000),
+                max_size: Size::from_bytes(10_000_000_000),
+                exclude_uploader: vec!["OtherUploader".to_string()],
+                uploaded_after: Some(date!(2023 - 01 - 15)),
+                min_seeders: Some(40),
+                max_leechers: Some(10),
+                ..Filter::default()
+            };
+            let torrent = create_default_torrent();
+            assert!(
+                filter.matches(&torrent),
+                "Should pass when all filters are met."
+            );
+        }
+    }
+
+    mod filter_matches_lib {
+        use super::*;
+
+        fn create_torrent_with_meta(meta: TorrentMeta) -> Torrent {
+            Torrent {
+                meta,
+
+                hash: "".to_string(),
+                mam_id: 0,
+                abs_id: None,
+                library_path: None,
+                library_files: vec![],
+                selected_audio_format: None,
+                selected_ebook_format: None,
+                title_search: "".to_string(),
+                created_at: Timestamp::now(),
+                replaced_with: None,
+                request_matadata_update: false,
+                library_mismatch: None,
+                client_status: None,
+            }
+        }
+
+        fn default_meta() -> TorrentMeta {
+            TorrentMeta {
+                mam_id: 0,
+                main_cat: MainCat::Audio,
+                cat: None,
+                language: None,
+                flags: None,
+                filetypes: vec![],
+                size: Size::from_bytes(0),
+                title: "".to_string(),
+                authors: vec![],
+                narrators: vec![],
+                series: vec![],
+            }
+        }
+
+        fn create_filter_with_audio_cats(cats: Option<Vec<AudiobookCategory>>) -> Filter {
+            Filter {
+                categories: Categories {
+                    audio: cats,
+                    ..Default::default()
+                },
+                ..Default::default()
+            }
+        }
+
+        // --- Language Filtering Tests ---
+        #[test]
+        fn test_lang_match_ok_true() {
+            let filter = Filter {
+                languages: vec![Language::English, Language::French],
+                ..Default::default()
+            };
+            let torrent = create_torrent_with_meta(TorrentMeta {
+                language: Some(Language::English),
+                ..default_meta()
+            });
+            assert!(filter.matches_lib(&torrent).unwrap());
+        }
+
+        #[test]
+        fn test_lang_mismatch_ok_false() {
+            let filter = Filter {
+                languages: vec![Language::French],
+                ..Default::default()
+            };
+            let torrent = create_torrent_with_meta(TorrentMeta {
+                language: Some(Language::English),
+                ..default_meta()
+            });
+            assert!(!filter.matches_lib(&torrent).unwrap());
+        }
+
+        #[test]
+        fn test_lang_filter_active_torrent_none_err() {
+            let filter = Filter {
+                languages: vec![Language::English],
+                ..Default::default()
+            };
+            let torrent = create_torrent_with_meta(TorrentMeta {
+                language: None,
+                ..default_meta()
+            });
+            // Should return Err due to `ensure!` failing
+            assert!(filter.matches_lib(&torrent).is_err());
+            assert!(
+                filter
+                    .matches_lib(&torrent)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("has language selection and no stored language")
+            );
+        }
+
+        #[test]
+        fn test_lang_filter_inactive_torrent_none_ok_true() {
+            let filter = Filter {
+                languages: vec![],
+                ..Default::default()
+            };
+            let torrent = create_torrent_with_meta(TorrentMeta {
+                language: None,
+                ..default_meta()
+            });
+            assert!(filter.matches_lib(&torrent).unwrap());
+        }
+
+        // --- Category Filtering Tests ---
+        #[test]
+        fn test_audio_cat_match_ok_true() {
+            let filter =
+                create_filter_with_audio_cats(Some(vec![AudiobookCategory::GeneralFiction]));
+            let torrent = create_torrent_with_meta(TorrentMeta {
+                cat: Some(Category::Audio(AudiobookCategory::GeneralFiction)),
+                ..default_meta()
+            });
+            assert!(filter.matches_lib(&torrent).unwrap());
+        }
+
+        #[test]
+        fn test_audio_cat_mismatch_ok_false() {
+            let filter =
+                create_filter_with_audio_cats(Some(vec![AudiobookCategory::GeneralNonFic]));
+            let torrent = create_torrent_with_meta(TorrentMeta {
+                cat: Some(Category::Audio(AudiobookCategory::GeneralFiction)),
+                ..default_meta()
+            });
+            assert!(!filter.matches_lib(&torrent).unwrap());
+        }
+
+        #[test]
+        fn test_cat_filter_inactive_torrent_has_cat_ok_true() {
+            let filter = Filter::default();
+            let torrent = create_torrent_with_meta(TorrentMeta {
+                cat: Some(Category::Audio(AudiobookCategory::GeneralNonFic)),
+                ..default_meta()
+            });
+            assert!(filter.matches_lib(&torrent).unwrap());
+        }
+
+        #[test]
+        fn test_no_cat_and_filter_empty_set_audio_ok_false() {
+            let filter = create_filter_with_audio_cats(Some(vec![]));
+            let torrent = create_torrent_with_meta(TorrentMeta {
+                cat: None,
+                main_cat: MainCat::Audio, // Main category matches
+                ..default_meta()
+            });
+            assert!(
+                !filter.matches_lib(&torrent).unwrap(),
+                "Should return false for Audio main-cat with no sub-cat, when filter has an empty set of audio categories."
+            );
+        }
+
+        #[test]
+        fn test_no_cat_and_filter_active_err() {
+            let filter =
+                create_filter_with_audio_cats(Some(vec![AudiobookCategory::GeneralFiction]));
+            let torrent = create_torrent_with_meta(TorrentMeta {
+                cat: None,
+                main_cat: MainCat::Audio,
+                ..default_meta()
+            });
+            assert!(filter.matches_lib(&torrent).is_err());
+            assert!(
+                filter
+                    .matches_lib(&torrent)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("has advanced audio selection and no stored category")
+            );
+        }
+
+        // --- Flags Filtering Tests ---
+        #[test]
+        fn test_flags_match_ok_true() {
+            let filter = Filter {
+                flags: Flags {
+                    violence: Some(true),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let torrent = create_torrent_with_meta(TorrentMeta {
+                flags: Some(FlagBits::new(
+                    Flags {
+                        violence: Some(true),
+                        explicit: Some(true),
+                        ..Default::default()
+                    }
+                    .as_bitfield(),
+                )),
+                ..default_meta()
+            });
+            assert!(filter.matches_lib(&torrent).unwrap());
+        }
+
+        #[test]
+        fn test_flags_mismatch_ok_false() {
+            let filter = Filter {
+                flags: Flags {
+                    explicit: Some(true),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let torrent = create_torrent_with_meta(TorrentMeta {
+                flags: Some(FlagBits::new(
+                    Flags {
+                        violence: Some(true),
+                        ..Default::default()
+                    }
+                    .as_bitfield(),
+                )),
+                ..default_meta()
+            });
+            assert!(!filter.matches_lib(&torrent).unwrap());
+        }
+
+        #[test]
+        fn test_flags_filter_active_torrent_none_err() {
+            let filter = Filter {
+                flags: Flags {
+                    violence: Some(true),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let torrent = create_torrent_with_meta(TorrentMeta {
+                flags: None,
+                ..default_meta()
+            });
+            assert!(filter.matches_lib(&torrent).is_err());
+            assert!(
+                filter
+                    .matches_lib(&torrent)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("has flags selection and no stored flags")
+            );
+        }
+
+        // --- Disallowed Filter Checks (Ensure) ---
+        #[test]
+        fn test_disallowed_min_size_err() {
+            let filter = Filter {
+                min_size: Size::from_bytes(1),
+                ..Default::default()
+            };
+            let torrent = create_torrent_with_meta(default_meta());
+            assert!(filter.matches_lib(&torrent).is_err());
+            assert!(
+                filter
+                    .matches_lib(&torrent)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("has min_size")
+            );
+        }
+
+        #[test]
+        fn test_disallowed_exclude_uploader_err() {
+            let filter = Filter {
+                exclude_uploader: vec!["test".to_string()],
+                ..Default::default()
+            };
+            let torrent = create_torrent_with_meta(default_meta());
+            assert!(filter.matches_lib(&torrent).is_err());
+            assert!(
+                filter
+                    .matches_lib(&torrent)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("has exclude_uploader")
+            );
+        }
+
+        #[test]
+        fn test_disallowed_uploaded_after_err() {
+            let filter = Filter {
+                uploaded_after: Some(date!(2023 - 01 - 15)),
+                ..Default::default()
+            };
+            let torrent = create_torrent_with_meta(default_meta());
+            assert!(filter.matches_lib(&torrent).is_err());
+            assert!(
+                filter
+                    .matches_lib(&torrent)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("has uploaded_after")
+            );
+        }
+
+        #[test]
+        fn test_disallowed_max_seeders_err() {
+            let filter = Filter {
+                max_seeders: Some(100),
+                ..Default::default()
+            };
+            let torrent = create_torrent_with_meta(default_meta());
+            assert!(filter.matches_lib(&torrent).is_err());
+            assert!(
+                filter
+                    .matches_lib(&torrent)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("has max_seeders")
+            );
+        }
+
+        // --- Full Success Case ---
+        #[test]
+        fn test_full_success_match() {
+            let filter = Filter {
+                languages: vec![Language::English],
+                categories: Categories {
+                    audio: Some(vec![AudiobookCategory::GeneralFiction]),
+                    ebook: None,
+                },
+                flags: Flags {
+                    crude_language: Some(true),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let torrent = create_torrent_with_meta(TorrentMeta {
+                language: Some(Language::English),
+                cat: Some(Category::Audio(AudiobookCategory::GeneralFiction)),
+                main_cat: MainCat::Audio,
+                flags: Some(FlagBits::new(
+                    Flags {
+                        crude_language: Some(true),
+                        explicit: Some(true),
+                        ..Default::default()
+                    }
+                    .as_bitfield(),
+                )),
+                ..default_meta()
+            });
+            assert!(
+                filter.matches_lib(&torrent).unwrap(),
+                "Torrent should pass all checks when all allowed filter criteria match."
+            );
+        }
     }
 }
