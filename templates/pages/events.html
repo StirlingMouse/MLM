@@ -65,7 +65,7 @@
     to: {{ library_path.to_string_lossy() }}<br />
     {% if let Some(torrent) = torrent %}
     <details>
-      <summary>files</summary>
+      <summary>Files</summary>
       <ul>
       {% for file in torrent.library_files.iter().flatten() %}
         <li>{{ file.to_string_lossy() }}</li>
@@ -90,12 +90,14 @@
     in: {{ library_path.to_string_lossy() }}<br />
     {% endif %}
     {% endif %}<br />
-    Removed files:
-    <ul>
-    {% for file in files %}
-      <li>{{ file.to_string_lossy() }}</li>
-    {% endfor %}
-    </ul>
+    <details>
+      <summary>Removed files</summary>
+      <ul>
+      {% for file in files %}
+        <li>{{ file.to_string_lossy() }}</li>
+      {% endfor %}
+      </ul>
+    </details>
   {% when EventType::Updated { fields } %}
     Updated {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}<br />
     <ul>
