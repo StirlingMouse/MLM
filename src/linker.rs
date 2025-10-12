@@ -3,6 +3,7 @@ use std::os::unix::fs::MetadataExt as _;
 #[cfg(target_family = "windows")]
 use std::os::windows::fs::MetadataExt as _;
 use std::{
+    collections::BTreeMap,
     fs::{self, File, Metadata, create_dir_all},
     io::{BufWriter, ErrorKind, Write},
     path::{Component, Path, PathBuf},
@@ -205,6 +206,7 @@ async fn match_torrent(
 
     link_torrent(
         &config,
+        qbit.0,
         &db,
         hash,
         torrent,
@@ -304,10 +306,10 @@ pub async fn refresh_metadata_relink(
         let Some(t) = torrents.pop() else {
             continue;
         };
-        torrent.replace((qbit, t));
+        torrent.replace((qbit_conf, qbit, t));
         break;
     }
-    let Some((qbit, qbit_torrent)) = torrent else {
+    let Some((qbit_conf, qbit, qbit_torrent)) = torrent else {
         bail!("Could not find torrent in qbit");
     };
     let Some(library) = find_library(config, &qbit_torrent) else {
@@ -332,6 +334,7 @@ pub async fn refresh_metadata_relink(
     remove_library_files(&torrent)?;
     link_torrent(
         config,
+        qbit_conf,
         db,
         &hash,
         &qbit_torrent,
@@ -352,6 +355,7 @@ pub async fn refresh_metadata_relink(
 #[allow(clippy::too_many_arguments)]
 async fn link_torrent(
     config: &Config,
+    qbit_config: &QbitConfig,
     db: &Database<'_>,
     hash: &str,
     torrent: &QbitTorrent,
@@ -408,7 +412,8 @@ async fn link_torrent(
         };
         let library_path = dir.join(&file_path);
         library_files.push(file_path.clone());
-        let download_path = PathBuf::from(&torrent.save_path).join(&file.name);
+        let download_path =
+            map_path(&qbit_config.path_mapping, &torrent.save_path).join(&file.name);
         match library.method() {
             LibraryLinkMethod::Hardlink => hard_link(&download_path, &library_path, &file_path)?,
             LibraryLinkMethod::HardlinkOrCopy => {
@@ -463,6 +468,21 @@ async fn link_torrent(
     );
 
     Ok(())
+}
+
+fn map_path(path_mapping: &BTreeMap<PathBuf, PathBuf>, save_path: &str) -> PathBuf {
+    let mut path = PathBuf::from(save_path);
+    for (from, to) in path_mapping.iter().rev() {
+        if path.starts_with(from) {
+            let mut components = path.components();
+            for _ in from {
+                components.next();
+            }
+            path = to.join(components.as_path());
+            break;
+        }
+    }
+    path
 }
 
 pub fn find_library<'a>(config: &'a Config, torrent: &QbitTorrent) -> Option<&'a Library> {
@@ -602,4 +622,41 @@ pub fn file_size(m: &Metadata) -> u64 {
     return m.size();
     #[cfg(target_family = "windows")]
     return m.file_size();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_map_path() {
+        let mut mappings = BTreeMap::new();
+        mappings.insert(PathBuf::from("/downloads"), PathBuf::from("/books"));
+        mappings.insert(
+            PathBuf::from("/downloads/audiobooks"),
+            PathBuf::from("/audiobooks"),
+        );
+        mappings.insert(PathBuf::from("/audiobooks"), PathBuf::from("/audiobooks"));
+
+        assert_eq!(
+            map_path(&mappings, "/downloads/torrent"),
+            PathBuf::from("/books/torrent")
+        );
+        assert_eq!(
+            map_path(&mappings, "/downloads/audiobooks/torrent"),
+            PathBuf::from("/audiobooks/torrent")
+        );
+        assert_eq!(
+            map_path(&mappings, "/downloads/audiobooks/torrent/deep"),
+            PathBuf::from("/audiobooks/torrent/deep")
+        );
+        assert_eq!(
+            map_path(&mappings, "/audiobooks/torrent"),
+            PathBuf::from("/audiobooks/torrent")
+        );
+        assert_eq!(
+            map_path(&mappings, "/ebooks/torrent"),
+            PathBuf::from("/ebooks/torrent")
+        );
+    }
 }

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 use time::Date;
@@ -196,6 +196,8 @@ pub struct QbitConfig {
     #[serde(default)]
     pub password: String,
     pub on_cleaned: Option<QbitOnCleaned>,
+    #[serde(default)]
+    pub path_mapping: BTreeMap<PathBuf, PathBuf>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
