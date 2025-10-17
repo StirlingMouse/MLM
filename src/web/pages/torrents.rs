@@ -1,3 +1,4 @@
+use std::mem;
 use std::str::FromStr;
 use std::{cell::RefCell, sync::Arc};
 
@@ -45,6 +46,10 @@ pub async fn torrents_page(
         .iter()
         .find(|(field, _)| field == &TorrentsPageFilter::Query)
         .and_then(|(_, value)| if value.is_empty() { None } else { Some(value) });
+    let metadata = filter
+        .iter()
+        .find(|(field, _)| field == &TorrentsPageFilter::Metadata)
+        .and_then(|(_, value)| if value.is_empty() { None } else { Some(value) });
     let show = show.show.unwrap_or_default();
 
     let mut torrents = torrents
@@ -82,11 +87,33 @@ pub async fn torrents_page(
                         }
                     }
                     TorrentsPageFilter::Title => &t.meta.title == value,
-                    TorrentsPageFilter::Author => t.meta.authors.contains(value),
-                    TorrentsPageFilter::Narrator => t.meta.narrators.contains(value),
-                    TorrentsPageFilter::Series => t.meta.series.iter().any(|s| &s.name == value),
+                    TorrentsPageFilter::Author => {
+                        if value.is_empty() {
+                            t.meta.authors.is_empty()
+                        } else {
+                            t.meta.authors.contains(value)
+                        }
+                    }
+                    TorrentsPageFilter::Narrator => {
+                        if value.is_empty() {
+                            t.meta.narrators.is_empty()
+                        } else {
+                            t.meta.narrators.contains(value)
+                        }
+                    }
+                    TorrentsPageFilter::Series => {
+                        if value.is_empty() {
+                            t.meta.series.is_empty()
+                        } else {
+                            t.meta.series.iter().any(|s| &s.name == value)
+                        }
+                    }
                     TorrentsPageFilter::Language => {
-                        t.meta.language == Language::from_str(value).ok()
+                        if value.is_empty() {
+                            t.meta.language.is_none()
+                        } else {
+                            t.meta.language == Language::from_str(value).ok()
+                        }
                     }
                     TorrentsPageFilter::Filetype => t.meta.filetypes.contains(value),
                     TorrentsPageFilter::Linked => t.library_path.is_some() == (value == "true"),
@@ -114,6 +141,7 @@ pub async fn torrents_page(
                     },
                     TorrentsPageFilter::Abs => t.abs_id.is_some() == (value == "true"),
                     TorrentsPageFilter::Query => true,
+                    TorrentsPageFilter::Metadata => true,
                     TorrentsPageFilter::SortBy => true,
                     TorrentsPageFilter::Asc => true,
                     TorrentsPageFilter::Show => true,
@@ -149,15 +177,87 @@ pub async fn torrents_page(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
+    if sort.sort_by.is_none() && query.is_some() {
+        torrents.sort_by_key(|(_, score)| -*score);
+    }
+    let mut torrents = torrents.into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+    if let Some(metadata) = metadata {
+        match metadata.as_str() {
+            "title" => {
+                torrents.sort_by(|a, b| a.title_search.cmp(&b.title_search));
+                let mut batch: Vec<Torrent> = vec![];
+                let mut new_torrents: Vec<Torrent> = vec![];
+                for torrent in torrents {
+                    if let Some(current) = batch.first() {
+                        if current.title_search != torrent.title_search {
+                            if batch.len() > 1
+                                && !batch.iter().all(|t| t.meta.title == current.meta.title)
+                            {
+                                new_torrents.extend(mem::take(&mut batch));
+                            } else {
+                                batch.clear();
+                            }
+                        }
+                        batch.push(torrent);
+                    } else {
+                        batch.push(torrent);
+                    }
+                }
+                torrents = new_torrents;
+            }
+            "authors" => {
+                torrents.sort_by(|a, b| a.title_search.cmp(&b.title_search));
+                let mut batch: Vec<Torrent> = vec![];
+                let mut new_torrents: Vec<Torrent> = vec![];
+                for torrent in torrents {
+                    if let Some(current) = batch.first() {
+                        if current.title_search != torrent.title_search {
+                            if batch.len() > 1
+                                && !batch.iter().all(|t| t.meta.authors == current.meta.authors)
+                            {
+                                new_torrents.extend(mem::take(&mut batch));
+                            } else {
+                                batch.clear();
+                            }
+                        }
+                        batch.push(torrent);
+                    } else {
+                        batch.push(torrent);
+                    }
+                }
+                torrents = new_torrents;
+            }
+            "series" => {
+                torrents.sort_by(|a, b| a.title_search.cmp(&b.title_search));
+                let mut batch: Vec<Torrent> = vec![];
+                let mut new_torrents: Vec<Torrent> = vec![];
+                for torrent in torrents {
+                    if let Some(current) = batch.first() {
+                        if current.title_search != torrent.title_search {
+                            if batch.len() > 1
+                                && !batch.iter().all(|t| t.meta.series == current.meta.series)
+                            {
+                                new_torrents.extend(mem::take(&mut batch));
+                            } else {
+                                batch.clear();
+                            }
+                        }
+                        batch.push(torrent);
+                    } else {
+                        batch.push(torrent);
+                    }
+                }
+                torrents = new_torrents;
+            }
+            _ => return Err(anyhow::Error::msg("Unknown metadata filter").into()),
+        }
+    }
+
     let paging = match paging.default_page_size(uri, 500, torrents.len()) {
         Ok(paging) => paging,
         Err(redirect) => return Ok(redirect.into_response()),
     };
 
-    if sort.sort_by.is_none() && query.is_some() {
-        torrents.sort_by_key(|(_, score)| -*score);
-    }
-    let mut torrents = torrents.into_iter().map(|(t, _)| t).collect::<Vec<_>>();
     if let Some(sort_by) = &sort.sort_by {
         torrents.sort_by(|a, b| {
             let ord = match sort_by {
@@ -313,6 +413,7 @@ pub enum TorrentsPageFilter {
     ClientStatus,
     Abs,
     Query,
+    Metadata,
     // Workaround sort decode failure
     SortBy,
     Asc,
