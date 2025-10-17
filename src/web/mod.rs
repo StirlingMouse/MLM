@@ -100,13 +100,16 @@ pub async fn start_webserver(
         )
         .route(
             "/replaced",
-            get(replaced_torrents_page).with_state(db.clone()),
+            get(replaced_torrents_page).with_state((config.clone(), db.clone())),
         )
         .route(
             "/replaced",
             post(replaced_torrents_page_post).with_state((config.clone(), db.clone(), mam.clone())),
         )
-        .route("/duplicate", get(duplicate_page).with_state(db.clone()))
+        .route(
+            "/duplicate",
+            get(duplicate_page).with_state((config.clone(), db.clone())),
+        )
         .route(
             "/duplicate",
             post(duplicate_torrents_page_post).with_state((

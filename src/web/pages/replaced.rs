@@ -27,7 +27,7 @@ use crate::{
 };
 
 pub async fn replaced_torrents_page(
-    State(db): State<Arc<Database<'static>>>,
+    State((config, db)): State<(Arc<Config>, Arc<Database<'static>>)>,
     uri: OriginalUri,
     Query(sort): Query<SortOn<TorrentsPageSort>>,
     Query(filter): Query<Vec<(TorrentsPageFilter, String)>>,
@@ -120,6 +120,7 @@ pub async fn replaced_torrents_page(
     }
 
     let template = ReplacedTorrentsPageTemplate {
+        abs_url: config.audiobookshelf.as_ref().map(|abs| abs.url.clone()),
         paging: paging.unwrap_or_default(),
         sort,
         show: show.show.unwrap_or_default(),
@@ -179,6 +180,7 @@ pub struct TorrentsPageForm {
 #[derive(Template)]
 #[template(path = "pages/replaced.html")]
 struct ReplacedTorrentsPageTemplate {
+    abs_url: Option<String>,
     paging: Pagination,
     sort: SortOn<TorrentsPageSort>,
     show: TorrentsPageColumns,

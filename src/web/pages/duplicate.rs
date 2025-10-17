@@ -26,7 +26,7 @@ use crate::{
 };
 
 pub async fn duplicate_page(
-    State(db): State<Arc<Database<'static>>>,
+    State((config, db)): State<(Arc<Config>, Arc<Database<'static>>)>,
     Query(sort): Query<SortOn<DuplicatePageSort>>,
     Query(filter): Query<Vec<(DuplicatePageFilter, String)>>,
 ) -> std::result::Result<Html<String>, AppError> {
@@ -81,7 +81,11 @@ pub async fn duplicate_page(
         };
         torrents.push((torrent, duplicate));
     }
-    let template = DuplicatePageTemplate { sort, torrents };
+    let template = DuplicatePageTemplate {
+        abs_url: config.audiobookshelf.as_ref().map(|abs| abs.url.clone()),
+        sort,
+        torrents,
+    };
     Ok::<_, AppError>(Html(template.to_string()))
 }
 
@@ -244,6 +248,7 @@ pub struct TorrentsPageForm {
 #[derive(Template)]
 #[template(path = "pages/duplicate.html")]
 struct DuplicatePageTemplate {
+    abs_url: Option<String>,
     sort: SortOn<DuplicatePageSort>,
     torrents: Vec<(DuplicateTorrent, Torrent)>,
 }

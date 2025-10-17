@@ -56,7 +56,13 @@
     {{ duplicate_of.library_path.is_some().to_string() }}
   </div>
   <div>{{ self::time(duplicate_of.created_at) }}</div>
-  <div><a href="https://www.myanonamouse.net/t/{{ duplicate_of.meta.mam_id }}" target=_blank>MaM</a></div>
+  <div>
+    <a href="/torrents/{{ duplicate_of.hash }}">open</a>
+    <a href="https://www.myanonamouse.net/t/{{ duplicate_of.meta.mam_id }}" target=_blank>MaM</a>
+    {% if let (Some(abs_url), Some(abs_id)) = (abs_url.as_ref(), duplicate_of.abs_id.as_ref()) %}
+      <a href="{{ abs_url }}/audiobookshelf/item/{{ abs_id }}" target=_blank>ABS</a>
+    {% endif %}
+  </div>
 {% endfor %}
 {% if torrents.is_empty() %}
 <p><i>There are currently no duplicate torrents</i>
