@@ -1,6 +1,13 @@
-use std::{ops::RangeInclusive, sync::Arc, time::Duration};
+use std::{
+    fs::File,
+    io::{BufWriter, Write as _},
+    ops::RangeInclusive,
+    sync::Arc,
+    time::Duration,
+};
 
 use crate::{
+    audiobookshelf::{self as abs, Abs},
     config::{Config, Cost, SortBy, TorrentFilter, Type},
     data::{
         self, DuplicateTorrent, ErroredTorrentId, Event, EventType, SelectedTorrent, Timestamp,
@@ -17,7 +24,7 @@ use itertools::Itertools as _;
 use lava_torrent::torrent::v1::Torrent;
 use native_db::{Database, db_type, transaction::RwTransaction};
 use qbit::parameters::{AddTorrent, AddTorrentType, TorrentFile};
-use tokio::{sync::watch::Sender, time::sleep};
+use tokio::{fs, sync::watch::Sender, time::sleep};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 #[instrument(skip_all)]
@@ -351,7 +358,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 .next();
             if let Some(old) = old_library.transpose()? {
                 if old.meta != meta {
-                    update_torrent_meta(db, rw_opt.unwrap(), old, meta)?;
+                    update_torrent_meta(config, db, rw_opt.unwrap(), &torrent, old, meta).await?;
                 }
                 continue 'torrent;
             }
@@ -423,7 +430,8 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             for old in old_library {
                 if old.meta.mam_id == meta.mam_id {
                     if old.meta != meta {
-                        update_torrent_meta(db, rw_opt.unwrap(), old, meta)?;
+                        update_torrent_meta(config, db, rw_opt.unwrap(), &torrent, old, meta)
+                            .await?;
                     }
                     continue 'torrent;
                 }
@@ -636,9 +644,11 @@ async fn grab_torrent(
     Ok(())
 }
 
-pub fn update_torrent_meta(
+pub async fn update_torrent_meta(
+    config: &Config,
     db: &Database<'_>,
     rw: RwTransaction<'_>,
+    mam_torrent: &MaMTorrent,
     torrent: data::Torrent,
     meta: TorrentMeta,
 ) -> Result<()> {
@@ -653,9 +663,36 @@ pub fn update_torrent_meta(
             .join("\n")
     );
     let mut torrent = torrent;
-    torrent.meta = meta;
-    rw.upsert(torrent)?;
+    torrent.meta = meta.clone();
+    rw.upsert(torrent.clone())?;
     rw.commit()?;
+
+    if let Some(library_path) = &torrent.library_path {
+        if let serde_json::Value::Object(new) = abs::create_metadata(mam_torrent, &meta) {
+            let metadata_path = library_path.join("metadata.json");
+            if metadata_path.exists() {
+                let existing = fs::read_to_string(&metadata_path).await?;
+                let mut existing: serde_json::Map<String, serde_json::Value> =
+                    serde_json::from_str(&existing)?;
+                for (key, value) in new {
+                    existing.insert(key, value);
+                }
+                let file = File::create(&metadata_path)?;
+                let mut writer = BufWriter::new(file);
+                serde_json::to_writer(&mut writer, &serde_json::Value::Object(existing))?;
+                writer.flush()?;
+                debug!("updated ABS metadata file {}", torrent.meta.mam_id);
+            }
+            if let (Some(abs_id), Some(abs_config)) = (&torrent.abs_id, &config.audiobookshelf) {
+                let abs = Abs::new(abs_config)?;
+                match abs.update_book(abs_id, mam_torrent, &meta).await {
+                    Ok(_) => debug!("updated ABS via API {}", torrent.meta.mam_id),
+                    Err(err) => warn!("Failed updating book {} in abs: {err}", torrent.meta.mam_id),
+                }
+            }
+        }
+    }
+
     write_event(
         db,
         Event::new(

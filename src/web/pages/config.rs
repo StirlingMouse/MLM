@@ -76,7 +76,15 @@ pub async fn config_page_post(
                         let new_meta = mam_torrent.as_meta()?;
                         if new_meta != torrent.meta {
                             let rw = db.rw_transaction()?;
-                            update_torrent_meta(&db, rw, torrent.clone(), new_meta)?;
+                            update_torrent_meta(
+                                &config,
+                                &db,
+                                rw,
+                                &mam_torrent,
+                                torrent.clone(),
+                                new_meta,
+                            )
+                            .await?;
                         }
                         if !tag_filter.filter.matches(&mam_torrent) {
                             continue;

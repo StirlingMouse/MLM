@@ -243,34 +243,16 @@ pub async fn refresh_metadata(
     };
     let meta = mam_torrent.as_meta().context("as_meta")?;
 
-    let metadata = abs::create_metadata(&mam_torrent, &meta);
-    if let (Some(library_path), serde_json::Value::Object(new)) = (&torrent.library_path, metadata)
-    {
-        let metadata_path = library_path.join("metadata.json");
-        if metadata_path.exists() {
-            let existing = fs::read_to_string(&metadata_path)?;
-            let mut existing: serde_json::Map<String, serde_json::Value> =
-                serde_json::from_str(&existing)?;
-            for (key, value) in new {
-                existing.insert(key, value);
-            }
-            let file = File::create(&metadata_path)?;
-            let mut writer = BufWriter::new(file);
-            serde_json::to_writer(&mut writer, &serde_json::Value::Object(existing))?;
-            writer.flush()?;
-            debug!("updated ABS metadata file {}", torrent.meta.mam_id);
-        }
-        if let (Some(abs_id), Some(abs_config)) = (&torrent.abs_id, &config.audiobookshelf) {
-            let abs = Abs::new(abs_config)?;
-            match abs.update_book(abs_id, &mam_torrent, &meta).await {
-                Ok(_) => debug!("updated ABS via API {}", torrent.meta.mam_id),
-                Err(err) => warn!("Failed updating book {} in abs: {err}", torrent.meta.mam_id),
-            }
-        }
-    }
-
     if torrent.meta != meta {
-        update_torrent_meta(db, db.rw_transaction()?, torrent.clone(), meta.clone())?;
+        update_torrent_meta(
+            config,
+            db,
+            db.rw_transaction()?,
+            &mam_torrent,
+            torrent.clone(),
+            meta.clone(),
+        )
+        .await?;
         torrent.meta = meta;
     }
     Ok((torrent, mam_torrent))
