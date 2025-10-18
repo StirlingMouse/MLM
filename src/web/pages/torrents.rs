@@ -249,6 +249,66 @@ pub async fn torrents_page(
                 }
                 torrents = new_torrents;
             }
+            "leading" => {
+                fn remove_leading(title: &str) -> &str {
+                    title
+                        .strip_prefix("the ")
+                        .or_else(|| title.strip_prefix("a "))
+                        .unwrap_or(title)
+                }
+                torrents.sort_by(|a, b| {
+                    remove_leading(&a.title_search).cmp(remove_leading(&b.title_search))
+                });
+                let mut batch: Vec<Torrent> = vec![];
+                let mut new_torrents: Vec<Torrent> = vec![];
+                for torrent in torrents {
+                    if let Some(current) = batch.first() {
+                        if remove_leading(&current.title_search)
+                            != remove_leading(&torrent.title_search)
+                        {
+                            if batch.len() > 1
+                                && !batch.iter().all(|t| t.meta.title == current.meta.title)
+                            {
+                                new_torrents.extend(mem::take(&mut batch));
+                            } else {
+                                batch.clear();
+                            }
+                        }
+                        batch.push(torrent);
+                    } else {
+                        batch.push(torrent);
+                    }
+                }
+                torrents = new_torrents;
+            }
+            "subtitle" => {
+                fn subtitle(title: &str) -> &str {
+                    let Some((title, _subtitle)) = title.split_once(':') else {
+                        return title;
+                    };
+                    title
+                }
+                torrents.sort_by(|a, b| subtitle(&a.title_search).cmp(subtitle(&b.title_search)));
+                let mut batch: Vec<Torrent> = vec![];
+                let mut new_torrents: Vec<Torrent> = vec![];
+                for torrent in torrents {
+                    if let Some(current) = batch.first() {
+                        if subtitle(&current.title_search) != subtitle(&torrent.title_search) {
+                            if batch.len() > 1
+                                && !batch.iter().all(|t| t.meta.title == current.meta.title)
+                            {
+                                new_torrents.extend(mem::take(&mut batch));
+                            } else {
+                                batch.clear();
+                            }
+                        }
+                        batch.push(torrent);
+                    } else {
+                        batch.push(torrent);
+                    }
+                }
+                torrents = new_torrents;
+            }
             _ => return Err(anyhow::Error::msg("Unknown metadata filter").into()),
         }
     }
