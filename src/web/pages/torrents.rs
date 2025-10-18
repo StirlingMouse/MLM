@@ -321,7 +321,7 @@ pub async fn torrents_page_post(
                 let Some(torrent) = db.r_transaction()?.get().primary(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };
-                clean_torrent(&config, &db, torrent).await?;
+                clean_torrent(&config, &db, torrent, true).await?;
             }
         }
         "refresh" => {
@@ -329,7 +329,7 @@ pub async fn torrents_page_post(
                 return Err(anyhow::Error::msg("mam_id error").into());
             };
             for torrent in form.torrents {
-                refresh_metadata(&db, mam, torrent).await?;
+                refresh_metadata(&config, &db, mam, torrent).await?;
             }
         }
         "refresh-relink" => {

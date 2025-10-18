@@ -148,7 +148,7 @@ pub async fn torrent_page_post(
             let Some(torrent) = db.r_transaction()?.get().primary(hash)? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
-            clean_torrent(&config, &db, torrent).await?;
+            clean_torrent(&config, &db, torrent, true).await?;
         }
         "refresh-relink" => {
             let Ok(mam) = mam.as_ref() else {

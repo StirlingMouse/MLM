@@ -2,9 +2,10 @@ use std::{fs, io::ErrorKind, mem, ops::Deref, sync::Arc};
 
 use anyhow::Result;
 use native_db::Database;
-use tracing::{debug, info, instrument, trace};
+use tracing::{debug, info, instrument, trace, warn};
 
 use crate::{
+    audiobookshelf::Abs,
     config::Config,
     data::{self, ErroredTorrentId, Event, EventType, Timestamp, Torrent},
     linker::file_size,
@@ -127,9 +128,14 @@ async fn process_batch(
             debug!("main_cat: {:?}", remove.meta.main_cat);
             debug!("authors: {:?}", remove.meta.authors);
             debug!("narrators: {:?}", remove.meta.narrators);
-            let result = clean_torrent(config, db, remove.clone())
-                .await
-                .map_err(|err| anyhow::Error::new(TorrentMetaError(remove.meta.clone(), err)));
+            let result = clean_torrent(
+                config,
+                db,
+                remove.clone(),
+                keep.library_path.is_some() && keep.library_path != remove.library_path,
+            )
+            .await
+            .map_err(|err| anyhow::Error::new(TorrentMetaError(remove.meta.clone(), err)));
             update_errored_torrent(
                 db,
                 ErroredTorrentId::Cleaner(remove.hash),
@@ -143,7 +149,12 @@ async fn process_batch(
 }
 
 #[instrument(skip_all)]
-pub async fn clean_torrent(config: &Config, db: &Database<'_>, mut remove: Torrent) -> Result<()> {
+pub async fn clean_torrent(
+    config: &Config,
+    db: &Database<'_>,
+    mut remove: Torrent,
+    delete_in_abs: bool,
+) -> Result<()> {
     for qbit_conf in config.qbittorrent.iter() {
         if let Some(on_cleaned) = &qbit_conf.on_cleaned {
             let qbit = qbit::Api::new_login_username_password(
@@ -169,7 +180,7 @@ pub async fn clean_torrent(config: &Config, db: &Database<'_>, mut remove: Torre
         trace!("qbit updated");
     }
 
-    remove_library_files(&remove)?;
+    remove_library_files(config, &remove, delete_in_abs).await?;
 
     let hash = remove.hash.clone();
     let mam_id = remove.meta.mam_id;
@@ -201,7 +212,20 @@ pub async fn clean_torrent(config: &Config, db: &Database<'_>, mut remove: Torre
 }
 
 #[instrument(skip_all)]
-pub fn remove_library_files(remove: &Torrent) -> Result<()> {
+pub async fn remove_library_files(
+    config: &Config,
+    remove: &Torrent,
+    delete_in_abs: bool,
+) -> Result<()> {
+    if delete_in_abs {
+        if let (Some(abs_id), Some(abs_config)) = (&remove.abs_id, &config.audiobookshelf) {
+            let abs = Abs::new(abs_config)?;
+            if let Err(err) = abs.delete_book(abs_id).await {
+                warn!("Failed deleting book from abs: {err}");
+            }
+        }
+    }
+
     if let Some(library_path) = &remove.library_path {
         debug!("Removing library files for torrent {}", remove.meta.mam_id);
         for file in remove.library_files.iter() {

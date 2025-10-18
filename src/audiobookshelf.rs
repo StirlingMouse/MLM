@@ -4,7 +4,7 @@ use anyhow::Result;
 use axum::http::HeaderMap;
 use native_db::Database;
 use reqwest::{Url, header::AUTHORIZATION};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{debug, error, instrument, trace};
 
@@ -12,6 +12,7 @@ use crate::{
     config::AudiobookShelfConfig,
     data::{Torrent, TorrentMeta, impls::format_serie},
     mam::MaMTorrent,
+    mam_enums::Flags,
 };
 
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
@@ -430,6 +431,47 @@ pub struct MetadataSmall {
     pub explicit: bool,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize)]
+pub struct MediaUpdate<'a> {
+    metadata: MetadataUpdate<'a>,
+    // #[serde(rename = "coverPath")]
+    // pub cover_path: Option<String>,
+    // pub tags: Vec<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize)]
+pub struct MetadataUpdate<'a> {
+    pub title: &'a str,
+    pub subtitle: Option<&'a str>,
+    pub authors: Vec<AuthorUpdate<'a>>,
+    pub narrators: Vec<&'a str>,
+    pub series: Vec<SeriesUpdate<'a>>,
+
+    // pub genres: Vec<String>,
+    // #[serde(rename = "publishedYear")]
+    // pub published_year: Option<&'a str>,
+    // #[serde(rename = "publishedDate")]
+    // pub published_date: Option<&'a str>,
+    // pub publisher: Option<&'a str>,
+    pub description: Option<&'a str>,
+    pub isbn: Option<&'a str>,
+    pub asin: Option<&'a str>,
+    pub language: Option<&'a str>,
+    pub explicit: bool,
+    pub abridged: bool,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize)]
+pub struct AuthorUpdate<'a> {
+    pub name: &'a str,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize)]
+pub struct SeriesUpdate<'a> {
+    pub name: &'a str,
+    pub sequence: Option<String>,
+}
+
 // #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 // pub struct SeriesItem {
 //     pub id: String,
@@ -517,9 +559,7 @@ impl Abs {
             let mut url: Url = format!("{}/api/libraries/{}/search", self.base_url, library.id)
                 .parse()
                 .unwrap();
-            // let mut titles = torrent.meta.title.splitn(2, ":");
-            // let title = titles.next().unwrap();
-            url.query_pairs_mut().append_pair("q", &first_author);
+            url.query_pairs_mut().append_pair("q", first_author);
             let resp = self
                 .client
                 .get(url)
@@ -566,23 +606,74 @@ impl Abs {
 
         Ok(None)
     }
+
+    pub async fn update_book(
+        &self,
+        id: &str,
+        mam_torrent: &MaMTorrent,
+        meta: &TorrentMeta,
+    ) -> Result<()> {
+        let (title, subtitle) = parse_titles(meta);
+        let (isbn, asin) = parse_isbn(mam_torrent);
+
+        self.client
+            .patch(format!("{}/api/items/{id}/media", self.base_url))
+            .body(serde_json::to_string(&MediaUpdate {
+                metadata: MetadataUpdate {
+                    title,
+                    subtitle,
+                    authors: meta
+                        .authors
+                        .iter()
+                        .map(|name| AuthorUpdate { name })
+                        .collect(),
+                    series: meta
+                        .series
+                        .iter()
+                        .map(|series| SeriesUpdate {
+                            name: &series.name,
+                            sequence: if series.entries.0.is_empty() {
+                                None
+                            } else {
+                                Some(format!("{}", series.entries))
+                            },
+                        })
+                        .collect(),
+                    narrators: meta.narrators.iter().map(|name| name.as_str()).collect(),
+                    description: mam_torrent.description.as_deref(),
+                    isbn,
+                    asin,
+                    language: meta.language.map(|l| l.to_str()),
+                    explicit: meta
+                        .flags
+                        .is_some_and(|f| Flags::from_bitfield(f.0).explicit == Some(true)),
+                    abridged: meta
+                        .flags
+                        .is_some_and(|f| Flags::from_bitfield(f.0).abridged == Some(true)),
+                },
+            })?)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(())
+    }
+
+    pub async fn delete_book(&self, id: &str) -> Result<()> {
+        self.client
+            .delete(format!("{}/api/items/{id}", self.base_url))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(())
+    }
 }
 
 pub fn create_metadata(mam_torrent: &MaMTorrent, meta: &TorrentMeta) -> serde_json::Value {
-    let mut titles = mam_torrent.title.splitn(2, ":");
-    let mut title = titles.next().unwrap();
-    let mut subtitle = titles.next().map(|t| t.trim());
-    if title.len() < 4 {
-        title = &mam_torrent.title;
-        subtitle = None;
-    }
-    let isbn_raw: &str = mam_torrent.isbn.as_deref().unwrap_or("");
-    let isbn = if isbn_raw.is_empty() || isbn_raw.starts_with("ASIN:") {
-        None
-    } else {
-        Some(isbn_raw)
-    };
-    let asin = isbn_raw.strip_prefix("ASIN:");
+    let (title, subtitle) = parse_titles(meta);
+    let (isbn, asin) = parse_isbn(mam_torrent);
+    let flags = Flags::from_bitfield(meta.flags.map_or(0, |f| f.0));
 
     let metadata = json!({
         "authors": &meta.authors,
@@ -593,7 +684,36 @@ pub fn create_metadata(mam_torrent: &MaMTorrent, meta: &TorrentMeta) -> serde_js
         "description": mam_torrent.description,
         "isbn": isbn,
         "asin": asin,
+        "tags": if flags.lgbt == Some(true) { Some(vec!["LGBT"]) } else { None },
+        "genres": meta.cat.as_ref().map(|c| vec![c.as_str()]),
+        "language": meta.language.map(|l| l.to_str()),
+        "explicit": flags.explicit == Some(true),
+        "abridged": flags.abridged == Some(true),
     });
 
     metadata
+}
+
+fn parse_titles(meta: &TorrentMeta) -> (&str, Option<&str>) {
+    let mut titles = meta.title.splitn(2, ":");
+    let mut title = titles.next().unwrap();
+    let mut subtitle = titles.next().map(|t| t.trim());
+    if title.len() < 4 {
+        title = &meta.title;
+        subtitle = None;
+    }
+
+    (title, subtitle)
+}
+
+fn parse_isbn(mam_torrent: &MaMTorrent) -> (Option<&str>, Option<&str>) {
+    let isbn_raw: &str = mam_torrent.isbn.as_deref().unwrap_or("");
+    let isbn = if isbn_raw.is_empty() || isbn_raw.starts_with("ASIN:") {
+        None
+    } else {
+        Some(isbn_raw.trim())
+    };
+    let asin = isbn_raw.strip_prefix("ASIN:").map(|s| s.trim());
+
+    (isbn, asin)
 }

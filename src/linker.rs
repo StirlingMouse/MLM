@@ -20,10 +20,10 @@ use qbit::{
     parameters::TorrentListParams,
 };
 use regex::Regex;
-use tracing::{Level, debug, instrument, span, trace};
+use tracing::{Level, debug, instrument, span, trace, warn};
 
 use crate::{
-    audiobookshelf as abs,
+    audiobookshelf::{self as abs, Abs},
     autograbber::update_torrent_meta,
     cleaner::remove_library_files,
     config::{Config, Library, LibraryLinkMethod, QbitConfig},
@@ -225,6 +225,7 @@ async fn match_torrent(
 
 #[instrument(skip_all)]
 pub async fn refresh_metadata(
+    config: &Config,
     db: &Database<'_>,
     mam: &MaM<'_>,
     hash: String,
@@ -258,6 +259,13 @@ pub async fn refresh_metadata(
             serde_json::to_writer(&mut writer, &serde_json::Value::Object(existing))?;
             writer.flush()?;
             debug!("updated ABS metadata file {}", torrent.meta.mam_id);
+        }
+        if let (Some(abs_id), Some(abs_config)) = (&torrent.abs_id, &config.audiobookshelf) {
+            let abs = Abs::new(abs_config)?;
+            match abs.update_book(abs_id, &mam_torrent, &meta).await {
+                Ok(_) => debug!("updated ABS via API {}", torrent.meta.mam_id),
+                Err(err) => warn!("Failed updating book {} in abs: {err}", torrent.meta.mam_id),
+            }
         }
     }
 
@@ -330,8 +338,14 @@ pub async fn refresh_metadata_relink(
     if selected_audio_format.is_none() && selected_ebook_format.is_none() {
         bail!("Could not find any wanted formats in torrent");
     }
-    let (torrent, mam_torrent) = refresh_metadata(db, mam, hash.clone()).await?;
-    remove_library_files(&torrent)?;
+    let (torrent, mam_torrent) = refresh_metadata(config, db, mam, hash.clone()).await?;
+    let library_path_changed = torrent.library_path
+        != library_dir(
+            config.exclude_narrator_in_library_dir,
+            library,
+            &torrent.meta,
+        );
+    remove_library_files(config, &torrent, library_path_changed).await?;
     link_torrent(
         config,
         qbit_conf,

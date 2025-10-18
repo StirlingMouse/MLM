@@ -141,7 +141,7 @@ pub async fn replaced_torrents_page_post(
                 return Err(anyhow::Error::msg("mam_id error").into());
             };
             for torrent in form.torrents {
-                refresh_metadata(&db, mam, torrent).await?;
+                refresh_metadata(&config, &db, mam, torrent).await?;
             }
         }
         "refresh-relink" => {

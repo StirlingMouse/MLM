@@ -217,7 +217,7 @@ pub async fn duplicate_torrents_page_post(
                 })?;
                 rw.remove(duplicate_torrent)?;
                 rw.commit()?;
-                clean_torrent(&config, &db, duplicate_of).await?;
+                clean_torrent(&config, &db, duplicate_of, false).await?;
             }
         }
         "remove" => {
