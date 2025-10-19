@@ -187,6 +187,7 @@ pub async fn clean_torrent(
     let library_path = remove.library_path.take();
     let mut library_files = remove.library_files.clone();
     remove.library_mismatch = None;
+    remove.abs_id = None;
     library_files.sort();
     {
         let rw = db.rw_transaction()?;
@@ -265,5 +266,6 @@ pub async fn remove_library_files(
         fs::remove_dir(library_path).ok();
         trace!("files removed");
     }
+
     Ok(())
 }
