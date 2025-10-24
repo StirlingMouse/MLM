@@ -14,7 +14,8 @@ use native_db::Database;
 use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
 
-use crate::data::{Category, ClientStatus};
+use crate::data::{Category, ClientStatus, MainCat, Series, SeriesEntry};
+use crate::mam_enums::Flags;
 use crate::web::{MaMState, Page};
 use crate::{
     cleaner::clean_torrent,
@@ -80,8 +81,17 @@ pub async fn torrents_page(
                     TorrentsPageFilter::Flags => {
                         if value.is_empty() {
                             t.meta.flags.is_none_or(|f| f.0 == 0)
-                        // } else if let Some(cat) = &t.meta.cat {
-                        //     cat.as_str() == value
+                        } else if let Some(flags) = &t.meta.flags {
+                            let flags = Flags::from_bitfield(flags.0);
+                            match value.as_str() {
+                                "violence" => flags.violence == Some(true),
+                                "explicit" => flags.explicit == Some(true),
+                                "some_explicit" => flags.some_explicit == Some(true),
+                                "language" => flags.crude_language == Some(true),
+                                "abridged" => flags.abridged == Some(true),
+                                "lgbt" => flags.lgbt == Some(true),
+                                _ => false,
+                            }
                         } else {
                             false
                         }
@@ -305,6 +315,98 @@ pub async fn torrents_page(
                         batch.push(torrent);
                     } else {
                         batch.push(torrent);
+                    }
+                }
+                torrents = new_torrents;
+            }
+            "missing_ebook" => {
+                torrents.sort_by(|a, b| a.title_search.cmp(&b.title_search));
+                let mut batch: Vec<Torrent> = vec![];
+                let mut new_torrents: Vec<Torrent> = vec![];
+                for torrent in torrents {
+                    if let Some(current) = batch.first() {
+                        if current.title_search != torrent.title_search {
+                            if batch.iter().any(|t| t.meta.main_cat == MainCat::Audio)
+                                && !batch.iter().any(|t| t.meta.main_cat == MainCat::Ebook)
+                            {
+                                new_torrents.extend(mem::take(&mut batch));
+                            } else {
+                                batch.clear();
+                            }
+                        }
+                        batch.push(torrent);
+                    } else {
+                        batch.push(torrent);
+                    }
+                }
+                torrents = new_torrents;
+            }
+            "initials" => {
+                fn bunched_initials(name: &str) -> bool {
+                    let mut capital = false;
+                    for char in name.chars() {
+                        if capital && char.is_uppercase() {
+                            return true;
+                        }
+                        capital = char.is_uppercase()
+                    }
+                    false
+                }
+                torrents.retain(|t| {
+                    t.meta.authors.iter().any(|name| bunched_initials(&name))
+                        || t.meta.narrators.iter().any(|name| bunched_initials(&name))
+                });
+            }
+            "series_with_holes" => {
+                fn first_series(series: &[Series]) -> Option<&Series> {
+                    series.iter().find(|s| !s.entries.0.is_empty())
+                }
+                fn series_name(series: &[Series]) -> &str {
+                    first_series(series)
+                        .map(|s| s.name.as_str())
+                        .unwrap_or_default()
+                }
+                torrents
+                    .sort_by(|a, b| series_name(&a.meta.series).cmp(series_name(&b.meta.series)));
+                let mut batch: Vec<(Torrent, Series)> = vec![];
+                let mut new_torrents: Vec<Torrent> = vec![];
+                for torrent in torrents {
+                    let Some(series) = first_series(&torrent.meta.series) else {
+                        continue;
+                    };
+                    if let Some(current) = batch.first() {
+                        if current.1.name != series.name {
+                            if batch.iter().any(|t| t.0.library_path.is_some()) {
+                                batch.sort_by(|a, b| a.1.entries.cmp(&b.1.entries));
+                                let last = batch
+                                    .iter()
+                                    .flat_map(|s| &s.1.entries.0)
+                                    .map(|s| match s {
+                                        SeriesEntry::Num(n) => *n,
+                                        SeriesEntry::Range(_start, end) => *end,
+                                        SeriesEntry::Part(n, _) => *n,
+                                    } as i32)
+                                    .max()
+                                    .unwrap_or_default();
+                                for i in 1..=last {
+                                    if !batch
+                                        .iter()
+                                        .any(|(_, series)| series.entries.contains(i as f32))
+                                    {
+                                        new_torrents.extend(
+                                            mem::take(&mut batch).into_iter().map(|(t, _)| t),
+                                        );
+                                        break;
+                                    }
+                                }
+                            }
+                            batch.clear();
+                        }
+                        let series = series.clone();
+                        batch.push((torrent, series));
+                    } else {
+                        let series = series.clone();
+                        batch.push((torrent, series));
                     }
                 }
                 torrents = new_torrents;
