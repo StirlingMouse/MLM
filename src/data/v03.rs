@@ -1,4 +1,4 @@
-use super::{v1, v2, v4, v5, v6};
+use super::{v01, v02, v04, v05, v06};
 use native_db::{Key, ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use time::{OffsetDateTime, UtcDateTime};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 2, version = 3, from = v2::Torrent)]
+#[native_model(id = 2, version = 3, from = v02::Torrent)]
 #[native_db]
 pub struct Torrent {
     #[primary_key]
@@ -25,7 +25,7 @@ pub struct Torrent {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 3, version = 3, from = v2::SelectedTorrent)]
+#[native_model(id = 3, version = 3, from = v02::SelectedTorrent)]
 #[native_db]
 pub struct SelectedTorrent {
     #[primary_key]
@@ -41,7 +41,7 @@ pub struct SelectedTorrent {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 4, version = 3, from = v2::DuplicateTorrent)]
+#[native_model(id = 4, version = 3, from = v02::DuplicateTorrent)]
 #[native_db]
 pub struct DuplicateTorrent {
     #[primary_key]
@@ -55,11 +55,11 @@ pub struct DuplicateTorrent {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 5, version = 3, from = v2::ErroredTorrent)]
+#[native_model(id = 5, version = 3, from = v02::ErroredTorrent)]
 #[native_db]
 pub struct ErroredTorrent {
     #[primary_key]
-    pub id: v1::ErroredTorrentId,
+    pub id: v01::ErroredTorrentId,
     pub title: String,
     pub error: String,
     pub meta: Option<TorrentMeta>,
@@ -106,7 +106,7 @@ pub struct ListItem {
     pub cover_url: String,
     pub book_url: Option<String>,
     pub isbn: Option<u64>,
-    pub prefer_format: Option<v1::MainCat>,
+    pub prefer_format: Option<v01::MainCat>,
     pub audio_torrent: Option<(u64, Timestamp)>,
     pub wanted_audio_torrent: Option<(u64, Timestamp)>,
     pub ebook_torrent: Option<(u64, Timestamp)>,
@@ -130,7 +130,7 @@ pub enum EventType {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct TorrentMeta {
     pub mam_id: u64,
-    pub main_cat: v1::MainCat,
+    pub main_cat: v01::MainCat,
     pub language: Option<Language>,
     pub filetypes: Vec<String>,
     pub size: Size,
@@ -266,8 +266,8 @@ impl ToKey for Uuid {
     }
 }
 
-impl From<v2::Torrent> for Torrent {
-    fn from(t: v2::Torrent) -> Self {
+impl From<v02::Torrent> for Torrent {
+    fn from(t: v02::Torrent) -> Self {
         Self {
             hash: t.hash,
             library_path: t.library_path,
@@ -283,8 +283,8 @@ impl From<v2::Torrent> for Torrent {
     }
 }
 
-impl From<v2::SelectedTorrent> for SelectedTorrent {
-    fn from(t: v2::SelectedTorrent) -> Self {
+impl From<v02::SelectedTorrent> for SelectedTorrent {
+    fn from(t: v02::SelectedTorrent) -> Self {
         Self {
             mam_id: t.mam_id,
             dl_link: t.dl_link,
@@ -298,8 +298,8 @@ impl From<v2::SelectedTorrent> for SelectedTorrent {
     }
 }
 
-impl From<v2::DuplicateTorrent> for DuplicateTorrent {
-    fn from(t: v2::DuplicateTorrent) -> Self {
+impl From<v02::DuplicateTorrent> for DuplicateTorrent {
+    fn from(t: v02::DuplicateTorrent) -> Self {
         Self {
             mam_id: t.mam_id,
             title_search: t.title_search,
@@ -311,8 +311,8 @@ impl From<v2::DuplicateTorrent> for DuplicateTorrent {
     }
 }
 
-impl From<v2::ErroredTorrent> for ErroredTorrent {
-    fn from(t: v2::ErroredTorrent) -> Self {
+impl From<v02::ErroredTorrent> for ErroredTorrent {
+    fn from(t: v02::ErroredTorrent) -> Self {
         Self {
             id: t.id,
             title: t.title,
@@ -323,8 +323,8 @@ impl From<v2::ErroredTorrent> for ErroredTorrent {
     }
 }
 
-impl From<v1::TorrentMeta> for TorrentMeta {
-    fn from(t: v1::TorrentMeta) -> Self {
+impl From<v01::TorrentMeta> for TorrentMeta {
+    fn from(t: v01::TorrentMeta) -> Self {
         Self {
             mam_id: t.mam_id,
             main_cat: t.main_cat,
@@ -339,8 +339,8 @@ impl From<v1::TorrentMeta> for TorrentMeta {
     }
 }
 
-impl From<v5::Torrent> for Torrent {
-    fn from(t: v5::Torrent) -> Self {
+impl From<v05::Torrent> for Torrent {
+    fn from(t: v05::Torrent) -> Self {
         Self {
             hash: t.hash,
             library_path: t.library_path,
@@ -356,8 +356,8 @@ impl From<v5::Torrent> for Torrent {
     }
 }
 
-impl From<v4::SelectedTorrent> for SelectedTorrent {
-    fn from(t: v4::SelectedTorrent) -> Self {
+impl From<v04::SelectedTorrent> for SelectedTorrent {
+    fn from(t: v04::SelectedTorrent) -> Self {
         Self {
             mam_id: t.mam_id,
             dl_link: t.dl_link,
@@ -371,8 +371,8 @@ impl From<v4::SelectedTorrent> for SelectedTorrent {
     }
 }
 
-impl From<v4::Event> for Event {
-    fn from(t: v4::Event) -> Self {
+impl From<v04::Event> for Event {
+    fn from(t: v04::Event) -> Self {
         Self {
             id: t.id,
             hash: t.hash,
@@ -383,8 +383,8 @@ impl From<v4::Event> for Event {
     }
 }
 
-impl From<v4::List> for List {
-    fn from(t: v4::List) -> Self {
+impl From<v04::List> for List {
+    fn from(t: v04::List) -> Self {
         Self {
             id: t.id.split(':').next().unwrap().parse().unwrap(),
             title: t.title,
@@ -392,8 +392,8 @@ impl From<v4::List> for List {
     }
 }
 
-impl From<v4::ListItem> for ListItem {
-    fn from(t: v4::ListItem) -> Self {
+impl From<v04::ListItem> for ListItem {
+    fn from(t: v04::ListItem) -> Self {
         let list_id = t.list_id.split(':').next().unwrap().parse().unwrap();
 
         Self {
@@ -407,28 +407,28 @@ impl From<v4::ListItem> for ListItem {
             isbn: t.isbn,
             prefer_format: t.prefer_format,
             audio_torrent: t.audio_torrent.as_ref().and_then(|t| {
-                if t.status == v4::TorrentStatus::Selected {
+                if t.status == v04::TorrentStatus::Selected {
                     Some((t.mam_id, t.at))
                 } else {
                     None
                 }
             }),
             wanted_audio_torrent: t.audio_torrent.as_ref().and_then(|t| {
-                if t.status == v4::TorrentStatus::Wanted {
+                if t.status == v04::TorrentStatus::Wanted {
                     Some((t.mam_id, t.at))
                 } else {
                     None
                 }
             }),
             ebook_torrent: t.ebook_torrent.as_ref().and_then(|t| {
-                if t.status == v4::TorrentStatus::Selected {
+                if t.status == v04::TorrentStatus::Selected {
                     Some((t.mam_id, t.at))
                 } else {
                     None
                 }
             }),
             wanted_ebook_torrent: t.ebook_torrent.as_ref().and_then(|t| {
-                if t.status == v4::TorrentStatus::Wanted {
+                if t.status == v04::TorrentStatus::Wanted {
                     Some((t.mam_id, t.at))
                 } else {
                     None
@@ -439,12 +439,12 @@ impl From<v4::ListItem> for ListItem {
     }
 }
 
-impl From<v4::EventType> for EventType {
-    fn from(t: v4::EventType) -> Self {
+impl From<v04::EventType> for EventType {
+    fn from(t: v04::EventType) -> Self {
         match t {
-            v4::EventType::Grabbed { .. } => Self::Grabbed,
-            v4::EventType::Linked { library_path } => Self::Linked { library_path },
-            v4::EventType::Cleaned {
+            v04::EventType::Grabbed { .. } => Self::Grabbed,
+            v04::EventType::Linked { library_path } => Self::Linked { library_path },
+            v04::EventType::Cleaned {
                 library_path,
                 files,
             } => Self::Cleaned {
@@ -455,8 +455,8 @@ impl From<v4::EventType> for EventType {
     }
 }
 
-impl From<v6::DuplicateTorrent> for DuplicateTorrent {
-    fn from(t: v6::DuplicateTorrent) -> Self {
+impl From<v06::DuplicateTorrent> for DuplicateTorrent {
+    fn from(t: v06::DuplicateTorrent) -> Self {
         Self {
             mam_id: t.mam_id,
             title_search: t.title_search,
@@ -468,8 +468,8 @@ impl From<v6::DuplicateTorrent> for DuplicateTorrent {
     }
 }
 
-impl From<v6::ErroredTorrent> for ErroredTorrent {
-    fn from(t: v6::ErroredTorrent) -> Self {
+impl From<v06::ErroredTorrent> for ErroredTorrent {
+    fn from(t: v06::ErroredTorrent) -> Self {
         Self {
             id: t.id,
             title: t.title,
@@ -480,8 +480,8 @@ impl From<v6::ErroredTorrent> for ErroredTorrent {
     }
 }
 
-impl From<v6::TorrentMeta> for TorrentMeta {
-    fn from(t: v6::TorrentMeta) -> Self {
+impl From<v06::TorrentMeta> for TorrentMeta {
+    fn from(t: v06::TorrentMeta) -> Self {
         Self {
             mam_id: t.mam_id,
             main_cat: t.main_cat,

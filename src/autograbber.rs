@@ -8,10 +8,10 @@ use std::{
 
 use crate::{
     audiobookshelf::{self as abs, Abs},
-    config::{Config, Cost, SortBy, TorrentFilter, Type},
+    config::{Config, Cost, Filter, SortBy, TorrentFilter, Type},
     data::{
-        self, DuplicateTorrent, ErroredTorrentId, Event, EventType, SelectedTorrent, Timestamp,
-        TorrentCost, TorrentKey, TorrentMeta,
+        self, DuplicateTorrent, ErroredTorrentId, Event, EventType, MetadataSource,
+        SelectedTorrent, Timestamp, TorrentCost, TorrentKey, TorrentMeta,
     },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{
@@ -264,6 +264,7 @@ pub async fn search_torrents(
         &db,
         &mam,
         torrents,
+        &torrent_filter.filter,
         torrent_filter.cost,
         torrent_filter.unsat_buffer,
         torrent_filter.category.clone(),
@@ -280,6 +281,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
     db: &Database<'_>,
     mam: &MaM<'_>,
     torrents: T,
+    grabber: &Filter,
     cost: Cost,
     unsat_buffer: Option<u64>,
     filter_category: Option<String>,
@@ -509,6 +511,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 tags,
                 title_search,
                 meta,
+                grabber: grabber.name.clone(),
                 created_at: Timestamp::now(),
                 removed_at: None,
             })?;
@@ -595,6 +598,7 @@ async fn grab_torrent(
 
     let mam_id = torrent.mam_id;
     let cost = Some(torrent.cost);
+    let grabber = torrent.grabber.clone();
     {
         let rw = db.rw_transaction()?;
         rw.insert(data::Torrent {
@@ -637,7 +641,11 @@ async fn grab_torrent(
         Event::new(
             Some(hash),
             Some(mam_id),
-            EventType::Grabbed { cost, wedged },
+            EventType::Grabbed {
+                grabber,
+                cost,
+                wedged,
+            },
         ),
     );
 
@@ -652,6 +660,10 @@ pub async fn update_torrent_meta(
     torrent: data::Torrent,
     meta: TorrentMeta,
 ) -> Result<()> {
+    if torrent.meta.source != MetadataSource::Mam {
+        return Ok(());
+    }
+
     let hash = torrent.hash.clone();
     let mam_id = meta.mam_id;
     let diff = torrent.meta.diff(&meta);

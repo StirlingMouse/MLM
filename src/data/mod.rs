@@ -1,13 +1,14 @@
 pub mod impls;
-mod v1;
-mod v2;
-mod v3;
-mod v4;
-mod v5;
-mod v6;
-mod v7;
-mod v8;
-mod v9;
+mod v01;
+mod v02;
+mod v03;
+mod v04;
+mod v05;
+mod v06;
+mod v07;
+mod v08;
+mod v09;
+mod v10;
 
 use anyhow::Result;
 use native_db::Models;
@@ -18,95 +19,102 @@ use tracing::{info, instrument};
 
 pub static MODELS: Lazy<Models> = Lazy::new(|| {
     let mut models = Models::new();
-    models.define::<v1::Config>().unwrap();
+    models.define::<v01::Config>().unwrap();
 
-    models.define::<v9::Torrent>().unwrap();
-    models.define::<v9::SelectedTorrent>().unwrap();
-    models.define::<v9::DuplicateTorrent>().unwrap();
-    models.define::<v9::ErroredTorrent>().unwrap();
+    models.define::<v10::Torrent>().unwrap();
+    models.define::<v10::SelectedTorrent>().unwrap();
+    models.define::<v10::DuplicateTorrent>().unwrap();
+    models.define::<v10::ErroredTorrent>().unwrap();
+    models.define::<v10::Event>().unwrap();
 
-    models.define::<v8::Torrent>().unwrap();
-    models.define::<v8::SelectedTorrent>().unwrap();
-    models.define::<v8::DuplicateTorrent>().unwrap();
-    models.define::<v8::ErroredTorrent>().unwrap();
-    models.define::<v8::Event>().unwrap();
+    models.define::<v09::Torrent>().unwrap();
+    models.define::<v09::SelectedTorrent>().unwrap();
+    models.define::<v09::DuplicateTorrent>().unwrap();
+    models.define::<v09::ErroredTorrent>().unwrap();
 
-    models.define::<v7::Torrent>().unwrap();
-    models.define::<v7::SelectedTorrent>().unwrap();
-    models.define::<v7::DuplicateTorrent>().unwrap();
-    models.define::<v7::Event>().unwrap();
+    models.define::<v08::Torrent>().unwrap();
+    models.define::<v08::SelectedTorrent>().unwrap();
+    models.define::<v08::DuplicateTorrent>().unwrap();
+    models.define::<v08::ErroredTorrent>().unwrap();
+    models.define::<v08::Event>().unwrap();
 
-    models.define::<v6::Torrent>().unwrap();
-    models.define::<v6::SelectedTorrent>().unwrap();
-    models.define::<v6::DuplicateTorrent>().unwrap();
-    models.define::<v6::ErroredTorrent>().unwrap();
+    models.define::<v07::Torrent>().unwrap();
+    models.define::<v07::SelectedTorrent>().unwrap();
+    models.define::<v07::DuplicateTorrent>().unwrap();
+    models.define::<v07::Event>().unwrap();
 
-    models.define::<v5::Torrent>().unwrap();
-    models.define::<v5::List>().unwrap();
-    models.define::<v5::ListItem>().unwrap();
+    models.define::<v06::Torrent>().unwrap();
+    models.define::<v06::SelectedTorrent>().unwrap();
+    models.define::<v06::DuplicateTorrent>().unwrap();
+    models.define::<v06::ErroredTorrent>().unwrap();
 
-    models.define::<v4::SelectedTorrent>().unwrap();
-    models.define::<v4::Event>().unwrap();
-    models.define::<v4::List>().unwrap();
-    models.define::<v4::ListItem>().unwrap();
+    models.define::<v05::Torrent>().unwrap();
+    models.define::<v05::List>().unwrap();
+    models.define::<v05::ListItem>().unwrap();
 
-    models.define::<v3::Torrent>().unwrap();
-    models.define::<v3::SelectedTorrent>().unwrap();
-    models.define::<v3::DuplicateTorrent>().unwrap();
-    models.define::<v3::ErroredTorrent>().unwrap();
-    models.define::<v3::Event>().unwrap();
-    models.define::<v3::List>().unwrap();
-    models.define::<v3::ListItem>().unwrap();
+    models.define::<v04::SelectedTorrent>().unwrap();
+    models.define::<v04::Event>().unwrap();
+    models.define::<v04::List>().unwrap();
+    models.define::<v04::ListItem>().unwrap();
 
-    models.define::<v2::Torrent>().unwrap();
-    models.define::<v2::SelectedTorrent>().unwrap();
-    models.define::<v2::DuplicateTorrent>().unwrap();
-    models.define::<v2::ErroredTorrent>().unwrap();
+    models.define::<v03::Torrent>().unwrap();
+    models.define::<v03::SelectedTorrent>().unwrap();
+    models.define::<v03::DuplicateTorrent>().unwrap();
+    models.define::<v03::ErroredTorrent>().unwrap();
+    models.define::<v03::Event>().unwrap();
+    models.define::<v03::List>().unwrap();
+    models.define::<v03::ListItem>().unwrap();
 
-    models.define::<v1::Torrent>().unwrap();
-    models.define::<v1::SelectedTorrent>().unwrap();
-    models.define::<v1::DuplicateTorrent>().unwrap();
-    models.define::<v1::ErroredTorrent>().unwrap();
+    models.define::<v02::Torrent>().unwrap();
+    models.define::<v02::SelectedTorrent>().unwrap();
+    models.define::<v02::DuplicateTorrent>().unwrap();
+    models.define::<v02::ErroredTorrent>().unwrap();
+
+    models.define::<v01::Torrent>().unwrap();
+    models.define::<v01::SelectedTorrent>().unwrap();
+    models.define::<v01::DuplicateTorrent>().unwrap();
+    models.define::<v01::ErroredTorrent>().unwrap();
 
     models
 });
 
-pub type Config = v1::Config;
-pub type Torrent = v9::Torrent;
-pub type TorrentKey = v9::TorrentKey;
-pub type SelectedTorrent = v9::SelectedTorrent;
-pub type SelectedTorrentKey = v9::SelectedTorrentKey;
-pub type DuplicateTorrent = v9::DuplicateTorrent;
-pub type ErroredTorrent = v9::ErroredTorrent;
-pub type ErroredTorrentKey = v9::ErroredTorrentKey;
-pub type ErroredTorrentId = v1::ErroredTorrentId;
-pub type Event = v8::Event;
-pub type EventKey = v8::EventKey;
-pub type EventType = v8::EventType;
-pub type List = v5::List;
-pub type ListKey = v5::ListKey;
-pub type ListItem = v5::ListItem;
-pub type ListItemKey = v5::ListItemKey;
-pub type ListItemTorrent = v4::ListItemTorrent;
-pub type TorrentMeta = v9::TorrentMeta;
-pub type TorrentMetaDiff = v8::TorrentMetaDiff;
-pub type TorrentMetaField = v8::TorrentMetaField;
-pub type MainCat = v1::MainCat;
-pub type Uuid = v3::Uuid;
-pub type Timestamp = v3::Timestamp;
-pub type Series = v9::Series;
-pub type SeriesEntries = v9::SeriesEntries;
-pub type SeriesEntry = v9::SeriesEntry;
-pub type Language = v3::Language;
-pub type FlagBits = v8::FlagBits;
-pub type Size = v3::Size;
-pub type TorrentCost = v4::TorrentCost;
-pub type TorrentStatus = v4::TorrentStatus;
-pub type LibraryMismatch = v8::LibraryMismatch;
-pub type ClientStatus = v8::ClientStatus;
-pub type AudiobookCategory = v6::AudiobookCategory;
-pub type EbookCategory = v6::EbookCategory;
-pub type Category = v6::Category;
+pub type Config = v01::Config;
+pub type Torrent = v10::Torrent;
+pub type TorrentKey = v10::TorrentKey;
+pub type SelectedTorrent = v10::SelectedTorrent;
+pub type SelectedTorrentKey = v10::SelectedTorrentKey;
+pub type DuplicateTorrent = v10::DuplicateTorrent;
+pub type ErroredTorrent = v10::ErroredTorrent;
+pub type ErroredTorrentKey = v10::ErroredTorrentKey;
+pub type ErroredTorrentId = v01::ErroredTorrentId;
+pub type Event = v10::Event;
+pub type EventKey = v10::EventKey;
+pub type EventType = v10::EventType;
+pub type List = v05::List;
+pub type ListKey = v05::ListKey;
+pub type ListItem = v05::ListItem;
+pub type ListItemKey = v05::ListItemKey;
+pub type ListItemTorrent = v04::ListItemTorrent;
+pub type TorrentMeta = v10::TorrentMeta;
+pub type TorrentMetaDiff = v08::TorrentMetaDiff;
+pub type TorrentMetaField = v08::TorrentMetaField;
+pub type MetadataSource = v10::MetadataSource;
+pub type MainCat = v01::MainCat;
+pub type Uuid = v03::Uuid;
+pub type Timestamp = v03::Timestamp;
+pub type Series = v09::Series;
+pub type SeriesEntries = v09::SeriesEntries;
+pub type SeriesEntry = v09::SeriesEntry;
+pub type Language = v03::Language;
+pub type FlagBits = v08::FlagBits;
+pub type Size = v03::Size;
+pub type TorrentCost = v04::TorrentCost;
+pub type TorrentStatus = v04::TorrentStatus;
+pub type LibraryMismatch = v08::LibraryMismatch;
+pub type ClientStatus = v08::ClientStatus;
+pub type AudiobookCategory = v06::AudiobookCategory;
+pub type EbookCategory = v06::EbookCategory;
+pub type Category = v06::Category;
 
 #[instrument(skip_all)]
 pub fn migrate(db: &Database<'_>) -> Result<()> {
@@ -115,9 +123,9 @@ pub fn migrate(db: &Database<'_>) -> Result<()> {
     rw.migrate::<Torrent>()?;
     rw.migrate::<SelectedTorrent>()?;
     rw.migrate::<DuplicateTorrent>()?;
-    // recover_migrate::<v2::ErroredTorrent, v3::ErroredTorrent>(&rw)?;
+    // recover_migrate::<v02::ErroredTorrent, v03::ErroredTorrent>(&rw)?;
     rw.migrate::<ErroredTorrent>()?;
-    // recover_migrate::<v3::Event, v4::Event>(&rw)?;
+    // recover_migrate::<v03::Event, v04::Event>(&rw)?;
     rw.migrate::<Event>()?;
     rw.migrate::<List>()?;
     rw.migrate::<ListItem>()?;

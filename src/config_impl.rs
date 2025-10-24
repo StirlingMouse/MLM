@@ -744,6 +744,8 @@ mod tests {
     }
 
     mod filter_matches_lib {
+        use crate::data::MetadataSource;
+
         use super::*;
 
         fn create_torrent_with_meta(meta: TorrentMeta) -> Torrent {
@@ -779,6 +781,7 @@ mod tests {
                 authors: vec![],
                 narrators: vec![],
                 series: vec![],
+                source: MetadataSource::Mam,
             }
         }
 

@@ -1,11 +1,11 @@
-use super::{v1, v3, v5, v6, v7};
+use super::{v01, v03, v05, v06, v07};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 3, version = 4, from = v3::SelectedTorrent)]
+#[native_model(id = 3, version = 4, from = v03::SelectedTorrent)]
 #[native_db]
 pub struct SelectedTorrent {
     #[primary_key]
@@ -17,27 +17,27 @@ pub struct SelectedTorrent {
     pub tags: Vec<String>,
     #[secondary_key]
     pub title_search: String,
-    pub meta: v3::TorrentMeta,
-    pub created_at: v3::Timestamp,
+    pub meta: v03::TorrentMeta,
+    pub created_at: v03::Timestamp,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 6, version = 4, from = v3::Event)]
+#[native_model(id = 6, version = 4, from = v03::Event)]
 #[native_db]
 pub struct Event {
     #[primary_key]
-    pub id: v3::Uuid,
+    pub id: v03::Uuid,
     #[secondary_key]
     pub hash: Option<String>,
     #[secondary_key]
     pub mam_id: Option<u64>,
     #[secondary_key]
-    pub created_at: v3::Timestamp,
+    pub created_at: v03::Timestamp,
     pub event: EventType,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 7, version = 4, from = v3::List)]
+#[native_model(id = 7, version = 4, from = v03::List)]
 #[native_db]
 pub struct List {
     #[primary_key]
@@ -47,7 +47,7 @@ pub struct List {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 8, version = 4, from = v3::ListItem)]
+#[native_model(id = 8, version = 4, from = v03::ListItem)]
 #[native_db]
 pub struct ListItem {
     #[primary_key]
@@ -60,13 +60,13 @@ pub struct ListItem {
     pub cover_url: String,
     pub book_url: Option<String>,
     pub isbn: Option<u64>,
-    pub prefer_format: Option<v1::MainCat>,
+    pub prefer_format: Option<v01::MainCat>,
     pub allow_audio: bool,
     pub audio_torrent: Option<ListItemTorrent>,
     pub allow_ebook: bool,
     pub ebook_torrent: Option<ListItemTorrent>,
     #[secondary_key]
-    pub created_at: v3::Timestamp,
+    pub created_at: v03::Timestamp,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -98,7 +98,7 @@ pub enum TorrentCost {
 pub struct ListItemTorrent {
     pub mam_id: u64,
     pub status: TorrentStatus,
-    pub at: v3::Timestamp,
+    pub at: v03::Timestamp,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -109,8 +109,8 @@ pub enum TorrentStatus {
     Existing,
 }
 
-impl From<v3::SelectedTorrent> for SelectedTorrent {
-    fn from(t: v3::SelectedTorrent) -> Self {
+impl From<v03::SelectedTorrent> for SelectedTorrent {
+    fn from(t: v03::SelectedTorrent) -> Self {
         Self {
             mam_id: t.mam_id,
             dl_link: t.dl_link,
@@ -125,8 +125,8 @@ impl From<v3::SelectedTorrent> for SelectedTorrent {
     }
 }
 
-impl From<v3::Event> for Event {
-    fn from(t: v3::Event) -> Self {
+impl From<v03::Event> for Event {
+    fn from(t: v03::Event) -> Self {
         Self {
             id: t.id,
             hash: t.hash,
@@ -137,8 +137,8 @@ impl From<v3::Event> for Event {
     }
 }
 
-impl From<v3::List> for List {
-    fn from(t: v3::List) -> Self {
+impl From<v03::List> for List {
+    fn from(t: v03::List) -> Self {
         Self {
             id: format!("{}:to-read", t.id),
             title: t.title,
@@ -146,8 +146,8 @@ impl From<v3::List> for List {
     }
 }
 
-impl From<v3::ListItem> for ListItem {
-    fn from(t: v3::ListItem) -> Self {
+impl From<v03::ListItem> for ListItem {
+    fn from(t: v03::ListItem) -> Self {
         Self {
             guid: (format!("{}:to-read", t.list_id), t.guid.1),
             list_id: format!("{}:to-read", t.list_id),
@@ -193,15 +193,15 @@ impl From<v3::ListItem> for ListItem {
     }
 }
 
-impl From<v3::EventType> for EventType {
-    fn from(t: v3::EventType) -> Self {
+impl From<v03::EventType> for EventType {
+    fn from(t: v03::EventType) -> Self {
         match t {
-            v3::EventType::Grabbed => Self::Grabbed {
+            v03::EventType::Grabbed => Self::Grabbed {
                 cost: None,
                 wedged: false,
             },
-            v3::EventType::Linked { library_path } => Self::Linked { library_path },
-            v3::EventType::Cleaned {
+            v03::EventType::Linked { library_path } => Self::Linked { library_path },
+            v03::EventType::Cleaned {
                 library_path,
                 files,
             } => Self::Cleaned {
@@ -212,8 +212,8 @@ impl From<v3::EventType> for EventType {
     }
 }
 
-impl From<v5::List> for List {
-    fn from(t: v5::List) -> Self {
+impl From<v05::List> for List {
+    fn from(t: v05::List) -> Self {
         Self {
             id: t.id,
             title: t.title,
@@ -221,8 +221,8 @@ impl From<v5::List> for List {
     }
 }
 
-impl From<v5::ListItem> for ListItem {
-    fn from(t: v5::ListItem) -> Self {
+impl From<v05::ListItem> for ListItem {
+    fn from(t: v05::ListItem) -> Self {
         Self {
             guid: t.guid,
             list_id: t.list_id,
@@ -246,8 +246,8 @@ impl From<v5::ListItem> for ListItem {
     }
 }
 
-impl From<v6::SelectedTorrent> for SelectedTorrent {
-    fn from(t: v6::SelectedTorrent) -> Self {
+impl From<v06::SelectedTorrent> for SelectedTorrent {
+    fn from(t: v06::SelectedTorrent) -> Self {
         Self {
             mam_id: t.mam_id,
             dl_link: t.dl_link,
@@ -262,8 +262,8 @@ impl From<v6::SelectedTorrent> for SelectedTorrent {
     }
 }
 
-impl From<v7::Event> for Event {
-    fn from(t: v7::Event) -> Self {
+impl From<v07::Event> for Event {
+    fn from(t: v07::Event) -> Self {
         Self {
             id: t.id,
             hash: t.hash,
@@ -274,19 +274,19 @@ impl From<v7::Event> for Event {
     }
 }
 
-impl From<v7::EventType> for EventType {
-    fn from(t: v7::EventType) -> Self {
+impl From<v07::EventType> for EventType {
+    fn from(t: v07::EventType) -> Self {
         match t {
-            v7::EventType::Grabbed { cost, wedged } => Self::Grabbed { cost, wedged },
-            v7::EventType::Linked { library_path } => Self::Linked { library_path },
-            v7::EventType::Cleaned {
+            v07::EventType::Grabbed { cost, wedged } => Self::Grabbed { cost, wedged },
+            v07::EventType::Linked { library_path } => Self::Linked { library_path },
+            v07::EventType::Cleaned {
                 library_path,
                 files,
             } => Self::Cleaned {
                 library_path,
                 files,
             },
-            v7::EventType::Updated { .. } => unimplemented!(),
+            v07::EventType::Updated { .. } => unimplemented!(),
         }
     }
 }

@@ -212,6 +212,7 @@ pub async fn duplicate_torrents_page_post(
                     tags,
                     title_search,
                     meta: mam_torrent.as_meta()?,
+                    grabber: None,
                     created_at: Timestamp::now(),
                     removed_at: None,
                 })?;

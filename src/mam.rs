@@ -25,7 +25,7 @@ use unidecode::unidecode;
 
 use crate::{
     config::Config,
-    data::{self, Category, FlagBits, Language, Series, SeriesEntries},
+    data::{self, Category, FlagBits, Language, MetadataSource, Series, SeriesEntries},
     mam_enums::SearchIn,
 };
 
@@ -427,6 +427,7 @@ impl MaMTorrent {
             authors,
             narrators,
             series,
+            source: MetadataSource::Mam,
         })
     }
 

@@ -136,7 +136,7 @@ async fn search_item(
     config: &Config,
     db: &Database<'_>,
     mam: &MaM<'_>,
-    list: &&crate::config::GoodreadsList,
+    list: &GoodreadsList,
     item: &Item,
     mut db_item: ListItem,
     max_torrents: u64,
@@ -240,7 +240,8 @@ async fn search_item(
             db,
             mam,
             [audiobook.0.clone()].into_iter(),
-            audiobook.3,
+            &audiobook.3.filter,
+            audiobook.3.cost,
             list.unsat_buffer,
             None,
             list.dry_run,
@@ -255,7 +256,8 @@ async fn search_item(
             db,
             mam,
             [ebook.0.clone()].into_iter(),
-            ebook.3,
+            &ebook.3.filter,
+            ebook.3.cost,
             list.unsat_buffer,
             None,
             list.dry_run,
@@ -348,7 +350,7 @@ async fn search_grab(
     item: &Item,
     db_item: &ListItem,
     grab: &Grab,
-) -> Result<Vec<(MaMTorrent, TorrentMeta, usize, Cost)>> {
+) -> Result<Vec<(MaMTorrent, TorrentMeta, usize, Grab)>> {
     let (flags_is_hide, flags) = grab.filter.flags.as_search_bitfield();
 
     let title_query = db_item.title.replace("*", "\"*\"");
@@ -496,7 +498,7 @@ async fn search_grab(
             let preference = preferred_types
                 .iter()
                 .position(|t| meta.filetypes.contains(t));
-            Ok((t, meta, preference.unwrap_or_default(), grab.cost))
+            Ok((t, meta, preference.unwrap_or_default(), grab.clone()))
         })
         .collect::<Result<Vec<_>>>()?;
     torrents.sort_by(|a, b| {
@@ -618,20 +620,20 @@ impl ListItem {
 }
 
 fn select_torrent(
-    torrents: &[Vec<(MaMTorrent, TorrentMeta, usize, Cost)>],
+    torrents: &[Vec<(MaMTorrent, TorrentMeta, usize, Grab)>],
     main_cat: MainCat,
-) -> Option<&(MaMTorrent, TorrentMeta, usize, Cost)> {
+) -> Option<&(MaMTorrent, TorrentMeta, usize, Grab)> {
     torrents
         .iter()
         .flatten()
         .filter(|t| t.1.main_cat == main_cat)
-        .find(|t| t.3 != Cost::Free || t.0.is_free())
+        .find(|t| t.3.cost != Cost::Free || t.0.is_free())
         .or_else(|| torrents.iter().flatten().find(|t| t.1.main_cat == main_cat))
 }
 
 fn not_wanted(
     field: &mut Option<ListItemTorrent>,
-    unwanted: &mut Option<&(MaMTorrent, TorrentMeta, usize, Cost)>,
+    unwanted: &mut Option<&(MaMTorrent, TorrentMeta, usize, Grab)>,
 ) -> bool {
     let found = unwanted.take().unwrap();
     if field
@@ -651,9 +653,10 @@ fn not_wanted(
 }
 fn check_cost(
     field: &mut Option<ListItemTorrent>,
-    selected: &mut Option<&(MaMTorrent, TorrentMeta, usize, Cost)>,
+    selected: &mut Option<&(MaMTorrent, TorrentMeta, usize, Grab)>,
 ) -> bool {
-    let take = selected.is_some_and(|selected| selected.3 == Cost::Free && !selected.0.is_free());
+    let take =
+        selected.is_some_and(|selected| selected.3.cost == Cost::Free && !selected.0.is_free());
     if take {
         let found = selected.take().unwrap();
         warn!("Skipped {:?} torrent as it is not free", found.1.main_cat);

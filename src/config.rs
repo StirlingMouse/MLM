@@ -137,6 +137,9 @@ pub struct TagFilter {
 #[serde(deny_unknown_fields)]
 pub struct Filter {
     #[serde(default)]
+    pub name: Option<String>,
+
+    #[serde(default)]
     pub categories: Categories,
     #[serde(default)]
     #[serde(deserialize_with = "parse_vec")]
@@ -237,6 +240,9 @@ pub struct LibraryByCategory {
 #[serde(deny_unknown_fields)]
 pub struct LibraryTagFilters {
     #[serde(default)]
+    pub name: Option<String>,
+
+    #[serde(default)]
     pub method: LibraryLinkMethod,
     #[serde(default)]
     pub allow_tags: Vec<String>,
@@ -246,7 +252,7 @@ pub struct LibraryTagFilters {
     pub ebook_types: Option<Vec<String>>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Default)]
+#[derive(Clone, Copy, Debug, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum LibraryLinkMethod {
     #[default]
@@ -255,6 +261,7 @@ pub enum LibraryLinkMethod {
     HardlinkOrSymlink,
     Copy,
     Symlink,
+    NoLink,
 }
 
 fn default_host() -> String {

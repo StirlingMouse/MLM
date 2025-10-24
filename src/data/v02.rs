@@ -1,4 +1,4 @@
-use super::{v1, v3};
+use super::{v01, v03};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use time::{OffsetDateTime, UtcOffset};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 2, version = 2, from = v1::Torrent)]
+#[native_model(id = 2, version = 2, from = v01::Torrent)]
 #[native_db]
 pub struct Torrent {
     #[primary_key]
@@ -15,14 +15,14 @@ pub struct Torrent {
     pub library_files: Vec<PathBuf>,
     #[secondary_key]
     pub title_search: String,
-    pub meta: v1::TorrentMeta,
+    pub meta: v01::TorrentMeta,
     pub created_at: OffsetDateTime,
     pub replaced_with: Option<(String, OffsetDateTime)>,
     pub request_matadata_update: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 3, version = 2, from = v1::SelectedTorrent)]
+#[native_model(id = 3, version = 2, from = v01::SelectedTorrent)]
 #[native_db]
 pub struct SelectedTorrent {
     #[primary_key]
@@ -33,38 +33,38 @@ pub struct SelectedTorrent {
     pub tags: Vec<String>,
     #[secondary_key]
     pub title_search: String,
-    pub meta: v1::TorrentMeta,
+    pub meta: v01::TorrentMeta,
     pub created_at: OffsetDateTime,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 4, version = 2, from = v1::DuplicateTorrent)]
+#[native_model(id = 4, version = 2, from = v01::DuplicateTorrent)]
 #[native_db]
 pub struct DuplicateTorrent {
     #[primary_key]
     pub mam_id: u64,
     #[secondary_key]
     pub title_search: String,
-    pub meta: v1::TorrentMeta,
+    pub meta: v01::TorrentMeta,
     pub created_at: OffsetDateTime,
     pub duplicate_of: Option<String>,
     pub request_replace: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 5, version = 2, from = v1::ErroredTorrent)]
+#[native_model(id = 5, version = 2, from = v01::ErroredTorrent)]
 #[native_db]
 pub struct ErroredTorrent {
     #[primary_key]
-    pub id: v1::ErroredTorrentId,
+    pub id: v01::ErroredTorrentId,
     pub title: String,
     pub error: String,
-    pub meta: Option<v1::TorrentMeta>,
+    pub meta: Option<v01::TorrentMeta>,
     pub created_at: OffsetDateTime,
 }
 
-impl From<v1::Torrent> for Torrent {
-    fn from(t: v1::Torrent) -> Self {
+impl From<v01::Torrent> for Torrent {
+    fn from(t: v01::Torrent) -> Self {
         Self {
             hash: t.hash,
             library_path: t.library_path,
@@ -78,8 +78,8 @@ impl From<v1::Torrent> for Torrent {
     }
 }
 
-impl From<v1::SelectedTorrent> for SelectedTorrent {
-    fn from(t: v1::SelectedTorrent) -> Self {
+impl From<v01::SelectedTorrent> for SelectedTorrent {
+    fn from(t: v01::SelectedTorrent) -> Self {
         Self {
             mam_id: t.mam_id,
             dl_link: t.dl_link,
@@ -93,8 +93,8 @@ impl From<v1::SelectedTorrent> for SelectedTorrent {
     }
 }
 
-impl From<v1::DuplicateTorrent> for DuplicateTorrent {
-    fn from(t: v1::DuplicateTorrent) -> Self {
+impl From<v01::DuplicateTorrent> for DuplicateTorrent {
+    fn from(t: v01::DuplicateTorrent) -> Self {
         Self {
             mam_id: t.mam_id,
             title_search: t.title_search,
@@ -106,8 +106,8 @@ impl From<v1::DuplicateTorrent> for DuplicateTorrent {
     }
 }
 
-impl From<v1::ErroredTorrent> for ErroredTorrent {
-    fn from(t: v1::ErroredTorrent) -> Self {
+impl From<v01::ErroredTorrent> for ErroredTorrent {
+    fn from(t: v01::ErroredTorrent) -> Self {
         Self {
             id: t.id,
             title: t.title,
@@ -118,8 +118,8 @@ impl From<v1::ErroredTorrent> for ErroredTorrent {
     }
 }
 
-impl From<v3::Torrent> for Torrent {
-    fn from(t: v3::Torrent) -> Self {
+impl From<v03::Torrent> for Torrent {
+    fn from(t: v03::Torrent) -> Self {
         Self {
             hash: t.hash,
             library_path: t.library_path,
@@ -135,8 +135,8 @@ impl From<v3::Torrent> for Torrent {
     }
 }
 
-impl From<v3::SelectedTorrent> for SelectedTorrent {
-    fn from(t: v3::SelectedTorrent) -> Self {
+impl From<v03::SelectedTorrent> for SelectedTorrent {
+    fn from(t: v03::SelectedTorrent) -> Self {
         Self {
             mam_id: t.mam_id,
             dl_link: t.dl_link,
@@ -150,8 +150,8 @@ impl From<v3::SelectedTorrent> for SelectedTorrent {
     }
 }
 
-impl From<v3::DuplicateTorrent> for DuplicateTorrent {
-    fn from(t: v3::DuplicateTorrent) -> Self {
+impl From<v03::DuplicateTorrent> for DuplicateTorrent {
+    fn from(t: v03::DuplicateTorrent) -> Self {
         Self {
             mam_id: t.mam_id,
             title_search: t.title_search,
@@ -163,8 +163,8 @@ impl From<v3::DuplicateTorrent> for DuplicateTorrent {
     }
 }
 
-impl From<v3::ErroredTorrent> for ErroredTorrent {
-    fn from(t: v3::ErroredTorrent) -> Self {
+impl From<v03::ErroredTorrent> for ErroredTorrent {
+    fn from(t: v03::ErroredTorrent) -> Self {
         Self {
             id: t.id,
             title: t.title,
@@ -175,8 +175,8 @@ impl From<v3::ErroredTorrent> for ErroredTorrent {
     }
 }
 
-impl From<v3::TorrentMeta> for v1::TorrentMeta {
-    fn from(t: v3::TorrentMeta) -> Self {
+impl From<v03::TorrentMeta> for v01::TorrentMeta {
+    fn from(t: v03::TorrentMeta) -> Self {
         Self {
             mam_id: t.mam_id,
             main_cat: t.main_cat,

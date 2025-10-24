@@ -1,4 +1,4 @@
-use super::v2;
+use super::v02;
 use native_db::{Key, ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -109,8 +109,8 @@ impl ToKey for ErroredTorrentId {
     }
 }
 
-impl From<v2::Torrent> for Torrent {
-    fn from(t: v2::Torrent) -> Self {
+impl From<v02::Torrent> for Torrent {
+    fn from(t: v02::Torrent) -> Self {
         Self {
             hash: t.hash,
             library_path: t.library_path,
@@ -123,8 +123,8 @@ impl From<v2::Torrent> for Torrent {
     }
 }
 
-impl From<v2::SelectedTorrent> for SelectedTorrent {
-    fn from(t: v2::SelectedTorrent) -> Self {
+impl From<v02::SelectedTorrent> for SelectedTorrent {
+    fn from(t: v02::SelectedTorrent) -> Self {
         Self {
             mam_id: t.mam_id,
             dl_link: t.dl_link,
@@ -137,8 +137,8 @@ impl From<v2::SelectedTorrent> for SelectedTorrent {
     }
 }
 
-impl From<v2::DuplicateTorrent> for DuplicateTorrent {
-    fn from(t: v2::DuplicateTorrent) -> Self {
+impl From<v02::DuplicateTorrent> for DuplicateTorrent {
+    fn from(t: v02::DuplicateTorrent) -> Self {
         Self {
             mam_id: t.mam_id,
             title_search: t.title_search,
@@ -149,8 +149,8 @@ impl From<v2::DuplicateTorrent> for DuplicateTorrent {
     }
 }
 
-impl From<v2::ErroredTorrent> for ErroredTorrent {
-    fn from(t: v2::ErroredTorrent) -> Self {
+impl From<v02::ErroredTorrent> for ErroredTorrent {
+    fn from(t: v02::ErroredTorrent) -> Self {
         Self {
             id: t.id,
             title: t.title,

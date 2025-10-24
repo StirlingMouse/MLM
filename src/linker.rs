@@ -23,7 +23,7 @@ use regex::Regex;
 use tracing::{Level, debug, instrument, span, trace, warn};
 
 use crate::{
-    audiobookshelf::{self as abs, Abs},
+    audiobookshelf::{self as abs},
     autograbber::update_torrent_meta,
     cleaner::remove_library_files,
     config::{Config, Library, LibraryLinkMethod, QbitConfig},
@@ -363,73 +363,82 @@ async fn link_torrent(
     existing_torrent: Option<&Torrent>,
     meta: &TorrentMeta,
 ) -> Result<()> {
-    let Some(mut dir) = library_dir(config.exclude_narrator_in_library_dir, library, meta) else {
-        bail!("Torrent has no author");
-    };
-    if config.exclude_narrator_in_library_dir && !meta.narrators.is_empty() && dir.exists() {
-        dir = library_dir(false, library, meta).unwrap();
-    }
-
-    let metadata = abs::create_metadata(&mam_torrent, meta);
-    create_dir_all(&dir)?;
-
     let mut library_files = vec![];
-    for file in files {
-        let span = span!(Level::TRACE, "file: {:?}", file.name);
-        let _s = span.enter();
-        if !(selected_audio_format
-            .as_ref()
-            .is_some_and(|ext| file.name.ends_with(ext))
-            || selected_ebook_format
-                .as_ref()
-                .is_some_and(|ext| file.name.ends_with(ext)))
-        {
-            debug!("Skiping \"{}\"", file.name);
-            continue;
-        }
-        let torrent_path = PathBuf::from(&file.name);
-        let mut path_components = torrent_path.components();
-        let file_name = path_components.next_back().unwrap();
-        let dir_name = path_components.next_back().and_then(|dir_name| {
-            if let Component::Normal(dir_name) = dir_name {
-                let dir_name = dir_name.to_string_lossy().to_string();
-                if let Some(disc) = DISK_PATTERN.captures(&dir_name).and_then(|c| c.get(1)) {
-                    return Some(format!("Disc {}", disc.as_str()));
-                }
-            }
-            None
-        });
-        let file_path = if let Some(dir_name) = dir_name {
-            let sub_dir = PathBuf::from(dir_name);
-            create_dir_all(dir.join(&sub_dir))?;
-            sub_dir.join(file_name)
-        } else {
-            PathBuf::from(&file_name)
-        };
-        let library_path = dir.join(&file_path);
-        library_files.push(file_path.clone());
-        let download_path =
-            map_path(&qbit_config.path_mapping, &torrent.save_path).join(&file.name);
-        match library.method() {
-            LibraryLinkMethod::Hardlink => hard_link(&download_path, &library_path, &file_path)?,
-            LibraryLinkMethod::HardlinkOrCopy => {
-                hard_link(&download_path, &library_path, &file_path)
-                    .or_else(|_| copy(&download_path, &library_path))?
-            }
-            LibraryLinkMethod::Copy => copy(&download_path, &library_path)?,
-            LibraryLinkMethod::HardlinkOrSymlink => {
-                hard_link(&download_path, &library_path, &file_path)
-                    .or_else(|_| symlink(&download_path, &library_path))?
-            }
-            LibraryLinkMethod::Symlink => symlink(&download_path, &library_path)?,
-        };
-    }
-    library_files.sort();
 
-    let file = File::create(dir.join("metadata.json"))?;
-    let mut writer = BufWriter::new(file);
-    serde_json::to_writer(&mut writer, &metadata)?;
-    writer.flush()?;
+    let library_path = if library.tag_filters().method != LibraryLinkMethod::NoLink {
+        let Some(mut dir) = library_dir(config.exclude_narrator_in_library_dir, library, meta)
+        else {
+            bail!("Torrent has no author");
+        };
+        if config.exclude_narrator_in_library_dir && !meta.narrators.is_empty() && dir.exists() {
+            dir = library_dir(false, library, meta).unwrap();
+        }
+        let metadata = abs::create_metadata(&mam_torrent, meta);
+
+        create_dir_all(&dir)?;
+        for file in files {
+            let span = span!(Level::TRACE, "file: {:?}", file.name);
+            let _s = span.enter();
+            if !(selected_audio_format
+                .as_ref()
+                .is_some_and(|ext| file.name.ends_with(ext))
+                || selected_ebook_format
+                    .as_ref()
+                    .is_some_and(|ext| file.name.ends_with(ext)))
+            {
+                debug!("Skiping \"{}\"", file.name);
+                continue;
+            }
+            let torrent_path = PathBuf::from(&file.name);
+            let mut path_components = torrent_path.components();
+            let file_name = path_components.next_back().unwrap();
+            let dir_name = path_components.next_back().and_then(|dir_name| {
+                if let Component::Normal(dir_name) = dir_name {
+                    let dir_name = dir_name.to_string_lossy().to_string();
+                    if let Some(disc) = DISK_PATTERN.captures(&dir_name).and_then(|c| c.get(1)) {
+                        return Some(format!("Disc {}", disc.as_str()));
+                    }
+                }
+                None
+            });
+            let file_path = if let Some(dir_name) = dir_name {
+                let sub_dir = PathBuf::from(dir_name);
+                create_dir_all(dir.join(&sub_dir))?;
+                sub_dir.join(file_name)
+            } else {
+                PathBuf::from(&file_name)
+            };
+            let library_path = dir.join(&file_path);
+            library_files.push(file_path.clone());
+            let download_path =
+                map_path(&qbit_config.path_mapping, &torrent.save_path).join(&file.name);
+            match library.method() {
+                LibraryLinkMethod::Hardlink => {
+                    hard_link(&download_path, &library_path, &file_path)?
+                }
+                LibraryLinkMethod::HardlinkOrCopy => {
+                    hard_link(&download_path, &library_path, &file_path)
+                        .or_else(|_| copy(&download_path, &library_path))?
+                }
+                LibraryLinkMethod::Copy => copy(&download_path, &library_path)?,
+                LibraryLinkMethod::HardlinkOrSymlink => {
+                    hard_link(&download_path, &library_path, &file_path)
+                        .or_else(|_| symlink(&download_path, &library_path))?
+                }
+                LibraryLinkMethod::Symlink => symlink(&download_path, &library_path)?,
+                LibraryLinkMethod::NoLink => {}
+            };
+        }
+        library_files.sort();
+
+        let file = File::create(dir.join("metadata.json"))?;
+        let mut writer = BufWriter::new(file);
+        serde_json::to_writer(&mut writer, &metadata)?;
+        writer.flush()?;
+        Some(dir.clone())
+    } else {
+        None
+    };
 
     {
         let rw = db.rw_transaction()?;
@@ -437,7 +446,7 @@ async fn link_torrent(
             hash: hash.to_owned(),
             mam_id: meta.mam_id,
             abs_id: existing_torrent.and_then(|t| t.abs_id.clone()),
-            library_path: Some(dir.clone()),
+            library_path: library_path.clone(),
             library_files,
             selected_audio_format,
             selected_ebook_format,
@@ -454,14 +463,19 @@ async fn link_torrent(
         rw.commit()?;
     }
 
-    write_event(
-        db,
-        Event::new(
-            Some(hash.to_owned()),
-            Some(meta.mam_id),
-            EventType::Linked { library_path: dir },
-        ),
-    );
+    if let Some(library_path) = library_path {
+        write_event(
+            db,
+            Event::new(
+                Some(hash.to_owned()),
+                Some(meta.mam_id),
+                EventType::Linked {
+                    linker: library.tag_filters().name.clone(),
+                    library_path,
+                },
+            ),
+        );
+    }
 
     Ok(())
 }

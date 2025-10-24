@@ -1,11 +1,11 @@
-use super::{v1, v3, v4, v6};
+use super::{v01, v03, v04, v06};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 2, version = 5, from = v3::Torrent)]
+#[native_model(id = 2, version = 5, from = v03::Torrent)]
 #[native_db]
 pub struct Torrent {
     #[primary_key]
@@ -16,10 +16,10 @@ pub struct Torrent {
     pub selected_ebook_format: Option<String>,
     #[secondary_key]
     pub title_search: String,
-    pub meta: v3::TorrentMeta,
+    pub meta: v03::TorrentMeta,
     #[secondary_key]
-    pub created_at: v3::Timestamp,
-    pub replaced_with: Option<(String, v3::Timestamp)>,
+    pub created_at: v03::Timestamp,
+    pub replaced_with: Option<(String, v03::Timestamp)>,
     pub request_matadata_update: bool,
     pub library_mismatch: Option<LibraryMismatch>,
 }
@@ -32,19 +32,19 @@ pub enum LibraryMismatch {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 7, version = 5, from = v4::List)]
+#[native_model(id = 7, version = 5, from = v04::List)]
 #[native_db]
 pub struct List {
     #[primary_key]
     pub id: String,
     #[secondary_key]
     pub title: String,
-    pub updated_at: Option<v3::Timestamp>,
-    pub build_date: Option<v3::Timestamp>,
+    pub updated_at: Option<v03::Timestamp>,
+    pub build_date: Option<v03::Timestamp>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 8, version = 5, from = v4::ListItem)]
+#[native_model(id = 8, version = 5, from = v04::ListItem)]
 #[native_db]
 pub struct ListItem {
     #[primary_key]
@@ -57,18 +57,18 @@ pub struct ListItem {
     pub cover_url: String,
     pub book_url: Option<String>,
     pub isbn: Option<u64>,
-    pub prefer_format: Option<v1::MainCat>,
+    pub prefer_format: Option<v01::MainCat>,
     pub allow_audio: bool,
-    pub audio_torrent: Option<v4::ListItemTorrent>,
+    pub audio_torrent: Option<v04::ListItemTorrent>,
     pub allow_ebook: bool,
-    pub ebook_torrent: Option<v4::ListItemTorrent>,
+    pub ebook_torrent: Option<v04::ListItemTorrent>,
     #[secondary_key]
-    pub created_at: v3::Timestamp,
-    pub marked_done_at: Option<v3::Timestamp>,
+    pub created_at: v03::Timestamp,
+    pub marked_done_at: Option<v03::Timestamp>,
 }
 
-impl From<v3::Torrent> for Torrent {
-    fn from(t: v3::Torrent) -> Self {
+impl From<v03::Torrent> for Torrent {
+    fn from(t: v03::Torrent) -> Self {
         Self {
             hash: t.hash,
             library_path: t.library_path,
@@ -85,8 +85,8 @@ impl From<v3::Torrent> for Torrent {
     }
 }
 
-impl From<v4::List> for List {
-    fn from(t: v4::List) -> Self {
+impl From<v04::List> for List {
+    fn from(t: v04::List) -> Self {
         Self {
             id: t.id,
             title: t.title,
@@ -96,8 +96,8 @@ impl From<v4::List> for List {
     }
 }
 
-impl From<v4::ListItem> for ListItem {
-    fn from(t: v4::ListItem) -> Self {
+impl From<v04::ListItem> for ListItem {
+    fn from(t: v04::ListItem) -> Self {
         Self {
             guid: t.guid,
             list_id: t.list_id,
@@ -122,8 +122,8 @@ impl From<v4::ListItem> for ListItem {
     }
 }
 
-impl From<v6::Torrent> for Torrent {
-    fn from(t: v6::Torrent) -> Self {
+impl From<v06::Torrent> for Torrent {
+    fn from(t: v06::Torrent) -> Self {
         Self {
             hash: t.hash,
             library_path: t.library_path,

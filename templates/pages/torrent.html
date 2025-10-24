@@ -235,7 +235,7 @@
     <div>{{ self::time(event.created_at) }}</div>
     <div>
     {% match event.event %}
-    {% when EventType::Grabbed { cost, wedged } %}
+    {% when EventType::Grabbed { grabber, cost, wedged } %}
       Grabbed Torrent
       {% if wedged %} using a wedge
       {% else %}{% match cost %}
@@ -243,9 +243,17 @@
         {% when Some(TorrentCost::GlobalFreeleech) %} as Freeleech
         {% when Some(TorrentCost::PersonalFreeleech) %} as Personal Freeleech
         {% when Some(_) %} using ratio
-        {% when _ %}{% endmatch %}{% endif %}<br />
-    {% when EventType::Linked { library_path } %}
-      Linked Torrent<br />
+        {% when _ %}{% endmatch %}{% endif %}
+      {% if let Some(grabber) = grabber %}
+        with grabber {{ grabber }}
+      {% endif %}
+      <br />
+    {% when EventType::Linked { linker, library_path } %}
+      Linked Torrent
+      {% if let Some(linker) = linker %}
+        with linker {{ linker }}
+      {% endif %}
+      <br />
       to: {{ library_path.to_string_lossy() }}<br />
       <details>
         <summary>Files</summary>
