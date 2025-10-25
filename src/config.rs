@@ -253,7 +253,7 @@ pub struct LibraryTagFilters {
     pub ebook_types: Option<Vec<String>>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum LibraryLinkMethod {
     #[default]

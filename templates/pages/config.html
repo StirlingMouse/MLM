@@ -40,6 +40,9 @@
       <h3>[[autograb]]</h3>
       <a href="{{autograb.mam_search()}}" target=_blank>search on MaM</a>
     </div>
+    {% if let Some(name) = autograb.filter.name %}
+    <span class=key>name</span> = <span class=string>{{ name | json }}</span><br>
+    {% endif %}
     <span class=key>type</span> = <span class=string>{{ autograb.kind | json }}</span><br>
     <span class=key>cost</span> = <span class=string>{{ autograb.cost | json }}</span><br>
     {% if let Some(query) = autograb.query %}
@@ -48,12 +51,21 @@
     {% if !autograb.search_in.is_empty() %}
     <span class=key>search_in</span> = {{ self::yaml_items(autograb.search_in) }}<br>
     {% endif %}
+    {% if let Some(sort_by) = autograb.sort_by %}
+    <span class=key>sort_by</span> = <span class=string>{{ sort_by | json }}</span><br>
+    {% endif %}
     {{ self::filter(autograb.filter) }}
+    {% if let Some(search_interval) = autograb.search_interval %}
+    <span class=key>search_interval</span> = <span class=num>{{ search_interval }}</span><br>
+    {% endif %}
     {% if let Some(unsat_buffer) = autograb.unsat_buffer %}
     <span class=key>unsat_buffer</span> = <span class=num>{{ unsat_buffer }}</span><br>
     {% endif %}
     {% if autograb.dry_run %}
     <span class=key>dry_run</span> = <span class=num>{{ autograb.dry_run }}</span><br>
+    {% endif %}
+    {% if let Some(category) = autograb.category %}
+    <span class=key>category</span> = <span class=string>{{ category | json }}</span><br>
     {% endif %}
   </div>
 </div>
@@ -72,6 +84,9 @@
       </form>
       {% endif %}
     </div>
+    {% if let Some(name) = tag.filter.name %}
+    <span class=key>name</span> = <span class=string>{{ name | json }}</span><br>
+    {% endif %}
     {{ self::filter(tag.filter) }}
     {% if let Some(category) = tag.category %}
     <span class=key>category</span> = <span class=string>{{ category | json }}</span><br>
@@ -89,6 +104,9 @@
     <div class=row>
       <h3>[[library]]</h3>
     </div>
+    {% if let Some(name) = library.tag_filters().name %}
+    <span class=key>name</span> = <span class=string>{{ name | json }}</span><br>
+    {% endif %}
     {% match library %}
     {% when Library::ByDir(library) %}
     <span class=key>download_dir</span> = <span class=string>{{ library.download_dir | json }}</span><br>
@@ -102,6 +120,9 @@
     {% endif %}
     {% if !library.tag_filters().deny_tags.is_empty() %}
     <span class=key>deny_tags</span> = {{ self::yaml_items(library.tag_filters().deny_tags) }}<br>
+    {% endif %}
+    {% if library.tag_filters().method != Default::default() %}
+    <span class=key>method</span> = <span class=string>{{ library.tag_filters().method | json }}</span><br>
     {% endif %}
   </div>
 </div>
