@@ -4,7 +4,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use anyhow::{Error, Result};
+use anyhow::{Error, Result, bail};
 use bytes::Bytes;
 use cookie::Cookie;
 use htmlentity::entity::{self, ICodedDataTrait as _};
@@ -523,6 +523,14 @@ impl RateLimitError {
             anyhow::Error::new(error)
         }
     }
+
+    pub fn maybe_resp(response: &reqwest::Response) -> Result<(), anyhow::Error> {
+        if response.status() == 429 {
+            Err(anyhow::Error::new(RateLimitError))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -601,12 +609,18 @@ impl<'a> MaM<'a> {
             .client
             .get("https://www.myanonamouse.net/json/checkCookie.php")
             .send()
-            .await?
-            .error_for_status()
-            .map_err(RateLimitError::maybe)?
-            .text()
             .await?;
-        info!("checked mam_id: {resp:?}");
+
+        RateLimitError::maybe_resp(&resp)?;
+
+        let status = resp.status();
+        let text = resp.text().await?;
+        info!("checked mam_id: {text:?}");
+
+        if status.is_client_error() || status.is_server_error() {
+            bail!("Bad status for checkCookie: {}", status)
+        }
+
         self.store_cookies();
         Ok(())
     }
@@ -734,7 +748,7 @@ impl<'a> MaM<'a> {
             .jar
             .read()
             .unwrap()
-            .get("www.myanonamouse.net", "/", "mam_id")
+            .get("myanonamouse.net", "/", "mam_id")
         {
             if let Ok(rw) = self.db.rw_transaction() {
                 let ok = rw
