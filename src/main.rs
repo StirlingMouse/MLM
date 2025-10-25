@@ -19,6 +19,7 @@ mod tray;
 mod web;
 
 use std::{
+    collections::BTreeMap,
     env,
     fs::{self, create_dir_all},
     io,
@@ -30,7 +31,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use audiobookshelf::match_torrents_to_abs;
-use autograbber::{grab_selected_torrents, run_autograbbers};
+use autograbber::{grab_selected_torrents, run_autograbber};
 use cleaner::run_library_cleaner;
 use dirs::{config_dir, data_local_dir};
 use exporter::export_db;
@@ -177,7 +178,7 @@ async fn app_main() -> Result<()> {
 
     let stats: Arc<Mutex<Stats>> = Default::default();
 
-    let (search_tx, mut search_rx) = watch::channel(());
+    let (mut search_tx, mut search_rx) = (BTreeMap::new(), BTreeMap::new());
     let (linker_tx, linker_rx) = watch::channel(());
     let (goodreads_tx, mut goodreads_rx) = watch::channel(());
     let (downloader_tx, mut downloader_rx) = watch::channel(());
@@ -242,24 +243,42 @@ async fn app_main() -> Result<()> {
             });
         }
 
-        if !config.autograbs.is_empty() {
+        for (i, grab) in config.autograbs.iter().enumerate() {
             let config = config.clone();
             let db = db.clone();
             let mam = mam.clone();
             let downloader_tx = downloader_tx.clone();
+            let (tx, mut rx) = watch::channel(());
+            search_tx.insert(i, tx);
+            search_rx.insert(i, rx.clone());
             let stats = stats.clone();
+            let grab = Arc::new(grab.clone());
             tokio::spawn(async move {
                 loop {
+                    select! {
+                        () = sleep(Duration::from_secs(60 * grab.search_interval.unwrap_or(config.search_interval))) => {},
+                        result = rx.changed() => {
+                            if let Err(err) = result {
+                                error!("Error listening on search_rx: {err:?}");
+                                let mut stats = stats.lock().await;
+                                stats.goodreads_result = Some(Err(err.into()));
+                            }
+                        },
+                    }
                     {
                         let mut stats = stats.lock().await;
-                        stats.autograbber_run_at = Some(OffsetDateTime::now_utc());
-                        stats.autograbber_result = None;
+                        stats
+                            .autograbber_run_at
+                            .insert(i, OffsetDateTime::now_utc());
+                        stats.autograbber_result.remove(&i);
                     }
-                    let result = run_autograbbers(
+                    let result = run_autograbber(
                         config.clone(),
                         db.clone(),
                         mam.clone(),
                         downloader_tx.clone(),
+                        i,
+                        grab.clone(),
                     )
                     .await
                     .context("autograbbers");
@@ -268,17 +287,7 @@ async fn app_main() -> Result<()> {
                     }
                     {
                         let mut stats = stats.lock().await;
-                        stats.autograbber_result = Some(result);
-                    }
-                    select! {
-                        () = sleep(Duration::from_secs(60 * config.search_interval)) => {},
-                        result = search_rx.changed() => {
-                            if let Err(err) = result {
-                                error!("Error listening on search_rx: {err:?}");
-                                let mut stats = stats.lock().await;
-                                stats.autograbber_result = Some(Err(err.into()));
-                            }
-                        },
+                        stats.autograbber_result.insert(i, result);
                     }
                 }
             });
@@ -292,6 +301,16 @@ async fn app_main() -> Result<()> {
             let downloader_tx = downloader_tx.clone();
             tokio::spawn(async move {
                 loop {
+                    select! {
+                        () = sleep(Duration::from_secs(60 * config.goodreads_interval)) => {},
+                        result = goodreads_rx.changed() => {
+                            if let Err(err) = result {
+                                error!("Error listening on goodreads_rx: {err:?}");
+                                let mut stats = stats.lock().await;
+                                stats.goodreads_result = Some(Err(err.into()));
+                            }
+                        },
+                    }
                     {
                         let mut stats = stats.lock().await;
                         stats.goodreads_run_at = Some(OffsetDateTime::now_utc());
@@ -311,16 +330,6 @@ async fn app_main() -> Result<()> {
                     {
                         let mut stats = stats.lock().await;
                         stats.goodreads_result = Some(result);
-                    }
-                    select! {
-                        () = sleep(Duration::from_secs(60 * config.goodreads_interval)) => {},
-                        result = goodreads_rx.changed() => {
-                            if let Err(err) = result {
-                                error!("Error listening on goodreads_rx: {err:?}");
-                                let mut stats = stats.lock().await;
-                                stats.goodreads_result = Some(Err(err.into()));
-                            }
-                        },
                     }
                 }
             });
@@ -348,6 +357,16 @@ async fn app_main() -> Result<()> {
                         }
                     };
                     loop {
+                        select! {
+                            () = sleep(Duration::from_secs(60 * config.link_interval)) => {},
+                            result = linker_rx.changed() => {
+                                if let Err(err) = result {
+                                    error!("Error listening on link_rx: {err:?}");
+                                    let mut stats = stats.lock().await;
+                                    stats.linker_result = Some(Err(err.into()));
+                                }
+                            },
+                        }
                         {
                             let mut stats = stats.lock().await;
                             stats.linker_run_at = Some(OffsetDateTime::now_utc());
@@ -380,16 +399,6 @@ async fn app_main() -> Result<()> {
                             let mut stats = stats.lock().await;
                             stats.cleaner_result = Some(result);
                         }
-                        select! {
-                            () = sleep(Duration::from_secs(60 * config.link_interval)) => {},
-                            result = linker_rx.changed() => {
-                                if let Err(err) = result {
-                                    error!("Error listening on link_rx: {err:?}");
-                                    let mut stats = stats.lock().await;
-                                    stats.linker_result = Some(Err(err.into()));
-                                }
-                            },
-                        }
                     }
                 });
             }
@@ -402,6 +411,16 @@ async fn app_main() -> Result<()> {
         let stats = stats.clone();
         tokio::spawn(async move {
             loop {
+                select! {
+                    () = sleep(Duration::from_secs(60 * config.interval)) => {},
+                    result = audiobookshelf_rx.changed() => {
+                        if let Err(err) = result {
+                            error!("Error listening on audiobookshelf_rx: {err:?}");
+                            let mut stats = stats.lock().await;
+                            stats.audiobookshelf_result = Some(Err(err.into()));
+                        }
+                    },
+                }
                 {
                     let mut stats = stats.lock().await;
                     stats.audiobookshelf_run_at = Some(OffsetDateTime::now_utc());
@@ -416,16 +435,6 @@ async fn app_main() -> Result<()> {
                 {
                     let mut stats = stats.lock().await;
                     stats.audiobookshelf_result = Some(result);
-                }
-                select! {
-                    () = sleep(Duration::from_secs(60 * config.interval)) => {},
-                    result = audiobookshelf_rx.changed() => {
-                        if let Err(err) = result {
-                            error!("Error listening on audiobookshelf_rx: {err:?}");
-                            let mut stats = stats.lock().await;
-                            stats.audiobookshelf_result = Some(Err(err.into()));
-                        }
-                    },
                 }
             }
         });

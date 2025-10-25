@@ -28,35 +28,39 @@ use tokio::{fs, sync::watch::Sender, time::sleep};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 #[instrument(skip_all)]
-pub async fn run_autograbbers(
+pub async fn run_autograbber(
     config: Arc<Config>,
     db: Arc<Database<'_>>,
     mam: Arc<MaM<'_>>,
     autograb_trigger: Sender<()>,
+    index: usize,
+    autograb_config: Arc<TorrentFilter>,
 ) -> Result<()> {
     let user_info = mam.user_info().await?;
     let max_torrents = user_info.unsat.limit.saturating_sub(user_info.unsat.count);
     debug!(
-        "autograbbers, unsats: {:#?}; max_torrents: {max_torrents}",
+        "autograbber {}, unsats: {:#?}; max_torrents: {max_torrents}",
+        autograb_config
+            .filter
+            .name
+            .clone()
+            .unwrap_or_else(|| index.to_string()),
         user_info.unsat
     );
 
-    let mut selected_torrents = 0;
-    for autograb_config in &config.autograbs {
-        let max_torrents = max_torrents
-            .saturating_sub(autograb_config.unsat_buffer.unwrap_or(config.unsat_buffer))
-            .saturating_sub(selected_torrents);
-        if max_torrents > 0 {
-            selected_torrents += search_torrents(
-                config.clone(),
-                db.clone(),
-                autograb_config,
-                mam.clone(),
-                max_torrents,
-            )
-            .await
-            .context("search_torrents")?;
-        }
+    let max_torrents =
+        max_torrents.saturating_sub(autograb_config.unsat_buffer.unwrap_or(config.unsat_buffer));
+    if max_torrents > 0 {
+        let selected_torrents = search_torrents(
+            config.clone(),
+            db.clone(),
+            &autograb_config,
+            mam.clone(),
+            max_torrents,
+        )
+        .await
+        .context("search_torrents")?;
+        mam.add_unsats(selected_torrents).await;
     }
 
     autograb_trigger.send(())?;

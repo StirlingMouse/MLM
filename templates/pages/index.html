@@ -19,61 +19,66 @@ no qbittorrent instances configured, all features are disabled
 </p>
 {% endif %}
 
-<form method=post class="infoboxes">
-<div class="infobox">
-  <h2>Autograbber</h2>
-  <p>Last run: {% match autograbber_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
+<div class="infoboxes">
+{% for (i, grab) in config.autograbs.iter().enumerate() %}
+<form method=post class="infobox">
+  <h2>Autograbber: {{ grab.display_name(*i) }}</h2>
+  <p>Last run: {% match autograbber_run_at.get(i) %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
   <button name=action value=run_search>run now</button>
-  {% if autograbber_run_at.is_some() %}
-  <p>Result: {% match autograbber_result %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
+  <input type=hidden name=index value={{ i }}>
+  {% if autograbber_run_at.get(i).is_some() %}
+  <p>Result: {% match autograbber_result.get(i) %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
   {% endif %}
+</form>
+{% endfor %}
 </div>
 
-<div class="infobox">
+<div class="infoboxes">
+<form method=post class="infobox">
   <h2>Goodreads Import</h2>
   <p>Last run: {% match goodreads_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
   <button name=action value=run_goodreads>run now</button>
   {% if goodreads_run_at.is_some() %}
   <p>Result: {% match goodreads_result %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
   {% endif %}
-</div>
+</form>
 
-<div class="infobox">
+<form method=post class="infobox">
   <h2>Linker</h2>
   <p>Last run: {% match linker_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
   <button name=action value=run_linker>run now</button>
   {% if linker_run_at.is_some() %}
   <p>Result: {% match linker_result %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
   {% endif %}
-</div>
+</form>
 
-<div class="infobox">
+<form method=post class="infobox">
   <h2>Cleaner</h2>
   <p>Last run: {% match cleaner_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
   {% if cleaner_run_at.is_some() %}
   <p>Result: {% match cleaner_result %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
   {% endif %}
-</div>
+</form>
 
-<div class="infobox">
+<form method=post class="infobox">
   <h2>Torrent downloader</h2>
   <p>Last run: {% match downloader_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
   <button name=action value=run_downloader>run now</button>
   {% if downloader_run_at.is_some() %}
   <p>Result: {% match downloader_result %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
   {% endif %}
-</div>
+</form>
 
-<div class="infobox">
+<form method=post class="infobox">
   <h2>Audiobookshelf Matcher</h2>
   <p>Last run: {% match audiobookshelf_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
   <button name=action value=run_abs_matcher>run now</button>
   {% if audiobookshelf_run_at.is_some() %}
   <p>Result: {% match audiobookshelf_result %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
   {% endif %}
-</div>
 </form>
+</div>
 
 <hr>
-<p><span style="font-size:2em">🏳️‍⚧️</span> Trans Rights are Human Rights</p>
+<p style="display:flex;align-items:center;gap:0.8ex"><span style="font-size:2em">🏳️‍⚧️</span> Trans Rights are Human Rights</p>
 {% endblock %}

@@ -643,6 +643,12 @@ impl<'a> MaM<'a> {
             .map(|(_, user_info)| user_info.clone())
     }
 
+    pub async fn add_unsats(&self, unsats: u64) {
+        if let Some((_, user)) = self.user.lock().await.as_mut() {
+            user.unsat.count += unsats;
+        }
+    }
+
     pub async fn get_torrent_file(&self, dl_hash: &str) -> Result<Bytes> {
         let resp = self
             .client

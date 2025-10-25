@@ -1,11 +1,13 @@
+use std::collections::BTreeMap;
+
 use anyhow::Result;
 use time::OffsetDateTime;
 use tokio::sync::watch::Sender;
 
 #[derive(Default)]
 pub struct Stats {
-    pub autograbber_run_at: Option<OffsetDateTime>,
-    pub autograbber_result: Option<Result<()>>,
+    pub autograbber_run_at: BTreeMap<usize, OffsetDateTime>,
+    pub autograbber_result: BTreeMap<usize, Result<()>>,
     pub linker_run_at: Option<OffsetDateTime>,
     pub linker_result: Option<Result<()>>,
     pub cleaner_run_at: Option<OffsetDateTime>,
@@ -20,7 +22,7 @@ pub struct Stats {
 
 #[derive(Clone)]
 pub struct Triggers {
-    pub search_tx: Sender<()>,
+    pub search_tx: BTreeMap<usize, Sender<()>>,
     pub linker_tx: Sender<()>,
     pub goodreads_tx: Sender<()>,
     pub downloader_tx: Sender<()>,

@@ -323,6 +323,8 @@ enum AppError {
     QbitError(#[from] qbit::Error),
     #[error("Send Error: {0:?}")]
     SendError(#[from] SendError<()>),
+    #[error("Send Error: {0:?}")]
+    SendError2(#[from] SendError<isize>),
     #[error("Meta Error: {0:?}")]
     MetaError(#[from] MetaError),
     #[error("Error: {0:?}")]

@@ -83,6 +83,7 @@ pub struct TorrentFilter {
     #[serde(flatten)]
     pub filter: Filter,
 
+    pub search_interval: Option<u64>,
     pub unsat_buffer: Option<u64>,
     #[serde(default)]
     pub dry_run: bool,

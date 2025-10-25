@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::Result;
 use askama::Template;
@@ -11,7 +11,7 @@ use serde::Deserialize;
 use tokio::sync::Mutex;
 
 use crate::{
-    config::Config,
+    config::{Config, TorrentFilter},
     data::Timestamp,
     mam::MaM,
     stats::{Stats, Triggers},
@@ -31,14 +31,20 @@ pub async fn index_page(
         Err(_) => None,
     };
     let template = IndexPageTemplate {
+        config: config.clone(),
         mam_error: mam.as_ref().as_ref().err().map(|e| format!("{e}")),
         has_no_qbits: config.qbittorrent.is_empty(),
         username,
-        autograbber_run_at: stats.autograbber_run_at.map(Into::into),
+        autograbber_run_at: stats
+            .autograbber_run_at
+            .iter()
+            .map(|(i, time)| (*i, Timestamp::from(*time)))
+            .collect(),
         autograbber_result: stats
             .autograbber_result
-            .as_ref()
-            .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+            .iter()
+            .map(|(i, r)| (*i, r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))))
+            .collect(),
         linker_run_at: stats.linker_run_at.map(Into::into),
         linker_result: stats
             .linker_result
@@ -78,7 +84,15 @@ pub async fn index_page_post(
             triggers.linker_tx.send(())?;
         }
         "run_search" => {
-            triggers.search_tx.send(())?;
+            if let Some(tx) = triggers.search_tx.get(
+                &form
+                    .index
+                    .ok_or_else(|| anyhow::Error::msg("Invalid index"))?,
+            ) {
+                tx.send(())?;
+            } else {
+                return Err(anyhow::Error::msg("Invalid index").into());
+            }
         }
         "run_goodreads" => {
             triggers.goodreads_tx.send(())?;
@@ -100,11 +114,12 @@ pub async fn index_page_post(
 #[derive(Template)]
 #[template(path = "pages/index.html")]
 struct IndexPageTemplate {
+    config: Arc<Config>,
     mam_error: Option<String>,
     has_no_qbits: bool,
     username: Option<String>,
-    autograbber_run_at: Option<Timestamp>,
-    autograbber_result: Option<Result<(), String>>,
+    autograbber_run_at: BTreeMap<usize, Timestamp>,
+    autograbber_result: BTreeMap<usize, Result<(), String>>,
     linker_run_at: Option<Timestamp>,
     linker_result: Option<Result<(), String>>,
     cleaner_run_at: Option<Timestamp>,
@@ -122,4 +137,11 @@ impl Page for IndexPageTemplate {}
 #[derive(Debug, Deserialize)]
 pub struct IndexPageForm {
     action: String,
+    index: Option<usize>,
+}
+
+impl TorrentFilter {
+    fn display_name(&self, i: usize) -> String {
+        self.filter.name.clone().unwrap_or_else(|| format!("{i}"))
+    }
 }

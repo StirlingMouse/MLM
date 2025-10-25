@@ -299,3 +299,14 @@ summary {
                 color: #de935f;
         }
 }
+
+.infoboxes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        max-width: min(932px, 100%);
+
+        .infobox {
+                width: min(300px, 100%);
+        }
+}
