@@ -48,9 +48,9 @@ pub async fn run_autograbber(
         user_info.unsat
     );
 
-    let max_torrents =
-        max_torrents.saturating_sub(autograb_config.unsat_buffer.unwrap_or(config.unsat_buffer));
-    if max_torrents > 0 {
+    let unsat_buffer = autograb_config.unsat_buffer.unwrap_or(config.unsat_buffer);
+    let max_torrents = max_torrents.saturating_sub(unsat_buffer);
+    if max_torrents > 0 || autograb_config.cost == Cost::MetadataOnly {
         let selected_torrents = search_torrents(
             config.clone(),
             db.clone(),
