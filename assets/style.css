@@ -55,8 +55,32 @@ nav > a {
         gap: 8px;
 }
 
+a.btn,
+button {
+        appearance: none;
+        padding: 4px 8px;
+        border: none;
+        border-radius: 2px;
+        font-size: inherit;
+        color: var(--text);
+        background: var(--above);
+        cursor: pointer;
+
+        &[data-prompt] {
+                color: var(--warn);
+        }
+
+        &:hover {
+                background: var(--color-3);
+        }
+        &:focus-ring {
+                background: var(--color-3);
+        }
+}
+
 form {
-        button {
+        
+        textarea {
                 appearance: none;
                 padding: 4px 8px;
                 border: none;
@@ -64,20 +88,13 @@ form {
                 font-size: inherit;
                 color: var(--text);
                 background: var(--above);
-                cursor: pointer;
+                width: max(220px, 20vw);
 
-                &[data-prompt] {
-                        color: var(--warn);
-                }
-
-                &:hover {
+                &:focus {
                         background: var(--color-3);
-                }
-                &:focus-ring {
-                        background: var(--color-3);
+                        outline: 2px solid var(--accent);
                 }
         }
-        
         input[type=text] {
                 appearance: none;
                 padding: 4px 8px;
@@ -134,6 +151,21 @@ form {
                 }
                 &:focus-ring {
                         background: var(--color-3);
+                }
+        }
+
+        &.page {
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+
+                label {
+                        display: flex;
+
+                        span {
+                                display: inline-block;
+                                width: 140px;
+                        }
                 }
         }
 }

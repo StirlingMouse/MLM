@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use anyhow::Result;
-use axum::http::HeaderMap;
+use axum::http::{HeaderMap, HeaderName};
 use native_db::Database;
 use reqwest::{Url, header::AUTHORIZATION};
 use serde::{Deserialize, Serialize};
@@ -618,6 +618,7 @@ impl Abs {
 
         self.client
             .patch(format!("{}/api/items/{id}/media", self.base_url))
+            .header("Content-Type", "application/json")
             .body(serde_json::to_string(&MediaUpdate {
                 metadata: MetadataUpdate {
                     title,

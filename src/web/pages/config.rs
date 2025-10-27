@@ -83,6 +83,7 @@ pub async fn config_page_post(
                                 &mam_torrent,
                                 torrent.clone(),
                                 new_meta,
+                                false,
                             )
                             .await?;
                         }

@@ -73,6 +73,13 @@ impl Category {
         }
     }
 
+    pub fn as_main_cat(&self) -> MainCat {
+        match self {
+            Category::Audio(_) => MainCat::Audio,
+            Category::Ebook(_) => MainCat::Ebook,
+        }
+    }
+
     pub fn as_id(&self) -> u8 {
         match self {
             Category::Audio(cat) => cat.to_id(),

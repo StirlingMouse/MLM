@@ -8,4 +8,5 @@ pub mod lists;
 pub mod replaced;
 pub mod selected;
 pub mod torrent;
+pub mod torrent_edit;
 pub mod torrents;

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}MLM - Edit- {{ torrent.meta.title }}{% endblock %}
+
+{% block head %}
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <h1>{{ torrent.meta.title }}</h1>
+</div>
+<form method=post class=page>
+  <label>
+    <span>Title</span>
+    <input type=text name=title value="{{ torrent.meta.title }}">
+  </label>
+  <label>
+    <span>Authors</span>
+    <textarea name=authors rows="{{ torrent.meta.authors.len() + 1 }}">{{ torrent.meta.authors.join("\n") }}</textarea>
+  </label>
+  <label>
+    <span>Narrators</span>
+    <textarea name=narrators rows="{{ torrent.meta.narrators.len() + 1 }}">{{ torrent.meta.narrators.join("\n") }}</textarea>
+  </label>
+  <label>
+    <span>Series</span>
+    <textarea name=series rows="{{ torrent.meta.series.len() + 1 }}">{{ series() }}</textarea>
+  </label>
+  <label>
+    <span>Language</span>
+    <select name=language>
+    {% for language in Language::all() %}
+      <option value="{{ language.to_id() }}" {% if torrent.meta.language == Some(*language) %}selected{% endif %}>{{ language.to_str() }}</option>
+    {% endfor %}
+    </select>
+  </label>
+  <label>
+    <span>Category</span>
+    <select name=category>
+    {% for cat in AudiobookCategory::all() %}
+      <option value="{{ cat.to_id() }}" {% if torrent.meta.cat.as_ref().map(Category::as_id) == Some(cat.to_id()) %}selected{% endif %}>Audiobook - {{ cat.to_str() }}</option>
+    {% endfor %}
+    {% for cat in EbookCategory::all() %}
+      <option value="{{ cat.to_id() }}" {% if torrent.meta.cat.as_ref().map(Category::as_id) == Some(cat.to_id()) %}selected{% endif %}>Ebook - {{ cat.to_str() }}</option>
+    {% endfor %}
+    </select>
+  </label>
+  <fieldset>
+    <legend>Flags</legend>
+    <label>
+      <span>Language</span>
+      <input type=checkbox name=crude_language value=true {% if flags.crude_language == Some(true) %}checked{% endif %}>
+    </label>
+    <label>
+      <span>Violence</span>
+      <input type=checkbox name=violence value=true {% if flags.violence == Some(true) %}checked{% endif %}>
+    </label>
+    <label>
+      <span>Some Explicit</span>
+      <input type=checkbox name=some_explicit value=true {% if flags.some_explicit == Some(true) %}checked{% endif %}>
+    </label>
+    <label>
+      <span>Explicit</span>
+      <input type=checkbox name=explicit value=true {% if flags.explicit == Some(true) %}checked{% endif %}>
+    </label>
+    <label>
+      <span>Abridged</span>
+      <input type=checkbox name=abridged value=true {% if flags.abridged == Some(true) %}checked{% endif %}>
+    </label>
+    <label>
+      <span>LGBT</span>
+      <input type=checkbox name=lgbt value=true {% if flags.lgbt == Some(true) %}checked{% endif %}>
+    </label>
+  </fieldset>
+  <button>Save</button>
+</form>
+{% endblock %}

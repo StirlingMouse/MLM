@@ -251,6 +251,7 @@ pub async fn refresh_metadata(
             &mam_torrent,
             torrent.clone(),
             meta.clone(),
+            true,
         )
         .await?;
         torrent.meta = meta;

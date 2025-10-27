@@ -26,6 +26,7 @@ use pages::{
     replaced::{replaced_torrents_page, replaced_torrents_page_post},
     selected::{selected_page, selected_torrents_page_post},
     torrent::{torrent_page, torrent_page_post},
+    torrent_edit::{torrent_edit_page, torrent_edit_page_post},
     torrents::{torrents_page, torrents_page_post},
 };
 use reqwest::header;
@@ -78,6 +79,14 @@ pub async fn start_webserver(
         .route(
             "/torrents/{hash}",
             post(torrent_page_post).with_state((config.clone(), db.clone(), mam.clone())),
+        )
+        .route(
+            "/torrents/{hash}/edit",
+            get(torrent_edit_page).with_state(db.clone()),
+        )
+        .route(
+            "/torrents/{hash}/edit",
+            post(torrent_edit_page_post).with_state((config.clone(), db.clone(), mam.clone())),
         )
         .route("/events", get(event_page).with_state(db.clone()))
         .route(

@@ -364,7 +364,8 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 .next();
             if let Some(old) = old_library.transpose()? {
                 if old.meta != meta {
-                    update_torrent_meta(config, db, rw_opt.unwrap(), &torrent, old, meta).await?;
+                    update_torrent_meta(config, db, rw_opt.unwrap(), &torrent, old, meta, false)
+                        .await?;
                 }
                 continue 'torrent;
             }
@@ -436,8 +437,16 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             for old in old_library {
                 if old.meta.mam_id == meta.mam_id {
                     if old.meta != meta {
-                        update_torrent_meta(config, db, rw_opt.unwrap(), &torrent, old, meta)
-                            .await?;
+                        update_torrent_meta(
+                            config,
+                            db,
+                            rw_opt.unwrap(),
+                            &torrent,
+                            old,
+                            meta,
+                            false,
+                        )
+                        .await?;
                     }
                     continue 'torrent;
                 }
@@ -663,8 +672,9 @@ pub async fn update_torrent_meta(
     mam_torrent: &MaMTorrent,
     torrent: data::Torrent,
     meta: TorrentMeta,
+    allow_non_mam: bool,
 ) -> Result<()> {
-    if torrent.meta.source != MetadataSource::Mam {
+    if !allow_non_mam && torrent.meta.source != MetadataSource::Mam {
         return Ok(());
     }
 

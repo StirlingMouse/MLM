@@ -14,6 +14,7 @@
 {% block content %}
 <div class="row">
   <h1>{{ torrent.meta.title }}</h1>
+  <a href="/torrents/{{ torrent.hash }}/edit" class=btn>edit</a>
 </div>
 <div class="row">
   id: {{ torrent.mam_id }}
