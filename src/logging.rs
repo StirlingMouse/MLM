@@ -35,7 +35,7 @@ pub fn update_errored_torrent(
                 ErroredTorrentId::Linker(_) => "Linker",
                 ErroredTorrentId::Cleaner(_) => "Cleaner",
             };
-            warn!("{name} error for {torrent}: {err}");
+            warn!("{name} error for {torrent}: {err:?}");
             let (err, meta) = match err.downcast::<TorrentMetaError>() {
                 Ok(TorrentMetaError(meta, err)) => (err, Some(meta)),
                 Err(err) => (err, None),
