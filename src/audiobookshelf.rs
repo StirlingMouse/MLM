@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use anyhow::Result;
-use axum::http::{HeaderMap, HeaderName};
+use axum::http::HeaderMap;
 use native_db::Database;
 use reqwest::{Url, header::AUTHORIZATION};
 use serde::{Deserialize, Serialize};
@@ -25,17 +25,17 @@ pub struct Library {
     pub id: String,
     pub name: String,
     pub folders: Vec<Folder>,
-    #[serde(rename = "displayOrder")]
-    pub display_order: i64,
-    pub icon: String,
-    #[serde(rename = "mediaType")]
-    pub media_type: String,
-    pub provider: String,
-    pub settings: Settings,
-    #[serde(rename = "createdAt")]
-    pub created_at: i64,
-    #[serde(rename = "lastUpdate")]
-    pub last_update: i64,
+    // #[serde(rename = "displayOrder")]
+    // pub display_order: i64,
+    // pub icon: String,
+    // #[serde(rename = "mediaType")]
+    // pub media_type: String,
+    // pub provider: String,
+    // pub settings: Settings,
+    // #[serde(rename = "createdAt")]
+    // pub created_at: i64,
+    // #[serde(rename = "lastUpdate")]
+    // pub last_update: i64,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
@@ -49,17 +49,17 @@ pub struct Folder {
     pub added_at: Option<i64>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
-pub struct Settings {
-    #[serde(rename = "coverAspectRatio")]
-    pub cover_aspect_ratio: i64,
-    #[serde(rename = "disableWatcher")]
-    pub disable_watcher: bool,
-    #[serde(rename = "skipMatchingMediaWithAsin")]
-    pub skip_matching_media_with_asin: bool,
-    #[serde(rename = "skipMatchingMediaWithIsbn")]
-    pub skip_matching_media_with_isbn: bool,
-}
+// #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+// pub struct Settings {
+//     #[serde(rename = "coverAspectRatio")]
+//     pub cover_aspect_ratio: i64,
+//     #[serde(rename = "disableWatcher")]
+//     pub disable_watcher: bool,
+//     #[serde(rename = "skipMatchingMediaWithAsin")]
+//     pub skip_matching_media_with_asin: bool,
+//     #[serde(rename = "skipMatchingMediaWithIsbn")]
+//     pub skip_matching_media_with_isbn: bool,
+// }
 
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 pub struct SearchResponse {
@@ -80,19 +80,19 @@ pub struct SearchResponse {
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 pub struct AuthorItem {
     pub id: String,
-    pub asin: Option<String>,
+    // pub asin: Option<String>,
     pub name: String,
-    pub description: Option<String>,
-    #[serde(rename = "imagePath")]
-    pub image_path: Option<String>,
-    #[serde(rename = "libraryId")]
-    pub library_id: String,
-    #[serde(rename = "addedAt")]
-    pub added_at: i64,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: i64,
-    #[serde(rename = "numBooks")]
-    pub num_books: i64,
+    // pub description: Option<String>,
+    // #[serde(rename = "imagePath")]
+    // pub image_path: Option<String>,
+    // #[serde(rename = "libraryId")]
+    // pub library_id: String,
+    // #[serde(rename = "addedAt")]
+    // pub added_at: i64,
+    // #[serde(rename = "updatedAt")]
+    // pub updated_at: i64,
+    // #[serde(rename = "numBooks")]
+    // pub num_books: i64,
 }
 
 // #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
@@ -339,16 +339,16 @@ pub struct AuthorItem {
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 pub struct AuthorResponse {
     pub id: String,
-    pub asin: Option<String>,
+    // pub asin: Option<String>,
     pub name: String,
-    pub description: Option<String>,
-    #[serde(rename = "imagePath")]
-    pub image_path: Option<String>,
-    #[serde(rename = "addedAt")]
-    pub added_at: i64,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: i64,
-    #[serde(rename = "libraryItems")]
+    // pub description: Option<String>,
+    // #[serde(rename = "imagePath")]
+    // pub image_path: Option<String>,
+    // #[serde(rename = "addedAt")]
+    // pub added_at: i64,
+    // #[serde(rename = "updatedAt")]
+    // pub updated_at: i64,
+    // #[serde(rename = "libraryItems")]
     pub library_items: Vec<LibraryItemMinified>,
     // pub series: Vec<SeriesItem>,
 }
@@ -366,70 +366,70 @@ pub struct LibraryItemMinified {
     pub rel_path: String,
     #[serde(rename = "isFile")]
     pub is_file: bool,
-    #[serde(rename = "mtimeMs")]
-    pub mtime_ms: i64,
-    #[serde(rename = "ctimeMs")]
-    pub ctime_ms: i64,
-    #[serde(rename = "birthtimeMs")]
-    pub birthtime_ms: i64,
-    #[serde(rename = "addedAt")]
-    pub added_at: i64,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: i64,
-    #[serde(rename = "isMissing")]
-    pub is_missing: bool,
-    #[serde(rename = "isInvalid")]
-    pub is_invalid: bool,
-    #[serde(rename = "mediaType")]
-    pub media_type: String,
-    pub media: MediaMinified,
-    #[serde(rename = "numFiles")]
-    pub num_files: i64,
-    pub size: i64,
+    // #[serde(rename = "mtimeMs")]
+    // pub mtime_ms: i64,
+    // #[serde(rename = "ctimeMs")]
+    // pub ctime_ms: i64,
+    // #[serde(rename = "birthtimeMs")]
+    // pub birthtime_ms: i64,
+    // #[serde(rename = "addedAt")]
+    // pub added_at: i64,
+    // #[serde(rename = "updatedAt")]
+    // pub updated_at: i64,
+    // #[serde(rename = "isMissing")]
+    // pub is_missing: bool,
+    // #[serde(rename = "isInvalid")]
+    // pub is_invalid: bool,
+    // #[serde(rename = "mediaType")]
+    // pub media_type: String,
+    // pub media: MediaMinified,
+    // #[serde(rename = "numFiles")]
+    // pub num_files: i64,
+    // pub size: i64,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
-pub struct MediaMinified {
-    pub metadata: MetadataSmall,
-    #[serde(rename = "coverPath")]
-    pub cover_path: Option<String>,
-    pub tags: Vec<String>,
-    #[serde(rename = "numTracks")]
-    pub num_tracks: i64,
-    #[serde(rename = "numAudioFiles")]
-    pub num_audio_files: i64,
-    #[serde(rename = "numChapters")]
-    pub num_chapters: i64,
-    pub duration: f64,
-    pub size: i64,
-    #[serde(rename = "ebookFileFormat")]
-    pub ebook_file_format: Option<String>,
-}
+// #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+// pub struct MediaMinified {
+//     pub metadata: MetadataSmall,
+//     #[serde(rename = "coverPath")]
+//     pub cover_path: Option<String>,
+//     pub tags: Vec<String>,
+//     #[serde(rename = "numTracks")]
+//     pub num_tracks: i64,
+//     #[serde(rename = "numAudioFiles")]
+//     pub num_audio_files: i64,
+//     #[serde(rename = "numChapters")]
+//     pub num_chapters: i64,
+//     pub duration: f64,
+//     pub size: i64,
+//     #[serde(rename = "ebookFileFormat")]
+//     pub ebook_file_format: Option<String>,
+// }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
-pub struct MetadataSmall {
-    pub title: String,
-    #[serde(rename = "titleIgnorePrefix")]
-    pub title_ignore_prefix: String,
-    pub subtitle: Option<String>,
-    #[serde(rename = "authorName")]
-    pub author_name: Option<String>,
-    #[serde(rename = "narratorName")]
-    pub narrator_name: Option<String>,
-    #[serde(rename = "seriesName")]
-    pub series_name: Option<String>,
-    pub genres: Vec<String>,
-    #[serde(rename = "publishedYear")]
-    pub published_year: Option<String>,
-    #[serde(rename = "publishedDate")]
-    pub published_date: Option<String>,
-    pub publisher: Option<String>,
-    pub description: Option<String>,
-    pub isbn: Option<String>,
-    pub asin: Option<String>,
-    pub language: Option<String>,
-    pub explicit: bool,
-}
+// #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+// pub struct MetadataSmall {
+//     pub title: String,
+//     #[serde(rename = "titleIgnorePrefix")]
+//     pub title_ignore_prefix: String,
+//     pub subtitle: Option<String>,
+//     #[serde(rename = "authorName")]
+//     pub author_name: Option<String>,
+//     #[serde(rename = "narratorName")]
+//     pub narrator_name: Option<String>,
+//     #[serde(rename = "seriesName")]
+//     pub series_name: Option<String>,
+//     pub genres: Vec<String>,
+//     #[serde(rename = "publishedYear")]
+//     pub published_year: Option<String>,
+//     #[serde(rename = "publishedDate")]
+//     pub published_date: Option<String>,
+//     pub publisher: Option<String>,
+//     pub description: Option<String>,
+//     pub isbn: Option<String>,
+//     pub asin: Option<String>,
+//     pub language: Option<String>,
+//     pub explicit: bool,
+// }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize)]
 pub struct MediaUpdate<'a> {
