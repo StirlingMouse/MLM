@@ -283,6 +283,36 @@ summary {
         }
 }
 
+.table2 {
+        --alternate: var(--above);
+        word-break: break-word;
+
+        & > div {
+                display: grid;
+
+                &:nth-child(even) {
+                        background: var(--alternate);
+                }
+
+                &&:hover {
+                        background: var(--color-3);
+                }
+
+                & > .header, & > div {
+                        display: block;
+                        padding: 4px;
+                }
+
+                & > .header {
+                        position: sticky;
+                        top: 0;
+                        font-weight: bold;
+                        border-bottom: 1px solid currentColor;
+                        background: var(--background);
+                }
+        }
+}
+
 .list_item {
         display: grid;
         grid-template-columns: auto 1fr;

@@ -25,7 +25,7 @@ use crate::{
     web::{
         AppError,
         tables::{
-            HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable, table_styles,
+            HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable, table2_styles,
         },
         time,
     },
@@ -358,8 +358,8 @@ pub async fn torrents_page(
                     false
                 }
                 torrents.retain(|t| {
-                    t.meta.authors.iter().any(|name| bunched_initials(&name))
-                        || t.meta.narrators.iter().any(|name| bunched_initials(&name))
+                    t.meta.authors.iter().any(|name| bunched_initials(name))
+                        || t.meta.narrators.iter().any(|name| bunched_initials(name))
                 });
             }
             "series_with_holes" => {
@@ -604,6 +604,7 @@ struct TorrentsPageColumns {
     size: bool,
     filetypes: bool,
     path: bool,
+    created_at: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -623,6 +624,7 @@ impl Default for TorrentsPageColumns {
             size: true,
             filetypes: true,
             path: false,
+            created_at: true,
         }
     }
 }
@@ -641,6 +643,7 @@ impl TryFrom<String> for TorrentsPageColumns {
             size: false,
             filetypes: false,
             path: false,
+            created_at: false,
         };
         for column in value.split(",") {
             match column {
@@ -653,6 +656,7 @@ impl TryFrom<String> for TorrentsPageColumns {
                 "size" => columns.size = true,
                 "filetype" => columns.filetypes = true,
                 "path" => columns.path = true,
+                "created_at" => columns.created_at = true,
                 "" => {}
                 _ => {
                     return Err(format!("Unknown column {column}"));

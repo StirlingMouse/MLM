@@ -66,7 +66,7 @@ document.body.addEventListener('change', e => {
                 return
         }
         if (e.target.type === 'checkbox') {
-                const table = e.target.closest('.table')
+                const table = e.target.closest('.table,.table2')
                 if (table) {
                         const name = e.target.name
                         if (name.endsWith('_all')) {

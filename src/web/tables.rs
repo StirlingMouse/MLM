@@ -315,6 +315,14 @@ pub fn table_styles_rows(cols: u64, rows: u64) -> String {
 
     styles
 }
+pub fn table2_styles(cols: &Vec<String>) -> String {
+    let styles = format!(
+        "& > div {{ grid-template-columns: {}; }}",
+        cols.join(" ")
+    );
+
+    styles
+}
 
 /// ```askama
 /// <a href="{{link()}}">{{label}}</a>

@@ -58,6 +58,10 @@
         Path
         <input type=checkbox name=show {% if show.path %}checked{% endif %} value="path">
       </label>
+      <label>
+        Added At
+        <input type=checkbox name=show {% if show.created_at %}checked{% endif %} value="created_at">
+      </label>
       </div>
     </div>
     <div class="option_group query">
@@ -72,7 +76,8 @@
   <button name=action value=clean data-prompt="Are you sure you want to clean the selected torrents?">clean torrent</button>
   <button name=action value=remove data-prompt="Are you sure you want to remove the selected torrents?">remove torrent from MLM</button>
 </div>
-<div class="TorrentsTable table">
+<div class="TorrentsTable table2">
+<div>
   {{ table_header_all("torrent", "30px") | safe }}
   {% if show.category %}
   {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", "130px") }}
@@ -89,9 +94,11 @@
   {{ table_header_if(show.filetypes, None, "Filetypes", "100px") }}
   {{ table_header_if(!show.path, Some(TorrentsPageSort::Linked), "Linked", "80px") }}
   {{ table_header_if(show.path, Some(TorrentsPageSort::Linked), "Path", "2fr") }}
-  {{ table_header_s(Some(TorrentsPageSort::CreatedAt), "Added At", "157px") }}
+  {{ table_header_if(show.created_at, Some(TorrentsPageSort::CreatedAt), "Added At", "157px") }}
   {{ table_header_s(None, "", "132px") }}
+</div>
 {% for torrent in torrents %}
+<div>
   <div><input type=checkbox name=torrent value={{torrent.hash}}></div>
   <div>
     <span title="{{ torrent.cat_name() }}">{{ item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</span>
@@ -175,7 +182,9 @@
       {% endmatch %}
     </div>
   {% endif %}
+  {% if show.created_at %}
   <div>{{ self::time(torrent.created_at) }}</div>
+  {% endif %}
   <div>
     <a href="/torrents/{{ torrent.hash }}">open</a>
     <a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a>
@@ -183,6 +192,7 @@
       <a href="{{ abs_url }}/audiobookshelf/item/{{ abs_id }}" target=_blank>ABS</a>
     {% endif %}
   </div>
+</div>
 {% endfor %}
 </div>
 {% if torrents.is_empty() %}
@@ -192,9 +202,8 @@
 {{ paging | safe }}
 <style>
   .TorrentsTable {
-    display: grid;
-    {{self::table_styles(*((self.cols.borrow().len()) as u64)) | safe}}
-    grid-template-columns: {{ self.cols.borrow().join(" ") }};
+    display: block;
+    {{self::table2_styles(self.cols.borrow().as_ref()) | safe}}
   }
 </style>
 {% endblock %}
