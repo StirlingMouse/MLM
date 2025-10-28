@@ -14,7 +14,7 @@ use native_db::Database;
 use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
 
-use crate::data::{Category, ClientStatus, MainCat, Series, SeriesEntry};
+use crate::data::{Category, ClientStatus, MainCat, MetadataSource, Series, SeriesEntry};
 use crate::mam_enums::Flags;
 use crate::web::{MaMState, Page};
 use crate::{
@@ -150,6 +150,11 @@ pub async fn torrents_page(
                         None => false,
                     },
                     TorrentsPageFilter::Abs => t.abs_id.is_some() == (value == "true"),
+                    TorrentsPageFilter::Source => match value.as_str() {
+                        "mam" => t.meta.source == MetadataSource::Mam,
+                        "manual" => t.meta.source == MetadataSource::Manual,
+                        _ => false,
+                    },
                     TorrentsPageFilter::Query => true,
                     TorrentsPageFilter::Metadata => true,
                     TorrentsPageFilter::SortBy => true,
@@ -575,6 +580,7 @@ pub enum TorrentsPageFilter {
     ClientStatus,
     Abs,
     Query,
+    Source,
     Metadata,
     // Workaround sort decode failure
     SortBy,
