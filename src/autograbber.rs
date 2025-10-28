@@ -690,6 +690,7 @@ pub async fn update_torrent_meta(
     );
     let mut torrent = torrent;
     torrent.meta = meta.clone();
+    torrent.title_search = normalize_title(&meta.title);
     rw.upsert(torrent.clone())?;
     rw.commit()?;
 
