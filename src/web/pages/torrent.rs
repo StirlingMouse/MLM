@@ -2,8 +2,9 @@ use std::{collections::BTreeSet, ops::Deref, path::PathBuf, sync::Arc};
 
 use askama::Template;
 use axum::{
+    body::Body,
     extract::{OriginalUri, Path, State},
-    response::{Html, Redirect},
+    response::{Html, IntoResponse, Redirect},
 };
 use axum_extra::extract::Form;
 use itertools::Itertools;
@@ -12,7 +13,9 @@ use qbit::{
     models::{Category, Torrent as QbitTorrent, Tracker},
     parameters::TorrentState,
 };
+use reqwest::header;
 use serde::Deserialize;
+use tokio_util::io::ReaderStream;
 
 use crate::{
     audiobookshelf::{Abs, LibraryItemMinified},
@@ -27,6 +30,44 @@ use crate::{
         tables::table_styles, time,
     },
 };
+
+pub async fn torrent_file(
+    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    Path((hash, filename)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let Some(torrent) = db.r_transaction()?.get().primary::<Torrent>(hash)? else {
+        return Err(AppError::NotFound);
+    };
+    let Some(path) = (if let (Some(library_path), Some(library_file)) = (
+        &torrent.library_path,
+        torrent
+            .library_files
+            .iter()
+            .find(|f| f.to_string_lossy() == filename),
+    ) {
+        Some(library_path.join(library_file))
+    } else {
+        None
+    }) else {
+        return Err(AppError::NotFound);
+    };
+    let file = match tokio::fs::File::open(path).await {
+        Ok(file) => file,
+        Err(_) => return Err(AppError::NotFound),
+    };
+    let stream = ReaderStream::new(file);
+    let body = Body::from_stream(stream);
+
+    let headers = [
+        (header::CONTENT_TYPE, "text/toml; charset=utf-8".to_string()),
+        (
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}\"", filename),
+        ),
+    ];
+
+    Ok((headers, body))
+}
 
 pub async fn torrent_page(
     State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,

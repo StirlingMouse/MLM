@@ -47,6 +47,7 @@ sublime_fuzzy = "0.7.0"
 thiserror = "2.0.12"
 time = { version = "0.3.41", features = ["formatting", "local-offset", "macros", "serde"] }
 tokio = { version = "1.45.1", features = ["full"] }
+tokio-util = "0.7"
 toml = "0.8.23"
 tower = "0.5.2"
 tower-http = { version = "0.6.6", features = ["fs"] }

@@ -62,7 +62,7 @@
   <summary>Files</summary>
   <ul>
   {% for file in torrent.library_files.iter().flatten() %}
-    <li>{{ file.to_string_lossy() }}</li>
+    <li><a href="/torrents/{{torrent.hash}}/{{file.to_string_lossy()}}" target=_blank>{{ file.to_string_lossy() }}</a></li>
   {% endfor %}
   </ul>
 </details>
@@ -107,7 +107,7 @@
     <summary>Files</summary>
     <ul>
     {% for file in torrent.library_files.iter().flatten() %}
-      <li>{{ file.to_string_lossy() }}</li>
+      <li><a href="/torrents/{{torrent.hash}}/{{file.to_string_lossy()}}" target=_blank>{{ file.to_string_lossy() }}</a></li>
     {% endfor %}
     </ul>
   </details>
