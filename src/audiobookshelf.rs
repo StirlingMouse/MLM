@@ -348,7 +348,7 @@ pub struct AuthorResponse {
     // pub added_at: i64,
     // #[serde(rename = "updatedAt")]
     // pub updated_at: i64,
-    // #[serde(rename = "libraryItems")]
+    #[serde(rename = "libraryItems")]
     pub library_items: Vec<LibraryItemMinified>,
     // pub series: Vec<SeriesItem>,
 }
