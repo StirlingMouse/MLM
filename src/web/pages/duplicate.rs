@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{Context as _, Error, Result};
+use anyhow::{Error, Result};
 use askama::Template;
 use axum::{
     extract::{OriginalUri, Query, State},
@@ -9,15 +9,13 @@ use axum::{
 use axum_extra::extract::Form;
 use native_db::Database;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::{
-    autograbber::get_mam_torrent_hash,
     cleaner::clean_torrent,
     config::Config,
     data::{DuplicateTorrent, SelectedTorrent, Timestamp, Torrent, TorrentCost},
-    mam::{SearchQuery, Tor, normalize_title},
-    mam_enums::SearchIn,
+    mam::normalize_title,
     web::{
         AppError, MaMState, Page,
         tables::{Key, SortOn, Sortable, table_styles_rows},
@@ -111,57 +109,12 @@ pub async fn duplicate_torrents_page_post(
                     return Err(anyhow::Error::msg("Could not find original torrent").into());
                 };
 
-                let mut mam_torrent = None;
-                if let Some(dl_link) = &duplicate_torrent.dl_link {
-                    let hash = get_mam_torrent_hash(mam, dl_link).await.ok();
-                    if let Some(hash) = hash {
-                        mam_torrent = mam.get_torrent_info(&hash).await.ok().flatten();
-                    }
-                }
-                if mam_torrent.is_none() {
-                    let page_results = mam
-                        .search(&SearchQuery {
-                            description: false,
-                            thumbnail: false,
-                            dl_link: true,
-                            isbn: false,
-                            perpage: 100,
-                            tor: Tor {
-                                start_number: 0,
-                                text: &duplicate_torrent.meta.authors.join("|"),
-                                srch_in: vec![SearchIn::Author],
-                                browse_lang: duplicate_torrent
-                                    .meta
-                                    .language
-                                    .map(|l| l.to_id())
-                                    .into_iter()
-                                    .collect(),
-                                main_cat: vec![duplicate_torrent.meta.main_cat.as_id()],
-                                min_size: duplicate_torrent.meta.size.bytes()
-                                    - (duplicate_torrent.meta.size.bytes() as f64 * 0.1) as u64,
-                                max_size: duplicate_torrent.meta.size.bytes()
-                                    + (duplicate_torrent.meta.size.bytes() as f64 * 0.1) as u64,
-                                unit: 1,
-                                ..Default::default()
-                            },
-                        })
-                        .await
-                        .context("search")?;
-                    debug!(
-                        "result: perpage: {}, start: {}, data: {}, total: {}, found: {}",
-                        page_results.perpage,
-                        page_results.start,
-                        page_results.data.len(),
-                        page_results.total,
-                        page_results.found
-                    );
-                    mam_torrent = page_results
-                        .data
-                        .into_iter()
-                        .find(|t| t.id == duplicate_torrent.mam_id);
-                }
-
-                let Some(mam_torrent) = mam_torrent else {
+                let Some(mam_torrent) = mam
+                    .get_torrent_info_by_id(duplicate_torrent.mam_id)
+                    .await
+                    .ok()
+                    .flatten()
+                else {
                     return Err(
                         anyhow::Error::msg("Could not find duplicate torrent on MaM").into(),
                     );

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}MLM - {{ meta.title }}{% endblock %}
+
+{% block head %}
+  <style>
+    .EventsTable {
+      {{self::table_styles(2) | safe}}
+      grid-template-columns: auto 1fr;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <h1>{{ meta.title }}</h1>
+</div>
+<div class="row">
+  id: {{ meta.mam_id }}
+  <form method=post>
+    <button name=action value=remove data-prompt="Are you sure you want to remove this torrents?">remove torrent from MLM</button>
+  </form>
+</div>
+<p>By {{ items(TorrentsPageFilter::Author, meta.authors) }}</p>
+{% if !meta.series.is_empty() %}
+  <p>Series: {{ series(TorrentsPageFilter::Series, meta.series) }}</p>
+{% endif %}
+{% if !meta.narrators.is_empty() %}
+  <p>Narrator: {{ items(TorrentsPageFilter::Narrator, meta.narrators) }}</p>
+{% endif %}
+{% if let Some(language) = meta.language %}
+  <p>Language: {{ language.to_str() }}</p>
+{% endif %}
+{% if let Some(cat) = meta.cat %}
+<p>Category: {{ meta.main_cat.as_str() }} - {{ cat.as_str() }} {{ meta.flag_icons() }}</p>
+{% else %}
+  <p>Category: {{ meta.main_cat.as_str() }} {{ meta.flag_icons() }}</p>
+{% endif %}
+<p>Size: {{ meta.size }}</p>
+{% endblock %}

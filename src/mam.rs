@@ -221,6 +221,9 @@ pub struct Tor<'a> {
     #[serde(skip_serializing_if = "str::is_empty")]
     pub hash: &'a str,
 
+    #[serde(skip_serializing_if = "is_zero")]
+    pub id: u64,
+
     // sortType	enum	'titleAsc': By the Title, Descending order
     // 'titleDesc': By the Title, Ascending order
     // 'fileAsc': By number of files, Ascending Order
@@ -677,6 +680,7 @@ impl<'a> MaM<'a> {
             .await?;
         Ok(resp)
     }
+
     pub async fn get_torrent_info(&self, hash: &str) -> Result<Option<MaMTorrent>> {
         let mut resp = self
             .search(&SearchQuery {
@@ -685,6 +689,21 @@ impl<'a> MaM<'a> {
                 thumbnail: false,
                 tor: Tor {
                     hash,
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .await?;
+        Ok(resp.data.pop())
+    }
+    pub async fn get_torrent_info_by_id(&self, mam_id: u64) -> Result<Option<MaMTorrent>> {
+        let mut resp = self
+            .search(&SearchQuery {
+                description: true,
+                isbn: true,
+                thumbnail: false,
+                tor: Tor {
+                    id: mam_id,
                     ..Default::default()
                 },
                 ..Default::default()

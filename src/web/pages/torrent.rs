@@ -21,7 +21,10 @@ use crate::{
     audiobookshelf::{Abs, LibraryItemMinified},
     cleaner::clean_torrent,
     config::Config,
-    data::{ClientStatus, Event, EventKey, EventType, Size, Torrent, TorrentCost, TorrentMeta},
+    data::{
+        ClientStatus, Event, EventKey, EventType, Size, Torrent, TorrentCost, TorrentKey,
+        TorrentMeta,
+    },
     linker::{find_library, library_dir, refresh_metadata_relink},
     mam::MaMTorrent,
     qbittorrent::{self},
@@ -70,6 +73,47 @@ pub async fn torrent_file(
 }
 
 pub async fn torrent_page(
+    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    Path(hash_or_id): Path<String>,
+) -> std::result::Result<Html<String>, AppError> {
+    if let Ok(id) = hash_or_id.parse() {
+        torrent_page_id(State((config, db, mam)), Path(id)).await
+    } else {
+        torrent_page_hash(State((config, db, mam)), Path(hash_or_id)).await
+    }
+}
+
+async fn torrent_page_id(
+    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    Path(mam_id): Path<u64>,
+) -> std::result::Result<Html<String>, AppError> {
+    let abs = config.audiobookshelf.as_ref().map(Abs::new);
+    if let Some(torrent) = db
+        .r_transaction()?
+        .scan()
+        .secondary::<Torrent>(TorrentKey::mam_id)?
+        .range(mam_id..=mam_id)?
+        .next()
+    {
+        return torrent_page_hash(State((config, db, mam)), Path(torrent?.hash)).await;
+    };
+
+    let Ok(mam) = mam.as_ref() else {
+        return Err(anyhow::Error::msg("mam_id error").into());
+    };
+    let Some(mam_torrent) = mam.get_torrent_info_by_id(mam_id).await? else {
+        return Err(AppError::NotFound);
+    };
+    let meta = mam_torrent.as_meta()?;
+
+    println!("mam_torrent: {:?}", mam_torrent);
+    println!("mam_meta: {:?}", meta);
+
+    let template = TorrentMamPageTemplate { mam_torrent, meta };
+    Ok::<_, AppError>(Html(template.to_string()))
+}
+
+async fn torrent_page_hash(
     State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
     Path(hash): Path<String>,
 ) -> std::result::Result<Html<String>, AppError> {
@@ -321,6 +365,19 @@ impl TorrentPageTemplate {
 }
 
 impl Page for TorrentPageTemplate {
+    fn item_path(&self) -> &'static str {
+        "/torrents"
+    }
+}
+
+#[derive(Template)]
+#[template(path = "pages/torrent_mam.html")]
+struct TorrentMamPageTemplate {
+    mam_torrent: MaMTorrent,
+    meta: TorrentMeta,
+}
+
+impl Page for TorrentMamPageTemplate {
     fn item_path(&self) -> &'static str {
         "/torrents"
     }
