@@ -1,3 +1,4 @@
+use std::cell::Ref;
 use std::str::FromStr;
 use std::{cell::RefCell, sync::Arc};
 
@@ -12,16 +13,14 @@ use axum_extra::extract::Form;
 use native_db::Database;
 use serde::{Deserialize, Serialize};
 
-use crate::web::{MaMState, Page};
+use crate::web::{MaMState, Page, tables};
 use crate::{
     config::Config,
     data::{Language, Torrent, TorrentKey},
     linker::{refresh_metadata, refresh_metadata_relink},
     web::{
         AppError,
-        tables::{
-            HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable, table_styles_rows,
-        },
+        tables::{Flex, HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable},
         time,
     },
 };
@@ -184,7 +183,7 @@ struct ReplacedTorrentsPageTemplate {
     paging: Pagination,
     sort: SortOn<TorrentsPageSort>,
     show: TorrentsPageColumns,
-    cols: RefCell<Vec<String>>,
+    cols: RefCell<Vec<Box<dyn tables::Size>>>,
     torrents: Vec<(Torrent, Torrent)>,
 }
 
@@ -299,7 +298,11 @@ impl Sortable for ReplacedTorrentsPageTemplate {
     }
 }
 impl HidableColumns for ReplacedTorrentsPageTemplate {
-    fn add_column(&self, size: &str) {
-        self.cols.borrow_mut().push(size.to_owned());
+    fn add_column(&self, size: Box<dyn tables::Size>) {
+        self.cols.borrow_mut().push(size);
+    }
+
+    fn get_columns(&self) -> Ref<'_, Vec<Box<dyn tables::Size>>> {
+        self.cols.borrow()
     }
 }

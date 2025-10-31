@@ -1,3 +1,4 @@
+use std::cell::Ref;
 use std::mem;
 use std::str::FromStr;
 use std::{cell::RefCell, sync::Arc};
@@ -16,7 +17,7 @@ use sublime_fuzzy::FuzzySearch;
 
 use crate::data::{Category, ClientStatus, MainCat, MetadataSource, Series, SeriesEntry};
 use crate::mam_enums::Flags;
-use crate::web::{MaMState, Page};
+use crate::web::{MaMState, Page, tables};
 use crate::{
     cleaner::clean_torrent,
     config::Config,
@@ -24,9 +25,7 @@ use crate::{
     linker::{refresh_metadata, refresh_metadata_relink},
     web::{
         AppError,
-        tables::{
-            HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable, table2_styles,
-        },
+        tables::{Flex, HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable},
         time,
     },
 };
@@ -539,7 +538,7 @@ struct TorrentsPageTemplate {
     paging: Pagination,
     sort: SortOn<TorrentsPageSort>,
     show: TorrentsPageColumns,
-    cols: RefCell<Vec<String>>,
+    cols: RefCell<Vec<Box<dyn tables::Size>>>,
     query: String,
     torrents: Vec<Torrent>,
 }
@@ -675,8 +674,12 @@ impl Sortable for TorrentsPageTemplate {
     }
 }
 impl HidableColumns for TorrentsPageTemplate {
-    fn add_column(&self, size: &str) {
-        self.cols.borrow_mut().push(size.to_owned());
+    fn add_column(&self, size: Box<dyn tables::Size>) {
+        self.cols.borrow_mut().push(size);
+    }
+
+    fn get_columns(&self) -> Ref<'_, Vec<Box<dyn tables::Size>>> {
+        self.cols.borrow()
     }
 }
 

@@ -53,20 +53,23 @@
   </div>
 </div>
 <p>Torrents that have been unlinked from the library and been replaced with a preferred version</p>
-<div class="TorrentsTable table">
-  {{ table_header_all("torrent", "30px") }}
-  {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", "84px") }}
-  {{ table_header_s(Some(TorrentsPageSort::Title), "Title", "2fr") }}
-  {{ table_header_if(show.authors, Some(TorrentsPageSort::Authors), "Authors", "1fr") }}
-  {{ table_header_if(show.narrators, Some(TorrentsPageSort::Narrators), "Narrators", "1fr") }}
-  {{ table_header_if(show.series, Some(TorrentsPageSort::Series), "Series", "1fr") }}
-  {{ table_header_if(show.language, Some(TorrentsPageSort::Language), "Language", "100px") }}
-  {{ table_header_if(show.size, Some(TorrentsPageSort::Size), "Size", "80px") }}
-  {{ table_header_if(show.filetypes, None, "Filetypes", "100px") }}
-  {{ table_header_s(Some(TorrentsPageSort::Replaced), "Replaced", "157px") }}
-  {{ table_header_s(Some(TorrentsPageSort::CreatedAt), "Added At", "157px") }}
-  {{ table_header_s(None, "", "132px") }}
+<div class="TorrentsTable table2">
+<div>
+  {{ table_header_all("torrent", 30) }}
+  {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", 110) }}
+  {{ table_header_s(Some(TorrentsPageSort::Title), "Title", Flex(2, 170)) }}
+  {{ table_header_if(show.authors, Some(TorrentsPageSort::Authors), "Authors", Flex(1, 130)) }}
+  {{ table_header_if(show.narrators, Some(TorrentsPageSort::Narrators), "Narrators", Flex(1, 130)) }}
+  {{ table_header_if(show.series, Some(TorrentsPageSort::Series), "Series", Flex(1, 130)) }}
+  {{ table_header_if(show.language, Some(TorrentsPageSort::Language), "Language", 100) }}
+  {{ table_header_if(show.size, Some(TorrentsPageSort::Size), "Size", 80) }}
+  {{ table_header_if(show.filetypes, None, "Filetypes", 100) }}
+  {{ table_header_s(Some(TorrentsPageSort::Replaced), "Replaced", 157) }}
+  {{ table_header_s(Some(TorrentsPageSort::CreatedAt), "Added At", 157) }}
+  {{ table_header_s(None, "", 132) }}
+</div>
 {% for (torrent, replacement) in torrents %}
+<div>
   <div><input type=checkbox name=torrent value={{torrent.hash}}></div>
   <div>{{ item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</div>
   <div>{{ item(TorrentsPageFilter::Title, torrent.meta.title) }}</div>
@@ -132,6 +135,7 @@
       <a href="{{ abs_url }}/audiobookshelf/item/{{ abs_id }}" target=_blank>ABS</a>
     {% endif %}
   </div>
+</div>
 {% endfor %}
 </div>
 {% if torrents.is_empty() %}
@@ -142,8 +146,7 @@
 <style>
   .TorrentsTable {
     display: grid;
-    {{self::table_styles_rows(*((self.cols.borrow().len()) as u64), 2) | safe}}
-    grid-template-columns: {{ self.cols.borrow().join(" ") }};
+    {{table2_styles() | safe}}
   }
 </style>
 {% endblock %}

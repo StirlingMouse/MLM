@@ -3,23 +3,26 @@
 {% block title %}MLM - Errors{% endblock %}
 
 {% block head %}
-  <style>
-    .ErrorsTable {
-      {{self::table_styles(5) | safe}}
-    }
-  </style>
 {% endblock %}
 
 {% block content %}
 <h1>Torrent Errors</h1>
 <p>Errors encountered while either grabbing, linking or cleaning torrents</p>
-<div class="ErrorsTable table">
-  {{ table_header(Some(ErrorsPageSort::Step), "Step") }}
-  {{ table_header(Some(ErrorsPageSort::Title), "Title") }}
-  {{ table_header(Some(ErrorsPageSort::Error), "Error") }}
-  {{ table_header(Some(ErrorsPageSort::CreatedAt), "When") }}
-  {{ table_header(None, "") }}
+<div class="ErrorsTable table2">
+<div>
+  {{ table_header_s(Some(ErrorsPageSort::Step), "Step", 100) }}
+  {{ table_header_s(Some(ErrorsPageSort::Title), "Title", Flex(1, 170)) }}
+  {{ table_header_s(Some(ErrorsPageSort::Error), "Error", Flex(1, 170)) }}
+  {{ table_header_s(Some(ErrorsPageSort::CreatedAt), "When", 157) }}
+  {{ table_header_s(None, "", 88) }}
+</div>
+<style>
+  .ErrorsTable {
+    {{table2_styles() | safe}}
+  }
+</style>
 {% for error in errors %}
+<div>
   <div>{{ item(ErrorsPageFilter::Step, error.id.step()) }}</div>
   <div>{{ item(ErrorsPageFilter::Title, error.title) }}</div>
   <div>{{ error.error }}</div>
@@ -27,13 +30,15 @@
   <div>
   {% match error.meta %}
     {% when Some(meta) %}
+      <a href="/torrents/{{ meta.mam_id }}" target=_blank>open</a>
       <a href="https://www.myanonamouse.net/t/{{ meta.mam_id }}" target=_blank>MaM</a>
     {% when None %}
   {% endmatch %}
   </div>
+</div>
 {% endfor %}
 {% if errors.is_empty() %}
 <p><i>There are currently no errors</i>
 {% endif %}
-</div>
+</dive
 {% endblock %}

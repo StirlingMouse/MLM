@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    cell::{Ref, RefCell},
+    sync::Arc,
+};
 
 use askama::Template;
 use axum::{
@@ -12,7 +15,7 @@ use crate::{
     data::{ErroredTorrent, ErroredTorrentId, ErroredTorrentKey},
     web::{
         AppError, Page,
-        tables::{Key, SortOn, Sortable, table_styles},
+        tables::{self, Flex, HidableColumns, Key, SortOn, Sortable},
         time,
     },
 };
@@ -59,6 +62,7 @@ pub async fn errors_page(
     }
     let template = ErrorsPageTemplate {
         sort,
+        cols: Default::default(),
         errors: errored_torrents,
     };
     Ok::<_, AppError>(Html(template.to_string()))
@@ -68,6 +72,7 @@ pub async fn errors_page(
 #[template(path = "pages/errors.html")]
 struct ErrorsPageTemplate {
     sort: SortOn<ErrorsPageSort>,
+    cols: RefCell<Vec<Box<dyn tables::Size>>>,
     errors: Vec<ErroredTorrent>,
 }
 
@@ -101,6 +106,15 @@ impl Sortable for ErrorsPageTemplate {
 
     fn get_current_sort(&self) -> SortOn<Self::SortKey> {
         self.sort
+    }
+}
+impl HidableColumns for ErrorsPageTemplate {
+    fn add_column(&self, size: Box<dyn tables::Size>) {
+        self.cols.borrow_mut().push(size);
+    }
+
+    fn get_columns(&self) -> Ref<'_, Vec<Box<dyn tables::Size>>> {
+        self.cols.borrow()
     }
 }
 

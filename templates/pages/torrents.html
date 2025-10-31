@@ -78,24 +78,24 @@
 </div>
 <div class="TorrentsTable table2">
 <div>
-  {{ table_header_all("torrent", "30px") | safe }}
+  {{ table_header_all("torrent", 30) | safe }}
   {% if show.category %}
-  {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", "130px") }}
+  {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", 130) }}
   {% else %}
-  {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", "84px") }}
+  {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", 84) }}
   {% endif %}
-  {{ table_header_if(show.flags, None, "Flags", "60px") }}
-  {{ table_header_s(Some(TorrentsPageSort::Title), "Title", "2fr") }}
-  {{ table_header_if(show.authors, Some(TorrentsPageSort::Authors), "Authors", "1fr") }}
-  {{ table_header_if(show.narrators, Some(TorrentsPageSort::Narrators), "Narrators", "1fr") }}
-  {{ table_header_if(show.series, Some(TorrentsPageSort::Series), "Series", "1fr") }}
-  {{ table_header_if(show.language, Some(TorrentsPageSort::Language), "Language", "100px") }}
-  {{ table_header_if(show.size, Some(TorrentsPageSort::Size), "Size", "80px") }}
-  {{ table_header_if(show.filetypes, None, "Filetypes", "100px") }}
-  {{ table_header_if(!show.path, Some(TorrentsPageSort::Linked), "Linked", "80px") }}
-  {{ table_header_if(show.path, Some(TorrentsPageSort::Linked), "Path", "2fr") }}
-  {{ table_header_if(show.created_at, Some(TorrentsPageSort::CreatedAt), "Added At", "157px") }}
-  {{ table_header_s(None, "", "132px") }}
+  {{ table_header_if(show.flags, None, "Flags", 60) }}
+  {{ table_header_s(Some(TorrentsPageSort::Title), "Title", Flex(2, 170)) }}
+  {{ table_header_if(show.authors, Some(TorrentsPageSort::Authors), "Authors", Flex(1, 130)) }}
+  {{ table_header_if(show.narrators, Some(TorrentsPageSort::Narrators), "Narrators", Flex(1, 130)) }}
+  {{ table_header_if(show.series, Some(TorrentsPageSort::Series), "Series", Flex(1, 130)) }}
+  {{ table_header_if(show.language, Some(TorrentsPageSort::Language), "Language", 100) }}
+  {{ table_header_if(show.size, Some(TorrentsPageSort::Size), "Size", 80) }}
+  {{ table_header_if(show.filetypes, None, "Filetypes", 100) }}
+  {{ table_header_if(!show.path, Some(TorrentsPageSort::Linked), "Linked", 80) }}
+  {{ table_header_if(show.path, Some(TorrentsPageSort::Linked), "Path", Flex(2, 200)) }}
+  {{ table_header_if(show.created_at, Some(TorrentsPageSort::CreatedAt), "Added At", 157) }}
+  {{ table_header_s(None, "", 132) }}
 </div>
 {% for torrent in torrents %}
 <div>
@@ -203,7 +203,7 @@
 <style>
   .TorrentsTable {
     display: block;
-    {{self::table2_styles(self.cols.borrow().as_ref()) | safe}}
+    {{table2_styles() | safe}}
   }
 </style>
 {% endblock %}

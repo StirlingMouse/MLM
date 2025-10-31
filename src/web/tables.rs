@@ -1,4 +1,5 @@
 use std::{
+    cell::Ref,
     fmt::{self, Display},
     ops::RangeInclusive,
 };
@@ -196,18 +197,26 @@ pub trait Sortable {
 }
 
 pub trait HidableColumns: Sortable {
-    fn add_column(&self, size: &str);
+    fn add_column(&self, size: Box<dyn Size>);
+    fn get_columns(&self) -> Ref<'_, Vec<Box<dyn Size>>>;
+
+    fn table2_styles(&self) -> String {
+        format!(
+            "& > div {{ grid-template-columns: {}; }}",
+            self.get_columns().iter().map(|c| c.style()).join(" ")
+        )
+    }
 
     fn table_header_if(
         &self,
         show: &bool,
         sort_key: Option<Self::SortKey>,
         label: &str,
-        size: &str,
+        size: impl Size + 'static,
     ) -> Conditional<TableHeader<Self::SortKey>> {
         let sort = self.get_current_sort();
         if *show {
-            self.add_column(size);
+            self.add_column(Box::new(size));
         }
         Conditional {
             template: show.then_some(TableHeader {
@@ -222,10 +231,10 @@ pub trait HidableColumns: Sortable {
         &self,
         sort_key: Option<Self::SortKey>,
         label: &str,
-        size: &str,
+        size: impl Size + 'static,
     ) -> TableHeader<Self::SortKey> {
         let sort = self.get_current_sort();
-        self.add_column(size);
+        self.add_column(Box::new(size));
         TableHeader {
             current_key: sort.sort_by,
             asc: sort.asc,
@@ -233,9 +242,38 @@ pub trait HidableColumns: Sortable {
             label: label.to_owned(),
         }
     }
-    fn table_header_all<'a>(&self, name: &'a str, size: &str) -> AllColumnHeader<'a> {
-        self.add_column(size);
+    fn table_header_all<'a>(
+        &self,
+        name: &'a str,
+        size: impl Size + 'static,
+    ) -> AllColumnHeader<'a> {
+        self.add_column(Box::new(size));
         AllColumnHeader { name }
+    }
+}
+
+pub trait Size {
+    fn style(&self) -> String;
+    fn px(&self) -> u64;
+}
+impl Size for u64 {
+    fn style(&self) -> String {
+        format!("{self}px")
+    }
+
+    fn px(&self) -> u64 {
+        *self
+    }
+}
+
+pub struct Flex(pub u64, pub u64);
+impl Size for Flex {
+    fn style(&self) -> String {
+        format!("{}fr", self.0)
+    }
+
+    fn px(&self) -> u64 {
+        self.1
     }
 }
 
@@ -312,14 +350,6 @@ pub fn table_styles_rows(cols: u64, rows: u64) -> String {
         }
     }
     styles.push_str("{ background: var(--alternate); }");
-
-    styles
-}
-pub fn table2_styles(cols: &Vec<String>) -> String {
-    let styles = format!(
-        "& > div {{ grid-template-columns: {}; }}",
-        cols.join(" ")
-    );
 
     styles
 }
