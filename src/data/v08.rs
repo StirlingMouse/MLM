@@ -1,4 +1,4 @@
-use super::{v01, v03, v04, v05, v06, v07, v09, v10};
+use super::{v01, v03, v04, v05, v06, v07, v09, v10, v11};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -423,6 +423,36 @@ impl From<v10::EventType> for EventType {
             },
             v10::EventType::Updated { fields } => Self::Updated { fields },
             v10::EventType::RemovedFromMam => Self::RemovedFromMam,
+        }
+    }
+}
+
+impl From<v11::TorrentMetaDiff> for TorrentMetaDiff {
+    fn from(value: v11::TorrentMetaDiff) -> Self {
+        Self {
+            field: value.field.into(),
+            from: value.from,
+            to: value.to,
+        }
+    }
+}
+
+impl From<v11::TorrentMetaField> for TorrentMetaField {
+    fn from(value: v11::TorrentMetaField) -> Self {
+        match value {
+            v11::TorrentMetaField::MamId => TorrentMetaField::MamId,
+            v11::TorrentMetaField::Vip => unimplemented!(),
+            v11::TorrentMetaField::MainCat => TorrentMetaField::MainCat,
+            v11::TorrentMetaField::Cat => TorrentMetaField::Cat,
+            v11::TorrentMetaField::Language => TorrentMetaField::Language,
+            v11::TorrentMetaField::Flags => TorrentMetaField::Flags,
+            v11::TorrentMetaField::Filetypes => TorrentMetaField::Filetypes,
+            v11::TorrentMetaField::Size => TorrentMetaField::Size,
+            v11::TorrentMetaField::Title => TorrentMetaField::Title,
+            v11::TorrentMetaField::Authors => TorrentMetaField::Authors,
+            v11::TorrentMetaField::Narrators => TorrentMetaField::Narrators,
+            v11::TorrentMetaField::Series => TorrentMetaField::Series,
+            v11::TorrentMetaField::Source => unimplemented!(),
         }
     }
 }

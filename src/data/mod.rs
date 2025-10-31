@@ -9,6 +9,7 @@ mod v07;
 mod v08;
 mod v09;
 mod v10;
+mod v11;
 
 use anyhow::Result;
 use native_db::Models;
@@ -20,6 +21,12 @@ use tracing::{info, instrument};
 pub static MODELS: Lazy<Models> = Lazy::new(|| {
     let mut models = Models::new();
     models.define::<v01::Config>().unwrap();
+
+    models.define::<v11::Torrent>().unwrap();
+    models.define::<v11::SelectedTorrent>().unwrap();
+    models.define::<v11::DuplicateTorrent>().unwrap();
+    models.define::<v11::ErroredTorrent>().unwrap();
+    models.define::<v11::Event>().unwrap();
 
     models.define::<v10::Torrent>().unwrap();
     models.define::<v10::SelectedTorrent>().unwrap();
@@ -79,25 +86,26 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
 });
 
 pub type Config = v01::Config;
-pub type Torrent = v10::Torrent;
-pub type TorrentKey = v10::TorrentKey;
-pub type SelectedTorrent = v10::SelectedTorrent;
-pub type SelectedTorrentKey = v10::SelectedTorrentKey;
-pub type DuplicateTorrent = v10::DuplicateTorrent;
-pub type ErroredTorrent = v10::ErroredTorrent;
-pub type ErroredTorrentKey = v10::ErroredTorrentKey;
-pub type ErroredTorrentId = v01::ErroredTorrentId;
-pub type Event = v10::Event;
-pub type EventKey = v10::EventKey;
-pub type EventType = v10::EventType;
+pub type Torrent = v11::Torrent;
+pub type TorrentKey = v11::TorrentKey;
+pub type SelectedTorrent = v11::SelectedTorrent;
+pub type SelectedTorrentKey = v11::SelectedTorrentKey;
+pub type DuplicateTorrent = v11::DuplicateTorrent;
+pub type ErroredTorrent = v11::ErroredTorrent;
+pub type ErroredTorrentKey = v11::ErroredTorrentKey;
+pub type ErroredTorrentId = v11::ErroredTorrentId;
+pub type Event = v11::Event;
+pub type EventKey = v11::EventKey;
+pub type EventType = v11::EventType;
 pub type List = v05::List;
 pub type ListKey = v05::ListKey;
 pub type ListItem = v05::ListItem;
 pub type ListItemKey = v05::ListItemKey;
 pub type ListItemTorrent = v04::ListItemTorrent;
-pub type TorrentMeta = v10::TorrentMeta;
-pub type TorrentMetaDiff = v08::TorrentMetaDiff;
-pub type TorrentMetaField = v08::TorrentMetaField;
+pub type TorrentMeta = v11::TorrentMeta;
+pub type TorrentMetaDiff = v11::TorrentMetaDiff;
+pub type TorrentMetaField = v11::TorrentMetaField;
+pub type VipStatus = v11::VipStatus;
 pub type MetadataSource = v10::MetadataSource;
 pub type MainCat = v01::MainCat;
 pub type Uuid = v03::Uuid;

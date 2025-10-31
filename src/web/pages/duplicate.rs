@@ -152,6 +152,7 @@ pub async fn duplicate_torrents_page_post(
                 let rw = db.rw_transaction()?;
                 rw.insert(SelectedTorrent {
                     mam_id: mam_torrent.id,
+                    hash: None,
                     dl_link: mam_torrent
                         .dl
                         .clone()
@@ -167,6 +168,7 @@ pub async fn duplicate_torrents_page_post(
                     meta: mam_torrent.as_meta()?,
                     grabber: None,
                     created_at: Timestamp::now(),
+                    started_at: None,
                     removed_at: None,
                 })?;
                 rw.remove(duplicate_torrent)?;

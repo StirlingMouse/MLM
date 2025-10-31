@@ -757,6 +757,8 @@ mod tests {
                 abs_id: None,
                 library_path: None,
                 library_files: vec![],
+                linker: None,
+                category: None,
                 selected_audio_format: None,
                 selected_ebook_format: None,
                 title_search: "".to_string(),
@@ -771,6 +773,7 @@ mod tests {
         fn default_meta() -> TorrentMeta {
             TorrentMeta {
                 mam_id: 0,
+                vip_status: None,
                 main_cat: MainCat::Audio,
                 cat: None,
                 language: None,

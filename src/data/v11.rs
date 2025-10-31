@@ -1,11 +1,12 @@
-use super::{v01, v03, v04, v06, v08, v09, v11};
-use native_db::{ToKey, native_db};
+use super::{v01, v03, v04, v06, v08, v09, v10};
+use native_db::{Key, ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use time::Date;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 2, version = 10, from = v09::Torrent)]
+#[native_model(id = 2, version = 11, from = v10::Torrent)]
 #[native_db]
 pub struct Torrent {
     #[primary_key]
@@ -15,6 +16,8 @@ pub struct Torrent {
     pub abs_id: Option<String>,
     pub library_path: Option<PathBuf>,
     pub library_files: Vec<PathBuf>,
+    pub linker: Option<String>,
+    pub category: Option<String>,
     pub selected_audio_format: Option<String>,
     pub selected_ebook_format: Option<String>,
     #[secondary_key]
@@ -29,11 +32,12 @@ pub struct Torrent {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 3, version = 10, from = v09::SelectedTorrent)]
+#[native_model(id = 3, version = 11, from = v10::SelectedTorrent)]
 #[native_db]
 pub struct SelectedTorrent {
     #[primary_key]
     pub mam_id: u64,
+    pub hash: Option<String>,
     pub dl_link: String,
     pub unsat_buffer: Option<u64>,
     pub cost: v04::TorrentCost,
@@ -44,11 +48,12 @@ pub struct SelectedTorrent {
     pub meta: TorrentMeta,
     pub grabber: Option<String>,
     pub created_at: v03::Timestamp,
+    pub started_at: Option<v03::Timestamp>,
     pub removed_at: Option<v03::Timestamp>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 4, version = 10, from = v09::DuplicateTorrent)]
+#[native_model(id = 4, version = 11, from = v10::DuplicateTorrent)]
 #[native_db]
 pub struct DuplicateTorrent {
     #[primary_key]
@@ -62,11 +67,11 @@ pub struct DuplicateTorrent {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 5, version = 10, from = v09::ErroredTorrent)]
+#[native_model(id = 5, version = 11, from = v10::ErroredTorrent)]
 #[native_db]
 pub struct ErroredTorrent {
     #[primary_key]
-    pub id: v01::ErroredTorrentId,
+    pub id: ErroredTorrentId,
     pub title: String,
     pub error: String,
     pub meta: Option<TorrentMeta>,
@@ -74,9 +79,35 @@ pub struct ErroredTorrent {
     pub created_at: v03::Timestamp,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum ErroredTorrentId {
+    Grabber(/* mam_id */ u64),
+    Linker(/* hash */ String),
+    Cleaner(/* hash */ String),
+}
+
+impl ToKey for ErroredTorrentId {
+    fn to_key(&self) -> Key {
+        match self {
+            ErroredTorrentId::Grabber(mam_id) => {
+                Key::new([&[0u8] as &[u8], &mam_id.to_le_bytes()].concat())
+            }
+            ErroredTorrentId::Linker(hash) => Key::new([&[1u8] as &[u8], hash.as_bytes()].concat()),
+            ErroredTorrentId::Cleaner(hash) => {
+                Key::new([&[2u8] as &[u8], hash.as_bytes()].concat())
+            }
+        }
+    }
+
+    fn key_names() -> Vec<String> {
+        vec!["ErroredTorrentHash".to_string()]
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct TorrentMeta {
     pub mam_id: u64,
+    pub vip_status: Option<VipStatus>,
     pub main_cat: v01::MainCat,
     pub cat: Option<v06::Category>,
     pub language: Option<v03::Language>,
@@ -87,17 +118,18 @@ pub struct TorrentMeta {
     pub authors: Vec<String>,
     pub narrators: Vec<String>,
     pub series: Vec<v09::Series>,
-    pub source: MetadataSource,
+    pub source: v10::MetadataSource,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum MetadataSource {
-    Mam,
-    Manual,
+pub enum VipStatus {
+    NotVip,
+    Permanent,
+    Temp(Date),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[native_model(id = 6, version = 10, from = v08::Event)]
+#[native_model(id = 6, version = 11, from = v10::Event)]
 #[native_db]
 pub struct Event {
     #[primary_key]
@@ -127,19 +159,45 @@ pub enum EventType {
         files: Vec<PathBuf>,
     },
     Updated {
-        fields: Vec<v08::TorrentMetaDiff>,
+        fields: Vec<TorrentMetaDiff>,
     },
     RemovedFromMam,
 }
 
-impl From<v09::Torrent> for Torrent {
-    fn from(t: v09::Torrent) -> Self {
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TorrentMetaDiff {
+    pub field: TorrentMetaField,
+    pub from: String,
+    pub to: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum TorrentMetaField {
+    MamId,
+    Vip,
+    MainCat,
+    Cat,
+    Language,
+    Flags,
+    Filetypes,
+    Size,
+    Title,
+    Authors,
+    Narrators,
+    Series,
+    Source,
+}
+
+impl From<v10::Torrent> for Torrent {
+    fn from(t: v10::Torrent) -> Self {
         Self {
             hash: t.hash,
             mam_id: t.meta.mam_id,
             abs_id: t.abs_id,
             library_path: t.library_path,
             library_files: t.library_files,
+            linker: None,
+            category: None,
             selected_audio_format: t.selected_audio_format,
             selected_ebook_format: t.selected_ebook_format,
             title_search: t.title_search,
@@ -153,130 +211,11 @@ impl From<v09::Torrent> for Torrent {
     }
 }
 
-impl From<v09::SelectedTorrent> for SelectedTorrent {
-    fn from(t: v09::SelectedTorrent) -> Self {
+impl From<v10::SelectedTorrent> for SelectedTorrent {
+    fn from(t: v10::SelectedTorrent) -> Self {
         Self {
             mam_id: t.mam_id,
-            dl_link: t.dl_link,
-            unsat_buffer: t.unsat_buffer,
-            cost: t.cost,
-            category: t.category,
-            tags: t.tags,
-            title_search: t.title_search,
-            meta: t.meta.into(),
-            grabber: None,
-            created_at: t.created_at,
-            removed_at: t.removed_at,
-        }
-    }
-}
-
-impl From<v09::DuplicateTorrent> for DuplicateTorrent {
-    fn from(t: v09::DuplicateTorrent) -> Self {
-        Self {
-            mam_id: t.mam_id,
-            dl_link: t.dl_link,
-            title_search: t.title_search,
-            meta: t.meta.into(),
-            created_at: t.created_at,
-            duplicate_of: t.duplicate_of,
-        }
-    }
-}
-
-impl From<v09::ErroredTorrent> for ErroredTorrent {
-    fn from(t: v09::ErroredTorrent) -> Self {
-        Self {
-            id: t.id,
-            title: t.title,
-            error: t.error,
-            meta: t.meta.map(|t| t.into()),
-            created_at: t.created_at,
-        }
-    }
-}
-
-impl From<v09::TorrentMeta> for TorrentMeta {
-    fn from(t: v09::TorrentMeta) -> Self {
-        Self {
-            mam_id: t.mam_id,
-            main_cat: t.main_cat,
-            cat: t.cat,
-            language: t.language,
-            flags: t.flags,
-            filetypes: t.filetypes,
-            size: t.size,
-            title: t.title,
-            authors: t.authors,
-            narrators: t.narrators,
-            series: t.series,
-            source: MetadataSource::Mam,
-        }
-    }
-}
-
-impl From<v08::Event> for Event {
-    fn from(t: v08::Event) -> Self {
-        Self {
-            id: t.id,
-            hash: t.hash,
-            mam_id: t.mam_id,
-            created_at: t.created_at,
-            event: t.event.into(),
-        }
-    }
-}
-
-impl From<v08::EventType> for EventType {
-    fn from(t: v08::EventType) -> Self {
-        match t {
-            v08::EventType::Grabbed { cost, wedged } => Self::Grabbed {
-                grabber: None,
-                cost,
-                wedged,
-            },
-            v08::EventType::Linked { library_path } => Self::Linked {
-                linker: None,
-                library_path,
-            },
-            v08::EventType::Cleaned {
-                library_path,
-                files,
-            } => Self::Cleaned {
-                library_path,
-                files,
-            },
-            v08::EventType::Updated { fields } => Self::Updated { fields },
-            v08::EventType::RemovedFromMam => Self::RemovedFromMam,
-        }
-    }
-}
-
-impl From<v11::Torrent> for Torrent {
-    fn from(t: v11::Torrent) -> Self {
-        Self {
-            hash: t.hash,
-            mam_id: t.meta.mam_id,
-            abs_id: t.abs_id,
-            library_path: t.library_path,
-            library_files: t.library_files,
-            selected_audio_format: t.selected_audio_format,
-            selected_ebook_format: t.selected_ebook_format,
-            title_search: t.title_search,
-            meta: t.meta.into(),
-            created_at: t.created_at,
-            replaced_with: t.replaced_with,
-            request_matadata_update: t.request_matadata_update,
-            library_mismatch: t.library_mismatch,
-            client_status: t.client_status,
-        }
-    }
-}
-
-impl From<v11::SelectedTorrent> for SelectedTorrent {
-    fn from(t: v11::SelectedTorrent) -> Self {
-        Self {
-            mam_id: t.mam_id,
+            hash: None,
             dl_link: t.dl_link,
             unsat_buffer: t.unsat_buffer,
             cost: t.cost,
@@ -286,13 +225,14 @@ impl From<v11::SelectedTorrent> for SelectedTorrent {
             meta: t.meta.into(),
             grabber: t.grabber,
             created_at: t.created_at,
+            started_at: None,
             removed_at: t.removed_at,
         }
     }
 }
 
-impl From<v11::DuplicateTorrent> for DuplicateTorrent {
-    fn from(t: v11::DuplicateTorrent) -> Self {
+impl From<v10::DuplicateTorrent> for DuplicateTorrent {
+    fn from(t: v10::DuplicateTorrent) -> Self {
         Self {
             mam_id: t.mam_id,
             dl_link: t.dl_link,
@@ -304,8 +244,8 @@ impl From<v11::DuplicateTorrent> for DuplicateTorrent {
     }
 }
 
-impl From<v11::ErroredTorrent> for ErroredTorrent {
-    fn from(t: v11::ErroredTorrent) -> Self {
+impl From<v10::ErroredTorrent> for ErroredTorrent {
+    fn from(t: v10::ErroredTorrent) -> Self {
         Self {
             id: t.id.into(),
             title: t.title,
@@ -316,10 +256,21 @@ impl From<v11::ErroredTorrent> for ErroredTorrent {
     }
 }
 
-impl From<v11::TorrentMeta> for TorrentMeta {
-    fn from(t: v11::TorrentMeta) -> Self {
+impl From<v01::ErroredTorrentId> for ErroredTorrentId {
+    fn from(t: v01::ErroredTorrentId) -> Self {
+        match t {
+            v01::ErroredTorrentId::Grabber(id) => ErroredTorrentId::Grabber(id),
+            v01::ErroredTorrentId::Linker(hash) => ErroredTorrentId::Linker(hash),
+            v01::ErroredTorrentId::Cleaner(hash) => ErroredTorrentId::Cleaner(hash),
+        }
+    }
+}
+
+impl From<v10::TorrentMeta> for TorrentMeta {
+    fn from(t: v10::TorrentMeta) -> Self {
         Self {
             mam_id: t.mam_id,
+            vip_status: None,
             main_cat: t.main_cat,
             cat: t.cat,
             language: t.language,
@@ -335,8 +286,8 @@ impl From<v11::TorrentMeta> for TorrentMeta {
     }
 }
 
-impl From<v11::Event> for Event {
-    fn from(t: v11::Event) -> Self {
+impl From<v10::Event> for Event {
+    fn from(t: v10::Event) -> Self {
         Self {
             id: t.id,
             hash: t.hash,
@@ -347,10 +298,10 @@ impl From<v11::Event> for Event {
     }
 }
 
-impl From<v11::EventType> for EventType {
-    fn from(t: v11::EventType) -> Self {
+impl From<v10::EventType> for EventType {
+    fn from(t: v10::EventType) -> Self {
         match t {
-            v11::EventType::Grabbed {
+            v10::EventType::Grabbed {
                 grabber,
                 cost,
                 wedged,
@@ -359,24 +310,52 @@ impl From<v11::EventType> for EventType {
                 cost,
                 wedged,
             },
-            v11::EventType::Linked {
+            v10::EventType::Linked {
                 linker,
                 library_path,
             } => Self::Linked {
                 linker,
                 library_path,
             },
-            v11::EventType::Cleaned {
+            v10::EventType::Cleaned {
                 library_path,
                 files,
             } => Self::Cleaned {
                 library_path,
                 files,
             },
-            v11::EventType::Updated { fields } => Self::Updated {
+            v10::EventType::Updated { fields } => Self::Updated {
                 fields: fields.into_iter().map(Into::into).collect(),
             },
-            v11::EventType::RemovedFromMam => Self::RemovedFromMam,
+            v10::EventType::RemovedFromMam => Self::RemovedFromMam,
+        }
+    }
+}
+
+impl From<v08::TorrentMetaDiff> for TorrentMetaDiff {
+    fn from(value: v08::TorrentMetaDiff) -> Self {
+        Self {
+            field: value.field.into(),
+            from: value.from,
+            to: value.to,
+        }
+    }
+}
+
+impl From<v08::TorrentMetaField> for TorrentMetaField {
+    fn from(value: v08::TorrentMetaField) -> Self {
+        match value {
+            v08::TorrentMetaField::MamId => TorrentMetaField::MamId,
+            v08::TorrentMetaField::MainCat => TorrentMetaField::MainCat,
+            v08::TorrentMetaField::Cat => TorrentMetaField::Cat,
+            v08::TorrentMetaField::Language => TorrentMetaField::Language,
+            v08::TorrentMetaField::Flags => TorrentMetaField::Flags,
+            v08::TorrentMetaField::Filetypes => TorrentMetaField::Filetypes,
+            v08::TorrentMetaField::Size => TorrentMetaField::Size,
+            v08::TorrentMetaField::Title => TorrentMetaField::Title,
+            v08::TorrentMetaField::Authors => TorrentMetaField::Authors,
+            v08::TorrentMetaField::Narrators => TorrentMetaField::Narrators,
+            v08::TorrentMetaField::Series => TorrentMetaField::Series,
         }
     }
 }

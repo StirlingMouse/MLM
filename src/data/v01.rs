@@ -1,4 +1,4 @@
-use super::v02;
+use super::{v02, v11};
 use native_db::{Key, ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -156,6 +156,16 @@ impl From<v02::ErroredTorrent> for ErroredTorrent {
             title: t.title,
             error: t.error,
             meta: t.meta,
+        }
+    }
+}
+
+impl From<v11::ErroredTorrentId> for ErroredTorrentId {
+    fn from(t: v11::ErroredTorrentId) -> Self {
+        match t {
+            v11::ErroredTorrentId::Grabber(id) => ErroredTorrentId::Grabber(id),
+            v11::ErroredTorrentId::Linker(hash) => ErroredTorrentId::Linker(hash),
+            v11::ErroredTorrentId::Cleaner(hash) => ErroredTorrentId::Cleaner(hash),
         }
     }
 }

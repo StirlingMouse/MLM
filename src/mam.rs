@@ -16,7 +16,7 @@ use reqwest_cookie_store::CookieStoreRwLock;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use time::{
-    UtcDateTime,
+    Date, UtcDateTime,
     format_description::{self, OwnedFormatItem},
 };
 use tokio::sync::Mutex;
@@ -25,7 +25,10 @@ use unidecode::unidecode;
 
 use crate::{
     config::Config,
-    data::{self, Category, FlagBits, Language, MetadataSource, Series, SeriesEntries},
+    data::{
+        self, Category, FlagBits, Language, MetadataSource, Series, SeriesEntries, Timestamp,
+        VipStatus,
+    },
     mam_enums::SearchIn,
 };
 
@@ -377,6 +380,7 @@ pub struct MaMTorrent {
     #[serde(deserialize_with = "parse_title")]
     pub title: String,
     pub vip: u64,
+    pub vip_expire: u64,
     pub w: u64,
 }
 
@@ -417,9 +421,21 @@ impl MaMTorrent {
             .map(|t| t.to_owned())
             .collect::<Vec<_>>();
         let size = self.size.parse().map_err(MetaError::InvalidSize)?;
+        let vip_status = if self.vip == 0 {
+            VipStatus::NotVip
+        } else if self.vip_expire == 0 {
+            VipStatus::Permanent
+        } else {
+            VipStatus::Temp(
+                UtcDateTime::from_unix_timestamp(self.vip_expire as i64)
+                    .map_err(|_| MetaError::InvalidVipExpiry(self.vip_expire))?
+                    .date(),
+            )
+        };
 
         Ok(data::TorrentMeta {
             mam_id: self.id,
+            vip_status: Some(vip_status),
             main_cat,
             cat: Some(cat),
             language: Some(language),
@@ -449,6 +465,8 @@ pub enum MetaError {
     UnknownLanguage(u8, String),
     #[error("{0}")]
     InvalidSize(String),
+    #[error("Invalid vip_expiry: {0}")]
+    InvalidVipExpiry(u64),
     #[error("Unknown error: {0}")]
     Other(#[from] Error),
 }
@@ -763,12 +781,16 @@ impl<'a> MaM<'a> {
     }
 
     fn store_cookies(&self) {
+        for cookie in self.jar.read().unwrap().iter_unexpired() {
+            println!("cookie: {:?}", cookie);
+        }
         if let Some(cookie) = self
             .jar
             .read()
             .unwrap()
             .get("myanonamouse.net", "/", "mam_id")
         {
+            println!("storing: {}", cookie.value());
             if let Ok(rw) = self.db.rw_transaction() {
                 let ok = rw
                     .upsert(data::Config {
@@ -782,6 +804,8 @@ impl<'a> MaM<'a> {
                     trace!("stored new mam_id");
                 }
             }
+        } else {
+            println!("none");
         }
     }
 }

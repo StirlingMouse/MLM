@@ -110,7 +110,7 @@
     Updated {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}<br />
     <ul>
     {% for field in fields %}
-      <li>{{ field.field }}: {{ field.from }} -> {{ field.to }}</li>
+      <li>{{ field.field }}: {{ field.from }} → {{ field.to }}</li>
     {% endfor %}
     </ul>
   {% when EventType::RemovedFromMam %}

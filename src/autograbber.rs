@@ -80,7 +80,10 @@ pub async fn grab_selected_torrents(
         r.scan()
             .primary::<data::SelectedTorrent>()?
             .all()?
-            .filter(|t| t.as_ref().is_ok_and(|t| t.removed_at.is_none()))
+            .filter(|t| {
+                t.as_ref()
+                    .is_ok_and(|t| t.removed_at.is_none() && t.started_at.is_none())
+            })
             .collect::<Result<Vec<_>, native_db::db_type::Error>>()
     }?;
     if selected_torrents.is_empty() {
@@ -514,6 +517,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             selected_torrents += 1;
             rw.insert(data::SelectedTorrent {
                 mam_id: torrent.id,
+                hash: None,
                 dl_link: torrent
                     .dl
                     .clone()
@@ -526,6 +530,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 meta,
                 grabber: grabber.name.clone(),
                 created_at: Timestamp::now(),
+                started_at: None,
                 removed_at: None,
             })?;
             rw_opt.unwrap().commit()?;
@@ -620,6 +625,8 @@ async fn grab_torrent(
             abs_id: None,
             library_path: None,
             library_files: Default::default(),
+            linker: None,
+            category: torrent.category.clone(),
             selected_audio_format: None,
             selected_ebook_format: None,
             title_search: torrent.title_search.clone(),
@@ -638,9 +645,12 @@ async fn grab_torrent(
                 Err(err)
             }
         })?;
-        rw.remove(torrent).map(|_| ()).or_else(|err| {
+        let mut torrent = torrent;
+        torrent.hash = Some(hash.clone());
+        torrent.started_at = Some(Timestamp::now());
+        rw.upsert(torrent).map(|_| ()).or_else(|err| {
             if let db_type::Error::KeyNotFound { .. } = err {
-                warn!("Got missing key when removing selected torrent");
+                warn!("Got missing key when updating selected torrent");
                 Ok(())
             } else {
                 Err(err)
@@ -685,7 +695,7 @@ pub async fn update_torrent_meta(
         "Updating meta for torrent {}, diff:\n{}",
         mam_id,
         diff.iter()
-            .map(|field| format!("  {}: {} -> {}", field.field, field.from, field.to))
+            .map(|field| format!("  {}: {} → {}", field.field, field.from, field.to))
             .join("\n")
     );
     let mut torrent = torrent;

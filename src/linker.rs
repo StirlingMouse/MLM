@@ -449,6 +449,12 @@ async fn link_torrent(
             abs_id: existing_torrent.and_then(|t| t.abs_id.clone()),
             library_path: library_path.clone(),
             library_files,
+            linker: library.tag_filters().name.clone(),
+            category: if torrent.category.is_empty() {
+                None
+            } else {
+                Some(torrent.category.clone())
+            },
             selected_audio_format,
             selected_ebook_format,
             title_search: normalize_title(&mam_torrent.title),

@@ -2,13 +2,13 @@ pub mod categories;
 pub mod language;
 pub mod series;
 
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 
 use itertools::Itertools as _;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Deserializer};
-use time::Date;
+use time::{Date, UtcDateTime};
 
 use crate::{
     data::{
@@ -19,7 +19,7 @@ use crate::{
     mam_enums::Flags,
 };
 
-use super::{FlagBits, Series};
+use super::{FlagBits, MetadataSource, Series, VipStatus};
 
 pub fn parse<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
@@ -85,6 +85,28 @@ impl TorrentMeta {
                 field: TorrentMetaField::MamId,
                 from: self.mam_id.to_string(),
                 to: other.mam_id.to_string(),
+            });
+        }
+        if self.vip_status != other.vip_status
+        // If we go from exired temp vip to not vip, do not write a diff
+            && !(self
+                .vip_status
+                .as_ref()
+                .is_some_and(|s| s == &VipStatus::NotVip)
+                && other.vip_status.as_ref().is_some_and(|s| !s.is_vip()))
+        {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::Vip,
+                from: self
+                    .vip_status
+                    .as_ref()
+                    .map(|vip_status| vip_status.to_string())
+                    .unwrap_or_default(),
+                to: other
+                    .vip_status
+                    .as_ref()
+                    .map(|vip_status| vip_status.to_string())
+                    .unwrap_or_default(),
             });
         }
         if self.main_cat != other.main_cat {
@@ -177,6 +199,13 @@ impl TorrentMeta {
                 to: other.series.iter().map(format_serie).join(", ").to_string(),
             });
         }
+        if self.source != other.source {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::Source,
+                from: self.source.to_string(),
+                to: other.source.to_string(),
+            });
+        }
         diff
     }
 }
@@ -185,6 +214,7 @@ impl std::fmt::Display for TorrentMetaField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TorrentMetaField::MamId => write!(f, "mam_id"),
+            TorrentMetaField::Vip => write!(f, "vip"),
             TorrentMetaField::MainCat => write!(f, "main_cat"),
             TorrentMetaField::Cat => write!(f, "cat"),
             TorrentMetaField::Language => write!(f, "language"),
@@ -195,6 +225,7 @@ impl std::fmt::Display for TorrentMetaField {
             TorrentMetaField::Authors => write!(f, "authors"),
             TorrentMetaField::Narrators => write!(f, "narrators"),
             TorrentMetaField::Series => write!(f, "series"),
+            TorrentMetaField::Source => write!(f, "source"),
         }
     }
 }
@@ -238,6 +269,16 @@ impl ListItem {
             && self
                 .prefer_format
                 .is_none_or(|f| f == MainCat::Ebook || !have_audio)
+    }
+}
+
+impl VipStatus {
+    fn is_vip(&self) -> bool {
+        match self {
+            VipStatus::NotVip => false,
+            VipStatus::Permanent => true,
+            VipStatus::Temp(date) => date > &UtcDateTime::now().date(),
+        }
     }
 }
 
@@ -310,6 +351,25 @@ impl TorrentCost {
             TorrentCost::UseWedge => "wedge",
             TorrentCost::TryWedge => "try wedge",
             TorrentCost::Ratio => "ratio",
+        }
+    }
+}
+
+impl fmt::Display for VipStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            VipStatus::NotVip => write!(f, "not VIP"),
+            VipStatus::Permanent => write!(f, "VIP"),
+            VipStatus::Temp(date) => write!(f, "VIP (expires {date})"),
+        }
+    }
+}
+
+impl fmt::Display for MetadataSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MetadataSource::Mam => write!(f, "MaM"),
+            MetadataSource::Manual => write!(f, "Manual"),
         }
     }
 }
