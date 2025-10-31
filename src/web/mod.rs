@@ -18,7 +18,7 @@ use once_cell::sync::Lazy;
 use pages::{
     config::{config_page, config_page_post},
     duplicate::{duplicate_page, duplicate_torrents_page_post},
-    errors::errors_page,
+    errors::{errors_page, errors_page_post},
     events::event_page,
     index::{index_page, index_page_post},
     list::{list_page, list_page_post},
@@ -103,6 +103,7 @@ pub async fn start_webserver(
             post(list_page_post).with_state(db.clone()),
         )
         .route("/errors", get(errors_page).with_state(db.clone()))
+        .route("/errors", post(errors_page_post).with_state(db.clone()))
         .route(
             "/selected",
             get(selected_page).with_state((config.clone(), db.clone(), mam.clone())),

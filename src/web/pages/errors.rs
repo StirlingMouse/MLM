@@ -5,9 +5,10 @@ use std::{
 
 use askama::Template;
 use axum::{
-    extract::{Query, State},
-    response::Html,
+    extract::{OriginalUri, Query, State},
+    response::{Html, Redirect},
 };
+use axum_extra::extract::Form;
 use native_db::Database;
 use serde::{Deserialize, Serialize};
 
@@ -66,6 +67,40 @@ pub async fn errors_page(
         errors: errored_torrents,
     };
     Ok::<_, AppError>(Html(template.to_string()))
+}
+
+pub async fn errors_page_post(
+    State(db): State<Arc<Database<'static>>>,
+    uri: OriginalUri,
+    Form(form): Form<ErrorPageForm>,
+) -> Result<Redirect, AppError> {
+    match form.action.as_str() {
+        "remove" => {
+            for error in form.errors {
+                let Ok(error) = serde_json::from_str::<ErroredTorrentId>(&error) else {
+                    return Err(anyhow::Error::msg("Could not parse error").into());
+                };
+                let rw = db.rw_transaction()?;
+                let Some(error) = rw.get().primary::<ErroredTorrent>(error)? else {
+                    return Err(anyhow::Error::msg("Could not find error").into());
+                };
+                rw.remove(error)?;
+                rw.commit()?;
+            }
+        }
+        action => {
+            eprintln!("unknown action: {action}");
+        }
+    }
+
+    Ok(Redirect::to(&uri.to_string()))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ErrorPageForm {
+    action: String,
+    #[serde(default, rename = "error")]
+    errors: Vec<String>,
 }
 
 #[derive(Template)]
