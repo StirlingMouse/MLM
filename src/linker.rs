@@ -29,8 +29,8 @@ use crate::{
     cleaner::remove_library_files,
     config::{Config, Library, LibraryLinkMethod, QbitConfig},
     data::{
-        ClientStatus, ErroredTorrentId, Event, EventType, LibraryMismatch, Size, Timestamp,
-        Torrent, TorrentMeta,
+        ClientStatus, ErroredTorrentId, Event, EventType, LibraryMismatch, SelectedTorrent, Size,
+        Timestamp, Torrent, TorrentMeta,
     },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{MaM, MaMTorrent, MetaError, normalize_title},
@@ -153,6 +153,27 @@ pub async fn link_torrents_to_library(
 
         if library.method() == LibraryLinkMethod::NoLink && existing_torrent.is_some() {
             continue;
+        }
+
+        {
+            let selected_torrent: Option<SelectedTorrent> = r
+                .scan()
+                .primary::<SelectedTorrent>()?
+                .all()?
+                .find(|t| {
+                    t.as_ref()
+                        .is_ok_and(|t| t.hash.as_ref() == Some(&torrent.hash))
+                })
+                .transpose()?;
+            if let Some(selected_torrent) = selected_torrent {
+                debug!(
+                    "Finished Downloading torrent {} {}",
+                    selected_torrent.mam_id, selected_torrent.meta.title
+                );
+                let rw = db.rw_transaction()?;
+                rw.remove(selected_torrent)?;
+                rw.commit()?;
+            }
         }
 
         let result = match_torrent(
