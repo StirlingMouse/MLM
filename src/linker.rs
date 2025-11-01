@@ -56,26 +56,45 @@ pub async fn link_torrents_to_library(
         if torrent.progress < 1.0 {
             continue;
         }
+        let library = find_library(&config, &torrent);
         let r = db.r_transaction()?;
         let mut existing_torrent: Option<Torrent> = r.get().primary(torrent.hash.clone())?;
         if let Some(t) = &mut existing_torrent {
+            let library_name = library.and_then(|l| l.tag_filters().name.as_ref());
+            if t.linker.as_ref() != library_name {
+                let rw = db.rw_transaction()?;
+                t.linker = library_name.map(ToOwned::to_owned);
+                rw.upsert(t.clone())?;
+                rw.commit()?;
+            }
+            let category = if torrent.category.is_empty() {
+                None
+            } else {
+                Some(torrent.category.as_str())
+            };
+            if t.category.as_deref() != category {
+                let rw = db.rw_transaction()?;
+                t.category = category.map(ToOwned::to_owned);
+                rw.upsert(t.clone())?;
+                rw.commit()?;
+            }
             if t.client_status.is_none() {
                 let trackers = qbit.1.trackers(&torrent.hash).await?;
-                if let Some(mam_tracker) = trackers.last() {
-                    if mam_tracker.msg == "torrent not registered with this tracker" {
-                        let rw = db.rw_transaction()?;
-                        t.client_status = Some(ClientStatus::RemovedFromMam);
-                        rw.upsert(t.clone())?;
-                        rw.commit()?;
-                        write_event(
-                            &db,
-                            Event::new(
-                                Some(torrent.hash.clone()),
-                                Some(t.mam_id),
-                                EventType::RemovedFromMam,
-                            ),
-                        );
-                    }
+                if let Some(mam_tracker) = trackers.last()
+                    && mam_tracker.msg == "torrent not registered with this tracker"
+                {
+                    let rw = db.rw_transaction()?;
+                    t.client_status = Some(ClientStatus::RemovedFromMam);
+                    rw.upsert(t.clone())?;
+                    rw.commit()?;
+                    write_event(
+                        &db,
+                        Event::new(
+                            Some(torrent.hash.clone()),
+                            Some(t.mam_id),
+                            EventType::RemovedFromMam,
+                        ),
+                    );
                 }
             }
             if let Some(library_path) = &t.library_path {
@@ -143,7 +162,7 @@ pub async fn link_torrents_to_library(
                 continue;
             }
         }
-        let Some(library) = find_library(&config, &torrent) else {
+        let Some(library) = library else {
             trace!(
                 "Could not find matching library for torrent \"{}\", save_path {}",
                 torrent.name, torrent.save_path
@@ -607,14 +626,14 @@ pub fn library_dir(
         }
         None => PathBuf::from(author).join(&meta.title),
     };
-    if let Some(narrator) = meta.narrators.first() {
-        if !exclude_narrator_in_library_dir {
-            dir.set_file_name(format!(
-                "{} {{{}}}",
-                dir.file_name().unwrap().to_string_lossy(),
-                narrator
-            ));
-        }
+    if let Some(narrator) = meta.narrators.first()
+        && !exclude_narrator_in_library_dir
+    {
+        dir.set_file_name(format!(
+            "{} {{{}}}",
+            dir.file_name().unwrap().to_string_lossy(),
+            narrator
+        ));
     }
     let dir = library.library_dir().join(dir);
     Some(dir)

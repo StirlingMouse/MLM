@@ -125,6 +125,20 @@ pub async fn torrents_page(
                         }
                     }
                     TorrentsPageFilter::Filetype => t.meta.filetypes.contains(value),
+                    TorrentsPageFilter::Linker => {
+                        if value.is_empty() {
+                            t.linker.is_none()
+                        } else {
+                            t.linker.as_ref() == Some(value)
+                        }
+                    }
+                    TorrentsPageFilter::QbitCategory => {
+                        if value.is_empty() {
+                            t.category.is_none()
+                        } else {
+                            t.category.as_ref() == Some(value)
+                        }
+                    }
                     TorrentsPageFilter::Linked => t.library_path.is_some() == (value == "true"),
                     TorrentsPageFilter::LibraryMismatch => {
                         if value.is_empty() {
@@ -443,6 +457,8 @@ pub async fn torrents_page(
                     .then(a.meta.main_cat.cmp(&b.meta.main_cat)),
                 TorrentsPageSort::Language => a.meta.language.cmp(&b.meta.language),
                 TorrentsPageSort::Size => a.meta.size.cmp(&b.meta.size),
+                TorrentsPageSort::Linker => a.linker.cmp(&b.linker),
+                TorrentsPageSort::QbitCategory => a.category.cmp(&b.category),
                 TorrentsPageSort::Linked => a.library_path.cmp(&b.library_path),
                 TorrentsPageSort::CreatedAt => a.created_at.cmp(&b.created_at),
             };
@@ -556,6 +572,8 @@ pub enum TorrentsPageSort {
     Series,
     Language,
     Size,
+    Linker,
+    QbitCategory,
     Linked,
     CreatedAt,
 }
@@ -574,6 +592,8 @@ pub enum TorrentsPageFilter {
     Series,
     Language,
     Filetype,
+    Linker,
+    QbitCategory,
     Linked,
     LibraryMismatch,
     ClientStatus,
@@ -602,6 +622,8 @@ struct TorrentsPageColumns {
     language: bool,
     size: bool,
     filetypes: bool,
+    linker: bool,
+    qbit_category: bool,
     path: bool,
     created_at: bool,
 }
@@ -622,6 +644,8 @@ impl Default for TorrentsPageColumns {
             language: false,
             size: true,
             filetypes: true,
+            linker: false,
+            qbit_category: false,
             path: false,
             created_at: true,
         }
@@ -641,6 +665,8 @@ impl TryFrom<String> for TorrentsPageColumns {
             language: false,
             size: false,
             filetypes: false,
+            linker: false,
+            qbit_category: false,
             path: false,
             created_at: false,
         };
@@ -654,6 +680,8 @@ impl TryFrom<String> for TorrentsPageColumns {
                 "language" => columns.language = true,
                 "size" => columns.size = true,
                 "filetype" => columns.filetypes = true,
+                "linker" => columns.linker = true,
+                "qbit_category" => columns.qbit_category = true,
                 "path" => columns.path = true,
                 "created_at" => columns.created_at = true,
                 "" => {}

@@ -16,7 +16,7 @@ use reqwest_cookie_store::CookieStoreRwLock;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use time::{
-    Date, UtcDateTime,
+    UtcDateTime,
     format_description::{self, OwnedFormatItem},
 };
 use tokio::sync::Mutex;
@@ -25,10 +25,7 @@ use unidecode::unidecode;
 
 use crate::{
     config::Config,
-    data::{
-        self, Category, FlagBits, Language, MetadataSource, Series, SeriesEntries, Timestamp,
-        VipStatus,
-    },
+    data::{self, Category, FlagBits, Language, MetadataSource, Series, SeriesEntries, VipStatus},
     mam_enums::SearchIn,
 };
 

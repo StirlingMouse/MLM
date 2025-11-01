@@ -55,6 +55,14 @@
         <input type=checkbox name=show {% if show.filetypes %}checked{% endif %} value="filetype">
       </label>
       <label>
+        Linker
+        <input type=checkbox name=show {% if show.linker %}checked{% endif %} value="linker">
+      </label>
+      <label>
+        Category
+        <input type=checkbox name=show {% if show.qbit_category %}checked{% endif %} value="qbit_category">
+      </label>
+      <label>
         Path
         <input type=checkbox name=show {% if show.path %}checked{% endif %} value="path">
       </label>
@@ -92,6 +100,8 @@
   {{ table_header_if(show.language, Some(TorrentsPageSort::Language), "Language", 100) }}
   {{ table_header_if(show.size, Some(TorrentsPageSort::Size), "Size", 80) }}
   {{ table_header_if(show.filetypes, None, "Filetypes", 100) }}
+  {{ table_header_if(show.linker, Some(TorrentsPageSort::Linker), "Linker", 130) }}
+  {{ table_header_if(show.qbit_category, Some(TorrentsPageSort::QbitCategory), "Qbit Category", 100) }}
   {{ table_header_if(!show.path, Some(TorrentsPageSort::Linked), "Linked", 80) }}
   {{ table_header_if(show.path, Some(TorrentsPageSort::Linked), "Path", Flex(2, 200)) }}
   {{ table_header_if(show.created_at, Some(TorrentsPageSort::CreatedAt), "Added At", 157) }}
@@ -142,6 +152,12 @@
   {% endif %}
   {% if show.filetypes %}
   <div>{{ items(TorrentsPageFilter::Filetype, torrent.meta.filetypes) }}</div>
+  {% endif %}
+  {% if show.linker %}
+  <div>{{ item(TorrentsPageFilter::Linker, &torrent.linker.clone().unwrap_or_default()) }}</div>
+  {% endif %}
+  {% if show.qbit_category %}
+  <div>{{ item(TorrentsPageFilter::QbitCategory, &torrent.category.clone().unwrap_or_default()) }}</div>
   {% endif %}
   {% if show.path %}
   <div>

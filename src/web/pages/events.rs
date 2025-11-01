@@ -23,10 +23,8 @@ pub async fn event_page(
     Query(filter): Query<Vec<(EventPageFilter, String)>>,
     Query(paging): Query<PaginationParams>,
 ) -> std::result::Result<Response, AppError> {
-    let events = db
-        .r_transaction()?
-        .scan()
-        .secondary::<Event>(EventKey::created_at)?;
+    let r = db.r_transaction()?;
+    let events = r.scan().secondary::<Event>(EventKey::created_at)?;
     let events = events.all()?.rev();
     let mut events_with_torrent = Vec::with_capacity(events.size_hint().0);
     let mut events = events
@@ -42,6 +40,48 @@ pub async fn event_page(
                         EventType::Cleaned { .. } => value == "cleaner",
                         EventType::Updated { .. } => value == "updated",
                         EventType::RemovedFromMam { .. } => value == "removed",
+                    },
+                    EventPageFilter::Grabber => match t.event {
+                        EventType::Grabbed { ref grabber, .. } => {
+                            if value.is_empty() {
+                                grabber.is_none()
+                            } else {
+                                grabber.as_ref() == Some(value)
+                            }
+                        }
+                        _ => false,
+                    },
+                    EventPageFilter::Linker => match t.event {
+                        EventType::Linked { ref linker, .. } => {
+                            if value.is_empty() {
+                                linker.is_none()
+                            } else {
+                                linker.as_ref() == Some(value)
+                            }
+                        }
+                        _ => false,
+                    },
+                    EventPageFilter::Category => {
+                        match t
+                            .hash
+                            .as_ref()
+                            .and_then(|hash| r.get().primary::<Torrent>(hash.clone()).ok()?)
+                        {
+                            Some(torrent) => {
+                                if value.is_empty() {
+                                    torrent.category.is_none()
+                                } else {
+                                    torrent.category.as_ref() == Some(value)
+                                }
+                            }
+                            None => false,
+                        }
+                    }
+                    EventPageFilter::HasUpdates => match t.event {
+                        EventType::Updated { ref fields, .. } => {
+                            fields.iter().any(|f| !f.from.is_empty())
+                        }
+                        _ => false,
                     },
                     EventPageFilter::From => true,
                     EventPageFilter::PageSize => true,
@@ -125,6 +165,10 @@ impl<'a> EventPageTemplate<'a> {
 #[serde(rename_all = "snake_case")]
 pub enum EventPageFilter {
     Show,
+    Grabber,
+    Linker,
+    Category,
+    HasUpdates,
     // Workaround sort decode failure
     From,
     PageSize,
