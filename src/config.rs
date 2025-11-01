@@ -85,6 +85,7 @@ pub struct TorrentFilter {
 
     pub search_interval: Option<u64>,
     pub unsat_buffer: Option<u64>,
+    pub max_active_downloads: Option<u64>,
     #[serde(default)]
     pub dry_run: bool,
     pub category: Option<String>,

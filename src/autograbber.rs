@@ -38,18 +38,32 @@ pub async fn run_autograbber(
 ) -> Result<()> {
     let user_info = mam.user_info().await?;
     let max_torrents = user_info.unsat.limit.saturating_sub(user_info.unsat.count);
+    let name = autograb_config
+        .filter
+        .name
+        .clone()
+        .unwrap_or_else(|| index.to_string());
     debug!(
         "autograbber {}, unsats: {:#?}; max_torrents: {max_torrents}",
-        autograb_config
-            .filter
-            .name
-            .clone()
-            .unwrap_or_else(|| index.to_string()),
-        user_info.unsat
+        name, user_info.unsat
     );
 
     let unsat_buffer = autograb_config.unsat_buffer.unwrap_or(config.unsat_buffer);
-    let max_torrents = max_torrents.saturating_sub(unsat_buffer);
+    let mut max_torrents = max_torrents.saturating_sub(unsat_buffer);
+
+    if max_torrents > 0
+        && let Some(max_active_downloads) = autograb_config.max_active_downloads
+    {
+        let r = db.r_transaction()?;
+        let downloading_torrents = r
+            .scan()
+            .primary::<SelectedTorrent>()?
+            .all()?
+            .filter(|t| t.as_ref().is_ok_and(|t| t.grabber.as_ref() == Some(&name)))
+            .count() as u64;
+        max_torrents = max_torrents.min(max_active_downloads.saturating_sub(downloading_torrents));
+    }
+
     if max_torrents > 0 || autograb_config.cost == Cost::MetadataOnly {
         let selected_torrents = search_torrents(
             config.clone(),
