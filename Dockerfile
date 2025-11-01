@@ -3,7 +3,7 @@
 # The above line is so we can use can use heredocs in Dockerfiles. No more && and \!
 # https://www.docker.com/blog/introduction-to-heredocs-in-dockerfiles/
 
-FROM rust:1.87 AS build
+FROM rust:1.91 AS build
 
 RUN cargo new --bin app
 
@@ -34,7 +34,7 @@ EOF
 CMD ["/app/target/release/mlm"]
 
 # Again, our final image is the same - a slim base and just our app
-FROM debian:bookworm-slim AS app
+FROM debian:trixie-slim AS app
 RUN apt update && apt install -y ca-certificates && apt clean
 COPY ./assets /assets
 COPY --from=build /app/target/release/mlm /mlm

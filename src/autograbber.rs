@@ -11,7 +11,7 @@ use crate::{
     config::{Config, Cost, Filter, SortBy, TorrentFilter, Type},
     data::{
         self, DuplicateTorrent, ErroredTorrentId, Event, EventType, MetadataSource,
-        SelectedTorrent, Timestamp, TorrentCost, TorrentKey, TorrentMeta,
+        SelectedTorrent, Timestamp, TorrentCost, TorrentKey, TorrentMeta, VipStatus,
     },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{
@@ -330,24 +330,22 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
         } else {
             Some(db.rw_transaction()?)
         };
-        if let Some(rw) = &rw_opt {
-            if let Some(old_selected) = rw
+        if let Some(rw) = &rw_opt
+            && let Some(old_selected) = rw
                 .get()
                 .primary::<data::SelectedTorrent>(torrent.id)
                 .ok()
                 .flatten()
+        {
+            if let Some(unsat_buffer) = unsat_buffer
+                && old_selected.unsat_buffer.is_none_or(|u| unsat_buffer < u)
             {
-                if let Some(unsat_buffer) = unsat_buffer {
-                    if old_selected.unsat_buffer.is_none_or(|u| unsat_buffer < u) {
-                        let mut updated = old_selected.clone();
-                        updated.unsat_buffer = Some(unsat_buffer);
-                        rw.update(old_selected, updated)?;
-                        rw_opt.unwrap().commit()?;
-                        continue;
-                    }
-                }
-                continue;
+                let mut updated = old_selected.clone();
+                updated.unsat_buffer = Some(unsat_buffer);
+                rw.update(old_selected, updated)?;
+                rw_opt.unwrap().commit()?;
             }
+            continue;
         }
         let title_search = normalize_title(&torrent.title);
         let preferred_types = match meta.main_cat {
@@ -694,12 +692,36 @@ pub async fn update_torrent_meta(
     db: &Database<'_>,
     rw: RwTransaction<'_>,
     mam_torrent: &MaMTorrent,
-    torrent: data::Torrent,
+    mut torrent: data::Torrent,
     meta: TorrentMeta,
     allow_non_mam: bool,
 ) -> Result<()> {
     if !allow_non_mam && torrent.meta.source != MetadataSource::Mam {
+        // Update VIP status still
+        if torrent.meta.vip_status != meta.vip_status {
+            torrent.meta.vip_status = meta.vip_status;
+            rw.upsert(torrent.clone())?;
+            rw.commit()?;
+        }
         return Ok(());
+    }
+
+    // Check expiring VIP
+    if torrent.meta.vip_status != meta.vip_status
+        && torrent
+            .meta
+            .vip_status
+            .as_ref()
+            .is_some_and(|s| !s.is_vip())
+        && meta.vip_status == Some(VipStatus::NotVip)
+    {
+        torrent.meta.vip_status = meta.vip_status.clone();
+        // If expiring VIP was the only change, just silently update the database
+        if torrent.meta == meta {
+            rw.upsert(torrent.clone())?;
+            rw.commit()?;
+            return Ok(());
+        }
     }
 
     let hash = torrent.hash.clone();
@@ -712,34 +734,33 @@ pub async fn update_torrent_meta(
             .map(|field| format!("  {}: {} → {}", field.field, field.from, field.to))
             .join("\n")
     );
-    let mut torrent = torrent;
     torrent.meta = meta.clone();
     torrent.title_search = normalize_title(&meta.title);
     rw.upsert(torrent.clone())?;
     rw.commit()?;
 
-    if let Some(library_path) = &torrent.library_path {
-        if let serde_json::Value::Object(new) = abs::create_metadata(mam_torrent, &meta) {
-            let metadata_path = library_path.join("metadata.json");
-            if metadata_path.exists() {
-                let existing = fs::read_to_string(&metadata_path).await?;
-                let mut existing: serde_json::Map<String, serde_json::Value> =
-                    serde_json::from_str(&existing)?;
-                for (key, value) in new {
-                    existing.insert(key, value);
-                }
-                let file = File::create(&metadata_path)?;
-                let mut writer = BufWriter::new(file);
-                serde_json::to_writer(&mut writer, &serde_json::Value::Object(existing))?;
-                writer.flush()?;
-                debug!("updated ABS metadata file {}", torrent.meta.mam_id);
+    if let Some(library_path) = &torrent.library_path
+        && let serde_json::Value::Object(new) = abs::create_metadata(mam_torrent, &meta)
+    {
+        let metadata_path = library_path.join("metadata.json");
+        if metadata_path.exists() {
+            let existing = fs::read_to_string(&metadata_path).await?;
+            let mut existing: serde_json::Map<String, serde_json::Value> =
+                serde_json::from_str(&existing)?;
+            for (key, value) in new {
+                existing.insert(key, value);
             }
-            if let (Some(abs_id), Some(abs_config)) = (&torrent.abs_id, &config.audiobookshelf) {
-                let abs = Abs::new(abs_config)?;
-                match abs.update_book(abs_id, mam_torrent, &meta).await {
-                    Ok(_) => debug!("updated ABS via API {}", torrent.meta.mam_id),
-                    Err(err) => warn!("Failed updating book {} in abs: {err}", torrent.meta.mam_id),
-                }
+            let file = File::create(&metadata_path)?;
+            let mut writer = BufWriter::new(file);
+            serde_json::to_writer(&mut writer, &serde_json::Value::Object(existing))?;
+            writer.flush()?;
+            debug!("updated ABS metadata file {}", torrent.meta.mam_id);
+        }
+        if let (Some(abs_id), Some(abs_config)) = (&torrent.abs_id, &config.audiobookshelf) {
+            let abs = Abs::new(abs_config)?;
+            match abs.update_book(abs_id, mam_torrent, &meta).await {
+                Ok(_) => debug!("updated ABS via API {}", torrent.meta.mam_id),
+                Err(err) => warn!("Failed updating book {} in abs: {err}", torrent.meta.mam_id),
             }
         }
     }

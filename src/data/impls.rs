@@ -100,8 +100,8 @@ impl TorrentMeta {
             && !(self
                 .vip_status
                 .as_ref()
-                .is_some_and(|s| s == &VipStatus::NotVip)
-                && other.vip_status.as_ref().is_some_and(|s| !s.is_vip()))
+                .is_some_and(|s| !s.is_vip())
+                && other.vip_status == Some(VipStatus::NotVip))
         {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Vip,
