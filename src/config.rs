@@ -187,7 +187,8 @@ pub enum Cost {
     Free,
     Wedge,
     TryWedge,
-    All,
+    #[serde(alias = "all")]
+    Ratio,
     MetadataOnly,
 }
 
