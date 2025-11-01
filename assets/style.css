@@ -290,6 +290,10 @@ summary {
         & > div {
                 display: grid;
 
+                &&&:first-of-type {
+                        align-items: end;
+                        background: var(--background);
+                }
                 &:nth-child(even) {
                         background: var(--alternate);
                 }

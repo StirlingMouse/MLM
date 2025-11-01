@@ -19,7 +19,7 @@ use crate::{
     mam_enums::Flags,
 };
 
-use super::{FlagBits, MetadataSource, Series, VipStatus};
+use super::{Category, FlagBits, MetadataSource, Series, VipStatus};
 
 pub fn parse<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
@@ -76,6 +76,14 @@ impl TorrentMeta {
             && self.authors.iter().any(|a| other.authors.contains(a))
             && ((self.narrators.is_empty() && other.narrators.is_empty())
                 || self.narrators.iter().any(|a| other.narrators.contains(a)))
+    }
+
+    pub fn cat_name(&self) -> &str {
+        match self.cat {
+            Some(Category::Audio(cat)) => cat.to_str(),
+            Some(Category::Ebook(cat)) => cat.to_str(),
+            None => "N/A",
+        }
     }
 
     pub(crate) fn diff(&self, other: &TorrentMeta) -> Vec<TorrentMetaDiff> {
@@ -273,7 +281,7 @@ impl ListItem {
 }
 
 impl VipStatus {
-    fn is_vip(&self) -> bool {
+    pub fn is_vip(&self) -> bool {
         match self {
             VipStatus::NotVip => false,
             VipStatus::Permanent => true,

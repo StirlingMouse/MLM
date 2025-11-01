@@ -682,13 +682,3 @@ impl HidableColumns for TorrentsPageTemplate {
         self.cols.borrow()
     }
 }
-
-impl Torrent {
-    pub fn cat_name(&self) -> &str {
-        match self.meta.cat {
-            Some(Category::Audio(cat)) => cat.to_str(),
-            Some(Category::Ebook(cat)) => cat.to_str(),
-            None => "N/A",
-        }
-    }
-}

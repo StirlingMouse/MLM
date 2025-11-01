@@ -101,10 +101,10 @@
 <div>
   <div><input type=checkbox name=torrent value={{torrent.hash}}></div>
   <div>
-    <span title="{{ torrent.cat_name() }}">{{ item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</span>
+    <span title="{{ torrent.meta.cat_name() }}">{{ item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</span>
     {% if show.category %}
     {% if let Some(cat) = torrent.meta.cat %}
-    <div>{{ item_v(TorrentsPageFilter::Category, torrent.cat_name(), &cat.as_id().to_string()) }}</div>
+    <div>{{ item_v(TorrentsPageFilter::Category, torrent.meta.cat_name(), &cat.as_id().to_string()) }}</div>
     {% endif %}
     {% endif %}
   </div>
