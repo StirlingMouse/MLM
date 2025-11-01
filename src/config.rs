@@ -199,14 +199,15 @@ pub struct QbitConfig {
     pub username: String,
     #[serde(default)]
     pub password: String,
-    pub on_cleaned: Option<QbitOnCleaned>,
+    pub on_cleaned: Option<QbitUpdate>,
+    pub on_invalid_torrent: Option<QbitUpdate>,
     #[serde(default)]
     pub path_mapping: BTreeMap<PathBuf, PathBuf>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct QbitOnCleaned {
+pub struct QbitUpdate {
     pub category: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,

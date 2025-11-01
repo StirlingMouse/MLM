@@ -6,6 +6,7 @@ use std::{
     collections::BTreeMap,
     fs::{self, File, Metadata, create_dir_all},
     io::{BufWriter, ErrorKind, Write},
+    ops::Deref,
     path::{Component, Path, PathBuf},
     sync::Arc,
 };
@@ -32,7 +33,7 @@ use crate::{
         Torrent, TorrentMeta,
     },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
-    mam::{MaM, MaMTorrent, normalize_title},
+    mam::{MaM, MaMTorrent, MetaError, normalize_title},
 };
 
 pub static DISK_PATTERN: Lazy<Regex> =
@@ -206,7 +207,36 @@ async fn match_torrent(
     let Some(mam_torrent) = mam.get_torrent_info(hash).await.context("get_mam_info")? else {
         bail!("Could not find torrent on mam");
     };
-    let meta = mam_torrent.as_meta().context("as_meta")?;
+    let meta = match mam_torrent.as_meta() {
+        Ok(meta) => meta,
+        Err(err) => {
+            if let MetaError::UnknownMainCat(_) = err {
+                if let Some(on_invalid_torrent) = &qbit.0.on_invalid_torrent {
+                    let qbit = qbit::Api::new_login_username_password(
+                        &qbit.0.url,
+                        &qbit.0.username,
+                        &qbit.0.password,
+                    )
+                    .await?;
+
+                    if let Some(category) = &on_invalid_torrent.category {
+                        qbit.set_category(Some(vec![&torrent.hash]), category)
+                            .await?;
+                    }
+
+                    if !on_invalid_torrent.tags.is_empty() {
+                        qbit.add_tags(
+                            Some(vec![&torrent.hash]),
+                            on_invalid_torrent.tags.iter().map(Deref::deref).collect(),
+                        )
+                        .await?;
+                    }
+                }
+                trace!("qbit updated");
+            }
+            return Err(err).context("as_meta");
+        }
+    };
 
     link_torrent(
         &config,
