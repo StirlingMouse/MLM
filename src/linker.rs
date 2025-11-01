@@ -150,6 +150,10 @@ pub async fn link_torrents_to_library(
             continue;
         };
 
+        if library.method() == LibraryLinkMethod::NoLink && existing_torrent.is_some() {
+            continue;
+        }
+
         let result = match_torrent(
             config.clone(),
             db.clone(),
