@@ -16,7 +16,10 @@
   <h1>{{ meta.title }}</h1>
 </div>
 <div class="row">
-  id: {{ meta.mam_id }}
+  <div>
+    id: {{ meta.mam_id }} {% if let Some(vip_status) = meta.vip_status %}{{ vip_status }}{% endif %}
+    <a href="https://www.myanonamouse.net/t/{{ mam_torrent.id }}" target=_blank class=btn>Open in MaM</a>
+  </div>
   <form method=post>
     <button name=action value=remove data-prompt="Are you sure you want to remove this torrents?">remove torrent from MLM</button>
   </form>
@@ -36,5 +39,25 @@
 {% else %}
   <p>Category: {{ meta.main_cat.as_str() }} {{ meta.flag_icons() }}</p>
 {% endif %}
-<p>Size: {{ meta.size }}</p>
+<form method=post>
+<p>
+  Size: {{ meta.size }}
+  {% if mam_torrent.vip > 0 %}<button name=action value=select>Download as VIP</button>
+  {% else if mam_torrent.personal_freeleech > 0 %}<button name=action value=select>Download as Personal Freeleech</button>
+  {% else if mam_torrent.free > 0 %}<button name=action value=select>Download as Global Freeleech</button>
+  {% else %}
+    <button name=action value=wedge>Download with Wedge</button>
+    <button name=action value=select>Download with Ratio</button>
+  {% endif %}
+</p>
+</form>
+<p>Uploader: {{ mam_torrent.owner_name }}</p>
+
+<p>{{ mam_torrent.tags }}</p>
+<details open>
+  <summary>Description</summary>
+  {% if let Some(description) = mam_torrent.description %}
+    <p>{{ description | safe }}</p>
+  {% endif %}
+</details>
 {% endblock %}

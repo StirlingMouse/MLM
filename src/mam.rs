@@ -720,6 +720,7 @@ impl<'a> MaM<'a> {
                 description: true,
                 isbn: true,
                 thumbnail: false,
+                dl_link: true,
                 tor: Tor {
                     id: mam_id,
                     ..Default::default()

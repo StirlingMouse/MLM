@@ -1,5 +1,6 @@
 use std::{collections::BTreeSet, ops::Deref, path::PathBuf, sync::Arc};
 
+use anyhow::Error;
 use askama::Template;
 use axum::{
     body::Body,
@@ -16,18 +17,20 @@ use qbit::{
 use reqwest::header;
 use serde::Deserialize;
 use tokio_util::io::ReaderStream;
+use tracing::info;
 
 use crate::{
     audiobookshelf::{Abs, LibraryItemMinified},
     cleaner::clean_torrent,
     config::Config,
     data::{
-        ClientStatus, Event, EventKey, EventType, Size, Torrent, TorrentCost, TorrentKey,
-        TorrentMeta,
+        ClientStatus, Event, EventKey, EventType, SelectedTorrent, Size, Timestamp, Torrent,
+        TorrentCost, TorrentKey, TorrentMeta,
     },
     linker::{find_library, library_dir, refresh_metadata_relink},
-    mam::MaMTorrent,
+    mam::{MaMTorrent, normalize_title},
     qbittorrent::{self},
+    stats::Triggers,
     web::{
         AppError, Conditional, MaMState, Page, TorrentLink, pages::torrents::TorrentsPageFilter,
         tables::table_styles, time,
@@ -35,7 +38,7 @@ use crate::{
 };
 
 pub async fn torrent_file(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    State((config, db)): State<(Arc<Config>, Arc<Database<'static>>)>,
     Path((hash, filename)): Path<(String, String)>,
 ) -> impl IntoResponse {
     let Some(torrent) = db.r_transaction()?.get().primary::<Torrent>(hash)? else {
@@ -87,7 +90,6 @@ async fn torrent_page_id(
     State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
     Path(mam_id): Path<u64>,
 ) -> std::result::Result<Html<String>, AppError> {
-    let abs = config.audiobookshelf.as_ref().map(Abs::new);
     if let Some(torrent) = db
         .r_transaction()?
         .scan()
@@ -223,6 +225,103 @@ async fn torrent_page_hash(
 }
 
 pub async fn torrent_page_post(
+    State((config, db, mam, triggers)): State<(
+        Arc<Config>,
+        Arc<Database<'static>>,
+        MaMState,
+        Triggers,
+    )>,
+    Path(hash_or_id): Path<String>,
+    uri: OriginalUri,
+    Form(form): Form<TorrentPageForm>,
+) -> Result<Redirect, AppError> {
+    if let Ok(id) = hash_or_id.parse() {
+        torrent_page_post_id(
+            State((config, db, mam, triggers)),
+            Path(id),
+            uri,
+            Form(form),
+        )
+        .await
+    } else {
+        torrent_page_post_hash(State((config, db, mam)), Path(hash_or_id), uri, Form(form)).await
+    }
+}
+
+pub async fn torrent_page_post_id(
+    State((config, db, mam, triggers)): State<(
+        Arc<Config>,
+        Arc<Database<'static>>,
+        MaMState,
+        Triggers,
+    )>,
+    Path(mam_id): Path<u64>,
+    uri: OriginalUri,
+    Form(form): Form<TorrentPageForm>,
+) -> Result<Redirect, AppError> {
+    let Ok(mam) = mam.as_ref() else {
+        return Err(anyhow::Error::msg("mam_id error").into());
+    };
+    let Some(torrent) = mam.get_torrent_info_by_id(mam_id).await? else {
+        return Err(AppError::NotFound);
+    };
+
+    match form.action.as_str() {
+        "select" | "wedge" => {
+            let meta = torrent.as_meta()?;
+            let tags: Vec<_> = config
+                .tags
+                .iter()
+                .filter(|t| t.filter.matches(&torrent))
+                .collect();
+            let category = tags.iter().find_map(|t| t.category.clone());
+            let tags = tags.iter().flat_map(|t| t.tags.clone()).collect();
+            let cost = if torrent.vip > 0 {
+                TorrentCost::Vip
+            } else if torrent.personal_freeleech > 0 {
+                TorrentCost::PersonalFreeleech
+            } else if torrent.free > 0 {
+                TorrentCost::GlobalFreeleech
+            } else if form.action == "wedge" {
+                TorrentCost::UseWedge
+            } else {
+                TorrentCost::Ratio
+            };
+            info!(
+                "Selecting torrent \"{}\" in format {}, cost: {:?}, with category {:?} and tags {:?}",
+                torrent.title, torrent.filetype, cost, category, tags
+            );
+            let rw = db.rw_transaction()?;
+            rw.insert(SelectedTorrent {
+                mam_id: torrent.id,
+                hash: None,
+                dl_link: torrent
+                    .dl
+                    .clone()
+                    .ok_or_else(|| Error::msg(format!("no dl field for torrent {}", torrent.id)))?,
+                unsat_buffer: None,
+                cost,
+                category,
+                tags,
+                title_search: normalize_title(&torrent.title),
+                meta,
+                grabber: None,
+                created_at: Timestamp::now(),
+                started_at: None,
+                removed_at: None,
+            })?;
+            rw.commit()?;
+            triggers.downloader_tx.send(())?;
+        }
+        action => {
+            eprintln!("unknown action: {action}");
+        }
+    }
+
+    Ok(Redirect::to(&uri.to_string()))
+}
+
+pub async fn torrent_page_post_hash(
     State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
     Path(hash): Path<String>,
     uri: OriginalUri,

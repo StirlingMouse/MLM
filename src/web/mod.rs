@@ -63,7 +63,7 @@ pub async fn start_webserver(
             "/",
             get(index_page).with_state((config.clone(), stats, mam.clone())),
         )
-        .route("/", post(index_page_post).with_state(triggers))
+        .route("/", post(index_page_post).with_state(triggers.clone()))
         .route(
             "/torrents",
             get(torrents_page).with_state((config.clone(), db.clone())),
@@ -78,7 +78,7 @@ pub async fn start_webserver(
         )
         .route(
             "/torrents/{hash}",
-            post(torrent_page_post).with_state((config.clone(), db.clone(), mam.clone())),
+            post(torrent_page_post).with_state((config.clone(), db.clone(), mam.clone(), triggers)),
         )
         .route(
             "/torrents/{hash}/edit",
@@ -90,7 +90,7 @@ pub async fn start_webserver(
         )
         .route(
             "/torrents/{hash}/{filename}",
-            get(torrent_file).with_state((config.clone(), db.clone(), mam.clone())),
+            get(torrent_file).with_state((config.clone(), db.clone())),
         )
         .route("/events", get(event_page).with_state(db.clone()))
         .route(

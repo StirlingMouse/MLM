@@ -17,7 +17,15 @@
   <a href="/torrents/{{ torrent.hash }}/edit" class=btn>edit</a>
 </div>
 <div class="row">
-  id: {{ torrent.mam_id }}
+  <div>
+    id: {{ torrent.mam_id }} {% if let Some(vip_status) = torrent.meta.vip_status %}{{ vip_status }}{% endif %}
+    {% if let Some(book) = book %}
+      <a href="{{ abs_url }}/audiobookshelf/item/{{ book.id }}" target=_blank class=btn>Open in ABS</a>
+    {% endif %}
+    {% if let Some(mam_torrent) = mam_torrent %}
+      <a href="https://www.myanonamouse.net/t/{{ mam_torrent.id }}" target=_blank class=btn>Open in MaM</a>
+    {% endif %}
+  </div>
   <form method=post>
     <button name=action value=remove data-prompt="Are you sure you want to remove this torrents?">remove torrent from MLM</button>
   </form>
@@ -189,7 +197,6 @@
   {% endif %}
 {% endif %}
 {% if let Some(book) = book %}
-  <a href="{{ abs_url }}/audiobookshelf/item/{{ book.id }}" target=_blank>Open in ABS</a>
   {# {% if !book.media.chapters.is_empty() %} #}
   {# <details> #}
   {#   <summary>Chapters</summary> #}
@@ -201,8 +208,8 @@
   {# </details> #}
   {# {% endif %} #}
 {% endif %}
+
 {% if let Some(mam_torrent) = mam_torrent %}
-  <a href="https://www.myanonamouse.net/t/{{ mam_torrent.id }}" target=_blank>Open in MaM</a>
   <p>{{ mam_torrent.tags }}</p>
   <details>
     <summary>Description</summary>
@@ -211,6 +218,7 @@
     {% endif %}
   </details>
 {% endif %}
+
 {% if let Some(mam_meta) = mam_meta %}
 {% if &torrent.meta != mam_meta %}
   {% if torrent.meta.title != mam_meta.title %}
