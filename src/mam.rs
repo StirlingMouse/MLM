@@ -48,13 +48,14 @@ fn is_zero(value: &u64) -> bool {
 pub struct UserResponse {
     pub unsat: Unsats,
     pub username: String,
+    pub downloaded_bytes: f64,
+    pub uploaded_bytes: f64,
     // pub classname: UserClass,
     // pub connectable: String,
     // pub country_code: Option<String>,
     // pub country_name: Option<String>,
     // pub created: u64,
     // pub downloaded: String,
-    // pub downloaded_bytes: u64,
     // pub duplicates: Duplicates,
     // #[serde(rename = "inactHnr")]
     // pub inact_hnr: InactHnr,
@@ -85,7 +86,6 @@ pub struct UserResponse {
     // pub up_inact: InactHnr,
     // pub update: u64,
     // pub uploaded: String,
-    // pub uploaded_bytes: u64,
     // pub username: String,
     // pub v6_connectable: bool,
     // pub vip_until: Option<String>,

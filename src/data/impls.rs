@@ -300,7 +300,10 @@ impl std::fmt::Display for Size {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut value = self.bytes() as f64;
         let mut unit = "B";
-        if value > 1024_f64.powf(3.0) {
+        if value > 1024_f64.powf(4.0) {
+            value /= 1024_f64.powf(4.0);
+            unit = "TiB";
+        } else if value > 1024_f64.powf(3.0) {
             value /= 1024_f64.powf(3.0);
             unit = "GiB";
         } else if value > 1024_f64.powf(2.0) {
@@ -316,7 +319,7 @@ impl std::fmt::Display for Size {
 }
 
 pub static SIZE_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^((?:\d{1,3},)?\d{1,6}(?:\.\d{1,3})?) ([kKMG]?)(i)?B$").unwrap());
+    Lazy::new(|| Regex::new(r"^((?:\d{1,3},)?\d{1,6}(?:\.\d{1,3})?) ([kKMGT]?)(i)?B$").unwrap());
 
 impl FromStr for Size {
     type Err = String;
@@ -333,6 +336,7 @@ impl FromStr for Size {
                 "k" | "K" => base,
                 "M" => base.pow(2),
                 "G" => base.pow(3),
+                "T" => base.pow(4),
                 _ => unreachable!("unknown unit: {}", unit.as_str()),
             } as f64;
             Ok(Size::from_bytes((value * multiplier).round() as u64))

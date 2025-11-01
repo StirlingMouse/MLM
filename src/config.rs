@@ -20,6 +20,8 @@ pub struct Config {
     pub web_host: String,
     #[serde(default = "default_port")]
     pub web_port: u16,
+    #[serde(default = "default_min_ratio")]
+    pub min_ratio: f64,
     #[serde(default = "default_unsat_buffer")]
     pub unsat_buffer: u64,
     #[serde(default)]
@@ -274,6 +276,10 @@ fn default_host() -> String {
 
 fn default_port() -> u16 {
     3157
+}
+
+fn default_min_ratio() -> f64 {
+    2.0
 }
 
 fn default_unsat_buffer() -> u64 {

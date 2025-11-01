@@ -11,7 +11,7 @@ use crate::{
     config::{Config, Cost, Filter, SortBy, TorrentFilter, Type},
     data::{
         self, DuplicateTorrent, ErroredTorrentId, Event, EventType, MetadataSource,
-        SelectedTorrent, Timestamp, TorrentCost, TorrentKey, TorrentMeta, VipStatus,
+        SelectedTorrent, Size, Timestamp, TorrentCost, TorrentKey, TorrentMeta, VipStatus,
     },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{
@@ -94,10 +94,7 @@ pub async fn grab_selected_torrents(
         r.scan()
             .primary::<data::SelectedTorrent>()?
             .all()?
-            .filter(|t| {
-                t.as_ref()
-                    .is_ok_and(|t| t.removed_at.is_none() && t.started_at.is_none())
-            })
+            .filter(|t| t.as_ref().is_ok_and(|t| t.removed_at.is_none()))
             .collect::<Result<Vec<_>, native_db::db_type::Error>>()
     }?;
     if selected_torrents.is_empty() {
@@ -107,17 +104,35 @@ pub async fn grab_selected_torrents(
 
     let user_info = mam.user_info().await?;
     let max_torrents = user_info.unsat.limit.saturating_sub(user_info.unsat.count);
+
+    let downloading_size: f64 = selected_torrents
+        .iter()
+        .filter(|t| t.started_at.is_some())
+        .map(|t| t.meta.size.bytes() as f64)
+        .sum();
+
+    let mut remaining_buffer =
+        (user_info.uploaded_bytes - user_info.downloaded_bytes - downloading_size)
+            / config.min_ratio;
     debug!(
-        "downloader, unsats: {:#?}; max_torrents: {max_torrents}",
-        user_info.unsat
+        "downloader, unsats: {:#?}; max_torrents: {max_torrents}; buffer: {}",
+        user_info.unsat,
+        Size::from_bytes(remaining_buffer as u64)
     );
 
     let mut snatched_torrents = 0;
-    for torrent in selected_torrents {
+    for torrent in selected_torrents
+        .into_iter()
+        .filter(|t| t.started_at.is_none())
+    {
         let max_torrents = max_torrents
             .saturating_sub(torrent.unsat_buffer.unwrap_or(config.unsat_buffer))
             .saturating_sub(snatched_torrents);
         if max_torrents == 0 {
+            continue;
+        }
+        let buffer_after = remaining_buffer - torrent.meta.size.bytes() as f64;
+        if buffer_after <= 0.0 {
             continue;
         }
 
@@ -137,6 +152,7 @@ pub async fn grab_selected_torrents(
         };
         if result.is_ok() {
             snatched_torrents += 1;
+            remaining_buffer = buffer_after;
             if let Some((_, user_info)) = mam.user.lock().await.as_mut() {
                 user_info.unsat.count += 1;
             }

@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     config::Config,
-    data::{Category, Language, SelectedTorrent, Timestamp},
+    data::{Category, Language, SelectedTorrent, Size, Timestamp},
     mam::Unsats,
     mam_enums::Flags,
     web::{
@@ -132,12 +132,36 @@ pub async fn selected_page(
             if sort.asc { ord.reverse() } else { ord }
         });
     }
-    let unsats = match mam.as_ref() {
-        Ok(mam) => mam.user_info().await.map(|u| u.unsat).ok(),
+    let downloading_size: f64 = db
+        .r_transaction()?
+        .scan()
+        .primary::<SelectedTorrent>()?
+        .all()?
+        .filter_map(|t| {
+            let t = t.ok()?;
+            if t.removed_at.is_none() && t.started_at.is_some() {
+                Some(t)
+            } else {
+                None
+            }
+        })
+        .map(|t| t.meta.size.bytes() as f64)
+        .sum();
+    let user_info = match mam.as_ref() {
+        Ok(mam) => mam.user_info().await.ok(),
         _ => None,
     };
+
+    let remaining_buffer = user_info.as_ref().map(|user_info| {
+        Size::from_bytes(
+            ((user_info.uploaded_bytes - user_info.downloaded_bytes - downloading_size)
+                / config.min_ratio) as u64,
+        )
+    });
+    let unsats = user_info.map(|u| u.unsat);
     let template = SelectedPageTemplate {
         unsats,
+        remaining_buffer,
         unsat_buffer: config.unsat_buffer,
         sort,
         show,
@@ -195,6 +219,7 @@ pub struct TorrentsPageForm {
 #[template(path = "pages/selected.html")]
 struct SelectedPageTemplate {
     unsats: Option<Unsats>,
+    remaining_buffer: Option<Size>,
     unsat_buffer: u64,
     sort: SortOn<SelectedPageSort>,
     show: TorrentsPageColumns,

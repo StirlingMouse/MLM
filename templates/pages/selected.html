@@ -68,6 +68,9 @@
 <p>Torrents that the autograbber has selected and will be downloaded</p>
 {% if let Some(unsats) = unsats %}
 <p>
+  {% if let Some(remaining_buffer) = remaining_buffer %}
+  Buffer: {{ remaining_buffer }}<br>
+  {% endif %}
   Unsats: {{ unsats.count }} / {{ unsats.limit }}
   {% if !torrents.is_empty() %}
     <br>Queued Torrents: {{ queued() }}
