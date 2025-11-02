@@ -162,17 +162,6 @@ pub async fn link_torrents_to_library(
                 continue;
             }
         }
-        let Some(library) = library else {
-            trace!(
-                "Could not find matching library for torrent \"{}\", save_path {}",
-                torrent.name, torrent.save_path
-            );
-            continue;
-        };
-
-        if library.method() == LibraryLinkMethod::NoLink && existing_torrent.is_some() {
-            continue;
-        }
 
         {
             let selected_torrent: Option<SelectedTorrent> = r
@@ -193,6 +182,17 @@ pub async fn link_torrents_to_library(
                 rw.remove(selected_torrent)?;
                 rw.commit()?;
             }
+        }
+        let Some(library) = library else {
+            trace!(
+                "Could not find matching library for torrent \"{}\", save_path {}",
+                torrent.name, torrent.save_path
+            );
+            continue;
+        };
+
+        if library.method() == LibraryLinkMethod::NoLink && existing_torrent.is_some() {
+            continue;
         }
 
         let result = match_torrent(
