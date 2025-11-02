@@ -27,7 +27,7 @@ use crate::{
         ClientStatus, Event, EventKey, EventType, SelectedTorrent, Size, Timestamp, Torrent,
         TorrentCost, TorrentKey, TorrentMeta,
     },
-    linker::{find_library, library_dir, refresh_metadata_relink},
+    linker::{find_library, library_dir, map_path, refresh_metadata_relink},
     mam::{MaMTorrent, normalize_title},
     qbittorrent::{self},
     stats::Triggers,
@@ -52,6 +52,14 @@ pub async fn torrent_file(
             .find(|f| f.to_string_lossy() == filename),
     ) {
         Some(library_path.join(library_file))
+    } else if let Some((torrent, qbit, qbit_config)) =
+        qbittorrent::get_torrent(&config, &torrent.hash).await?
+    {
+        qbit.files(&torrent.hash, None)
+            .await?
+            .into_iter()
+            .find(|f| f.name == filename)
+            .map(|file| map_path(&qbit_config.path_mapping, &torrent.save_path).join(&file.name))
     } else {
         None
     }) else {
@@ -167,7 +175,8 @@ async fn torrent_page_hash(
 
     let mut qbit_data = None;
     let mut wanted_path = None;
-    if let Some((qbit_torrent, qbit)) = qbittorrent::get_torrent(&config, &torrent.hash).await? {
+    let mut qbit_files = vec![];
+    if let Some((qbit_torrent, qbit, _)) = qbittorrent::get_torrent(&config, &torrent.hash).await? {
         let trackers = qbit.trackers(&torrent.hash).await?;
         let mut categories = qbit.categories().await?.into_values().collect_vec();
         categories.sort_by(|a, b| a.name.cmp(&b.name));
@@ -188,6 +197,8 @@ async fn torrent_page_hash(
             categories,
             tags,
         });
+
+        qbit_files = qbit.files(&torrent.hash, None).await?;
     }
 
     println!("book: {:?}", book);
@@ -220,6 +231,7 @@ async fn torrent_page_hash(
         mam_meta,
         qbit_data,
         wanted_path,
+        qbit_files,
     };
     Ok::<_, AppError>(Html(template.to_string()))
 }
@@ -366,13 +378,13 @@ pub async fn torrent_page_post_hash(
             rw.commit()?;
         }
         "torrent-start" => {
-            let Some((_torrent, qbit)) = qbittorrent::get_torrent(&config, &hash).await? else {
+            let Some((_torrent, qbit, _)) = qbittorrent::get_torrent(&config, &hash).await? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
             qbit.start(vec![&hash]).await?;
         }
         "torrent-stop" => {
-            let Some((_torrent, qbit)) = qbittorrent::get_torrent(&config, &hash).await? else {
+            let Some((_torrent, qbit, _)) = qbittorrent::get_torrent(&config, &hash).await? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
             qbit.stop(vec![&hash]).await?;
@@ -387,7 +399,7 @@ pub async fn torrent_page_post_hash(
             rw.commit()?;
         }
         "qbit" => {
-            let Some((torrent, qbit)) = qbittorrent::get_torrent(&config, &hash).await? else {
+            let Some((torrent, qbit, _)) = qbittorrent::get_torrent(&config, &hash).await? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
 
@@ -467,6 +479,7 @@ struct TorrentPageTemplate {
     mam_meta: Option<TorrentMeta>,
     qbit_data: Option<QbitData>,
     wanted_path: Option<PathBuf>,
+    qbit_files: Vec<qbit::models::TorrentContent>,
 }
 
 impl TorrentPageTemplate {

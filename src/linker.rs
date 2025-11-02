@@ -561,7 +561,7 @@ async fn link_torrent(
     Ok(())
 }
 
-fn map_path(path_mapping: &BTreeMap<PathBuf, PathBuf>, save_path: &str) -> PathBuf {
+pub fn map_path(path_mapping: &BTreeMap<PathBuf, PathBuf>, save_path: &str) -> PathBuf {
     let mut path = PathBuf::from(save_path);
     for (from, to) in path_mapping.iter().rev() {
         if path.starts_with(from) {

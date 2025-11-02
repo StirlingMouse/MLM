@@ -1,9 +1,12 @@
 use anyhow::Result;
 use qbit::{models::Torrent, parameters::TorrentListParams};
 
-use crate::config::Config;
+use crate::config::{Config, QbitConfig};
 
-pub async fn get_torrent(config: &Config, hash: &str) -> Result<Option<(Torrent, qbit::Api)>> {
+pub async fn get_torrent<'a, 'b>(
+    config: &'a Config,
+    hash: &'b str,
+) -> Result<Option<(Torrent, qbit::Api, &'a QbitConfig)>> {
     for qbit_conf in config.qbittorrent.iter() {
         let Ok(qbit) = qbit::Api::new_login_username_password(
             &qbit_conf.url,
@@ -25,7 +28,7 @@ pub async fn get_torrent(config: &Config, hash: &str) -> Result<Option<(Torrent,
         else {
             continue;
         };
-        return Ok(Some((torrent, qbit)));
+        return Ok(Some((torrent, qbit, qbit_conf)));
     }
     Ok(None)
 }

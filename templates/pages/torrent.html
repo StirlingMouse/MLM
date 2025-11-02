@@ -66,14 +66,16 @@
     </div>
   {% endif %}
 {% endif %}
+{% if !torrent.library_files.is_empty() %}
 <details>
   <summary>Files</summary>
   <ul>
   {% for file in torrent.library_files.iter().flatten() %}
-    <li><a href="/torrents/{{torrent.hash}}/{{file.to_string_lossy()}}" target=_blank>{{ file.to_string_lossy() }}</a></li>
+    <li><a href="/torrents/{{torrent.hash}}/{{file.to_string_lossy() | urlencode_strict}}" target=_blank>{{ file.to_string_lossy() }}</a></li>
   {% endfor %}
   </ul>
 </details>
+{% endif %}
 
 {% if let Some(torrent) = replacement_torrent %}
   <div class="row">
@@ -115,7 +117,7 @@
     <summary>Files</summary>
     <ul>
     {% for file in torrent.library_files.iter().flatten() %}
-      <li><a href="/torrents/{{torrent.hash}}/{{file.to_string_lossy()}}" target=_blank>{{ file.to_string_lossy() }}</a></li>
+      <li><a href="/torrents/{{torrent.hash}}/{{file.to_string_lossy() | urlencode_strict}}" target=_blank>{{ file.to_string_lossy() }}</a></li>
     {% endfor %}
     </ul>
   </details>
@@ -194,6 +196,16 @@
       <button type=submit name=action value=remove-torrent data-prompt="Are you sure you want to remove the seeding files?">remove seeding files</button>
     {% endif %}
   </form>
+  {% endif %}
+  {% if !qbit_files.is_empty() %}
+  <details>
+    <summary>Files</summary>
+    <ul>
+    {% for file in qbit_files.iter() %}
+      <li><a href="/torrents/{{torrent.hash}}/{{file.name | urlencode_strict}}" target=_blank>{{ file.name }}</a></li>
+    {% endfor %}
+    </ul>
+  </details>
   {% endif %}
 {% endif %}
 {% if let Some(book) = book %}
