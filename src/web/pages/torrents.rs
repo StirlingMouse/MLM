@@ -429,6 +429,44 @@ pub async fn torrents_page(
                 }
                 torrents = new_torrents;
             }
+            "series_authors" => {
+                fn first_series(series: &[Series]) -> Option<&Series> {
+                    series.iter().find(|s| !s.entries.0.is_empty())
+                }
+                fn series_name(series: &[Series]) -> &str {
+                    first_series(series)
+                        .map(|s| s.name.as_str())
+                        .unwrap_or_default()
+                }
+                torrents
+                    .sort_by(|a, b| series_name(&a.meta.series).cmp(series_name(&b.meta.series)));
+                let mut batch: Vec<(Torrent, Series)> = vec![];
+                let mut new_torrents: Vec<Torrent> = vec![];
+                for torrent in torrents {
+                    let Some(series) = first_series(&torrent.meta.series) else {
+                        continue;
+                    };
+                    if let Some(current) = batch.first() {
+                        if current.1.name != series.name {
+                            if batch.len() > 1
+                                && !batch
+                                    .iter()
+                                    .all(|t| t.0.meta.authors == current.0.meta.authors)
+                            {
+                                new_torrents
+                                    .extend(mem::take(&mut batch).into_iter().map(|(t, _)| t));
+                            }
+                            batch.clear();
+                        }
+                        let series = series.clone();
+                        batch.push((torrent, series));
+                    } else {
+                        let series = series.clone();
+                        batch.push((torrent, series));
+                    }
+                }
+                torrents = new_torrents;
+            }
             _ => return Err(anyhow::Error::msg("Unknown metadata filter").into()),
         }
     }
