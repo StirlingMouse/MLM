@@ -233,18 +233,12 @@
 
 {% if let Some(mam_meta) = mam_meta %}
 {% if &torrent.meta != mam_meta %}
-  {% if torrent.meta.title != mam_meta.title %}
-    <p>New title: {{ mam_meta.title }}</p>
-  {% endif %}
-  {% if torrent.meta.authors != mam_meta.authors %}
-    <p>New authors: {{ mam_meta.authors.join(", ") }}</p>
-  {% endif %}
-  {% if torrent.meta.series != mam_meta.series %}
-    <p>New series: {{ series(TorrentsPageFilter::Series, mam_meta.series) }}</p>
-  {% endif %}
-  {% if torrent.meta.narrators != mam_meta.narrators %}
-    <p>New narrators: {{ mam_meta.narrators.join(", ") }}</p>
-  {% endif %}
+  {% for field in torrent.meta.diff(&mam_meta) %}
+    <div>New {{ field.field }}: {{ field.to }}</div>
+  {% endfor %}
+  <form method=post>
+    <button name=action value=refresh>refresh metadata</button>
+  </form>
 {% endif %}
 {% endif %}
 

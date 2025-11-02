@@ -27,7 +27,7 @@ use crate::{
         ClientStatus, Event, EventKey, EventType, SelectedTorrent, Size, Timestamp, Torrent,
         TorrentCost, TorrentKey, TorrentMeta,
     },
-    linker::{find_library, library_dir, map_path, refresh_metadata_relink},
+    linker::{find_library, library_dir, map_path, refresh_metadata, refresh_metadata_relink},
     mam::{MaMTorrent, normalize_title},
     qbittorrent::{self},
     stats::Triggers,
@@ -362,6 +362,12 @@ pub async fn torrent_page_post_hash(
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
             clean_torrent(&config, &db, torrent, true).await?;
+        }
+        "refresh" => {
+            let Ok(mam) = mam.as_ref() else {
+                return Err(anyhow::Error::msg("mam_id error").into());
+            };
+            refresh_metadata(&config, &db, mam, hash).await?;
         }
         "refresh-relink" => {
             let Ok(mam) = mam.as_ref() else {
