@@ -259,6 +259,23 @@ pub async fn torrent_page_post_id(
     uri: OriginalUri,
     Form(form): Form<TorrentPageForm>,
 ) -> Result<Redirect, AppError> {
+    if let Some(torrent) = db
+        .r_transaction()?
+        .scan()
+        .secondary::<Torrent>(TorrentKey::mam_id)?
+        .range(mam_id..=mam_id)?
+        .next()
+        .transpose()?
+    {
+        return torrent_page_post_hash(
+            State((config, db, mam)),
+            Path(torrent.hash),
+            uri,
+            Form(form),
+        )
+        .await;
+    };
+
     let Ok(mam) = mam.as_ref() else {
         return Err(anyhow::Error::msg("mam_id error").into());
     };
