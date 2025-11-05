@@ -6,6 +6,7 @@ pub mod index;
 pub mod list;
 pub mod lists;
 pub mod replaced;
+pub mod search;
 pub mod selected;
 pub mod torrent;
 pub mod torrent_edit;

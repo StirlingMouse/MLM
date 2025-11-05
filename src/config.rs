@@ -15,7 +15,6 @@ use crate::{
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub mam_id: String,
-    pub audiobookshelf: Option<AudiobookShelfConfig>,
     #[serde(default = "default_host")]
     pub web_host: String,
     #[serde(default = "default_port")]
@@ -43,6 +42,10 @@ pub struct Config {
     pub ebook_types: Vec<String>,
 
     #[serde(default)]
+    pub search: SearchConfig,
+    pub audiobookshelf: Option<AudiobookShelfConfig>,
+
+    #[serde(default)]
     #[serde(rename = "autograb")]
     pub autograbs: Vec<TorrentFilter>,
 
@@ -60,6 +63,13 @@ pub struct Config {
     #[serde(default)]
     #[serde(rename = "library")]
     pub libraries: Vec<Library>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SearchConfig {
+    #[serde(deserialize_with = "parse_opt")]
+    pub wedge_over: Option<Size>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

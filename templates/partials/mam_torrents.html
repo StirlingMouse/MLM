@@ -1,0 +1,61 @@
+<div class="MaMTorrentsTable table2 nohover">
+<div></div>
+{% for (mam_torrent, meta, torrent) in torrents %}
+<div>
+  <div>
+    {% if let Some(cat) = meta.cat %}
+      <img src="/assets/icons/cats/{{ cat.as_id() }}_b.png" alt="{{ meta.main_cat.as_str() }} - {{ meta.cat_name() }}" />
+    {% endif %}
+  </div>
+  <div>{{ mam_torrent.cost_icon() }}{{ meta.flag_icons() }}</div>
+  <div>
+      {% if mam_torrent.lang_code != "ENG" %}
+      <span class=faint>[{{ mam_torrent.lang_code }}]</span>
+      {% endif %}
+      <a href="/torrents/{{ meta.mam_id }}"><b>{{ meta.title }}</b></a><br>
+      <i class=faint>by</i> {{ meta.authors.join(", ") }}<br>
+      {% if !meta.series.is_empty() %}
+      <i class=faint>series</i> {% for series in meta.series %}<span class=item>{{ series.name }}</span>{% if !series.entries.0.is_empty() %} #{{ series.entries }}{% endif %}{% endfor %}<br>
+      {% endif %}
+      {% if !meta.narrators.is_empty() %}
+        <i class=faint>narrated by</i> {{ meta.narrators.join(", ") }}<br>
+      {% endif %}
+      <i>{{ mam_torrent.tags }}</i><br>
+      <span class=faint>{{ meta.filetypes.join(", ") }} | {{ mam_torrent.comments }} comment{{ mam_torrent.comments | pluralize }}</span><br>
+  </div>
+  <div>
+    {% if torrent.is_some() %}
+    <img src="/assets/icons/greenCheck2.png" alt="Torrent is downloaded" title="Torrent is downloaded" />
+    {% else %}
+    <form method=post>
+      <input type=hidden name=mam_id value="{{ meta.mam_id }}">
+      {% if let Some(wedge_over) = config.wedge_over %}
+        {% if &meta.size >= &wedge_over && !mam_torrent.is_free() %}
+        <button name=action value=wedge style="filter:hue-rotate(180deg)">
+          <img src="/assets/icons/down.png" alt="Download with Wedge" title="Download with Wedge" />
+        </button>
+        {% else %}
+        <button name=action value=select><img src="/assets/icons/down.png" alt="Download" title="Download" /></button>
+        {% endif %}
+      {% else %}
+      <button name=action value=select><img src="/assets/icons/down.png" alt="Download" title="Download" /></button>
+      {% endif %}
+    </form>
+    {% endif %}
+  </div>
+  <div>
+      {{ mam_torrent.numfiles }}<br>
+      {{ meta.size }}
+  </div>
+  <div>
+      {{ mam_torrent.added }}<br>
+      {{ mam_torrent.owner_name }}
+  </div>
+  <div>
+      {{ mam_torrent.seeders }} <img src="/assets/icons/upBig3.png" alt="seeders" /><br>
+      {{ mam_torrent.leechers }} <img src="/assets/icons/downBig3.png" alt="leechers" /><br>
+      {{ mam_torrent.times_completed }} <img src="/assets/icons/snatched.png" alt="snatches" /><br>
+  </div>
+</div>
+{% endfor %}
+</div>

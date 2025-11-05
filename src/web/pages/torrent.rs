@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, ops::Deref, path::PathBuf, sync::Arc};
 
-use anyhow::Error;
+use anyhow::Result;
 use askama::Template;
 use axum::{
     body::Body,
@@ -17,23 +17,24 @@ use qbit::{
 use reqwest::header;
 use serde::Deserialize;
 use tokio_util::io::ReaderStream;
-use tracing::info;
 
 use crate::{
     audiobookshelf::{Abs, LibraryItemMinified},
     cleaner::clean_torrent,
     config::Config,
     data::{
-        ClientStatus, Event, EventKey, EventType, SelectedTorrent, Size, Timestamp, Torrent,
-        TorrentCost, TorrentKey, TorrentMeta,
+        ClientStatus, Event, EventKey, EventType, MainCat, Size, Torrent, TorrentCost, TorrentKey,
+        TorrentMeta,
     },
     linker::{find_library, library_dir, map_path, refresh_metadata, refresh_metadata_relink},
-    mam::{MaMTorrent, normalize_title},
+    mam::{MaM, MaMTorrent, SearchQuery, Tor},
     qbittorrent::{self},
     stats::Triggers,
     web::{
-        AppError, Conditional, MaMState, Page, TorrentLink, pages::torrents::TorrentsPageFilter,
-        tables::table_styles, time,
+        AppError, Conditional, MaMState, MaMTorrentsTemplate, Page, TorrentLink,
+        pages::{search::select_torrent, torrents::TorrentsPageFilter},
+        tables::table_styles,
+        time,
     },
 };
 
@@ -118,8 +119,13 @@ async fn torrent_page_id(
 
     println!("mam_torrent: {:?}", mam_torrent);
     println!("mam_meta: {:?}", meta);
+    let other_torrents = other_torrents(&config, &db, mam, &meta).await?;
 
-    let template = TorrentMamPageTemplate { mam_torrent, meta };
+    let template = TorrentMamPageTemplate {
+        mam_torrent,
+        meta,
+        other_torrents,
+    };
     Ok::<_, AppError>(Html(template.to_string()))
 }
 
@@ -216,6 +222,7 @@ async fn torrent_page_hash(
         rw.upsert(torrent.clone())?;
         rw.commit()?;
     }
+    let other_torrents = other_torrents(&config, &db, mam, &torrent.meta).await?;
 
     let template = TorrentPageTemplate {
         abs_url: config
@@ -232,6 +239,7 @@ async fn torrent_page_hash(
         qbit_data,
         wanted_path,
         qbit_files,
+        other_torrents,
     };
     Ok::<_, AppError>(Html(template.to_string()))
 }
@@ -256,7 +264,13 @@ pub async fn torrent_page_post(
         )
         .await
     } else {
-        torrent_page_post_hash(State((config, db, mam)), Path(hash_or_id), uri, Form(form)).await
+        torrent_page_post_hash(
+            State((config, db, mam, triggers)),
+            Path(hash_or_id),
+            uri,
+            Form(form),
+        )
+        .await
     }
 }
 
@@ -271,6 +285,7 @@ pub async fn torrent_page_post_id(
     uri: OriginalUri,
     Form(form): Form<TorrentPageForm>,
 ) -> Result<Redirect, AppError> {
+    let mam_id = form.mam_id.unwrap_or(mam_id);
     if let Some(torrent) = db
         .r_transaction()?
         .scan()
@@ -279,8 +294,11 @@ pub async fn torrent_page_post_id(
         .next()
         .transpose()?
     {
+        if form.mam_id.is_some() {
+            return Err(anyhow::Error::msg("torrent is already downloaded").into());
+        }
         return torrent_page_post_hash(
-            State((config, db, mam)),
+            State((config, db, mam, triggers)),
             Path(torrent.hash),
             uri,
             Form(form),
@@ -288,59 +306,9 @@ pub async fn torrent_page_post_id(
         .await;
     };
 
-    let Ok(mam) = mam.as_ref() else {
-        return Err(anyhow::Error::msg("mam_id error").into());
-    };
-    let Some(torrent) = mam.get_torrent_info_by_id(mam_id).await? else {
-        return Err(AppError::NotFound);
-    };
-
     match form.action.as_str() {
         "select" | "wedge" => {
-            let meta = torrent.as_meta()?;
-            let tags: Vec<_> = config
-                .tags
-                .iter()
-                .filter(|t| t.filter.matches(&torrent))
-                .collect();
-            let category = tags.iter().find_map(|t| t.category.clone());
-            let tags = tags.iter().flat_map(|t| t.tags.clone()).collect();
-            let cost = if torrent.vip > 0 {
-                TorrentCost::Vip
-            } else if torrent.personal_freeleech > 0 {
-                TorrentCost::PersonalFreeleech
-            } else if torrent.free > 0 {
-                TorrentCost::GlobalFreeleech
-            } else if form.action == "wedge" {
-                TorrentCost::UseWedge
-            } else {
-                TorrentCost::Ratio
-            };
-            info!(
-                "Selecting torrent \"{}\" in format {}, cost: {:?}, with category {:?} and tags {:?}",
-                torrent.title, torrent.filetype, cost, category, tags
-            );
-            let rw = db.rw_transaction()?;
-            rw.insert(SelectedTorrent {
-                mam_id: torrent.id,
-                hash: None,
-                dl_link: torrent
-                    .dl
-                    .clone()
-                    .ok_or_else(|| Error::msg(format!("no dl field for torrent {}", torrent.id)))?,
-                unsat_buffer: None,
-                cost,
-                category,
-                tags,
-                title_search: normalize_title(&torrent.title),
-                meta,
-                grabber: None,
-                created_at: Timestamp::now(),
-                started_at: None,
-                removed_at: None,
-            })?;
-            rw.commit()?;
-            triggers.downloader_tx.send(())?;
+            select_torrent(&config, &db, mam, &triggers, mam_id, form.action == "wedge").await?;
         }
         action => {
             eprintln!("unknown action: {action}");
@@ -351,12 +319,23 @@ pub async fn torrent_page_post_id(
 }
 
 pub async fn torrent_page_post_hash(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    State((config, db, mam, triggers)): State<(
+        Arc<Config>,
+        Arc<Database<'static>>,
+        MaMState,
+        Triggers,
+    )>,
     Path(hash): Path<String>,
     uri: OriginalUri,
     Form(form): Form<TorrentPageForm>,
 ) -> Result<Redirect, AppError> {
     match form.action.as_str() {
+        "select" | "wedge" => {
+            let Some(mam_id) = form.mam_id else {
+                return Err(anyhow::Error::msg("torrent is already downloaded").into());
+            };
+            select_torrent(&config, &db, mam, &triggers, mam_id, form.action == "wedge").await?;
+        }
         "clean" => {
             let Some(torrent) = db.r_transaction()?.get().primary(hash)? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
@@ -471,6 +450,7 @@ pub struct TorrentPageForm {
     category: String,
     #[serde(default)]
     tags: Vec<String>,
+    mam_id: Option<u64>,
 }
 
 #[derive(Template)]
@@ -486,6 +466,7 @@ struct TorrentPageTemplate {
     qbit_data: Option<QbitData>,
     wanted_path: Option<PathBuf>,
     qbit_files: Vec<qbit::models::TorrentContent>,
+    other_torrents: MaMTorrentsTemplate,
 }
 
 impl TorrentPageTemplate {
@@ -510,6 +491,7 @@ impl Page for TorrentPageTemplate {
 struct TorrentMamPageTemplate {
     mam_torrent: MaMTorrent,
     meta: TorrentMeta,
+    other_torrents: MaMTorrentsTemplate,
 }
 
 impl Page for TorrentMamPageTemplate {
@@ -527,6 +509,7 @@ struct QbitData {
     torrent_tags: BTreeSet<String>,
 }
 
+#[allow(unused)]
 fn duration(seconds: f64) -> String {
     let mut seconds = seconds as u64;
     let hours = seconds / 3600;
@@ -544,4 +527,44 @@ fn duration(seconds: f64) -> String {
         duration.push(format!("{seconds}s"));
     }
     duration.join(" ")
+}
+
+async fn other_torrents(
+    config: &Config,
+    db: &Database<'_>,
+    mam: &MaM<'_>,
+    meta: &TorrentMeta,
+) -> Result<MaMTorrentsTemplate> {
+    let result = mam
+        .search(&SearchQuery {
+            tor: Tor {
+                text: &meta.title,
+                main_cat: vec![MainCat::Audio.as_id(), MainCat::Ebook.as_id()],
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .await?;
+
+    let r = db.r_transaction()?;
+    let torrents = result
+        .data
+        .into_iter()
+        .map(|mam_torrent| {
+            let meta = mam_torrent.as_meta()?;
+            let torrent = r
+                .scan()
+                .secondary::<Torrent>(TorrentKey::mam_id)?
+                .range(meta.mam_id..=meta.mam_id)?
+                .next()
+                .transpose()?;
+
+            Ok((mam_torrent, meta, torrent))
+        })
+        .collect::<Result<_>>()?;
+
+    Ok(MaMTorrentsTemplate {
+        config: config.search.clone(),
+        torrents,
+    })
 }

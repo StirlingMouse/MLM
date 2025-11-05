@@ -7,6 +7,7 @@ body {
 
         --background: var(--color-1); 
         --above: var(--color-2); 
+        --text-faint: var(--color-3); 
         --text: var(--color-4); 
         --accent: hsl(331.8, 91.3%, 45%);
         --accent-above: hsl(331.8, 91.3%, 55%);
@@ -70,10 +71,22 @@ button {
                 color: var(--warn);
         }
 
-        &:hover {
+        &:has(> img:only-child) {
+                padding: 4px;
+                width: 28px;
+                height: 28px;
+                background: transparent;
+                
+                img {
+                        width: 20px;
+                        height: 20px;
+                }
+        }
+
+        &&:hover {
                 background: var(--color-3);
         }
-        &:focus-ring {
+        &&:focus-ring {
                 background: var(--color-3);
         }
 }
@@ -287,6 +300,28 @@ summary {
         --alternate: var(--above);
         word-break: break-word;
 
+        &.MaMTorrentsTable {
+                margin: 0 -8px;
+        }
+
+        &.MaMTorrentsTable > div {
+                grid-template-columns: 72px 54px 1fr 32px 84px 130px 64px;
+
+                & > div {
+                        padding: 8px 4px;
+                }
+                & > div:nth-child(1n+4) {
+                        text-align: center;
+                }
+                & > div:first-of-type {
+                        padding-left: 12px;
+                }
+                & > div:last-of-type {
+                        text-align: right;
+                        padding-right: 12px;
+                }
+        }
+
         & > div {
                 display: grid;
 
@@ -296,10 +331,6 @@ summary {
                 }
                 &:nth-child(even) {
                         background: var(--alternate);
-                }
-
-                &&:hover {
-                        background: var(--color-3);
                 }
 
                 & > .header, & > div {
@@ -314,6 +345,10 @@ summary {
                         border-bottom: 1px solid currentColor;
                         background: var(--background);
                 }
+        }
+
+        &:not(.nohover) > div:hover {
+                background: var(--color-3);
         }
 }
 
@@ -342,6 +377,9 @@ summary {
         font-weight: bold;
 }
 
+.faint {
+        opacity: 0.8;
+}
 .missing {
         color: var(--warn);
 }
@@ -375,4 +413,10 @@ summary {
         .infobox {
                 width: min(300px, 100%);
         }
+}
+
+.item {
+        background-color: #aa86b72e;
+        padding: 2px 4px;
+        border-radius: 4px;
 }

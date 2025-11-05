@@ -33,7 +33,7 @@ use reqwest::header;
 use serde::Serialize;
 use tables::{ItemFilter, ItemFilters, Key};
 use time::{
-    Date, UtcOffset,
+    Date, UtcDateTime, UtcOffset,
     format_description::{self, OwnedFormatItem},
 };
 use tokio::sync::{Mutex, watch::error::SendError};
@@ -42,11 +42,12 @@ use tower::ServiceBuilder;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
-    config::{Config, Filter},
-    data::{AudiobookCategory, EbookCategory, Series, Timestamp, TorrentMeta},
-    mam::{DATE_FORMAT, MaM, MetaError},
+    config::{Config, Filter, SearchConfig},
+    data::{AudiobookCategory, EbookCategory, Language, Series, Timestamp, Torrent, TorrentMeta},
+    mam::{DATE_FORMAT, MaM, MaMTorrent, MetaError},
     mam_enums::Flags,
     stats::{Stats, Triggers},
+    web::pages::search::{search_page, search_page_post},
 };
 
 pub type MaMState = Arc<Result<Arc<MaM<'static>>>>;
@@ -78,7 +79,12 @@ pub async fn start_webserver(
         )
         .route(
             "/torrents/{hash}",
-            post(torrent_page_post).with_state((config.clone(), db.clone(), mam.clone(), triggers)),
+            post(torrent_page_post).with_state((
+                config.clone(),
+                db.clone(),
+                mam.clone(),
+                triggers.clone(),
+            )),
         )
         .route(
             "/torrents/{hash}/edit",
@@ -93,6 +99,14 @@ pub async fn start_webserver(
             get(torrent_file).with_state((config.clone(), db.clone())),
         )
         .route("/events", get(event_page).with_state(db.clone()))
+        .route(
+            "/search",
+            get(search_page).with_state((config.clone(), db.clone(), mam.clone())),
+        )
+        .route(
+            "/search",
+            post(search_page_post).with_state((config.clone(), db.clone(), mam.clone(), triggers)),
+        )
         .route(
             "/lists",
             get(lists_page).with_state((config.clone(), db.clone())),
@@ -303,6 +317,32 @@ impl TorrentMeta {
         }
     }
 }
+
+#[derive(Template)]
+#[template(path = "partials/cost_icon.html")]
+pub struct CostIconTemplate<'a> {
+    mam_torrent: &'a MaMTorrent,
+}
+impl<'a> HtmlSafe for CostIconTemplate<'a> {}
+
+impl MaMTorrent {
+    pub fn cost_icon(&self) -> CostIconTemplate<'_> {
+        CostIconTemplate { mam_torrent: self }
+    }
+    pub fn vip_expire(&self) -> Date {
+        UtcDateTime::from_unix_timestamp(self.vip_expire as i64)
+            .unwrap_or(UtcDateTime::UNIX_EPOCH)
+            .date()
+    }
+}
+
+#[derive(Template)]
+#[template(path = "partials/mam_torrents.html")]
+struct MaMTorrentsTemplate {
+    config: SearchConfig,
+    torrents: Vec<(MaMTorrent, TorrentMeta, Option<Torrent>)>,
+}
+impl HtmlSafe for MaMTorrentsTemplate {}
 
 /// ```askama
 /// {% match template %}

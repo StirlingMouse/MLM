@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}MLM - Search{% endblock %}
+
+{% block head %}
+{% endblock %}
+
+{% block content %}
+<form class="row">
+  <h1>MaM Search</h1>
+  <label>
+    <input type="submit" style="display:none">
+    Search: <input type=text value="{{ query.q }}" name=q>
+    <button is="clear-button" type="button"></button>
+  </label>
+</form>
+{{ torrents }}
+{% endblock %}
