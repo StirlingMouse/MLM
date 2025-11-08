@@ -153,9 +153,9 @@ pub async fn grab_selected_torrents(
         if result.is_ok() {
             snatched_torrents += 1;
             remaining_buffer = buffer_after;
-            if let Some((_, user_info)) = mam.user.lock().await.as_mut() {
-                user_info.unsat.count += 1;
-            }
+            // if let Some((_, user_info)) = mam.user.lock().await.as_mut() {
+            //     user_info.unsat.count += 1;
+            // }
         }
         update_errored_torrent(
             db,
@@ -307,6 +307,7 @@ pub async fn search_torrents(
         torrent_filter.category.clone(),
         torrent_filter.dry_run,
         max_torrents,
+        None,
     )
     .await
     .context("select_torrents")
@@ -324,6 +325,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
     filter_category: Option<String>,
     dry_run: bool,
     max_torrents: u64,
+    goodreads_id: Option<u64>,
 ) -> Result<u64> {
     let mut selected_torrents = 0;
     'torrent: for torrent in torrents {
@@ -334,7 +336,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
         let meta = match torrent.as_meta() {
             Ok(it) => it,
             Err(err) => match err {
-                MetaError::UnknownMainCat(_) => {
+                MetaError::UnknownMediaType(_) => {
                     warn!("{err} for torrent {} {}", torrent.id, torrent.title);
                     continue;
                 }
@@ -364,10 +366,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             continue;
         }
         let title_search = normalize_title(&torrent.title);
-        let preferred_types = match meta.main_cat {
-            data::MainCat::Audio => &config.audio_types,
-            data::MainCat::Ebook => &config.ebook_types,
-        };
+        let preferred_types = meta.media_type.preferred_types(&config);
         let preference = preferred_types
             .iter()
             .position(|t| meta.filetypes.contains(t));
@@ -545,6 +544,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             selected_torrents += 1;
             rw.insert(data::SelectedTorrent {
                 mam_id: torrent.id,
+                goodreads_id,
                 hash: None,
                 dl_link: torrent
                     .dl
@@ -651,6 +651,7 @@ async fn grab_torrent(
             hash: hash.clone(),
             mam_id: torrent.meta.mam_id,
             abs_id: None,
+            goodreads_id: torrent.goodreads_id,
             library_path: None,
             library_files: Default::default(),
             linker: None,

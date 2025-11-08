@@ -49,7 +49,7 @@ pub async fn replaced_torrents_page(
             }
             for (field, value) in filter.iter() {
                 let ok = match field {
-                    TorrentsPageFilter::Kind => t.meta.main_cat.as_str() == value,
+                    TorrentsPageFilter::Kind => t.meta.media_type.as_str() == value,
                     TorrentsPageFilter::Title => &t.meta.title == value,
                     TorrentsPageFilter::Author => t.meta.authors.contains(value),
                     TorrentsPageFilter::Narrator => t.meta.narrators.contains(value),
@@ -81,7 +81,7 @@ pub async fn replaced_torrents_page(
     if let Some(sort_by) = &sort.sort_by {
         replaced_torrents.sort_by(|a, b| {
             let ord = match sort_by {
-                TorrentsPageSort::Kind => a.meta.main_cat.cmp(&b.meta.main_cat),
+                TorrentsPageSort::Kind => a.meta.media_type.cmp(&b.meta.media_type),
                 TorrentsPageSort::Title => a.meta.title.cmp(&b.meta.title),
                 TorrentsPageSort::Authors => a.meta.authors.cmp(&b.meta.authors),
                 TorrentsPageSort::Narrators => a.meta.narrators.cmp(&b.meta.narrators),

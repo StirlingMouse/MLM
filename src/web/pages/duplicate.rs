@@ -39,7 +39,7 @@ pub async fn duplicate_page(
             };
             for (field, value) in filter.iter() {
                 let ok = match field {
-                    DuplicatePageFilter::Kind => t.meta.main_cat.as_str() == value,
+                    DuplicatePageFilter::Kind => t.meta.media_type.as_str() == value,
                     DuplicatePageFilter::Title => &t.meta.title == value,
                     DuplicatePageFilter::Author => t.meta.authors.contains(value),
                     DuplicatePageFilter::Narrator => t.meta.narrators.contains(value),
@@ -58,7 +58,7 @@ pub async fn duplicate_page(
     if let Some(sort_by) = &sort.sort_by {
         duplicate_torrents.sort_by(|a, b| {
             let ord = match sort_by {
-                DuplicatePageSort::Kind => a.meta.main_cat.cmp(&b.meta.main_cat),
+                DuplicatePageSort::Kind => a.meta.media_type.cmp(&b.meta.media_type),
                 DuplicatePageSort::Title => a.meta.title.cmp(&b.meta.title),
                 DuplicatePageSort::Authors => a.meta.authors.cmp(&b.meta.authors),
                 DuplicatePageSort::Narrators => a.meta.narrators.cmp(&b.meta.narrators),
@@ -152,6 +152,7 @@ pub async fn duplicate_torrents_page_post(
                 let rw = db.rw_transaction()?;
                 rw.insert(SelectedTorrent {
                     mam_id: mam_torrent.id,
+                    goodreads_id: None,
                     hash: None,
                     dl_link: mam_torrent
                         .dl

@@ -13,7 +13,7 @@ use tracing::info;
 
 use crate::{
     config::Config,
-    data::{MainCat, SelectedTorrent, Timestamp, Torrent, TorrentCost, TorrentKey},
+    data::{SelectedTorrent, Timestamp, Torrent, TorrentCost, TorrentKey},
     mam::{SearchQuery, Tor, normalize_title},
     stats::Triggers,
     web::{AppError, MaMState, MaMTorrentsTemplate, Page},
@@ -30,7 +30,6 @@ pub async fn search_page(
         .search(&SearchQuery {
             tor: Tor {
                 text: &query.q,
-                main_cat: vec![MainCat::Audio.as_id(), MainCat::Ebook.as_id()],
                 ..Default::default()
             },
             ..Default::default()
@@ -156,6 +155,7 @@ pub async fn select_torrent(
     let rw = db.rw_transaction()?;
     rw.insert(SelectedTorrent {
         mam_id: torrent.id,
+        goodreads_id: None,
         hash: None,
         dl_link: torrent
             .dl

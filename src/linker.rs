@@ -250,7 +250,7 @@ async fn match_torrent(
     let meta = match mam_torrent.as_meta() {
         Ok(meta) => meta,
         Err(err) => {
-            if let MetaError::UnknownMainCat(_) = err {
+            if let MetaError::UnknownMediaType(_) = err {
                 if let Some(on_invalid_torrent) = &qbit.0.on_invalid_torrent {
                     let qbit = qbit::Api::new_login_username_password(
                         &qbit.0.url,
@@ -521,6 +521,7 @@ async fn link_torrent(
             hash: hash.to_owned(),
             mam_id: meta.mam_id,
             abs_id: existing_torrent.and_then(|t| t.abs_id.clone()),
+            goodreads_id: existing_torrent.and_then(|t| t.goodreads_id),
             library_path: library_path.clone(),
             library_files,
             linker: library.tag_filters().name.clone(),

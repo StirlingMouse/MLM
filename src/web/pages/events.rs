@@ -153,10 +153,10 @@ impl<'a> EventPageTemplate<'a> {
         }
     }
 
-    fn torrent_main_cat(&'a self, torrent: &'a Option<Torrent>) -> &'a str {
+    fn torrent_media_type(&'a self, torrent: &'a Option<Torrent>) -> &'a str {
         torrent
             .as_ref()
-            .map(|t| t.meta.main_cat.as_str())
+            .map(|t| t.meta.media_type.as_str())
             .unwrap_or_default()
     }
 }

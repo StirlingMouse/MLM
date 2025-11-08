@@ -35,9 +35,9 @@
   <p>Language: {{ language.to_str() }}</p>
 {% endif %}
 {% if let Some(cat) = meta.cat %}
-<p>Category: {{ meta.main_cat.as_str() }} - {{ cat.as_str() }} {{ meta.flag_icons() }}</p>
+<p>Category: {{ meta.media_type.as_str() }} - {{ cat.as_str() }} {{ meta.flag_icons() }}</p>
 {% else %}
-  <p>Category: {{ meta.main_cat.as_str() }} {{ meta.flag_icons() }}</p>
+  <p>Category: {{ meta.media_type.as_str() }} {{ meta.flag_icons() }}</p>
 {% endif %}
 <form method=post>
 <p>

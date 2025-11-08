@@ -23,7 +23,7 @@ use crate::{
     cleaner::clean_torrent,
     config::Config,
     data::{
-        ClientStatus, Event, EventKey, EventType, MainCat, Size, Torrent, TorrentCost, TorrentKey,
+        ClientStatus, Event, EventKey, EventType, Size, Torrent, TorrentCost, TorrentKey,
         TorrentMeta,
     },
     linker::{find_library, library_dir, map_path, refresh_metadata, refresh_metadata_relink},
@@ -553,7 +553,6 @@ async fn other_torrents(
                         .map_or(meta.title.as_str(), |(a, _)| a),
                     meta.authors.iter().map(|a| format!("\"{a}\"")).join(" | ")
                 ),
-                main_cat: vec![MainCat::Audio.as_id(), MainCat::Ebook.as_id()],
                 srch_in: vec![SearchIn::Title, SearchIn::Author],
                 ..Default::default()
             },

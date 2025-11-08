@@ -15,7 +15,7 @@ use native_db::Database;
 use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
 
-use crate::data::{Category, ClientStatus, MainCat, MetadataSource, Series, SeriesEntry};
+use crate::data::{ClientStatus, MediaType, MetadataSource, OldCategory, Series, SeriesEntry};
 use crate::mam_enums::Flags;
 use crate::web::{MaMState, Page, tables};
 use crate::{
@@ -62,7 +62,7 @@ pub async fn torrents_page(
             let mut torrent_score = 0;
             for (field, value) in filter.iter() {
                 let ok = match field {
-                    TorrentsPageFilter::Kind => t.meta.main_cat.as_str() == value,
+                    TorrentsPageFilter::Kind => t.meta.media_type.as_str() == value,
                     TorrentsPageFilter::Category => {
                         if value.is_empty() {
                             t.meta.cat.is_none()
@@ -70,7 +70,7 @@ pub async fn torrents_page(
                             let cats = value
                                 .split(",")
                                 .filter_map(|id| id.parse().ok())
-                                .filter_map(Category::from_one_id)
+                                .filter_map(OldCategory::from_one_id)
                                 .collect::<Vec<_>>();
                             cats.contains(cat) || cat.as_str() == value
                         } else {
@@ -344,8 +344,12 @@ pub async fn torrents_page(
                 for torrent in torrents {
                     if let Some(current) = batch.first() {
                         if current.title_search != torrent.title_search {
-                            if batch.iter().any(|t| t.meta.main_cat == MainCat::Audio)
-                                && !batch.iter().any(|t| t.meta.main_cat == MainCat::Ebook)
+                            if batch
+                                .iter()
+                                .any(|t| t.meta.media_type.matches(MediaType::Audiobook))
+                                && !batch
+                                    .iter()
+                                    .any(|t| t.meta.media_type.matches(MediaType::Ebook))
                             {
                                 new_torrents.extend(mem::take(&mut batch));
                             } else {
@@ -479,7 +483,7 @@ pub async fn torrents_page(
     if let Some(sort_by) = &sort.sort_by {
         torrents.sort_by(|a, b| {
             let ord = match sort_by {
-                TorrentsPageSort::Kind => a.meta.main_cat.cmp(&b.meta.main_cat),
+                TorrentsPageSort::Kind => a.meta.media_type.cmp(&b.meta.media_type),
                 TorrentsPageSort::Category => a
                     .meta
                     .cat
@@ -492,7 +496,7 @@ pub async fn torrents_page(
                     .meta
                     .series
                     .cmp(&b.meta.series)
-                    .then(a.meta.main_cat.cmp(&b.meta.main_cat)),
+                    .then(a.meta.media_type.cmp(&b.meta.media_type)),
                 TorrentsPageSort::Language => a.meta.language.cmp(&b.meta.language),
                 TorrentsPageSort::Size => a.meta.size.cmp(&b.meta.size),
                 TorrentsPageSort::Linker => a.linker.cmp(&b.linker),

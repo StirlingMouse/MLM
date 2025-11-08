@@ -1,5 +1,6 @@
 pub mod categories;
 pub mod language;
+pub mod old_categories;
 pub mod series;
 
 use std::{fmt, str::FromStr};
@@ -12,14 +13,14 @@ use time::{Date, UtcDateTime};
 
 use crate::{
     data::{
-        ListItem, MainCat, Size, Torrent, TorrentCost, TorrentMeta, TorrentMetaDiff,
-        TorrentMetaField, TorrentStatus,
+        ListItem, MediaType, OldCategory, OldMainCat, Size, Torrent, TorrentCost, TorrentMeta,
+        TorrentMetaDiff, TorrentMetaField, TorrentStatus,
     },
     mam::DATE_FORMAT,
     mam_enums::Flags,
 };
 
-use super::{Category, FlagBits, MetadataSource, Series, VipStatus};
+use super::{FlagBits, MetadataSource, Series, VipStatus};
 
 pub fn parse<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
@@ -72,7 +73,7 @@ impl Torrent {
 
 impl TorrentMeta {
     pub(crate) fn matches(&self, other: &TorrentMeta) -> bool {
-        self.main_cat == other.main_cat
+        self.media_type.matches(other.media_type)
             && self.authors.iter().any(|a| other.authors.contains(a))
             && ((self.narrators.is_empty() && other.narrators.is_empty())
                 || self.narrators.iter().any(|a| other.narrators.contains(a)))
@@ -80,8 +81,8 @@ impl TorrentMeta {
 
     pub fn cat_name(&self) -> &str {
         match self.cat {
-            Some(Category::Audio(cat)) => cat.to_str(),
-            Some(Category::Ebook(cat)) => cat.to_str(),
+            Some(OldCategory::Audio(cat)) => cat.to_str(),
+            Some(OldCategory::Ebook(cat)) => cat.to_str(),
             None => "N/A",
         }
     }
@@ -117,26 +118,44 @@ impl TorrentMeta {
                     .unwrap_or_default(),
             });
         }
-        if self.main_cat != other.main_cat {
-            diff.push(TorrentMetaDiff {
-                field: TorrentMetaField::MainCat,
-                from: self.main_cat.as_str().to_string(),
-                to: other.main_cat.as_str().to_string(),
-            });
-        }
         if self.cat != other.cat {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Cat,
                 from: self
                     .cat
                     .as_ref()
-                    .map(|cat| cat.as_str().to_string())
+                    .map(|cat| cat.to_string())
                     .unwrap_or_default(),
                 to: other
                     .cat
                     .as_ref()
-                    .map(|cat| cat.as_str().to_string())
+                    .map(|cat| cat.to_string())
                     .unwrap_or_default(),
+            });
+        }
+        if self.media_type != other.media_type {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::MediaType,
+                from: self.media_type.to_string(),
+                to: other.media_type.to_string(),
+            });
+        }
+        if self.main_cat != other.main_cat {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::MainCat,
+                from: self.main_cat.map(|c| c.to_string()).unwrap_or_default(),
+                to: other.main_cat.map(|c| c.to_string()).unwrap_or_default(),
+            });
+        }
+        if self.categories != other.categories {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::Categories,
+                from: self.categories.iter().map(|cat| cat.to_string()).join(", "),
+                to: other
+                    .categories
+                    .iter()
+                    .map(|cat| cat.to_string())
+                    .join(", "),
             });
         }
         if self.language != other.language {
@@ -218,13 +237,28 @@ impl TorrentMeta {
     }
 }
 
+impl MediaType {
+    pub fn matches(&self, other: MediaType) -> bool {
+        match (*self, other) {
+            (a, b) if a == b => true,
+            // Due to filetype restrictions, torrents for the same book will end up in different
+            // media types
+            (MediaType::Ebook, MediaType::ComicBook) => true,
+            (MediaType::ComicBook, MediaType::Ebook) => true,
+            _ => false,
+        }
+    }
+}
+
 impl std::fmt::Display for TorrentMetaField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TorrentMetaField::MamId => write!(f, "mam_id"),
             TorrentMetaField::Vip => write!(f, "vip"),
-            TorrentMetaField::MainCat => write!(f, "main_cat"),
             TorrentMetaField::Cat => write!(f, "cat"),
+            TorrentMetaField::MediaType => write!(f, "media_type"),
+            TorrentMetaField::MainCat => write!(f, "main_cat"),
+            TorrentMetaField::Categories => write!(f, "categories"),
             TorrentMetaField::Language => write!(f, "language"),
             TorrentMetaField::Flags => write!(f, "flags"),
             TorrentMetaField::Filetypes => write!(f, "filetypes"),
@@ -256,7 +290,7 @@ impl ListItem {
             && !have_audio
             && self
                 .prefer_format
-                .is_none_or(|f| f == MainCat::Audio || !have_ebook)
+                .is_none_or(|f| f == OldMainCat::Audio || !have_ebook)
     }
 
     pub fn want_ebook(&self) -> bool {
@@ -276,7 +310,7 @@ impl ListItem {
             && !have_ebook
             && self
                 .prefer_format
-                .is_none_or(|f| f == MainCat::Ebook || !have_audio)
+                .is_none_or(|f| f == OldMainCat::Ebook || !have_audio)
     }
 }
 

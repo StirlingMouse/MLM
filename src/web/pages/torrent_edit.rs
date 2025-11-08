@@ -14,7 +14,7 @@ use crate::{
     autograbber::update_torrent_meta,
     config::Config,
     data::{
-        AudiobookCategory, Category, EbookCategory, FlagBits, Language, MetadataSource, Series,
+        AudiobookCategory, EbookCategory, FlagBits, Language, MetadataSource, OldCategory, Series,
         Torrent, TorrentMeta, impls::format_serie,
     },
     mam_enums::Flags,
@@ -77,7 +77,7 @@ pub async fn torrent_edit_page_post(
     };
     let language =
         Language::from_id(form.language).ok_or_else(|| anyhow::Error::msg("Invalid language"))?;
-    let category = Category::from_one_id(form.category)
+    let category = OldCategory::from_one_id(form.category)
         .ok_or_else(|| anyhow::Error::msg("Invalid category"))?;
     let flags = Flags {
         crude_language: Some(form.crude_language),
@@ -90,7 +90,7 @@ pub async fn torrent_edit_page_post(
 
     let meta = TorrentMeta {
         title: form.title,
-        main_cat: category.as_main_cat(),
+        media_type: category.as_main_cat().into(),
         cat: Some(category),
         language: Some(language),
         flags: Some(FlagBits::new(flags.as_bitfield())),

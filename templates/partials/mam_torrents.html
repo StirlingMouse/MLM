@@ -4,7 +4,7 @@
 <div>
   <div>
     {% if let Some(cat) = meta.cat %}
-      <img src="/assets/icons/cats/{{ cat.as_id() }}_b.png" alt="{{ meta.main_cat.as_str() }} - {{ meta.cat_name() }}" />
+      <img src="/assets/icons/cats/{{ cat.as_id() }}_b.png" alt="{{ meta.media_type.as_str() }} - {{ meta.cat_name() }}" />
     {% endif %}
   </div>
   <div>{{ mam_torrent.cost_icon() }}{{ meta.flag_icons() }}</div>

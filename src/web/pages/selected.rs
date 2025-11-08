@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     config::Config,
-    data::{Category, Language, SelectedTorrent, Size, Timestamp},
+    data::{Language, OldCategory, SelectedTorrent, Size, Timestamp},
     mam::Unsats,
     mam_enums::Flags,
     web::{
@@ -46,7 +46,7 @@ pub async fn selected_page(
             };
             for (field, value) in filter.iter() {
                 let ok = match field {
-                    SelectedPageFilter::Kind => t.meta.main_cat.as_str() == value,
+                    SelectedPageFilter::Kind => t.meta.media_type.as_str() == value,
                     SelectedPageFilter::Category => {
                         if value.is_empty() {
                             t.meta.cat.is_none()
@@ -54,7 +54,7 @@ pub async fn selected_page(
                             let cats = value
                                 .split(",")
                                 .filter_map(|id| id.parse().ok())
-                                .filter_map(Category::from_one_id)
+                                .filter_map(OldCategory::from_one_id)
                                 .collect::<Vec<_>>();
                             cats.contains(cat) || cat.as_str() == value
                         } else {
@@ -113,7 +113,7 @@ pub async fn selected_page(
     if let Some(sort_by) = &sort.sort_by {
         torrents.sort_by(|a, b| {
             let ord = match sort_by {
-                SelectedPageSort::Kind => a.meta.main_cat.cmp(&b.meta.main_cat),
+                SelectedPageSort::Kind => a.meta.media_type.cmp(&b.meta.media_type),
                 SelectedPageSort::Title => a.meta.title.cmp(&b.meta.title),
                 SelectedPageSort::Authors => a.meta.authors.cmp(&b.meta.authors),
                 SelectedPageSort::Narrators => a.meta.narrators.cmp(&b.meta.narrators),

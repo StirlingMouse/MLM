@@ -71,7 +71,7 @@
 {% for (torrent, replacement) in torrents %}
 <div>
   <div><input type=checkbox name=torrent value={{torrent.hash}}></div>
-  <div>{{ item(TorrentsPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</div>
+  <div>{{ item(TorrentsPageFilter::Kind, torrent.meta.media_type.as_str()) }}</div>
   <div>{{ item(TorrentsPageFilter::Title, torrent.meta.title) }}</div>
   {% if show.authors %}
   <div>{{ items(TorrentsPageFilter::Author, torrent.meta.authors) }}</div>

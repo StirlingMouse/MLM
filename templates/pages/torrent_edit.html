@@ -38,10 +38,10 @@
     <span>Category</span>
     <select name=category>
     {% for cat in AudiobookCategory::all() %}
-      <option value="{{ cat.to_id() }}" {% if torrent.meta.cat.as_ref().map(Category::as_id) == Some(cat.to_id()) %}selected{% endif %}>Audiobook - {{ cat.to_str() }}</option>
+      <option value="{{ cat.to_id() }}" {% if torrent.meta.cat.as_ref().map(OldCategory::as_id) == Some(cat.to_id()) %}selected{% endif %}>Audiobook - {{ cat.to_str() }}</option>
     {% endfor %}
     {% for cat in EbookCategory::all() %}
-      <option value="{{ cat.to_id() }}" {% if torrent.meta.cat.as_ref().map(Category::as_id) == Some(cat.to_id()) %}selected{% endif %}>Ebook - {{ cat.to_str() }}</option>
+      <option value="{{ cat.to_id() }}" {% if torrent.meta.cat.as_ref().map(OldCategory::as_id) == Some(cat.to_id()) %}selected{% endif %}>Ebook - {{ cat.to_str() }}</option>
     {% endfor %}
     </select>
   </label>

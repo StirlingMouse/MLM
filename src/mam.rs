@@ -25,7 +25,10 @@ use unidecode::unidecode;
 
 use crate::{
     config::Config,
-    data::{self, Category, FlagBits, Language, MetadataSource, Series, SeriesEntries, VipStatus},
+    data::{
+        self, Category, FlagBits, Language, MetadataSource, OldCategory, Series, SeriesEntries,
+        VipStatus,
+    },
     mam_enums::SearchIn,
 };
 
@@ -340,7 +343,13 @@ pub struct MaMTorrent {
     pub author_info: BTreeMap<u64, String>,
     pub bookmarked: Option<u64>,
     pub browseflags: u8,
+    /// Old MainCat field -> MediaType
+    pub main_cat: u8,
     pub category: u64,
+    pub mediatype: u8,
+    pub maincat: u8,
+    #[serde(deserialize_with = "json_or_default")]
+    pub categories: Vec<u64>,
     pub catname: String,
     pub cat: String,
     pub comments: u64,
@@ -357,7 +366,6 @@ pub struct MaMTorrent {
     pub lang_code: String,
     pub language: u8,
     pub leechers: u64,
-    pub main_cat: u64,
     pub my_snatched: u64,
     #[serde(deserialize_with = "json_or_default")]
     pub narrator_info: BTreeMap<u64, String>,
@@ -407,9 +415,24 @@ impl MaMTorrent {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        let main_cat = data::MainCat::from_id(self.main_cat).map_err(MetaError::UnknownMainCat)?;
-        let cat = Category::from_id(main_cat, self.category)
-            .ok_or_else(|| MetaError::UnknownCat(self.catname.clone()))?;
+
+        let media_type = data::MediaType::from_id(self.mediatype)
+            .or_else(|| data::MediaType::from_main_cat_id(self.main_cat))
+            .ok_or_else(|| {
+                MetaError::UnknownMediaType(format!(
+                    "Unknown mediatype {} and main_cat {}",
+                    self.mediatype, self.main_cat
+                ))
+            })?;
+        let main_cat = data::MainCat::from_id(self.maincat);
+        let categories = self
+            .categories
+            .iter()
+            .map(|id| Category::from_id(*id).ok_or_else(|| MetaError::UnknownCat(*id)))
+            .collect::<Result<Vec<_>, _>>()?;
+        let cat = OldCategory::from_one_id(self.category)
+            .ok_or_else(|| MetaError::UnknownOldCat(self.catname.clone()))?;
+
         let language = Language::from_id(self.language)
             .ok_or_else(|| MetaError::UnknownLanguage(self.language, self.lang_code.clone()))?;
         let filetypes = self
@@ -433,7 +456,9 @@ impl MaMTorrent {
         Ok(data::TorrentMeta {
             mam_id: self.id,
             vip_status: Some(vip_status),
+            media_type,
             main_cat,
+            categories,
             cat: Some(cat),
             language: Some(language),
             flags: Some(FlagBits::new(self.browseflags)),
@@ -455,9 +480,11 @@ impl MaMTorrent {
 #[derive(thiserror::Error, Debug)]
 pub enum MetaError {
     #[error("{0}")]
-    UnknownMainCat(String),
+    UnknownMediaType(String),
     #[error("Unknown category: {0}")]
-    UnknownCat(String),
+    UnknownCat(u64),
+    #[error("Unknown old category: {0}")]
+    UnknownOldCat(String),
     #[error("Unknown language id {0}, code: {1}")]
     UnknownLanguage(u8, String),
     #[error("{0}")]

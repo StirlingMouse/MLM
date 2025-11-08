@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 
 use anyhow::Result;
 use axum::http::HeaderMap;
@@ -456,6 +456,7 @@ pub struct MetadataUpdate<'a> {
     pub description: Option<&'a str>,
     pub isbn: Option<&'a str>,
     pub asin: Option<&'a str>,
+    pub genres: BTreeSet<&'a str>,
     pub language: Option<&'a str>,
     pub explicit: bool,
     pub abridged: bool,
@@ -644,6 +645,13 @@ impl Abs {
                     description: mam_torrent.description.as_deref(),
                     isbn,
                     asin,
+                    genres: meta
+                        .cat
+                        .as_ref()
+                        .map(|c| c.as_str())
+                        .into_iter()
+                        .chain(meta.categories.iter().map(|c| c.as_str()))
+                        .collect::<BTreeSet<_>>(),
                     language: meta.language.map(|l| l.to_str()),
                     explicit: meta
                         .flags
@@ -686,7 +694,13 @@ pub fn create_metadata(mam_torrent: &MaMTorrent, meta: &TorrentMeta) -> serde_js
         "isbn": isbn,
         "asin": asin,
         "tags": if flags.lgbt == Some(true) { Some(vec!["LGBT"]) } else { None },
-        "genres": meta.cat.as_ref().map(|c| vec![c.as_str()]),
+        "genres": meta
+            .cat
+            .as_ref()
+            .map(|c| c.as_str())
+            .into_iter()
+            .chain(meta.categories.iter().map(|c| c.as_str()))
+            .collect::<BTreeSet<_>>(),
         "language": meta.language.map(|l| l.to_str()),
         "explicit": flags.explicit == Some(true),
         "abridged": flags.abridged == Some(true),

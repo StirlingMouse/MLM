@@ -34,7 +34,7 @@
   {{ table_header(None, "") }}
 {% for (torrent, duplicate_of) in torrents %}
   <div><input type=checkbox name=torrent value={{torrent.mam_id}}></div>
-  <div>{{ item(DuplicatePageFilter::Kind, torrent.meta.main_cat.as_str()) }}</div>
+  <div>{{ item(DuplicatePageFilter::Kind, torrent.meta.media_type.as_str()) }}</div>
   <div>{{ item(DuplicatePageFilter::Title, torrent.meta.title) }}</div>
   <div>{{ items(DuplicatePageFilter::Author, torrent.meta.authors) }}</div>
   <div>{{ items(DuplicatePageFilter::Narrator, torrent.meta.narrators) }}</div>

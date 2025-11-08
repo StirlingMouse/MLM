@@ -15,12 +15,12 @@ use tracing::{debug, instrument};
 use tracing::{trace, warn};
 
 use crate::config::GoodreadsList;
-use crate::data::{ListItemTorrent, Torrent, TorrentKey, TorrentStatus};
+use crate::data::{ListItemTorrent, OldMainCat, Torrent, TorrentKey, TorrentStatus};
 use crate::mam::normalize_title;
 use crate::{
     autograbber::select_torrents,
     config::{Config, Cost, Grab},
-    data::{List, ListItem, MainCat, Timestamp, TorrentMeta},
+    data::{List, ListItem, Timestamp, TorrentMeta},
     mam::{DATE_FORMAT, MaM, MaMTorrent, SearchQuery, SearchResult, Tor},
     mam_enums::SearchIn,
 };
@@ -98,9 +98,9 @@ pub async fn run_goodreads_import(
                             }
                         }
                         if (db_item.audio_torrent.is_some() && db_item.ebook_torrent.is_some())
-                            || (list.prefer_format == Some(MainCat::Audio)
+                            || (list.prefer_format == Some(OldMainCat::Audio)
                                 && db_item.audio_torrent.is_some())
-                            || (list.prefer_format == Some(MainCat::Ebook)
+                            || (list.prefer_format == Some(OldMainCat::Ebook)
                                 && db_item.ebook_torrent.is_some())
                         {
                             continue;
@@ -119,7 +119,7 @@ pub async fn run_goodreads_import(
                 };
                 trace!("Searching for book {} from Goodreads list", item.title);
                 selected_torrents +=
-                    search_item(&config, &db, &mam, &list, &item, db_item, max_torrents)
+                    search_item(&config, &db, &mam, list, &item, db_item, max_torrents)
                         .await
                         .context("search goodreads book")?;
             }
@@ -162,17 +162,17 @@ async fn search_item(
             .context("search_grab")?;
         torrents.push(results);
     }
-    let mut audiobook = select_torrent(&torrents, MainCat::Audio);
-    let mut ebook = select_torrent(&torrents, MainCat::Ebook);
+    let mut audiobook = select_torrent(&torrents, OldMainCat::Audio);
+    let mut ebook = select_torrent(&torrents, OldMainCat::Ebook);
 
     let mut has_updates = false;
     if audiobook.is_some() && ebook.is_some() {
         match list.prefer_format {
-            Some(MainCat::Audio) => {
+            Some(OldMainCat::Audio) => {
                 let updated = not_wanted(&mut db_item.ebook_torrent, &mut ebook);
                 has_updates = updated || has_updates;
             }
-            Some(MainCat::Ebook) => {
+            Some(OldMainCat::Ebook) => {
                 let updated = not_wanted(&mut db_item.audio_torrent, &mut audiobook);
                 has_updates = updated || has_updates;
             }
@@ -199,33 +199,31 @@ async fn search_item(
     }
 
     let mut has_updates = false;
-    if let Some(found) = audiobook {
-        if db_item
+    if let Some(found) = audiobook
+        && db_item
             .audio_torrent
             .as_ref()
             .is_none_or(|t| !(t.status == TorrentStatus::Selected && t.mam_id == found.0.id))
-        {
-            db_item.audio_torrent = Some(ListItemTorrent {
-                mam_id: found.0.id,
-                status: TorrentStatus::Selected,
-                at: Timestamp::now(),
-            });
-            has_updates = true;
-        }
+    {
+        db_item.audio_torrent = Some(ListItemTorrent {
+            mam_id: found.0.id,
+            status: TorrentStatus::Selected,
+            at: Timestamp::now(),
+        });
+        has_updates = true;
     }
-    if let Some(found) = ebook {
-        if db_item
+    if let Some(found) = ebook
+        && db_item
             .ebook_torrent
             .as_ref()
             .is_none_or(|t| !(t.status == TorrentStatus::Selected && t.mam_id == found.0.id))
-        {
-            db_item.ebook_torrent = Some(ListItemTorrent {
-                mam_id: found.0.id,
-                status: TorrentStatus::Selected,
-                at: Timestamp::now(),
-            });
-            has_updates = true;
-        }
+    {
+        db_item.ebook_torrent = Some(ListItemTorrent {
+            mam_id: found.0.id,
+            status: TorrentStatus::Selected,
+            at: Timestamp::now(),
+        });
+        has_updates = true;
     }
     if !list.dry_run && has_updates {
         let rw = db.rw_transaction()?;
@@ -246,6 +244,7 @@ async fn search_item(
             None,
             list.dry_run,
             max_torrents,
+            item.book_id,
         )
         .await
         .context("select_torrents")?;
@@ -262,6 +261,7 @@ async fn search_item(
             None,
             list.dry_run,
             max_torrents,
+            item.book_id,
         )
         .await
         .context("select_torrents")?;
@@ -288,17 +288,18 @@ fn search_library(
     }?;
 
     library.sort_by_key(|torrent| {
-        let preferred_types = match torrent.meta.main_cat {
-            MainCat::Audio => &config.audio_types,
-            MainCat::Ebook => &config.ebook_types,
-        };
+        let preferred_types = torrent.meta.media_type.preferred_types(config);
         preferred_types
             .iter()
             .position(|t| torrent.meta.filetypes.contains(t))
     });
 
-    let audiobook = library.iter().find(|t| t.meta.main_cat == MainCat::Audio);
-    let ebook = library.iter().find(|t| t.meta.main_cat == MainCat::Ebook);
+    let audiobook = library
+        .iter()
+        .find(|t| t.meta.media_type.matches(OldMainCat::Audio.into()));
+    let ebook = library
+        .iter()
+        .find(|t| t.meta.media_type.matches(OldMainCat::Ebook.into()));
 
     let mut updated_any = false;
     if let Some(audiobook) = audiobook {
@@ -491,10 +492,7 @@ async fn search_grab(
         .take_while(|t| t.1 > max_score - 100)
         .map(|(t, _)| {
             let meta = t.as_meta()?;
-            let preferred_types = match meta.main_cat {
-                MainCat::Audio => &config.audio_types,
-                MainCat::Ebook => &config.ebook_types,
-            };
+            let preferred_types = meta.media_type.preferred_types(config);
             let preference = preferred_types
                 .iter()
                 .position(|t| meta.filetypes.contains(t));
@@ -527,6 +525,7 @@ struct Channel {
 #[derive(Debug, Deserialize)]
 struct Item {
     guid: String,
+    book_id: Option<u64>,
     title: String,
     author_name: Option<String>,
     series: Option<(String, f64)>,
@@ -621,14 +620,19 @@ impl ListItem {
 
 fn select_torrent(
     torrents: &[Vec<(MaMTorrent, TorrentMeta, usize, Grab)>],
-    main_cat: MainCat,
+    main_cat: OldMainCat,
 ) -> Option<&(MaMTorrent, TorrentMeta, usize, Grab)> {
     torrents
         .iter()
         .flatten()
-        .filter(|t| t.1.main_cat == main_cat)
+        .filter(|t| t.1.media_type.matches(main_cat.into()))
         .find(|t| t.3.cost != Cost::Free || t.0.is_free())
-        .or_else(|| torrents.iter().flatten().find(|t| t.1.main_cat == main_cat))
+        .or_else(|| {
+            torrents
+                .iter()
+                .flatten()
+                .find(|t| t.1.media_type.matches(main_cat.into()))
+        })
 }
 
 fn not_wanted(

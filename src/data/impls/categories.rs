@@ -1,590 +1,296 @@
-use std::str::FromStr;
+use crate::{
+    config::Config,
+    data::{Category, MainCat, MediaType},
+};
 
-use crate::data::{AudiobookCategory, Category, EbookCategory, MainCat};
-
-impl MainCat {
-    pub(crate) fn from_id(main_cat: u64) -> Result<MainCat, String> {
-        match main_cat {
-            13 => Ok(MainCat::Audio),
-            14 => Ok(MainCat::Ebook),
-            15 => Err("Unsupported main_cat Musicology".to_string()),
-            16 => Err("Unsupported main_cat Radio".to_string()),
-            id => Err(format!("Unknown main_cat {id}")),
-        }
-    }
-
-    pub(crate) fn as_str(&self) -> &str {
-        match self {
-            MainCat::Audio => "Audiobook",
-            MainCat::Ebook => "Ebook",
-        }
-    }
-
-    pub fn as_id(&self) -> u8 {
-        match self {
-            MainCat::Audio => 13,
-            MainCat::Ebook => 14,
-        }
-    }
-}
-
-impl FromStr for MainCat {
-    type Err = String;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        let l = match value.to_lowercase().as_str() {
-            "audio" => Some(MainCat::Audio),
-            "ebook" => Some(MainCat::Ebook),
+impl MediaType {
+    pub fn from_id(id: u8) -> Option<MediaType> {
+        match id {
+            1 => Some(MediaType::Audiobook),
+            2 => Some(MediaType::Ebook),
+            3 => Some(MediaType::Musicology),
+            4 => Some(MediaType::Radio),
+            5 => Some(MediaType::Manga),
+            6 => Some(MediaType::ComicBook),
+            7 => Some(MediaType::Periodical),
             _ => None,
-        };
-        match l {
-            Some(l) => Ok(l),
-            None => Err(format!("invalid category {value}")),
         }
     }
-}
 
-impl TryFrom<String> for MainCat {
-    type Error = String;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        value.parse()
-    }
-}
-
-impl Category {
-    pub fn from_id(main_cat: MainCat, category: u64) -> Option<Category> {
+    pub(crate) fn from_main_cat_id(main_cat: u8) -> Option<MediaType> {
         match main_cat {
-            MainCat::Audio => AudiobookCategory::from_id(category).map(Category::Audio),
-            MainCat::Ebook => EbookCategory::from_id(category).map(Category::Ebook),
+            13 => Some(MediaType::Audiobook),
+            14 => Some(MediaType::Ebook),
+            15 => Some(MediaType::Musicology),
+            16 => Some(MediaType::Radio),
+            _ => None,
         }
-    }
-
-    pub fn from_one_id(category: u64) -> Option<Category> {
-        AudiobookCategory::from_id(category)
-            .map(Category::Audio)
-            .or_else(|| EbookCategory::from_id(category).map(Category::Ebook))
     }
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            Category::Audio(cat) => cat.to_str(),
-            Category::Ebook(cat) => cat.to_str(),
-        }
-    }
-
-    pub fn as_main_cat(&self) -> MainCat {
-        match self {
-            Category::Audio(_) => MainCat::Audio,
-            Category::Ebook(_) => MainCat::Ebook,
+            MediaType::Audiobook => "Audiobook",
+            MediaType::Ebook => "Ebook",
+            MediaType::Musicology => "Musicology",
+            MediaType::Radio => "Radio",
+            MediaType::Manga => "Manga",
+            MediaType::ComicBook => "Comic Book / Graphic Novel",
+            MediaType::Periodical => "Periodical",
         }
     }
 
     pub fn as_id(&self) -> u8 {
         match self {
-            Category::Audio(cat) => cat.to_id(),
-            Category::Ebook(cat) => cat.to_id(),
+            MediaType::Audiobook => 1,
+            MediaType::Ebook => 2,
+            MediaType::Musicology => 3,
+            MediaType::Radio => 4,
+            MediaType::Manga => 5,
+            MediaType::ComicBook => 6,
+            MediaType::Periodical => 7,
+        }
+    }
+
+    pub fn preferred_types<'a>(&self, config: &'a Config) -> &'a [String] {
+        match self {
+            MediaType::Audiobook => &config.audio_types,
+            MediaType::Ebook => &config.ebook_types,
+            MediaType::Musicology => &config.music_types,
+            MediaType::Radio => &config.radio_types,
+            MediaType::Manga => &config.ebook_types,
+            MediaType::ComicBook => &config.ebook_types,
+            MediaType::Periodical => &config.ebook_types,
         }
     }
 }
 
-impl AudiobookCategory {
-    pub fn all() -> Vec<AudiobookCategory> {
-        vec![
-            AudiobookCategory::ActionAdventure,
-            AudiobookCategory::Art,
-            AudiobookCategory::Biographical,
-            AudiobookCategory::Business,
-            AudiobookCategory::ComputerInternet,
-            AudiobookCategory::Crafts,
-            AudiobookCategory::CrimeThriller,
-            AudiobookCategory::Fantasy,
-            AudiobookCategory::Food,
-            AudiobookCategory::GeneralFiction,
-            AudiobookCategory::GeneralNonFic,
-            AudiobookCategory::HistoricalFiction,
-            AudiobookCategory::History,
-            AudiobookCategory::HomeGarden,
-            AudiobookCategory::Horror,
-            AudiobookCategory::Humor,
-            AudiobookCategory::Instructional,
-            AudiobookCategory::Juvenile,
-            AudiobookCategory::Language,
-            AudiobookCategory::LiteraryClassics,
-            AudiobookCategory::MathScienceTech,
-            AudiobookCategory::Medical,
-            AudiobookCategory::Mystery,
-            AudiobookCategory::Nature,
-            AudiobookCategory::Philosophy,
-            AudiobookCategory::PolSocRelig,
-            AudiobookCategory::Recreation,
-            AudiobookCategory::Romance,
-            AudiobookCategory::ScienceFiction,
-            AudiobookCategory::SelfHelp,
-            AudiobookCategory::TravelAdventure,
-            AudiobookCategory::TrueCrime,
-            AudiobookCategory::UrbanFantasy,
-            AudiobookCategory::Western,
-            AudiobookCategory::YoungAdult,
-        ]
+impl std::fmt::Display for MediaType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
+}
 
-    pub fn from_str(value: &str) -> Option<AudiobookCategory> {
-        match value.to_lowercase().as_str() {
-            "action" => Some(AudiobookCategory::ActionAdventure),
-            "action/adventure" => Some(AudiobookCategory::ActionAdventure),
-            "art" => Some(AudiobookCategory::Art),
-            "biographical" => Some(AudiobookCategory::Biographical),
-            "business" => Some(AudiobookCategory::Business),
-            "computer" => Some(AudiobookCategory::ComputerInternet),
-            "internet" => Some(AudiobookCategory::ComputerInternet),
-            "computer/internet" => Some(AudiobookCategory::ComputerInternet),
-            "crafts" => Some(AudiobookCategory::Crafts),
-            "crime/thriller" => Some(AudiobookCategory::CrimeThriller),
-            "fantasy" => Some(AudiobookCategory::Fantasy),
-            "food" => Some(AudiobookCategory::Food),
-            "general fiction" => Some(AudiobookCategory::GeneralFiction),
-            "general non-fic" => Some(AudiobookCategory::GeneralNonFic),
-            "general non fic" => Some(AudiobookCategory::GeneralNonFic),
-            "general nonfic" => Some(AudiobookCategory::GeneralNonFic),
-            "general non-fiction" => Some(AudiobookCategory::GeneralNonFic),
-            "general non fiction" => Some(AudiobookCategory::GeneralNonFic),
-            "general nonfiction" => Some(AudiobookCategory::GeneralNonFic),
-            "historical fiction" => Some(AudiobookCategory::HistoricalFiction),
-            "history" => Some(AudiobookCategory::History),
-            "home" => Some(AudiobookCategory::HomeGarden),
-            "garden" => Some(AudiobookCategory::HomeGarden),
-            "home/garden" => Some(AudiobookCategory::HomeGarden),
-            "horror" => Some(AudiobookCategory::Horror),
-            "humor" => Some(AudiobookCategory::Humor),
-            "instructional" => Some(AudiobookCategory::Instructional),
-            "juvenile" => Some(AudiobookCategory::Juvenile),
-            "language" => Some(AudiobookCategory::Language),
-            "classics" => Some(AudiobookCategory::LiteraryClassics),
-            "literary classics" => Some(AudiobookCategory::LiteraryClassics),
-            "math" => Some(AudiobookCategory::MathScienceTech),
-            "science" => Some(AudiobookCategory::MathScienceTech),
-            "tech" => Some(AudiobookCategory::MathScienceTech),
-            "math/science/tech" => Some(AudiobookCategory::MathScienceTech),
-            "medical" => Some(AudiobookCategory::Medical),
-            "mystery" => Some(AudiobookCategory::Mystery),
-            "nature" => Some(AudiobookCategory::Nature),
-            "philosophy" => Some(AudiobookCategory::Philosophy),
-            "pol" => Some(AudiobookCategory::PolSocRelig),
-            "soc" => Some(AudiobookCategory::PolSocRelig),
-            "relig" => Some(AudiobookCategory::PolSocRelig),
-            "pol/soc/relig" => Some(AudiobookCategory::PolSocRelig),
-            "recreation" => Some(AudiobookCategory::Recreation),
-            "romance" => Some(AudiobookCategory::Romance),
-            "sf" => Some(AudiobookCategory::ScienceFiction),
-            "science fiction" => Some(AudiobookCategory::ScienceFiction),
-            "self help" => Some(AudiobookCategory::SelfHelp),
-            "self-help" => Some(AudiobookCategory::SelfHelp),
-            "travel" => Some(AudiobookCategory::TravelAdventure),
-            "travel/adventure" => Some(AudiobookCategory::TravelAdventure),
-            "true crime" => Some(AudiobookCategory::TrueCrime),
-            "urban fantasy" => Some(AudiobookCategory::UrbanFantasy),
-            "western" => Some(AudiobookCategory::Western),
-            "ya" => Some(AudiobookCategory::YoungAdult),
-            "young adult" => Some(AudiobookCategory::YoungAdult),
+impl MainCat {
+    pub fn from_id(id: u8) -> Option<MainCat> {
+        match id {
+            1 => Some(MainCat::Fiction),
+            2 => Some(MainCat::Nonfiction),
             _ => None,
         }
     }
 
-    pub fn from_id(category: u64) -> Option<AudiobookCategory> {
-        match category {
-            39 => Some(AudiobookCategory::ActionAdventure),
-            49 => Some(AudiobookCategory::Art),
-            50 => Some(AudiobookCategory::Biographical),
-            83 => Some(AudiobookCategory::Business),
-            51 => Some(AudiobookCategory::ComputerInternet),
-            97 => Some(AudiobookCategory::Crafts),
-            40 => Some(AudiobookCategory::CrimeThriller),
-            41 => Some(AudiobookCategory::Fantasy),
-            106 => Some(AudiobookCategory::Food),
-            42 => Some(AudiobookCategory::GeneralFiction),
-            52 => Some(AudiobookCategory::GeneralNonFic),
-            98 => Some(AudiobookCategory::HistoricalFiction),
-            54 => Some(AudiobookCategory::History),
-            55 => Some(AudiobookCategory::HomeGarden),
-            43 => Some(AudiobookCategory::Horror),
-            99 => Some(AudiobookCategory::Humor),
-            84 => Some(AudiobookCategory::Instructional),
-            44 => Some(AudiobookCategory::Juvenile),
-            56 => Some(AudiobookCategory::Language),
-            45 => Some(AudiobookCategory::LiteraryClassics),
-            57 => Some(AudiobookCategory::MathScienceTech),
-            85 => Some(AudiobookCategory::Medical),
-            87 => Some(AudiobookCategory::Mystery),
-            119 => Some(AudiobookCategory::Nature),
-            88 => Some(AudiobookCategory::Philosophy),
-            58 => Some(AudiobookCategory::PolSocRelig),
-            59 => Some(AudiobookCategory::Recreation),
-            46 => Some(AudiobookCategory::Romance),
-            47 => Some(AudiobookCategory::ScienceFiction),
-            53 => Some(AudiobookCategory::SelfHelp),
-            89 => Some(AudiobookCategory::TravelAdventure),
-            100 => Some(AudiobookCategory::TrueCrime),
-            108 => Some(AudiobookCategory::UrbanFantasy),
-            48 => Some(AudiobookCategory::Western),
-            111 => Some(AudiobookCategory::YoungAdult),
-            _ => None,
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            MainCat::Fiction => "Fiction",
+            MainCat::Nonfiction => "Nonfiction",
         }
     }
 
-    pub fn to_id(self) -> u8 {
+    pub fn as_id(&self) -> u8 {
         match self {
-            AudiobookCategory::ActionAdventure => 39,
-            AudiobookCategory::Art => 49,
-            AudiobookCategory::Biographical => 50,
-            AudiobookCategory::Business => 83,
-            AudiobookCategory::ComputerInternet => 51,
-            AudiobookCategory::Crafts => 97,
-            AudiobookCategory::CrimeThriller => 40,
-            AudiobookCategory::Fantasy => 41,
-            AudiobookCategory::Food => 106,
-            AudiobookCategory::GeneralFiction => 42,
-            AudiobookCategory::GeneralNonFic => 52,
-            AudiobookCategory::HistoricalFiction => 98,
-            AudiobookCategory::History => 54,
-            AudiobookCategory::HomeGarden => 55,
-            AudiobookCategory::Horror => 43,
-            AudiobookCategory::Humor => 99,
-            AudiobookCategory::Instructional => 84,
-            AudiobookCategory::Juvenile => 44,
-            AudiobookCategory::Language => 56,
-            AudiobookCategory::LiteraryClassics => 45,
-            AudiobookCategory::MathScienceTech => 57,
-            AudiobookCategory::Medical => 85,
-            AudiobookCategory::Mystery => 87,
-            AudiobookCategory::Nature => 119,
-            AudiobookCategory::Philosophy => 88,
-            AudiobookCategory::PolSocRelig => 58,
-            AudiobookCategory::Recreation => 59,
-            AudiobookCategory::Romance => 46,
-            AudiobookCategory::ScienceFiction => 47,
-            AudiobookCategory::SelfHelp => 53,
-            AudiobookCategory::TravelAdventure => 89,
-            AudiobookCategory::TrueCrime => 100,
-            AudiobookCategory::UrbanFantasy => 108,
-            AudiobookCategory::Western => 48,
-            AudiobookCategory::YoungAdult => 111,
-        }
-    }
-
-    pub fn to_str(self) -> &'static str {
-        match self {
-            AudiobookCategory::ActionAdventure => "Action/Adventure",
-            AudiobookCategory::Art => "Art",
-            AudiobookCategory::Biographical => "Biographical",
-            AudiobookCategory::Business => "Business",
-            AudiobookCategory::ComputerInternet => "Computer/Internet",
-            AudiobookCategory::Crafts => "Crafts",
-            AudiobookCategory::CrimeThriller => "Crime/Thriller",
-            AudiobookCategory::Fantasy => "Fantasy",
-            AudiobookCategory::Food => "Food",
-            AudiobookCategory::GeneralFiction => "General Fiction",
-            AudiobookCategory::GeneralNonFic => "General Non-fic",
-            AudiobookCategory::HistoricalFiction => "Historical Fiction",
-            AudiobookCategory::History => "History",
-            AudiobookCategory::HomeGarden => "Home/Garden",
-            AudiobookCategory::Horror => "Horror",
-            AudiobookCategory::Humor => "Humor",
-            AudiobookCategory::Instructional => "Instructional",
-            AudiobookCategory::Juvenile => "Juvenile",
-            AudiobookCategory::Language => "Language",
-            AudiobookCategory::LiteraryClassics => "Literary Classics",
-            AudiobookCategory::MathScienceTech => "Math/Science/Tech",
-            AudiobookCategory::Medical => "Medical",
-            AudiobookCategory::Mystery => "Mystery",
-            AudiobookCategory::Nature => "Nature",
-            AudiobookCategory::Philosophy => "Philosophy",
-            AudiobookCategory::PolSocRelig => "Pol/Soc/Relig",
-            AudiobookCategory::Recreation => "Recreation",
-            AudiobookCategory::Romance => "Romance",
-            AudiobookCategory::ScienceFiction => "Science Fiction",
-            AudiobookCategory::SelfHelp => "Self-Help",
-            AudiobookCategory::TravelAdventure => "Travel/Adventure",
-            AudiobookCategory::TrueCrime => "True Crime",
-            AudiobookCategory::UrbanFantasy => "Urban Fantasy",
-            AudiobookCategory::Western => "Western",
-            AudiobookCategory::YoungAdult => "Young Adult",
+            MainCat::Fiction => 1,
+            MainCat::Nonfiction => 2,
         }
     }
 }
 
-impl TryFrom<String> for AudiobookCategory {
-    type Error = String;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        let l = Self::from_str(&value);
-        match l {
-            Some(l) => Ok(l),
-            None => Err(format!("invalid category {value}")),
-        }
+impl std::fmt::Display for MainCat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
-impl EbookCategory {
-    pub fn all() -> Vec<EbookCategory> {
-        vec![
-            EbookCategory::ActionAdventure,
-            EbookCategory::Art,
-            EbookCategory::Biographical,
-            EbookCategory::Business,
-            EbookCategory::ComicsGraphicnovels,
-            EbookCategory::ComputerInternet,
-            EbookCategory::Crafts,
-            EbookCategory::CrimeThriller,
-            EbookCategory::Fantasy,
-            EbookCategory::Food,
-            EbookCategory::GeneralFiction,
-            EbookCategory::GeneralNonFiction,
-            EbookCategory::HistoricalFiction,
-            EbookCategory::History,
-            EbookCategory::HomeGarden,
-            EbookCategory::Horror,
-            EbookCategory::Humor,
-            EbookCategory::IllusionMagic,
-            EbookCategory::Instructional,
-            EbookCategory::Juvenile,
-            EbookCategory::Language,
-            EbookCategory::LiteraryClassics,
-            EbookCategory::MagazinesNewspapers,
-            EbookCategory::MathScienceTech,
-            EbookCategory::Medical,
-            EbookCategory::MixedCollections,
-            EbookCategory::Mystery,
-            EbookCategory::Nature,
-            EbookCategory::Philosophy,
-            EbookCategory::PolSocRelig,
-            EbookCategory::Recreation,
-            EbookCategory::Romance,
-            EbookCategory::ScienceFiction,
-            EbookCategory::SelfHelp,
-            EbookCategory::TravelAdventure,
-            EbookCategory::TrueCrime,
-            EbookCategory::UrbanFantasy,
-            EbookCategory::Western,
-            EbookCategory::YoungAdult,
-        ]
-    }
-
-    pub fn from_str(value: &str) -> Option<EbookCategory> {
-        match value.to_lowercase().as_str() {
-            "action" => Some(EbookCategory::ActionAdventure),
-            "action/adventure" => Some(EbookCategory::ActionAdventure),
-            "art" => Some(EbookCategory::Art),
-            "biographical" => Some(EbookCategory::Biographical),
-            "business" => Some(EbookCategory::Business),
-            "comics" => Some(EbookCategory::ComicsGraphicnovels),
-            "graphic novels" => Some(EbookCategory::ComicsGraphicnovels),
-            "comics/graphic novels" => Some(EbookCategory::ComicsGraphicnovels),
-            "computer" => Some(EbookCategory::ComputerInternet),
-            "internet" => Some(EbookCategory::ComputerInternet),
-            "computer/internet" => Some(EbookCategory::ComputerInternet),
-            "crafts" => Some(EbookCategory::Crafts),
-            "crime" => Some(EbookCategory::CrimeThriller),
-            "thriller" => Some(EbookCategory::CrimeThriller),
-            "crime/thriller" => Some(EbookCategory::CrimeThriller),
-            "fantasy" => Some(EbookCategory::Fantasy),
-            "food" => Some(EbookCategory::Food),
-            "general fiction" => Some(EbookCategory::GeneralFiction),
-            "general non-fic" => Some(EbookCategory::GeneralNonFiction),
-            "general non fic" => Some(EbookCategory::GeneralNonFiction),
-            "general nonfic" => Some(EbookCategory::GeneralNonFiction),
-            "general non-fiction" => Some(EbookCategory::GeneralNonFiction),
-            "general non fiction" => Some(EbookCategory::GeneralNonFiction),
-            "general nonfiction" => Some(EbookCategory::GeneralNonFiction),
-            "historical fiction" => Some(EbookCategory::HistoricalFiction),
-            "history" => Some(EbookCategory::History),
-            "home" => Some(EbookCategory::HomeGarden),
-            "garden" => Some(EbookCategory::HomeGarden),
-            "home/garden" => Some(EbookCategory::HomeGarden),
-            "horror" => Some(EbookCategory::Horror),
-            "humor" => Some(EbookCategory::Humor),
-            "illusion" => Some(EbookCategory::IllusionMagic),
-            "magic" => Some(EbookCategory::IllusionMagic),
-            "illusion/magic" => Some(EbookCategory::IllusionMagic),
-            "instructional" => Some(EbookCategory::Instructional),
-            "juvenile" => Some(EbookCategory::Juvenile),
-            "language" => Some(EbookCategory::Language),
-            "literary classics" => Some(EbookCategory::LiteraryClassics),
-            "magazines" => Some(EbookCategory::MagazinesNewspapers),
-            "newspapers" => Some(EbookCategory::MagazinesNewspapers),
-            "magazines/newspapers" => Some(EbookCategory::MagazinesNewspapers),
-            "math" => Some(EbookCategory::MathScienceTech),
-            "science" => Some(EbookCategory::MathScienceTech),
-            "tech" => Some(EbookCategory::MathScienceTech),
-            "math/science/tech" => Some(EbookCategory::MathScienceTech),
-            "medical" => Some(EbookCategory::Medical),
-            "mixed collections" => Some(EbookCategory::MixedCollections),
-            "mystery" => Some(EbookCategory::Mystery),
-            "nature" => Some(EbookCategory::Nature),
-            "philosophy" => Some(EbookCategory::Philosophy),
-            "pol" => Some(EbookCategory::PolSocRelig),
-            "soc" => Some(EbookCategory::PolSocRelig),
-            "relig" => Some(EbookCategory::PolSocRelig),
-            "pol/soc/relig" => Some(EbookCategory::PolSocRelig),
-            "recreation" => Some(EbookCategory::Recreation),
-            "romance" => Some(EbookCategory::Romance),
-            "sf" => Some(EbookCategory::ScienceFiction),
-            "science fiction" => Some(EbookCategory::ScienceFiction),
-            "self help" => Some(EbookCategory::SelfHelp),
-            "self-help" => Some(EbookCategory::SelfHelp),
-            "travel" => Some(EbookCategory::TravelAdventure),
-            "travel/adventure" => Some(EbookCategory::TravelAdventure),
-            "true crime" => Some(EbookCategory::TrueCrime),
-            "urban fantasy" => Some(EbookCategory::UrbanFantasy),
-            "western" => Some(EbookCategory::Western),
-            "ya" => Some(EbookCategory::YoungAdult),
-            "young adult" => Some(EbookCategory::YoungAdult),
+impl Category {
+    pub fn from_id(id: u64) -> Option<Category> {
+        match id {
+            1 => Some(Category::Action),
+            2 => Some(Category::Art),
+            3 => Some(Category::Biographical),
+            4 => Some(Category::Business),
+            5 => Some(Category::Comedy),
+            6 => Some(Category::CompleteEditionsMusic),
+            7 => Some(Category::Computer),
+            8 => Some(Category::Crafts),
+            9 => Some(Category::Crime),
+            10 => Some(Category::Drama),
+            11 => Some(Category::Education),
+            12 => Some(Category::FactualNews),
+            13 => Some(Category::Fantasy),
+            14 => Some(Category::Food),
+            15 => Some(Category::Guitar),
+            16 => Some(Category::Health),
+            17 => Some(Category::Historical),
+            18 => Some(Category::Home),
+            19 => Some(Category::Horror),
+            20 => Some(Category::Humor),
+            21 => Some(Category::IndividualSheet),
+            22 => Some(Category::Instructional),
+            23 => Some(Category::Juvenile),
+            24 => Some(Category::Language),
+            25 => Some(Category::Lgbt),
+            26 => Some(Category::LickLibraryLTP),
+            27 => Some(Category::LickLibraryTechniques),
+            28 => Some(Category::LiteraryClassics),
+            29 => Some(Category::LitRPG),
+            30 => Some(Category::Math),
+            31 => Some(Category::Medicine),
+            32 => Some(Category::Music),
+            33 => Some(Category::MusicBook),
+            34 => Some(Category::Mystery),
+            35 => Some(Category::Nature),
+            36 => Some(Category::Paranormal),
+            37 => Some(Category::Philosophy),
+            38 => Some(Category::Poetry),
+            39 => Some(Category::Politics),
+            40 => Some(Category::Reference),
+            41 => Some(Category::Religion),
+            42 => Some(Category::Romance),
+            43 => Some(Category::Rpg),
+            44 => Some(Category::Science),
+            45 => Some(Category::ScienceFiction),
+            46 => Some(Category::SelfHelp),
+            47 => Some(Category::SheetCollection),
+            48 => Some(Category::SheetCollectionMP3),
+            49 => Some(Category::Sports),
+            50 => Some(Category::Technology),
+            51 => Some(Category::Thriller),
+            52 => Some(Category::Travel),
+            53 => Some(Category::UrbanFantasy),
+            54 => Some(Category::Western),
+            55 => Some(Category::YoungAdult),
+            56 => Some(Category::Superheroes),
+            57 => Some(Category::LiteraryFiction),
             _ => None,
         }
     }
 
-    pub fn from_id(category: u64) -> Option<EbookCategory> {
-        match category {
-            60 => Some(EbookCategory::ActionAdventure),
-            71 => Some(EbookCategory::Art),
-            72 => Some(EbookCategory::Biographical),
-            90 => Some(EbookCategory::Business),
-            61 => Some(EbookCategory::ComicsGraphicnovels),
-            73 => Some(EbookCategory::ComputerInternet),
-            101 => Some(EbookCategory::Crafts),
-            62 => Some(EbookCategory::CrimeThriller),
-            63 => Some(EbookCategory::Fantasy),
-            107 => Some(EbookCategory::Food),
-            64 => Some(EbookCategory::GeneralFiction),
-            74 => Some(EbookCategory::GeneralNonFiction),
-            102 => Some(EbookCategory::HistoricalFiction),
-            76 => Some(EbookCategory::History),
-            77 => Some(EbookCategory::HomeGarden),
-            65 => Some(EbookCategory::Horror),
-            103 => Some(EbookCategory::Humor),
-            115 => Some(EbookCategory::IllusionMagic),
-            91 => Some(EbookCategory::Instructional),
-            66 => Some(EbookCategory::Juvenile),
-            78 => Some(EbookCategory::Language),
-            67 => Some(EbookCategory::LiteraryClassics),
-            79 => Some(EbookCategory::MagazinesNewspapers),
-            80 => Some(EbookCategory::MathScienceTech),
-            92 => Some(EbookCategory::Medical),
-            118 => Some(EbookCategory::MixedCollections),
-            94 => Some(EbookCategory::Mystery),
-            120 => Some(EbookCategory::Nature),
-            95 => Some(EbookCategory::Philosophy),
-            81 => Some(EbookCategory::PolSocRelig),
-            82 => Some(EbookCategory::Recreation),
-            68 => Some(EbookCategory::Romance),
-            69 => Some(EbookCategory::ScienceFiction),
-            75 => Some(EbookCategory::SelfHelp),
-            96 => Some(EbookCategory::TravelAdventure),
-            104 => Some(EbookCategory::TrueCrime),
-            109 => Some(EbookCategory::UrbanFantasy),
-            70 => Some(EbookCategory::Western),
-            112 => Some(EbookCategory::YoungAdult),
-            _ => None,
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Category::Action => "Action/Adventure",
+            Category::Art => "Art/Photography",
+            Category::Biographical => "Biographical",
+            Category::Business => "Business/Money",
+            Category::Comedy => "Comedy",
+            Category::CompleteEditionsMusic => "Complete Editions - Music",
+            Category::Computer => "Computer/Internet",
+            Category::Crafts => "Crafts",
+            Category::Crime => "Crime",
+            Category::Drama => "Drama/Full Cast",
+            Category::Education => "Education/Textbook",
+            Category::FactualNews => "Factual News/Current Events",
+            Category::Fantasy => "Fantasy",
+            Category::Food => "Food/Wine",
+            Category::Guitar => "Guitar/Bass Tabs",
+            Category::Health => "Health/Fitness/Diet",
+            Category::Historical => "Historical",
+            Category::Home => "Home/Garden",
+            Category::Horror => "Horror",
+            Category::Humor => "Humor",
+            Category::IndividualSheet => "Individual Sheet",
+            Category::Instructional => "Instructional",
+            Category::Juvenile => "Juvenile",
+            Category::Language => "Language",
+            Category::Lgbt => "LGBT",
+            Category::LickLibraryLTP => "Lick Library - LTP/Jam With",
+            Category::LickLibraryTechniques => "Lick Library - Techniques/QL",
+            Category::LiteraryClassics => "Literary Classics",
+            Category::LitRPG => "LitRPG",
+            Category::Math => "Math",
+            Category::Medicine => "Medicine/Psychology",
+            Category::Music => "Music",
+            Category::MusicBook => "Music Book",
+            Category::Mystery => "Mystery",
+            Category::Nature => "Nature",
+            Category::Paranormal => "Paranormal",
+            Category::Philosophy => "Philosophy",
+            Category::Poetry => "Poetry",
+            Category::Politics => "Politics/Sociology",
+            Category::Reference => "Reference",
+            Category::Religion => "Religion/Spirituality",
+            Category::Romance => "Romance",
+            Category::Rpg => "RPG",
+            Category::Science => "Science",
+            Category::ScienceFiction => "Science Fiction",
+            Category::SelfHelp => "Self-Help",
+            Category::SheetCollection => "Sheet Collection",
+            Category::SheetCollectionMP3 => "Sheet Collection MP3",
+            Category::Sports => "Sports/Hobbies",
+            Category::Technology => "Technology",
+            Category::Thriller => "Thriller/Suspense",
+            Category::Travel => "Travel",
+            Category::UrbanFantasy => "Urban Fantasy",
+            Category::Western => "Western",
+            Category::YoungAdult => "Young Adult",
+            Category::Superheroes => "Superheroes",
+            Category::LiteraryFiction => "Literary Fiction",
         }
     }
 
-    pub fn to_id(self) -> u8 {
+    pub fn as_id(&self) -> u8 {
         match self {
-            EbookCategory::ActionAdventure => 60,
-            EbookCategory::Art => 71,
-            EbookCategory::Biographical => 72,
-            EbookCategory::Business => 90,
-            EbookCategory::ComicsGraphicnovels => 61,
-            EbookCategory::ComputerInternet => 73,
-            EbookCategory::Crafts => 101,
-            EbookCategory::CrimeThriller => 62,
-            EbookCategory::Fantasy => 63,
-            EbookCategory::Food => 107,
-            EbookCategory::GeneralFiction => 64,
-            EbookCategory::GeneralNonFiction => 74,
-            EbookCategory::HistoricalFiction => 102,
-            EbookCategory::History => 76,
-            EbookCategory::HomeGarden => 77,
-            EbookCategory::Horror => 65,
-            EbookCategory::Humor => 103,
-            EbookCategory::IllusionMagic => 115,
-            EbookCategory::Instructional => 91,
-            EbookCategory::Juvenile => 66,
-            EbookCategory::Language => 78,
-            EbookCategory::LiteraryClassics => 67,
-            EbookCategory::MagazinesNewspapers => 79,
-            EbookCategory::MathScienceTech => 80,
-            EbookCategory::Medical => 92,
-            EbookCategory::MixedCollections => 118,
-            EbookCategory::Mystery => 94,
-            EbookCategory::Nature => 120,
-            EbookCategory::Philosophy => 95,
-            EbookCategory::PolSocRelig => 81,
-            EbookCategory::Recreation => 82,
-            EbookCategory::Romance => 68,
-            EbookCategory::ScienceFiction => 69,
-            EbookCategory::SelfHelp => 75,
-            EbookCategory::TravelAdventure => 96,
-            EbookCategory::TrueCrime => 104,
-            EbookCategory::UrbanFantasy => 109,
-            EbookCategory::Western => 70,
-            EbookCategory::YoungAdult => 112,
-        }
-    }
-
-    pub fn to_str(self) -> &'static str {
-        match self {
-            EbookCategory::ActionAdventure => "Action/Adventure",
-            EbookCategory::Art => "Art",
-            EbookCategory::Biographical => "Biographical",
-            EbookCategory::Business => "Business",
-            EbookCategory::ComicsGraphicnovels => "Comics/Graphic Novels",
-            EbookCategory::ComputerInternet => "Computer/Internet",
-            EbookCategory::Crafts => "Crafts",
-            EbookCategory::CrimeThriller => "Crime/Thriller",
-            EbookCategory::Fantasy => "Fantasy",
-            EbookCategory::Food => "Food",
-            EbookCategory::GeneralFiction => "General Fiction",
-            EbookCategory::GeneralNonFiction => "General Non-fic",
-            EbookCategory::HistoricalFiction => "Historical Fiction",
-            EbookCategory::History => "History",
-            EbookCategory::HomeGarden => "Home/Garden",
-            EbookCategory::Horror => "Horror",
-            EbookCategory::Humor => "Humor",
-            EbookCategory::IllusionMagic => "Illusion/Magic",
-            EbookCategory::Instructional => "Instructional",
-            EbookCategory::Juvenile => "Juvenile",
-            EbookCategory::Language => "Language",
-            EbookCategory::LiteraryClassics => "Literary Classics",
-            EbookCategory::MagazinesNewspapers => "Magazines/Newspapers",
-            EbookCategory::MathScienceTech => "Math/Science/Tech",
-            EbookCategory::Medical => "Medical",
-            EbookCategory::MixedCollections => "Mixed Collections",
-            EbookCategory::Mystery => "Mystery",
-            EbookCategory::Nature => "Nature",
-            EbookCategory::Philosophy => "Philosophy",
-            EbookCategory::PolSocRelig => "Pol/Soc/Relig",
-            EbookCategory::Recreation => "Recreation",
-            EbookCategory::Romance => "Romance",
-            EbookCategory::ScienceFiction => "Science Fiction",
-            EbookCategory::SelfHelp => "Self-Help",
-            EbookCategory::TravelAdventure => "Travel/Adventure",
-            EbookCategory::TrueCrime => "True Crime",
-            EbookCategory::UrbanFantasy => "Urban Fantasy",
-            EbookCategory::Western => "Western",
-            EbookCategory::YoungAdult => "Young Adult",
+            Category::Action => 1,
+            Category::Art => 2,
+            Category::Biographical => 3,
+            Category::Business => 4,
+            Category::Comedy => 5,
+            Category::CompleteEditionsMusic => 6,
+            Category::Computer => 7,
+            Category::Crafts => 8,
+            Category::Crime => 9,
+            Category::Drama => 10,
+            Category::Education => 11,
+            Category::FactualNews => 12,
+            Category::Fantasy => 13,
+            Category::Food => 14,
+            Category::Guitar => 15,
+            Category::Health => 16,
+            Category::Historical => 17,
+            Category::Home => 18,
+            Category::Horror => 19,
+            Category::Humor => 20,
+            Category::IndividualSheet => 21,
+            Category::Instructional => 22,
+            Category::Juvenile => 23,
+            Category::Language => 24,
+            Category::Lgbt => 25,
+            Category::LickLibraryLTP => 26,
+            Category::LickLibraryTechniques => 27,
+            Category::LiteraryClassics => 28,
+            Category::LitRPG => 29,
+            Category::Math => 30,
+            Category::Medicine => 31,
+            Category::Music => 32,
+            Category::MusicBook => 33,
+            Category::Mystery => 34,
+            Category::Nature => 35,
+            Category::Paranormal => 36,
+            Category::Philosophy => 37,
+            Category::Poetry => 38,
+            Category::Politics => 39,
+            Category::Reference => 40,
+            Category::Religion => 41,
+            Category::Romance => 42,
+            Category::Rpg => 43,
+            Category::Science => 44,
+            Category::ScienceFiction => 45,
+            Category::SelfHelp => 46,
+            Category::SheetCollection => 47,
+            Category::SheetCollectionMP3 => 48,
+            Category::Sports => 49,
+            Category::Technology => 50,
+            Category::Thriller => 51,
+            Category::Travel => 52,
+            Category::UrbanFantasy => 53,
+            Category::Western => 54,
+            Category::YoungAdult => 55,
+            Category::Superheroes => 56,
+            Category::LiteraryFiction => 57,
         }
     }
 }
 
-impl TryFrom<String> for EbookCategory {
-    type Error = String;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        let l = Self::from_str(&value);
-        match l {
-            Some(l) => Ok(l),
-            None => Err(format!("invalid category {value}")),
-        }
+impl std::fmt::Display for Category {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }

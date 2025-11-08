@@ -52,7 +52,7 @@
   <div>
   {% match event.event %}
   {% when EventType::Grabbed { grabber, cost, wedged } %}
-    Grabbed {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}
+    Grabbed {{ torrent_media_type(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}
     {% if wedged %} using a wedge
     {% else %}{% match cost %}
       {% when Some(TorrentCost::Vip) %} as VIP
@@ -65,7 +65,7 @@
     {% endif %}
     <br />
   {% when EventType::Linked { linker, library_path } %}
-    Linked {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}
+    Linked {{ torrent_media_type(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}
     {% if let Some(linker) = linker %}
       with linker {{ linker }}
     {% endif %}
@@ -82,7 +82,7 @@
     </details>
     {% endif %}
   {% when EventType::Cleaned { library_path, files } %}
-    Cleaned {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}<br />
+    Cleaned {{ torrent_media_type(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}<br />
     {% if let Some(torrent) = torrent %}
     size: {{ torrent.meta.size }}<br />
     formats: {{ torrent.meta.filetypes.join(", ") }}<br />
@@ -107,14 +107,14 @@
       </ul>
     </details>
   {% when EventType::Updated { fields } %}
-    Updated {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}<br />
+    Updated {{ torrent_media_type(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}<br />
     <ul>
     {% for field in fields %}
       <li>{{ field.field }}: {{ field.from }} → {{ field.to }}</li>
     {% endfor %}
     </ul>
   {% when EventType::RemovedFromMam %}
-    {{ torrent_main_cat(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }} was removed from MaM<br />
+    {{ torrent_media_type(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }} was removed from MaM<br />
   {% endmatch %}
   </div>
 {% endfor %}

@@ -110,7 +110,7 @@
 <div>
   <div><input type=checkbox name=torrent value={{torrent.mam_id}}></div>
   <div>
-    <span title="{{ torrent.meta.cat_name() }}">{{ item(SelectedPageFilter::Kind, torrent.meta.main_cat.as_str()) }}</span>
+    <span title="{{ torrent.meta.cat_name() }}">{{ item(SelectedPageFilter::Kind, torrent.meta.media_type.as_str()) }}</span>
     {% if show.category %}
     {% if let Some(cat) = torrent.meta.cat %}
     <div>{{ item_v(SelectedPageFilter::Category, torrent.meta.cat_name(), &cat.as_id().to_string()) }}</div>

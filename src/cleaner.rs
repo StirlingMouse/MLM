@@ -70,10 +70,7 @@ async fn process_batch(
         let mut batch = batch
             .into_iter()
             .map(|torrent| {
-                let preferred_types = match torrent.meta.main_cat {
-                    data::MainCat::Audio => &config.audio_types,
-                    data::MainCat::Ebook => &config.ebook_types,
-                };
+                let preferred_types = torrent.meta.media_type.preferred_types(&config);
                 let preference = preferred_types
                     .iter()
                     .position(|t| torrent.meta.filetypes.contains(t))
@@ -110,24 +107,10 @@ async fn process_batch(
         let (keep, _) = batch.remove(0);
         for (mut remove, _) in batch {
             info!(
-                "Replacing library torrent \"{}\" with formats {:?} with {:?}",
-                remove.meta.title, remove.meta.filetypes, keep.meta.filetypes
+                "Replacing library torrent \"{}\" {} with {}",
+                remove.meta.title, remove.meta.mam_id, keep.meta.mam_id
             );
             remove.replaced_with = Some((keep.hash.clone(), Timestamp::now()));
-            debug!(
-                "keep files: {:?} {:?}",
-                keep.library_path, keep.library_files
-            );
-            debug!("main_cat: {:?}", keep.meta.main_cat);
-            debug!("authors: {:?}", keep.meta.authors);
-            debug!("narrators: {:?}", keep.meta.narrators);
-            debug!(
-                "remove files: {:?} {:?}",
-                remove.library_path, remove.library_files
-            );
-            debug!("main_cat: {:?}", remove.meta.main_cat);
-            debug!("authors: {:?}", remove.meta.authors);
-            debug!("narrators: {:?}", remove.meta.narrators);
             let result = clean_torrent(
                 config,
                 db,

@@ -7,7 +7,7 @@ use tracing::error;
 
 use crate::{
     config::{Filter, GoodreadsList, Library, LibraryLinkMethod, LibraryTagFilters},
-    data::{Category, Language, MainCat, Size, Torrent},
+    data::{Language, MediaType, OldCategory, Size, Torrent},
     mam::{DATE_TIME_FORMAT, MaMTorrent},
     mam_enums::Flags,
 };
@@ -132,7 +132,7 @@ impl Filter {
         }
         if let Some(cat) = &torrent.meta.cat {
             match cat {
-                Category::Audio(category) => {
+                OldCategory::Audio(category) => {
                     if self
                         .categories
                         .audio
@@ -142,7 +142,7 @@ impl Filter {
                         return Ok(false);
                     }
                 }
-                Category::Ebook(category) => {
+                OldCategory::Ebook(category) => {
                     if self
                         .categories
                         .ebook
@@ -155,12 +155,12 @@ impl Filter {
             }
         } else {
             if self.categories.audio.as_ref().is_some_and(|c| c.is_empty())
-                && torrent.meta.main_cat == MainCat::Audio
+                && torrent.meta.media_type == MediaType::Audiobook
             {
                 return Ok(false);
             }
             if self.categories.ebook.as_ref().is_some_and(|c| c.is_empty())
-                && torrent.meta.main_cat == MainCat::Ebook
+                && torrent.meta.media_type == MediaType::Ebook
             {
                 return Ok(false);
             }
@@ -744,7 +744,7 @@ mod tests {
     }
 
     mod filter_matches_lib {
-        use crate::data::MetadataSource;
+        use crate::data::{MainCat, MediaType, MetadataSource, OldCategory};
 
         use super::*;
 
@@ -755,6 +755,7 @@ mod tests {
                 hash: "".to_string(),
                 mam_id: 0,
                 abs_id: None,
+                goodreads_id: None,
                 library_path: None,
                 library_files: vec![],
                 linker: None,
@@ -774,7 +775,9 @@ mod tests {
             TorrentMeta {
                 mam_id: 0,
                 vip_status: None,
-                main_cat: MainCat::Audio,
+                media_type: MediaType::Audiobook,
+                main_cat: Some(MainCat::Fiction),
+                categories: vec![],
                 cat: None,
                 language: None,
                 flags: None,
@@ -865,7 +868,7 @@ mod tests {
             let filter =
                 create_filter_with_audio_cats(Some(vec![AudiobookCategory::GeneralFiction]));
             let torrent = create_torrent_with_meta(TorrentMeta {
-                cat: Some(Category::Audio(AudiobookCategory::GeneralFiction)),
+                cat: Some(OldCategory::Audio(AudiobookCategory::GeneralFiction)),
                 ..default_meta()
             });
             assert!(filter.matches_lib(&torrent).unwrap());
@@ -876,7 +879,7 @@ mod tests {
             let filter =
                 create_filter_with_audio_cats(Some(vec![AudiobookCategory::GeneralNonFic]));
             let torrent = create_torrent_with_meta(TorrentMeta {
-                cat: Some(Category::Audio(AudiobookCategory::GeneralFiction)),
+                cat: Some(OldCategory::Audio(AudiobookCategory::GeneralFiction)),
                 ..default_meta()
             });
             assert!(!filter.matches_lib(&torrent).unwrap());
@@ -886,7 +889,7 @@ mod tests {
         fn test_cat_filter_inactive_torrent_has_cat_ok_true() {
             let filter = Filter::default();
             let torrent = create_torrent_with_meta(TorrentMeta {
-                cat: Some(Category::Audio(AudiobookCategory::GeneralNonFic)),
+                cat: Some(OldCategory::Audio(AudiobookCategory::GeneralNonFic)),
                 ..default_meta()
             });
             assert!(filter.matches_lib(&torrent).unwrap());
@@ -897,7 +900,7 @@ mod tests {
             let filter = create_filter_with_audio_cats(Some(vec![]));
             let torrent = create_torrent_with_meta(TorrentMeta {
                 cat: None,
-                main_cat: MainCat::Audio, // Main category matches
+                media_type: MediaType::Audiobook, // Main category matches
                 ..default_meta()
             });
             assert!(
@@ -912,7 +915,7 @@ mod tests {
                 create_filter_with_audio_cats(Some(vec![AudiobookCategory::GeneralFiction]));
             let torrent = create_torrent_with_meta(TorrentMeta {
                 cat: None,
-                main_cat: MainCat::Audio,
+                media_type: MediaType::Audiobook,
                 ..default_meta()
             });
             assert!(filter.matches_lib(&torrent).is_err());
@@ -1080,8 +1083,8 @@ mod tests {
             };
             let torrent = create_torrent_with_meta(TorrentMeta {
                 language: Some(Language::English),
-                cat: Some(Category::Audio(AudiobookCategory::GeneralFiction)),
-                main_cat: MainCat::Audio,
+                cat: Some(OldCategory::Audio(AudiobookCategory::GeneralFiction)),
+                media_type: MediaType::Audiobook,
                 flags: Some(FlagBits::new(
                     Flags {
                         crude_language: Some(true),

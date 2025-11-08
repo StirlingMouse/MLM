@@ -10,6 +10,7 @@ mod v08;
 mod v09;
 mod v10;
 mod v11;
+mod v12;
 
 use anyhow::Result;
 use native_db::Models;
@@ -21,6 +22,12 @@ use tracing::{info, instrument};
 pub static MODELS: Lazy<Models> = Lazy::new(|| {
     let mut models = Models::new();
     models.define::<v01::Config>().unwrap();
+
+    models.define::<v12::Torrent>().unwrap();
+    models.define::<v12::SelectedTorrent>().unwrap();
+    models.define::<v12::DuplicateTorrent>().unwrap();
+    models.define::<v12::ErroredTorrent>().unwrap();
+    models.define::<v12::Event>().unwrap();
 
     models.define::<v11::Torrent>().unwrap();
     models.define::<v11::SelectedTorrent>().unwrap();
@@ -86,28 +93,29 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
 });
 
 pub type Config = v01::Config;
-pub type Torrent = v11::Torrent;
-pub type TorrentKey = v11::TorrentKey;
-pub type SelectedTorrent = v11::SelectedTorrent;
-pub type SelectedTorrentKey = v11::SelectedTorrentKey;
-pub type DuplicateTorrent = v11::DuplicateTorrent;
-pub type ErroredTorrent = v11::ErroredTorrent;
-pub type ErroredTorrentKey = v11::ErroredTorrentKey;
+pub type Torrent = v12::Torrent;
+pub type TorrentKey = v12::TorrentKey;
+pub type SelectedTorrent = v12::SelectedTorrent;
+pub type SelectedTorrentKey = v12::SelectedTorrentKey;
+pub type DuplicateTorrent = v12::DuplicateTorrent;
+pub type ErroredTorrent = v12::ErroredTorrent;
+pub type ErroredTorrentKey = v12::ErroredTorrentKey;
 pub type ErroredTorrentId = v11::ErroredTorrentId;
-pub type Event = v11::Event;
-pub type EventKey = v11::EventKey;
-pub type EventType = v11::EventType;
+pub type Event = v12::Event;
+pub type EventKey = v12::EventKey;
+pub type EventType = v12::EventType;
 pub type List = v05::List;
 pub type ListKey = v05::ListKey;
 pub type ListItem = v05::ListItem;
 pub type ListItemKey = v05::ListItemKey;
 pub type ListItemTorrent = v04::ListItemTorrent;
-pub type TorrentMeta = v11::TorrentMeta;
-pub type TorrentMetaDiff = v11::TorrentMetaDiff;
-pub type TorrentMetaField = v11::TorrentMetaField;
+pub type TorrentMeta = v12::TorrentMeta;
+pub type TorrentMetaDiff = v12::TorrentMetaDiff;
+pub type TorrentMetaField = v12::TorrentMetaField;
 pub type VipStatus = v11::VipStatus;
 pub type MetadataSource = v10::MetadataSource;
-pub type MainCat = v01::MainCat;
+pub type OldMainCat = v01::MainCat;
+pub type MainCat = v12::MainCat;
 pub type Uuid = v03::Uuid;
 pub type Timestamp = v03::Timestamp;
 pub type Series = v09::Series;
@@ -122,7 +130,9 @@ pub type LibraryMismatch = v08::LibraryMismatch;
 pub type ClientStatus = v08::ClientStatus;
 pub type AudiobookCategory = v06::AudiobookCategory;
 pub type EbookCategory = v06::EbookCategory;
-pub type Category = v06::Category;
+pub type OldCategory = v06::Category;
+pub type MediaType = v12::MediaType;
+pub type Category = v12::Category;
 
 #[instrument(skip_all)]
 pub fn migrate(db: &Database<'_>) -> Result<()> {

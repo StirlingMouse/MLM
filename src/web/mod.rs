@@ -43,7 +43,7 @@ use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
     config::{Config, Filter, SearchConfig},
-    data::{AudiobookCategory, EbookCategory, Language, Series, Timestamp, Torrent, TorrentMeta},
+    data::{AudiobookCategory, EbookCategory, Series, Timestamp, Torrent, TorrentMeta},
     mam::{DATE_FORMAT, MaM, MaMTorrent, MetaError},
     mam_enums::Flags,
     stats::{Stats, Triggers},
