@@ -28,6 +28,7 @@ use crate::{
     },
     linker::{find_library, library_dir, map_path, refresh_metadata, refresh_metadata_relink},
     mam::{MaM, MaMTorrent, SearchQuery, Tor},
+    mam_enums::SearchIn,
     qbittorrent::{self},
     stats::Triggers,
     web::{
@@ -535,11 +536,25 @@ async fn other_torrents(
     mam: &MaM<'_>,
     meta: &TorrentMeta,
 ) -> Result<MaMTorrentsTemplate> {
+    // const title = detailPage.querySeleVctor('.TorrentTitle')?.textContent
+    //    .replaceAll(/([\*\?])/g, '"$1"')
+    // 	.replaceAll(/(['`/]| - )/g, ' ')
+    // 	.replaceAll('!', '')
+    //    .replaceAll(/\s+\[[^\]\[]+?\]/g, '')
+    //    .replaceAll(/\s+\([^\)\(]+?\)/g, '')
+    // 	.replaceAll(/&|\band\b/g, '(&|and)').trim()
     let result = mam
         .search(&SearchQuery {
             tor: Tor {
-                text: &meta.title,
+                text: &format!(
+                    "{} ({})",
+                    meta.title
+                        .split_once(":")
+                        .map_or(meta.title.as_str(), |(a, _)| a),
+                    meta.authors.iter().map(|a| format!("\"{a}\"")).join(" | ")
+                ),
                 main_cat: vec![MainCat::Audio.as_id(), MainCat::Ebook.as_id()],
+                srch_in: vec![SearchIn::Title, SearchIn::Author],
                 ..Default::default()
             },
             ..Default::default()
@@ -550,6 +565,7 @@ async fn other_torrents(
     let torrents = result
         .data
         .into_iter()
+        .filter(|t| t.id != meta.mam_id)
         .map(|mam_torrent| {
             let meta = mam_torrent.as_meta()?;
             let torrent = r

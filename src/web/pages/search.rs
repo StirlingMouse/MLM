@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Error, Result};
 use askama::Template;
 use axum::{
     extract::{OriginalUri, Query, State},
@@ -13,8 +13,8 @@ use tracing::info;
 
 use crate::{
     config::Config,
-    data::{MainCat, Torrent, TorrentCost, TorrentKey},
-    mam::{SearchQuery, Tor},
+    data::{MainCat, SelectedTorrent, Timestamp, Torrent, TorrentCost, TorrentKey},
+    mam::{SearchQuery, Tor, normalize_title},
     stats::Triggers,
     web::{AppError, MaMState, MaMTorrentsTemplate, Page},
 };
@@ -154,25 +154,25 @@ pub async fn select_torrent(
         torrent.title, torrent.filetype, cost, category, tags
     );
     let rw = db.rw_transaction()?;
-    // rw.insert(SelectedTorrent {
-    //     mam_id: torrent.id,
-    //     hash: None,
-    //     dl_link: torrent
-    //         .dl
-    //         .clone()
-    //         .ok_or_else(|| Error::msg(format!("no dl field for torrent {}", torrent.id)))?,
-    //     unsat_buffer: None,
-    //     cost,
-    //     category,
-    //     tags,
-    //     title_search: normalize_title(&torrent.title),
-    //     meta,
-    //     grabber: None,
-    //     created_at: Timestamp::now(),
-    //     started_at: None,
-    //     removed_at: None,
-    // })?;
-    // rw.commit()?;
+    rw.insert(SelectedTorrent {
+        mam_id: torrent.id,
+        hash: None,
+        dl_link: torrent
+            .dl
+            .clone()
+            .ok_or_else(|| Error::msg(format!("no dl field for torrent {}", torrent.id)))?,
+        unsat_buffer: None,
+        cost,
+        category,
+        tags,
+        title_search: normalize_title(&torrent.title),
+        meta,
+        grabber: None,
+        created_at: Timestamp::now(),
+        started_at: None,
+        removed_at: None,
+    })?;
+    rw.commit()?;
     triggers.downloader_tx.send(())?;
 
     Ok(())

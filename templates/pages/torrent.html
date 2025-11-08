@@ -320,4 +320,7 @@
 
 <h2>Other Torrents</h2>
 {{ other_torrents }}
+{% if other_torrents.torrents.is_empty() %}
+<p><i>No other torrents for this book was found</i>
+{% endif %}
 {% endblock %}
