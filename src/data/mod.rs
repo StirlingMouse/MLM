@@ -11,6 +11,7 @@ mod v09;
 mod v10;
 mod v11;
 mod v12;
+mod v13;
 
 use anyhow::Result;
 use native_db::Models;
@@ -22,6 +23,11 @@ use tracing::{info, instrument};
 pub static MODELS: Lazy<Models> = Lazy::new(|| {
     let mut models = Models::new();
     models.define::<v01::Config>().unwrap();
+
+    models.define::<v13::Torrent>().unwrap();
+    models.define::<v13::SelectedTorrent>().unwrap();
+    models.define::<v13::DuplicateTorrent>().unwrap();
+    models.define::<v13::ErroredTorrent>().unwrap();
 
     models.define::<v12::Torrent>().unwrap();
     models.define::<v12::SelectedTorrent>().unwrap();
@@ -93,13 +99,13 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
 });
 
 pub type Config = v01::Config;
-pub type Torrent = v12::Torrent;
-pub type TorrentKey = v12::TorrentKey;
-pub type SelectedTorrent = v12::SelectedTorrent;
-pub type SelectedTorrentKey = v12::SelectedTorrentKey;
-pub type DuplicateTorrent = v12::DuplicateTorrent;
-pub type ErroredTorrent = v12::ErroredTorrent;
-pub type ErroredTorrentKey = v12::ErroredTorrentKey;
+pub type Torrent = v13::Torrent;
+pub type TorrentKey = v13::TorrentKey;
+pub type SelectedTorrent = v13::SelectedTorrent;
+pub type SelectedTorrentKey = v13::SelectedTorrentKey;
+pub type DuplicateTorrent = v13::DuplicateTorrent;
+pub type ErroredTorrent = v13::ErroredTorrent;
+pub type ErroredTorrentKey = v13::ErroredTorrentKey;
 pub type ErroredTorrentId = v11::ErroredTorrentId;
 pub type Event = v12::Event;
 pub type EventKey = v12::EventKey;
@@ -109,7 +115,7 @@ pub type ListKey = v05::ListKey;
 pub type ListItem = v05::ListItem;
 pub type ListItemKey = v05::ListItemKey;
 pub type ListItemTorrent = v04::ListItemTorrent;
-pub type TorrentMeta = v12::TorrentMeta;
+pub type TorrentMeta = v13::TorrentMeta;
 pub type TorrentMetaDiff = v12::TorrentMetaDiff;
 pub type TorrentMetaField = v12::TorrentMetaField;
 pub type VipStatus = v11::VipStatus;
@@ -131,7 +137,7 @@ pub type ClientStatus = v08::ClientStatus;
 pub type AudiobookCategory = v06::AudiobookCategory;
 pub type EbookCategory = v06::EbookCategory;
 pub type OldCategory = v06::Category;
-pub type MediaType = v12::MediaType;
+pub type MediaType = v13::MediaType;
 pub type Category = v12::Category;
 
 #[instrument(skip_all)]

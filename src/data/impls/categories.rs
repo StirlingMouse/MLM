@@ -1,6 +1,6 @@
 use crate::{
     config::Config,
-    data::{Category, MainCat, MediaType},
+    data::{Category, MainCat, MediaType, OldMainCat},
 };
 
 impl MediaType {
@@ -12,7 +12,8 @@ impl MediaType {
             4 => Some(MediaType::Radio),
             5 => Some(MediaType::Manga),
             6 => Some(MediaType::ComicBook),
-            7 => Some(MediaType::Periodical),
+            7 => Some(MediaType::PeriodicalEbook),
+            8 => Some(MediaType::PeriodicalAudiobook),
             _ => None,
         }
     }
@@ -35,7 +36,8 @@ impl MediaType {
             MediaType::Radio => "Radio",
             MediaType::Manga => "Manga",
             MediaType::ComicBook => "Comic Book / Graphic Novel",
-            MediaType::Periodical => "Periodical",
+            MediaType::PeriodicalEbook => "Periodical Ebook",
+            MediaType::PeriodicalAudiobook => "Periodical Audiobook",
         }
     }
 
@@ -47,7 +49,8 @@ impl MediaType {
             MediaType::Radio => 4,
             MediaType::Manga => 5,
             MediaType::ComicBook => 6,
-            MediaType::Periodical => 7,
+            MediaType::PeriodicalEbook => 7,
+            MediaType::PeriodicalAudiobook => 8,
         }
     }
 
@@ -59,7 +62,8 @@ impl MediaType {
             MediaType::Radio => &config.radio_types,
             MediaType::Manga => &config.ebook_types,
             MediaType::ComicBook => &config.ebook_types,
-            MediaType::Periodical => &config.ebook_types,
+            MediaType::PeriodicalEbook => &config.ebook_types,
+            MediaType::PeriodicalAudiobook => &config.audio_types,
         }
     }
 }
@@ -67,6 +71,15 @@ impl MediaType {
 impl std::fmt::Display for MediaType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
+    }
+}
+
+impl From<OldMainCat> for MediaType {
+    fn from(value: OldMainCat) -> Self {
+        match value {
+            OldMainCat::Audio => MediaType::Audiobook,
+            OldMainCat::Ebook => MediaType::Ebook,
+        }
     }
 }
 
