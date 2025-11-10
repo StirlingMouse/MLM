@@ -1,3 +1,4 @@
+mod api;
 mod pages;
 mod tables;
 
@@ -47,7 +48,10 @@ use crate::{
     mam::{DATE_FORMAT, MaM, MaMTorrent, MetaError},
     mam_enums::Flags,
     stats::{Stats, Triggers},
-    web::pages::search::{search_page, search_page_post},
+    web::{
+        api::torrent::torrent_api,
+        pages::search::{search_page, search_page_post},
+    },
 };
 
 pub type MaMState = Arc<Result<Arc<MaM<'static>>>>;
@@ -150,6 +154,10 @@ pub async fn start_webserver(
         .route(
             "/config",
             post(config_page_post).with_state((config.clone(), db.clone(), mam.clone())),
+        )
+        .route(
+            "/api/torrents/{hash}",
+            get(torrent_api).with_state((config.clone(), db.clone(), mam.clone())),
         )
         .nest_service(
             "/assets",
