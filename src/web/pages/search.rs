@@ -13,7 +13,7 @@ use tracing::info;
 
 use crate::{
     config::Config,
-    data::{SelectedTorrent, Timestamp, Torrent, TorrentCost, TorrentKey},
+    data::{OldMainCat, SelectedTorrent, Timestamp, Torrent, TorrentCost, TorrentKey},
     mam::{SearchQuery, Tor, normalize_title},
     stats::Triggers,
     web::{AppError, MaMState, MaMTorrentsTemplate, Page},
@@ -30,6 +30,7 @@ pub async fn search_page(
         .search(&SearchQuery {
             tor: Tor {
                 text: &query.q,
+                main_cat: vec![OldMainCat::Audio.as_id(), OldMainCat::Ebook.as_id()],
                 ..Default::default()
             },
             ..Default::default()
