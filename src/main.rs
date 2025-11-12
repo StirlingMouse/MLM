@@ -14,9 +14,9 @@ mod mam;
 mod mam_enums;
 mod qbittorrent;
 mod stats;
-#[cfg(target_family = "windows")]
-mod tray;
 mod web;
+#[cfg(target_family = "windows")]
+mod windows;
 
 use std::{
     collections::BTreeMap,
@@ -60,6 +60,13 @@ use crate::{config::Config, linker::link_torrents_to_library, mam::MaM};
 #[tokio::main]
 async fn main() {
     if let Err(err) = app_main().await {
+        #[cfg(target_family = "windows")]
+        windows::error_window::ErrorWindow::create_and_run(
+            "MLM App Error".to_string(),
+            err.to_string(),
+            None,
+        )
+        .unwrap();
         error!("AppError: {err:?}");
         eprintln!("{:?}", err);
         process::exit(1);
@@ -161,10 +168,21 @@ async fn app_main() -> Result<()> {
             create_dir_all(dir)?;
         }
     }
-    let config: Config = Figment::new()
+    let config: Result<Config, _> = Figment::new()
         .merge(Toml::file_exact(&config_file))
         .merge(Env::prefixed("MLM_CONF_"))
-        .extract()?;
+        .extract();
+    #[cfg(target_family = "windows")]
+    if let Err(err) = &config {
+        windows::error_window::ErrorWindow::create_and_run(
+            "MLM Config Error".to_string(),
+            err.to_string(),
+            Some(config_file.clone()),
+        )
+        .unwrap();
+        return Ok(());
+    }
+    let config = config?;
     let config = Arc::new(config);
 
     let db = native_db::Builder::new().create(&data::MODELS, database_file)?;
@@ -174,7 +192,7 @@ async fn app_main() -> Result<()> {
     let db = Arc::new(db);
 
     #[cfg(target_family = "windows")]
-    let _tray = tray::start_tray_icon(log_dir, config_file, config.clone())?;
+    let _tray = windows::tray::start_tray_icon(log_dir, config_file.clone(), config.clone())?;
 
     let stats: Arc<Mutex<Stats>> = Default::default();
 
@@ -448,7 +466,22 @@ async fn app_main() -> Result<()> {
         audiobookshelf_tx,
     };
 
-    start_webserver(config, db, stats, Arc::new(mam), triggers).await?;
+    let result = start_webserver(config.clone(), db, stats, Arc::new(mam), triggers).await;
+
+    #[cfg(target_family = "windows")]
+    if let Err(err) = &result {
+        windows::error_window::ErrorWindow::create_and_run(
+            "MLM Webserver Error".to_string(),
+            format!(
+                "{err}\r\n\r\nThis usually mean that your port is in use.\r\nConfigured port: {}",
+                config.web_port
+            ),
+            Some(config_file.clone()),
+        )
+        .unwrap();
+        return Ok(());
+    }
+    result?;
 
     Ok(())
 }
