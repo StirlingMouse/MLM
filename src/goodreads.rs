@@ -16,7 +16,7 @@ use tracing::{trace, warn};
 
 use crate::config::GoodreadsList;
 use crate::data::{ListItemTorrent, OldMainCat, Torrent, TorrentKey, TorrentStatus};
-use crate::mam::normalize_title;
+use crate::mam::{clean_value, normalize_title};
 use crate::{
     autograbber::select_torrents,
     config::{Config, Cost, Grab},
@@ -77,7 +77,20 @@ pub async fn run_goodreads_import(
                 }
             }
 
-            for item in rss.channel.items.into_iter() {
+            for mut item in rss.channel.items.into_iter() {
+                if let Ok(title) = clean_value(&item.title) {
+                    item.title = title;
+                }
+                if let Some(author_name) = &item.author_name
+                    && let Ok(author_name) = clean_value(author_name)
+                {
+                    item.author_name = Some(author_name);
+                }
+                if let Some((series_name, num)) = &item.series
+                    && let Ok(series_name) = clean_value(series_name)
+                {
+                    item.series = Some((series_name, *num));
+                }
                 let db_item = match db
                     .r_transaction()?
                     .get()
