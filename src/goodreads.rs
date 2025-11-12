@@ -100,10 +100,14 @@ pub async fn run_goodreads_import(
                         if db_item.prefer_format != list.prefer_format
                             || db_item.allow_audio != list.allow_audio()
                             || db_item.allow_ebook != list.allow_ebook()
+                            || db_item.title != item.title
+                            || db_item.series.first() != item.series.as_ref()
                         {
                             db_item.prefer_format = list.prefer_format;
                             db_item.allow_audio = list.allow_audio();
                             db_item.allow_ebook = list.allow_ebook();
+                            db_item.title = item.title.clone();
+                            db_item.series = item.series.iter().cloned().collect();
                             if !list.dry_run {
                                 let rw = db.rw_transaction()?;
                                 rw.upsert(db_item.clone())?;
