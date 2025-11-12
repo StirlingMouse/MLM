@@ -100,7 +100,7 @@ async fn app_main() -> Result<()> {
     let file_layer = log_dir
         .as_ref()
         .map(|log_dir| {
-            Result::<_>::Ok(
+            Result::<_, anyhow::Error>::Ok(
                 tracing_subscriber::fmt::layer().pretty().with_writer(
                     RollingFileAppender::builder()
                         .rotation(Rotation::DAILY)
@@ -163,10 +163,10 @@ async fn app_main() -> Result<()> {
         let default_config = r#"mam_id = """#;
         fs::write(&config_file, default_config)?;
     }
-    if !database_file.exists() {
-        if let Some(dir) = database_file.parent() {
-            create_dir_all(dir)?;
-        }
+    if !database_file.exists()
+        && let Some(dir) = database_file.parent()
+    {
+        create_dir_all(dir)?;
     }
     let config: Result<Config, _> = Figment::new()
         .merge(Toml::file_exact(&config_file))
@@ -215,8 +215,8 @@ async fn app_main() -> Result<()> {
             let stats = stats.clone();
             tokio::spawn(async move {
                 if let Some(qbit_conf) = config.qbittorrent.first() {
-                    let mut qbit: Option<qbit::Api> = None;
                     loop {
+                        let mut qbit: Option<qbit::Api> = None;
                         if downloader_rx.changed().await.is_err() {
                             break;
                         }
@@ -361,26 +361,33 @@ async fn app_main() -> Result<()> {
                 let stats = stats.clone();
                 let mut linker_rx = linker_rx.clone();
                 tokio::spawn(async move {
-                    let qbit = match qbit::Api::new_login_username_password(
-                        &qbit_conf.url,
-                        &qbit_conf.username,
-                        &qbit_conf.password,
-                    )
-                    .await
-                    {
-                        Ok(qbit) => qbit,
-                        Err(err) => {
-                            error!("Error logging in to qbit {}: {err}", qbit_conf.url);
-                            return;
-                        }
-                    };
                     loop {
+                        let qbit = match qbit::Api::new_login_username_password(
+                            &qbit_conf.url,
+                            &qbit_conf.username,
+                            &qbit_conf.password,
+                        )
+                        .await
+                        {
+                            Ok(qbit) => qbit,
+                            Err(err) => {
+                                error!("Error logging in to qbit {}: {err}", qbit_conf.url);
+                                let mut stats = stats.lock().await;
+                                stats.linker_run_at = Some(OffsetDateTime::now_utc());
+                                stats.linker_result = Some(Err(anyhow::Error::msg(format!(
+                                    "Error logging in to qbit {}: {err}",
+                                    qbit_conf.url,
+                                ))));
+                                return;
+                            }
+                        };
                         select! {
                             () = sleep(Duration::from_secs(60 * config.link_interval)) => {},
                             result = linker_rx.changed() => {
                                 if let Err(err) = result {
                                     error!("Error listening on link_rx: {err:?}");
                                     let mut stats = stats.lock().await;
+                                    stats.linker_run_at = Some(OffsetDateTime::now_utc());
                                     stats.linker_result = Some(Err(err.into()));
                                 }
                             },
