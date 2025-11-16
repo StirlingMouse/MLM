@@ -289,6 +289,7 @@ impl std::fmt::Display for Flags {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(try_from = "String")]
+#[allow(unused)]
 pub enum UserClass {
     Dev,
     SysOp,

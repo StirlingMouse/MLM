@@ -5,23 +5,6 @@ use crate::data::{
 };
 
 impl MainCat {
-    pub(crate) fn from_id(main_cat: u64) -> Result<MainCat, String> {
-        match main_cat {
-            13 => Ok(MainCat::Audio),
-            14 => Ok(MainCat::Ebook),
-            15 => Err("Unsupported main_cat Musicology".to_string()),
-            16 => Err("Unsupported main_cat Radio".to_string()),
-            id => Err(format!("Unknown main_cat {id}")),
-        }
-    }
-
-    pub(crate) fn as_str(&self) -> &str {
-        match self {
-            MainCat::Audio => "Audiobook",
-            MainCat::Ebook => "Ebook",
-        }
-    }
-
     pub fn as_id(&self) -> u8 {
         match self {
             MainCat::Audio => 13,
@@ -55,13 +38,6 @@ impl TryFrom<String> for MainCat {
 }
 
 impl Category {
-    // pub fn from_id(main_cat: MainCat, category: u64) -> Option<Category> {
-    //     match main_cat {
-    //         MainCat::Audio => AudiobookCategory::from_id(category).map(Category::Audio),
-    //         MainCat::Ebook => EbookCategory::from_id(category).map(Category::Ebook),
-    //     }
-    // }
-
     pub fn from_one_id(category: u64) -> Option<Category> {
         AudiobookCategory::from_id(category)
             .map(Category::Audio)

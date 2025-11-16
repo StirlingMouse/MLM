@@ -1,44 +1,18 @@
-use std::{collections::BTreeSet, ops::Deref, path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
-use anyhow::Result;
-use askama::Template;
 use axum::{
     Json,
-    body::Body,
-    extract::{OriginalUri, Path, State},
-    response::{Html, IntoResponse, Redirect},
+    extract::{Path, State},
 };
-use axum_extra::extract::Form;
-use itertools::Itertools;
 use native_db::Database;
-use qbit::{
-    models::{Category, Torrent as QbitTorrent, Tracker},
-    parameters::TorrentState,
-};
-use reqwest::header;
-use serde::Deserialize;
 use serde_json::json;
-use tokio_util::io::ReaderStream;
 
 use crate::{
-    audiobookshelf::{Abs, LibraryItemMinified},
-    cleaner::clean_torrent,
+    audiobookshelf::Abs,
     config::Config,
-    data::{
-        ClientStatus, Event, EventKey, EventType, Size, Torrent, TorrentCost, TorrentKey,
-        TorrentMeta,
-    },
-    linker::{find_library, library_dir, map_path, refresh_metadata, refresh_metadata_relink},
-    mam::{MaM, MaMTorrent, SearchQuery, Tor},
-    mam_enums::SearchIn,
+    data::{Torrent, TorrentKey},
     qbittorrent::{self},
-    stats::Triggers,
-    web::{
-        AppError, Conditional, MaMState, MaMTorrentsTemplate, Page, TorrentLink,
-        pages::{search::select_torrent, torrents::TorrentsPageFilter},
-        tables::table_styles,
-        time,
-    },
+    web::{AppError, MaMState},
 };
 
 // pub async fn torrent_file(
@@ -177,21 +151,24 @@ async fn torrent_api_hash(
     // let mam_meta = mam_torrent.as_ref().map(|t| t.as_meta()).transpose()?;
 
     // let mut qbit_data = None;
-    let mut wanted_path = None;
+    // let mut wanted_path = None;
+    let mut qbit_torrent = None;
     let mut qbit_files = vec![];
-    if let Some((qbit_torrent, qbit, _)) = qbittorrent::get_torrent(&config, &torrent.hash).await? {
-        let trackers = qbit.trackers(&torrent.hash).await?;
-        let mut categories = qbit.categories().await?.into_values().collect_vec();
-        categories.sort_by(|a, b| a.name.cmp(&b.name));
-        let tags = qbit.tags().await?;
-
-        wanted_path = find_library(&config, &qbit_torrent).and_then(|library| {
-            library_dir(
-                config.exclude_narrator_in_library_dir,
-                library,
-                &torrent.meta,
-            )
-        });
+    if let Some((qbit_torrent_, qbit, _)) = qbittorrent::get_torrent(&config, &torrent.hash).await?
+    {
+        qbit_torrent = Some(qbit_torrent_);
+        // let trackers = qbit.trackers(&torrent.hash).await?;
+        // let mut categories = qbit.categories().await?.into_values().collect_vec();
+        // categories.sort_by(|a, b| a.name.cmp(&b.name));
+        // let tags = qbit.tags().await?;
+        //
+        // wanted_path = find_library(&config, &qbit_torrent).and_then(|library| {
+        //     library_dir(
+        //         config.exclude_narrator_in_library_dir,
+        //         library,
+        //         &torrent.meta,
+        //     )
+        // });
 
         // qbit_data = Some(QbitData {
         //     torrent_tags: qbit_torrent.tags.split(", ").map(str::to_string).collect(),
@@ -217,7 +194,8 @@ async fn torrent_api_hash(
         // "mam_torrent": mam_torrent,
         // "mam_meta": mam_meta,
         // "qbit_data": qbit_data,
-        "wanted_path": wanted_path,
+        // "wanted_path": wanted_path,
+        "qbit_torrent": qbit_torrent,
         "qbit_files": qbit_files,
     })))
 }
