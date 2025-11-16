@@ -20,4 +20,4 @@ cost = "wedge" # automatically wedge torrents before download, as we have an cos
 languages = [ "english" ]
 ```
 
-Each list needs at least one `.grab` block that select what torrents to grab.
+Each list needs at least one `goodreads_list.grab` block that select what torrents to grab. To see how to select torrents and what fields you can set, see [Search Filters](./search_filters.md).

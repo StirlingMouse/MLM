@@ -10,7 +10,7 @@ url = "http://localhost:8011" # update this to your qbit web ui URL
 username = "qbittorent username"
 password = "qbittorent password"
 
-[qbittorrent.on_cleaned] # you can skip the on_cleaned section if you don't want MLM to do anything in qbit when upgrading a book
+[qbittorrent.on_cleaned]
 category = "Seed" # change the qbittorrent category to Seed when a torrent gets replaced with a better one
 
 [[autograb]] # you can skip the autograb sections if you don't want it to grab anything automatically
@@ -38,3 +38,6 @@ library_dir = "/mnt/Data/Library/Audiobooks" # this is where your nicely organiz
 category = "Ebooks"
 library_dir = "/mnt/Data/Library/Ebooks"
 ```
+
+### MaM ID
+The `mam_id` is a security session you create on <https://www.myanonamouse.net/preferences/index.php?view=security>

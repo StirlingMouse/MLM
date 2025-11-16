@@ -1,11 +1,14 @@
 # Full Example
 
-An advanced example showcasing all current options with their default values:
+An advanced example showcasing many options:
 ```toml
 mam_id = "set mam_id here"
+
+# Below top-level settings show the default values
 web_host = "0.0.0.0" # What address to bind the web server to
 web_port = 3157 # What port to bind the web server to
-unsat_buffer = 10 # how many unsat slots to leave empty
+unsat_buffer = 10 # How many unsat slots to leave empty
+min_ratio = 2 # Lowest ratio MLM is allowed to use. If downloading a torrent would take you below this ratio, MLM will not download it.
 add_torrents_stopped = false
 exclude_narrator_in_library_dir = false
 search_interval = 30 # in minutes, how often a search should be done for the autograbs
