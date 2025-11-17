@@ -207,6 +207,7 @@ pub enum Cost {
     #[serde(alias = "all")]
     Ratio,
     MetadataOnly,
+    MetadataOnlyAdd,
 }
 
 #[derive(Clone, Debug, Deserialize)]

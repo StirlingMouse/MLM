@@ -19,7 +19,8 @@ use crate::{
         SearchResult, SearchTarget, Tor, WedgeBuyError, normalize_title,
     },
 };
-use anyhow::{Context, Error, Result};
+use anyhow::{Context, Error, Result, bail};
+use bytes::Bytes;
 use itertools::Itertools as _;
 use lava_torrent::torrent::v1::Torrent;
 use native_db::{Database, db_type, transaction::RwTransaction};
@@ -64,7 +65,10 @@ pub async fn run_autograbber(
         max_torrents = max_torrents.min(max_active_downloads.saturating_sub(downloading_torrents));
     }
 
-    if max_torrents > 0 || autograb_config.cost == Cost::MetadataOnly {
+    if max_torrents > 0
+        || autograb_config.cost == Cost::MetadataOnly
+        || autograb_config.cost == Cost::MetadataOnlyAdd
+    {
         let selected_torrents = search_torrents(
             config.clone(),
             db.clone(),
@@ -139,24 +143,12 @@ pub async fn grab_selected_torrents(
         let result = grab_torrent(config, db, qbit, mam, torrent.clone())
             .await
             .map_err(|err| anyhow::Error::new(TorrentMetaError(torrent.meta.clone(), err)));
-        let mut long_wait = false;
-        let result = match result {
-            Ok(v) => Ok(v),
-            Err(e) => Err(match e.downcast::<RateLimitError>() {
-                Ok(e) => {
-                    long_wait = true;
-                    anyhow::Error::new(e)
-                }
-                Err(e) => e,
-            }),
-        };
+
         if result.is_ok() {
             snatched_torrents += 1;
             remaining_buffer = buffer_after;
-            // if let Some((_, user_info)) = mam.user.lock().await.as_mut() {
-            //     user_info.unsat.count += 1;
-            // }
         }
+
         update_errored_torrent(
             db,
             ErroredTorrentId::Grabber(torrent.mam_id),
@@ -164,7 +156,7 @@ pub async fn grab_selected_torrents(
             result,
         );
 
-        sleep(Duration::from_millis(if long_wait { 30_000 } else { 1000 })).await;
+        sleep(Duration::from_millis(1000)).await;
     }
     Ok(())
 }
@@ -203,7 +195,7 @@ pub async fn search_torrents(
     let (flags_is_hide, flags) = torrent_filter.filter.flags.as_search_bitfield();
     let paginate = matches!(
         torrent_filter.kind,
-        Type::Bookmarks | Type::Freeleech | Type::Mine
+        Type::Bookmarks | Type::Freeleech | Type::Mine | Type::Uploader(_)
     );
 
     let mut results: Option<SearchResult> = None;
@@ -366,7 +358,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             continue;
         }
         let title_search = normalize_title(&torrent.title);
-        let preferred_types = meta.media_type.preferred_types(&config);
+        let preferred_types = meta.media_type.preferred_types(config);
         let preference = preferred_types
             .iter()
             .position(|t| meta.filetypes.contains(t));
@@ -399,6 +391,10 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 }
                 continue 'torrent;
             }
+        }
+        if cost == Cost::MetadataOnlyAdd {
+            add_metadata_only_torrent(rw_opt.unwrap(), mam, torrent, meta).await?;
+            continue 'torrent;
         }
         if cost == Cost::MetadataOnly {
             continue 'torrent;
@@ -584,7 +580,7 @@ async fn grab_torrent(
         torrent.meta.title, torrent.category, torrent.tags,
     );
 
-    let torrent_file_bytes = mam.get_torrent_file(&torrent.dl_link).await?;
+    let torrent_file_bytes = get_mam_torrent_file(mam, &torrent.dl_link).await?;
     let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
     let hash = torrent_file.info_hash();
 
@@ -700,6 +696,59 @@ async fn grab_torrent(
             },
         ),
     );
+
+    Ok(())
+}
+
+#[instrument(skip_all)]
+async fn add_metadata_only_torrent(
+    rw: RwTransaction<'_>,
+    mam: &MaM<'_>,
+    torrent: MaMTorrent,
+    meta: TorrentMeta,
+) -> Result<()> {
+    info!("Adding metadata only torrent \"{}\"", meta.title,);
+    let Some(dl_link) = torrent.dl.as_ref() else {
+        bail!("missing dl_link");
+    };
+
+    let torrent_file_bytes = get_mam_torrent_file(mam, dl_link).await?;
+    let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
+    let hash = torrent_file.info_hash();
+
+    let mam_id = torrent.id;
+    {
+        rw.insert(data::Torrent {
+            hash: hash.clone(),
+            mam_id,
+            abs_id: None,
+            goodreads_id: None,
+            library_path: None,
+            library_files: Default::default(),
+            linker: None,
+            category: None,
+            selected_audio_format: None,
+            selected_ebook_format: None,
+            title_search: normalize_title(&meta.title),
+            meta,
+            created_at: Timestamp::now(),
+            replaced_with: None,
+            request_matadata_update: false,
+            library_mismatch: None,
+            client_status: None,
+        })
+        .or_else(|err| {
+            if let db_type::Error::DuplicateKey { .. } = err {
+                warn!("Got dup key when adding torrent {:?}", torrent);
+                Ok(())
+            } else {
+                Err(err)
+            }
+        })?;
+        rw.commit()?;
+    }
+
+    sleep(Duration::from_millis(1000)).await;
 
     Ok(())
 }
@@ -822,10 +871,26 @@ async fn update_selected_torrent_meta(
 }
 
 pub async fn get_mam_torrent_hash(mam: &MaM<'_>, dl_link: &str) -> Result<String> {
-    let torrent_file_bytes = mam.get_torrent_file(dl_link).await?;
+    let torrent_file_bytes = get_mam_torrent_file(mam, dl_link).await?;
     let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
     let hash = torrent_file.info_hash();
     Ok(hash)
+}
+
+async fn get_mam_torrent_file(mam: &MaM<'_>, dl_link: &str) -> Result<Bytes> {
+    loop {
+        let result = mam.get_torrent_file(dl_link).await;
+
+        match result {
+            Ok(v) => return Ok(v),
+            Err(e) => match e.downcast::<RateLimitError>() {
+                Ok(_) => {
+                    sleep(Duration::from_millis(30_000)).await;
+                }
+                Err(e) => return Err(e),
+            },
+        };
+    }
 }
 
 fn add_duplicate_torrent(
