@@ -806,16 +806,12 @@ impl<'a> MaM<'a> {
     }
 
     fn store_cookies(&self) {
-        for cookie in self.jar.read().unwrap().iter_unexpired() {
-            println!("cookie: {:?}", cookie);
-        }
         if let Some(cookie) = self
             .jar
             .read()
             .unwrap()
             .get("myanonamouse.net", "/", "mam_id")
         {
-            println!("storing: {}", cookie.value());
             if let Ok(rw) = self.db.rw_transaction() {
                 let ok = rw
                     .upsert(data::Config {
@@ -829,8 +825,6 @@ impl<'a> MaM<'a> {
                     trace!("stored new mam_id");
                 }
             }
-        } else {
-            println!("none");
         }
     }
 }
