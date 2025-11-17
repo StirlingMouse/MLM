@@ -26,7 +26,7 @@ use lava_torrent::torrent::v1::Torrent;
 use native_db::{Database, db_type, transaction::RwTransaction};
 use qbit::parameters::{AddTorrent, AddTorrentType, TorrentFile};
 use tokio::{fs, sync::watch::Sender, time::sleep};
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{Level, debug, enabled, error, info, instrument, trace, warn};
 
 #[instrument(skip_all)]
 pub async fn run_autograbber(
@@ -270,6 +270,12 @@ pub async fn search_torrents(
             break;
         }
 
+        if enabled!(Level::TRACE) {
+            trace!(
+                "torrents in result: {:?}",
+                page_results.data.iter().map(|t| t.id).collect::<Vec<_>>()
+            )
+        }
         if let Some(results) = &mut results {
             results.data.append(&mut page_results.data);
         } else {
@@ -306,6 +312,7 @@ pub async fn search_torrents(
 }
 
 #[instrument(skip_all)]
+#[allow(clippy::too_many_arguments)]
 pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
     config: &Config,
     db: &Database<'_>,
@@ -322,6 +329,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
     let mut selected_torrents = 0;
     'torrent: for torrent in torrents {
         if config.ignore_torrents.contains(&torrent.id) {
+            trace!("Torrent {} is ignored", torrent.id);
             continue;
         }
 
@@ -352,9 +360,16 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             {
                 let mut updated = old_selected.clone();
                 updated.unsat_buffer = Some(unsat_buffer);
-                rw.update(old_selected, updated)?;
-                rw_opt.unwrap().commit()?;
+                if updated.meta != meta {
+                    update_selected_torrent_meta(db, rw_opt.unwrap(), mam, updated, meta).await?;
+                } else {
+                    rw.update(old_selected, updated)?;
+                    rw_opt.unwrap().commit()?;
+                }
+            } else if old_selected.meta != meta {
+                update_selected_torrent_meta(db, rw_opt.unwrap(), mam, old_selected, meta).await?;
             }
+            trace!("Torrent {} is already selected", torrent.id);
             continue;
         }
         let title_search = normalize_title(&torrent.title);
@@ -370,15 +385,6 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             continue;
         }
         if let Some(rw) = &rw_opt {
-            let old_selected = rw.get().primary::<data::SelectedTorrent>(meta.mam_id)?;
-            if let Some(old) = old_selected {
-                if old.meta != meta {
-                    update_selected_torrent_meta(db, rw_opt.unwrap(), mam, old, meta).await?;
-                }
-                continue 'torrent;
-            }
-        }
-        if let Some(rw) = &rw_opt {
             let old_library = rw
                 .scan()
                 .secondary::<data::Torrent>(TorrentKey::mam_id)?
@@ -389,6 +395,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                     update_torrent_meta(config, db, rw_opt.unwrap(), &torrent, old, meta, false)
                         .await?;
                 }
+                trace!("Torrent {} is already in library", torrent.id);
                 continue 'torrent;
             }
         }
@@ -411,6 +418,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                     if old.meta != meta {
                         update_selected_torrent_meta(db, rw_opt.unwrap(), mam, old, meta).await?;
                     }
+                    trace!("Torrent {} is already selected2", torrent.id);
                     continue 'torrent;
                 }
                 trace!(
@@ -422,7 +430,6 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         .iter()
                         .position(|t| old.meta.filetypes.contains(t));
                     if old_preference <= preference {
-                        let mam_id = meta.mam_id;
                         if let Err(err) =
                             add_duplicate_torrent(rw, None, torrent.dl.clone(), title_search, meta)
                         {
@@ -431,7 +438,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         rw_opt.unwrap().commit()?;
                         trace!(
                             "Skipping torrent {} as we have {} selected",
-                            mam_id, old.meta.mam_id
+                            torrent.id, old.meta.mam_id
                         );
                         continue 'torrent;
                     } else {
@@ -474,6 +481,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         )
                         .await?;
                     }
+                    trace!("Torrent {} is already in library2", torrent.id);
                     continue 'torrent;
                 }
                 trace!(
@@ -485,7 +493,6 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         .iter()
                         .position(|t| old.meta.filetypes.contains(t));
                     if old_preference <= preference {
-                        let mam_id = meta.mam_id;
                         if let Err(err) = add_duplicate_torrent(
                             rw,
                             Some(old.hash),
@@ -498,7 +505,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         rw_opt.unwrap().commit()?;
                         trace!(
                             "Skipping torrent {} as we have {} in libary",
-                            mam_id, old.meta.mam_id
+                            torrent.id, old.meta.mam_id
                         );
                         continue 'torrent;
                     } else {
