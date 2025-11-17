@@ -23,7 +23,7 @@ type = "new"              # Searches new/latest torrents
 type = { uploader = 123 } # Searches uploads by user with id 123
 ```
 
-Bookmarks and Freeleech will go through all pages in the search result,
+Bookmarks and Freeleech will go through up to 50 pages of the search result,
 allowing you to find all of them. While New and Uploader will only ever
 see the 100 latest torrents matching your [search filters](./search_filters.md).
 
@@ -85,6 +85,12 @@ flags = { lgbt = true }
 unsat_buffer = 50
 ```
 
+### Max Pages
+```toml
+max_pages = 5
+```
+How many pages (of 100 torrents) of the search should be fetched. By default, type Bookmarks and Freeleech will go through up to 50 pages of the search result, while other types only fetch a single page.
+
 ### Search Interval
 ```toml
 search_interval = 60
@@ -108,7 +114,7 @@ How many currently active downloads are allowed for this autograb block. For exa
 ```toml
 category = "bookmarks"
 ```
-A qbittorrent category to set on all torrents downloaded by this autograbber. Overrides any `[[tag]]` blocks you might have.
+A qBittorrent category to set on all torrents downloaded by this autograbber. Overrides any `[[tag]]` blocks you might have.
 
 ### Dry Run
 ```toml

@@ -96,6 +96,7 @@ pub struct TorrentFilter {
     #[serde(default)]
     pub search_in: Vec<SearchIn>,
     pub sort_by: Option<SortBy>,
+    pub max_pages: Option<u8>,
     #[serde(flatten)]
     pub filter: Filter,
 

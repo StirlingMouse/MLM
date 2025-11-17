@@ -193,13 +193,15 @@ pub async fn search_torrents(
             _ => "",
         });
     let (flags_is_hide, flags) = torrent_filter.filter.flags.as_search_bitfield();
-    let paginate = matches!(
-        torrent_filter.kind,
-        Type::Bookmarks | Type::Freeleech | Type::Mine | Type::Uploader(_)
-    );
+    let max_pages = torrent_filter
+        .max_pages
+        .unwrap_or(match torrent_filter.kind {
+            Type::Bookmarks | Type::Freeleech | Type::Mine => 50,
+            _ => 0,
+        });
 
     let mut results: Option<SearchResult> = None;
-    loop {
+    for page in 1.. {
         let mut page_results = mam
             .search(&SearchQuery {
                 dl_link: true,
@@ -283,7 +285,7 @@ pub async fn search_torrents(
         }
 
         let results = results.as_ref().unwrap();
-        if !paginate || results.data.len() >= results.found {
+        if page >= max_pages || results.data.len() >= results.found {
             break;
         }
     }
