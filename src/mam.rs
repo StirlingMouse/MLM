@@ -16,7 +16,7 @@ use reqwest_cookie_store::CookieStoreRwLock;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use time::{
-    UtcDateTime,
+    OffsetDateTime, UtcDateTime,
     format_description::{self, OwnedFormatItem},
 };
 use tokio::sync::Mutex;
@@ -614,8 +614,9 @@ impl<'a> MaM<'a> {
             info!("Using mam_id from config");
         }
         let has_stored_mam_id = stored_mam_id.is_some();
-        let cookie =
-            Cookie::build(("mam_id", stored_mam_id.unwrap_or(config.mam_id.clone()))).build();
+        let cookie = Cookie::build(("mam_id", stored_mam_id.unwrap_or(config.mam_id.clone())))
+            .expires(OffsetDateTime::now_local()? + Duration::from_mins(10))
+            .build();
         jar.write()
             .unwrap()
             .store_response_cookies([cookie].into_iter(), &url);
@@ -635,7 +636,9 @@ impl<'a> MaM<'a> {
         if let Err(err) = mam.check_mam_id().await {
             if has_stored_mam_id {
                 warn!("Stored mam_id failed with {err}, falling back to config value");
-                let cookie = Cookie::build(("mam_id", config.mam_id.clone())).build();
+                let cookie = Cookie::build(("mam_id", config.mam_id.clone()))
+                    .expires(OffsetDateTime::now_local()? + Duration::from_mins(10))
+                    .build();
                 mam.jar
                     .write()
                     .unwrap()
@@ -672,13 +675,12 @@ impl<'a> MaM<'a> {
 
     pub async fn user_info(&self) -> Result<UserResponse> {
         let mut cache = self.user.lock().await;
-        if let Some((at, user_info)) = cache.as_ref() {
-            if SystemTime::now()
+        if let Some((at, user_info)) = cache.as_ref()
+            && SystemTime::now()
                 .duration_since(*at)
                 .is_ok_and(|d| d < Duration::from_secs(60))
-            {
-                return Ok(user_info.clone());
-            }
+        {
+            return Ok(user_info.clone());
         }
         let resp: UserResponse = self
             .client
@@ -811,19 +813,18 @@ impl<'a> MaM<'a> {
             .read()
             .unwrap()
             .get("myanonamouse.net", "/", "mam_id")
+            && let Ok(rw) = self.db.rw_transaction()
         {
-            if let Ok(rw) = self.db.rw_transaction() {
-                let ok = rw
-                    .upsert(data::Config {
-                        key: "mam_id".to_string(),
-                        value: cookie.value().to_string(),
-                    })
-                    .and_then(|_| rw.commit())
-                    .is_ok();
+            let ok = rw
+                .upsert(data::Config {
+                    key: "mam_id".to_string(),
+                    value: cookie.value().to_string(),
+                })
+                .and_then(|_| rw.commit())
+                .is_ok();
 
-                if ok {
-                    trace!("stored new mam_id");
-                }
+            if ok {
+                trace!("stored new mam_id");
             }
         }
     }
