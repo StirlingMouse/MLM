@@ -61,6 +61,10 @@
         Started At
         <input type=checkbox name=show {% if show.started_at %}checked{% endif %} value="started_at">
       </label>
+      <label>
+        Removed At
+        <input type=checkbox name=show {% if show.removed_at %}checked{% endif %} value="removed_at">
+      </label>
       </div>
     </div>
   </div>
@@ -99,6 +103,7 @@
   {{ table_header_if(show.grabber, Some(SelectedPageSort::Grabber), "Grabber", 130) }}
   {{ table_header_if(show.created_at, Some(SelectedPageSort::CreatedAt), "Added At", 157) }}
   {{ table_header_if(show.started_at, Some(SelectedPageSort::StartedAt), "Started At", 157) }}
+  {{ table_header_if(show.removed_at, None, "Removed At", 157) }}
   {{ table_header_s(None, "", 44) }}
 </div>
 <style>
@@ -151,6 +156,13 @@
   <div>
     {% if let Some(started_at) = torrent.started_at %}
       {{ self::time(started_at) }}
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if show.removed_at %}
+  <div>
+    {% if let Some(removed_at) = torrent.removed_at %}
+      {{ self::time(removed_at) }}
     {% endif %}
   </div>
   {% endif %}

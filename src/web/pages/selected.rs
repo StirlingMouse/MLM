@@ -13,6 +13,7 @@ use axum::{
 use axum_extra::extract::Form;
 use native_db::Database;
 use serde::{Deserialize, Serialize};
+use tracing::info;
 
 use crate::{
     config::Config,
@@ -39,7 +40,7 @@ pub async fn selected_page(
         .scan()
         .primary::<SelectedTorrent>()?
         .all()?
-        .filter(|t| t.as_ref().is_ok_and(|t| t.removed_at.is_none()))
+        .filter(|t| show.removed_at || t.as_ref().is_ok_and(|t| t.removed_at.is_none()))
         .filter(|t| {
             let Ok(t) = t else {
                 return true;
@@ -183,8 +184,13 @@ pub async fn selected_torrents_page_post(
                 let Some(mut torrent) = rw.get().primary::<SelectedTorrent>(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };
-                torrent.removed_at = Some(Timestamp::now());
-                rw.upsert(torrent)?;
+                if torrent.removed_at.is_none() {
+                    torrent.removed_at = Some(Timestamp::now());
+                    rw.upsert(torrent)?;
+                } else {
+                    info!("Hard-removing selected torrent {}", torrent.mam_id);
+                    rw.remove(torrent)?;
+                }
                 rw.commit()?;
             }
         }
@@ -195,6 +201,7 @@ pub async fn selected_torrents_page_post(
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };
                 torrent.unsat_buffer = Some(form.unsats.unwrap_or_default());
+                torrent.removed_at = None;
                 rw.upsert(torrent)?;
                 rw.commit()?;
             }
@@ -300,6 +307,7 @@ struct TorrentsPageColumns {
     grabber: bool,
     created_at: bool,
     started_at: bool,
+    removed_at: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -321,6 +329,7 @@ impl Default for TorrentsPageColumns {
             grabber: true,
             created_at: true,
             started_at: true,
+            removed_at: false,
         }
     }
 }
@@ -341,6 +350,7 @@ impl TryFrom<String> for TorrentsPageColumns {
             grabber: false,
             created_at: false,
             started_at: false,
+            removed_at: false,
         };
         for column in value.split(",") {
             match column {
@@ -355,6 +365,7 @@ impl TryFrom<String> for TorrentsPageColumns {
                 "grabber" => columns.grabber = true,
                 "created_at" => columns.created_at = true,
                 "started_at" => columns.started_at = true,
+                "removed_at" => columns.removed_at = true,
                 "" => {}
                 _ => {
                     return Err(format!("Unknown column {column}"));
