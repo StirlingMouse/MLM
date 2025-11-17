@@ -125,7 +125,7 @@ impl Category {
             7 => Some(Category::Computer),
             8 => Some(Category::Crafts),
             9 => Some(Category::Crime),
-            10 => Some(Category::Drama),
+            10 => Some(Category::Dramatization),
             11 => Some(Category::Education),
             12 => Some(Category::FactualNews),
             13 => Some(Category::Fantasy),
@@ -173,6 +173,9 @@ impl Category {
             55 => Some(Category::YoungAdult),
             56 => Some(Category::Superheroes),
             57 => Some(Category::LiteraryFiction),
+            58 => Some(Category::ProgressionFantasy),
+            // 59 is already removed?
+            60 => Some(Category::DramaPlays),
             _ => None,
         }
     }
@@ -188,7 +191,7 @@ impl Category {
             Category::Computer => "Computer/Internet",
             Category::Crafts => "Crafts",
             Category::Crime => "Crime",
-            Category::Drama => "Drama/Full Cast",
+            Category::Dramatization => "Dramatization/Full Cast",
             Category::Education => "Education/Textbook",
             Category::FactualNews => "Factual News/Current Events",
             Category::Fantasy => "Fantasy",
@@ -203,7 +206,7 @@ impl Category {
             Category::Instructional => "Instructional",
             Category::Juvenile => "Juvenile",
             Category::Language => "Language",
-            Category::Lgbt => "LGBT",
+            Category::Lgbt => "LGBTQIA+",
             Category::LickLibraryLTP => "Lick Library - LTP/Jam With",
             Category::LickLibraryTechniques => "Lick Library - Techniques/QL",
             Category::LiteraryClassics => "Literary Classics",
@@ -235,7 +238,12 @@ impl Category {
             Category::Western => "Western",
             Category::YoungAdult => "Young Adult",
             Category::Superheroes => "Superheroes",
-            Category::LiteraryFiction => "Literary Fiction",
+            // Since there is no replacement for general fiction, literary fiction is being used
+            // instead.
+            Category::LiteraryFiction => "General Fiction",
+            Category::ProgressionFantasy => "Progression Fantasy",
+            Category::DramaPlays => "Drama/Plays",
+            Category::Unknown(_) => "Unknown Category",
         }
     }
 
@@ -250,7 +258,7 @@ impl Category {
             Category::Computer => 7,
             Category::Crafts => 8,
             Category::Crime => 9,
-            Category::Drama => 10,
+            Category::Dramatization => 10,
             Category::Education => 11,
             Category::FactualNews => 12,
             Category::Fantasy => 13,
@@ -298,6 +306,9 @@ impl Category {
             Category::YoungAdult => 55,
             Category::Superheroes => 56,
             Category::LiteraryFiction => 57,
+            Category::ProgressionFantasy => 58,
+            Category::DramaPlays => 60,
+            Category::Unknown(id) => *id,
         }
     }
 }

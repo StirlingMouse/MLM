@@ -1,4 +1,4 @@
-use super::{v01, v03, v04, v06, v08, v09, v10, v11, v13};
+use super::{v01, v03, v04, v06, v08, v09, v10, v11, v13, v14};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -523,6 +523,73 @@ impl From<v13::MediaType> for MediaType {
             v13::MediaType::ComicBook => MediaType::ComicBook,
             v13::MediaType::PeriodicalEbook => MediaType::Periodical,
             v13::MediaType::PeriodicalAudiobook => MediaType::Periodical,
+        }
+    }
+}
+
+impl From<v14::Category> for Category {
+    fn from(value: v14::Category) -> Self {
+        match value {
+            v14::Category::Action => Category::Action,
+            v14::Category::Art => Category::Art,
+            v14::Category::Biographical => Category::Biographical,
+            v14::Category::Business => Category::Business,
+            v14::Category::Comedy => Category::Comedy,
+            v14::Category::CompleteEditionsMusic => Category::CompleteEditionsMusic,
+            v14::Category::Computer => Category::Computer,
+            v14::Category::Crafts => Category::Crafts,
+            v14::Category::Crime => Category::Crime,
+            v14::Category::Dramatization => Category::Drama,
+            v14::Category::Education => Category::Education,
+            v14::Category::FactualNews => Category::FactualNews,
+            v14::Category::Fantasy => Category::Fantasy,
+            v14::Category::Food => Category::Food,
+            v14::Category::Guitar => Category::Guitar,
+            v14::Category::Health => Category::Health,
+            v14::Category::Historical => Category::Historical,
+            v14::Category::Home => Category::Home,
+            v14::Category::Horror => Category::Horror,
+            v14::Category::Humor => Category::Humor,
+            v14::Category::IndividualSheet => Category::IndividualSheet,
+            v14::Category::Instructional => Category::Instructional,
+            v14::Category::Juvenile => Category::Juvenile,
+            v14::Category::Language => Category::Language,
+            v14::Category::Lgbt => Category::Lgbt,
+            v14::Category::LickLibraryLTP => Category::LickLibraryLTP,
+            v14::Category::LickLibraryTechniques => Category::LickLibraryTechniques,
+            v14::Category::LiteraryClassics => Category::LiteraryClassics,
+            v14::Category::LitRPG => Category::LitRPG,
+            v14::Category::Math => Category::Math,
+            v14::Category::Medicine => Category::Medicine,
+            v14::Category::Music => Category::Music,
+            v14::Category::MusicBook => Category::MusicBook,
+            v14::Category::Mystery => Category::Mystery,
+            v14::Category::Nature => Category::Nature,
+            v14::Category::Paranormal => Category::Paranormal,
+            v14::Category::Philosophy => Category::Philosophy,
+            v14::Category::Poetry => Category::Poetry,
+            v14::Category::Politics => Category::Politics,
+            v14::Category::Reference => Category::Reference,
+            v14::Category::Religion => Category::Religion,
+            v14::Category::Romance => Category::Romance,
+            v14::Category::Rpg => Category::Rpg,
+            v14::Category::Science => Category::Science,
+            v14::Category::ScienceFiction => Category::ScienceFiction,
+            v14::Category::SelfHelp => Category::SelfHelp,
+            v14::Category::SheetCollection => Category::SheetCollection,
+            v14::Category::SheetCollectionMP3 => Category::SheetCollectionMP3,
+            v14::Category::Sports => Category::Sports,
+            v14::Category::Technology => Category::Technology,
+            v14::Category::Thriller => Category::Thriller,
+            v14::Category::Travel => Category::Travel,
+            v14::Category::UrbanFantasy => Category::UrbanFantasy,
+            v14::Category::Western => Category::Western,
+            v14::Category::YoungAdult => Category::YoungAdult,
+            v14::Category::Superheroes => Category::Superheroes,
+            v14::Category::LiteraryFiction => Category::LiteraryFiction,
+            v14::Category::ProgressionFantasy => Category::LitRPG,
+            v14::Category::DramaPlays => Category::Drama,
+            v14::Category::Unknown(_) => unimplemented!(),
         }
     }
 }
