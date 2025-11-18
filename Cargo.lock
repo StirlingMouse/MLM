@@ -1500,7 +1500,7 @@ dependencies = [
 
 [[package]]
 name = "mlm"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -1528,6 +1528,7 @@ dependencies = [
  "regex",
  "reqwest",
  "reqwest_cookie_store",
+ "sanitize-filename",
  "scraper",
  "serde",
  "serde-nested-json",
@@ -2322,6 +2323,11 @@ checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
 ]
+
+[[package]]
+name = "sanitize-filename"
+version = "0.7.0-beta"
+source = "git+https://github.com/StirlingMouse/sanitize-filename.git#2861a903d9e79d5cb2f613af4a282ce8a336b6e9"
 
 [[package]]
 name = "schannel"

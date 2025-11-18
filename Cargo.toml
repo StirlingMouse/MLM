@@ -38,6 +38,7 @@ quick-xml = { version = "0.38.0", features = ["serialize"] }
 regex = "1.11.1"
 reqwest = "0.12.20"
 reqwest_cookie_store = "0.8.0"
+sanitize-filename = { git = "https://github.com/StirlingMouse/sanitize-filename.git" }
 scraper = "0.23.1"
 serde = "1.0.136"
 serde_derive = "1.0.136"

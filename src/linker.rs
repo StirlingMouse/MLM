@@ -219,6 +219,7 @@ pub async fn link_torrents_to_library(
 }
 
 #[instrument(skip_all)]
+#[allow(clippy::too_many_arguments)]
 async fn match_torrent(
     config: Arc<Config>,
     db: Arc<Database<'_>>,
@@ -616,25 +617,30 @@ pub fn library_dir(
         .find(|s| !s.entries.0.is_empty())
         .or(meta.series.first())
     {
-        Some(series) => {
-            PathBuf::from(author)
-                .join(&series.name)
-                .join(if series.entries.0.is_empty() {
+        Some(series) => PathBuf::from(sanitize_filename::sanitize(author).to_string())
+            .join(sanitize_filename::sanitize(&series.name).to_string())
+            .join(
+                sanitize_filename::sanitize(if series.entries.0.is_empty() {
                     meta.title.clone()
                 } else {
                     format!("{} #{} - {}", series.name, series.entries, meta.title)
                 })
-        }
-        None => PathBuf::from(author).join(&meta.title),
+                .to_string(),
+            ),
+        None => PathBuf::from(sanitize_filename::sanitize(author).to_string())
+            .join(sanitize_filename::sanitize(&meta.title).to_string()),
     };
     if let Some(narrator) = meta.narrators.first()
         && !exclude_narrator_in_library_dir
     {
-        dir.set_file_name(format!(
-            "{} {{{}}}",
-            dir.file_name().unwrap().to_string_lossy(),
-            narrator
-        ));
+        dir.set_file_name(
+            sanitize_filename::sanitize(format!(
+                "{} {{{}}}",
+                dir.file_name().unwrap().to_string_lossy(),
+                narrator
+            ))
+            .to_string(),
+        );
     }
     let dir = library.library_dir().join(dir);
     Some(dir)
