@@ -24,6 +24,8 @@ pub struct Config {
     #[serde(default = "default_unsat_buffer")]
     pub unsat_buffer: u64,
     #[serde(default)]
+    pub wedge_buffer: u64,
+    #[serde(default)]
     pub add_torrents_stopped: bool,
     #[serde(default)]
     pub exclude_narrator_in_library_dir: bool,

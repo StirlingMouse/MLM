@@ -16,7 +16,7 @@ use crate::{
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{
         DATE_FORMAT, MaM, MaMTorrent, MetaError, RateLimitError, SearchKind, SearchQuery,
-        SearchResult, SearchTarget, Tor, WedgeBuyError, normalize_title,
+        SearchResult, SearchTarget, Tor, UserResponse, WedgeBuyError, normalize_title,
     },
 };
 use anyhow::{Context, Error, Result, bail};
@@ -140,7 +140,7 @@ pub async fn grab_selected_torrents(
             continue;
         }
 
-        let result = grab_torrent(config, db, qbit, mam, torrent.clone())
+        let result = grab_torrent(config, db, qbit, mam, &user_info, torrent.clone())
             .await
             .map_err(|err| anyhow::Error::new(TorrentMetaError(torrent.meta.clone(), err)));
 
@@ -583,6 +583,7 @@ async fn grab_torrent(
     db: &Database<'_>,
     qbit: &qbit::Api,
     mam: &MaM<'_>,
+    user_info: &UserResponse,
     torrent: SelectedTorrent,
 ) -> Result<()> {
     info!(
@@ -596,10 +597,19 @@ async fn grab_torrent(
 
     let mut wedged = false;
     if torrent.cost == TorrentCost::UseWedge || torrent.cost == TorrentCost::TryWedge {
+        if user_info.wedges < config.wedge_buffer {
+            return Err(anyhow::Error::msg(format!(
+                "Fewer wedges ({}) than wedge_buffer ({})",
+                user_info.wedges, config.wedge_buffer
+            )));
+        }
         info!("Using wedge on torrent \"{}\"", torrent.meta.title);
         match mam.wedge_torrent(torrent.mam_id).await {
             Ok(_) => {
                 wedged = true;
+                if let Some((_, user_info)) = mam.user.lock().await.as_mut() {
+                    user_info.wedges = user_info.wedges.saturating_sub(1);
+                }
             }
             Err(err) => {
                 warn!(

@@ -18,7 +18,7 @@ use tracing::info;
 use crate::{
     config::Config,
     data::{Language, OldCategory, SelectedTorrent, Size, Timestamp},
-    mam::Unsats,
+    mam::{Unsats, UserResponse},
     mam_enums::Flags,
     web::{
         AppError, MaMState, Page,
@@ -159,9 +159,8 @@ pub async fn selected_page(
                 / config.min_ratio) as u64,
         )
     });
-    let unsats = user_info.map(|u| u.unsat);
     let template = SelectedPageTemplate {
-        unsats,
+        user_info,
         remaining_buffer,
         unsat_buffer: config.unsat_buffer,
         sort,
@@ -225,7 +224,7 @@ pub struct TorrentsPageForm {
 #[derive(Template)]
 #[template(path = "pages/selected.html")]
 struct SelectedPageTemplate {
-    unsats: Option<Unsats>,
+    user_info: Option<UserResponse>,
     remaining_buffer: Option<Size>,
     unsat_buffer: u64,
     sort: SortOn<SelectedPageSort>,

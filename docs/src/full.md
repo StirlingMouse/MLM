@@ -8,6 +8,7 @@ mam_id = "set mam_id here"
 web_host = "0.0.0.0" # What address to bind the web server to
 web_port = 3157 # What port to bind the web server to
 unsat_buffer = 10 # How many unsat slots to leave empty
+wedge_buffer = 0  # How many wedges to leave unused
 min_ratio = 2 # Lowest ratio MLM is allowed to use. If downloading a torrent would take you below this ratio, MLM will not download it.
 add_torrents_stopped = false
 exclude_narrator_in_library_dir = false

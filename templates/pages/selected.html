@@ -70,12 +70,14 @@
   </div>
 </div>
 <p>Torrents that the autograbber has selected and will be downloaded</p>
-{% if let Some(unsats) = unsats %}
+{% if let Some(user_info) = user_info %}
 <p>
   {% if let Some(remaining_buffer) = remaining_buffer %}
   Buffer: {{ remaining_buffer }}<br>
   {% endif %}
-  Unsats: {{ unsats.count }} / {{ unsats.limit }}
+  Unsats: {{ user_info.unsat.count }} / {{ user_info.unsat.limit }}<br>
+  Wedges: {{ user_info.wedges }}<br>
+  Bonus: {{ user_info.seedbonus }}<br>
   {% if !torrents.is_empty() %}
     <br>Queued Torrents: {{ queued() }}
     <br>Downloading Torrents: {{ downloading() }}

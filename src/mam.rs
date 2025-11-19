@@ -53,6 +53,8 @@ pub struct UserResponse {
     pub username: String,
     pub downloaded_bytes: f64,
     pub uploaded_bytes: f64,
+    pub seedbonus: i64,
+    pub wedges: u64,
     // pub classname: UserClass,
     // pub connectable: String,
     // pub country_code: Option<String>,
@@ -81,7 +83,6 @@ pub struct UserResponse {
     // pub seed_hnr: InactHnr,
     // #[serde(rename = "seedUnsat")]
     // pub seed_unsat: InactHnr,
-    // pub seedbonus: i64,
     // pub uid: u64,
     // #[serde(rename = "upAct")]
     // pub up_act: InactHnr,
