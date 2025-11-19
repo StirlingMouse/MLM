@@ -288,6 +288,7 @@ pub async fn search_torrents(
         if page >= max_pages || results.data.len() >= results.found {
             break;
         }
+        sleep(Duration::from_millis(400)).await;
     }
 
     let torrents = results

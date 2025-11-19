@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use itertools::Itertools;
@@ -11,6 +12,7 @@ use regex::Regex;
 use scraper::{Html, Selector};
 use serde::Deserialize;
 use tokio::sync::watch::Sender;
+use tokio::time::sleep;
 use tracing::{debug, instrument};
 use tracing::{trace, warn};
 
@@ -139,6 +141,7 @@ pub async fn run_goodreads_import(
                     search_item(&config, &db, &mam, list, &item, db_item, max_torrents)
                         .await
                         .context("search goodreads book")?;
+                sleep(Duration::from_millis(400)).await;
             }
         }
     }
