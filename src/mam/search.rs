@@ -9,12 +9,13 @@ use crate::{
         enums::{SearchIn, SearchKind, SearchTarget},
         meta::{MetaError, clean_value},
         serde::{
-            is_false, is_zero, json_or_default, opt_string_or_number, parse_title, string_or_number,
+            bool_string_or_number, is_false, is_zero, json_or_default, opt_string_or_number,
+            parse_title, string_or_number,
         },
     },
 };
 use anyhow::Result;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use time::UtcDateTime;
 use tracing::warn;
 
@@ -190,22 +191,26 @@ pub struct MaMTorrent {
     pub description: Option<String>,
     pub dl: Option<String>,
     pub filetype: String,
-    pub fl_vip: i64,
-    pub free: i64,
+    #[serde(deserialize_with = "bool_string_or_number")]
+    pub fl_vip: bool,
+    #[serde(deserialize_with = "bool_string_or_number")]
+    pub free: bool,
     #[serde(default)]
     #[serde(deserialize_with = "opt_string_or_number")]
     pub isbn: Option<String>,
     pub lang_code: String,
     pub language: u8,
     pub leechers: u64,
-    pub my_snatched: u64,
+    #[serde(deserialize_with = "bool_string_or_number")]
+    pub my_snatched: bool,
     #[serde(deserialize_with = "json_or_default")]
     pub narrator_info: BTreeMap<u64, String>,
     pub numfiles: u64,
     pub owner: u64,
     #[serde(deserialize_with = "string_or_number")]
     pub owner_name: String,
-    pub personal_freeleech: u64,
+    #[serde(deserialize_with = "bool_string_or_number")]
+    pub personal_freeleech: bool,
     pub seeders: u64,
     #[serde(deserialize_with = "json_or_default")]
     pub series_info: BTreeMap<u64, (String, String)>,
@@ -216,7 +221,8 @@ pub struct MaMTorrent {
     pub thumbnail: Option<String>,
     #[serde(deserialize_with = "parse_title")]
     pub title: String,
-    pub vip: u64,
+    #[serde(deserialize_with = "bool_string_or_number")]
+    pub vip: bool,
     pub vip_expire: u64,
     pub w: u64,
 }
@@ -273,7 +279,7 @@ impl MaMTorrent {
             .map(|t| t.to_owned())
             .collect::<Vec<_>>();
         let size = self.size.parse().map_err(MetaError::InvalidSize)?;
-        let vip_status = if self.vip == 0 {
+        let vip_status = if !self.vip {
             VipStatus::NotVip
         } else if self.vip_expire == 0 {
             VipStatus::Permanent
@@ -305,6 +311,6 @@ impl MaMTorrent {
     }
 
     pub fn is_free(&self) -> bool {
-        self.free > 0 || self.personal_freeleech > 0 || self.fl_vip > 0
+        self.free || self.personal_freeleech || self.fl_vip
     }
 }

@@ -19,6 +19,18 @@ pub fn is_zero(value: &u64) -> bool {
     *value == 0
 }
 
+pub fn bool_string_or_number<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v = Value::deserialize(deserializer)?;
+    match v {
+        Value::String(v) => Ok(v == "yes" || v == "1"),
+        Value::Number(v) => Ok(v.as_u64().unwrap_or_default() == 1),
+        _ => Err(serde::de::Error::custom("expected number or string")),
+    }
+}
+
 pub fn opt_string_or_number<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
     D: Deserializer<'de>,

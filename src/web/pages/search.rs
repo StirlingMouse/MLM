@@ -141,11 +141,11 @@ pub async fn select_torrent(
         .collect();
     let category = tags.iter().find_map(|t| t.category.clone());
     let tags: Vec<String> = tags.iter().flat_map(|t| t.tags.clone()).collect();
-    let cost = if torrent.vip > 0 {
+    let cost = if torrent.vip {
         TorrentCost::Vip
-    } else if torrent.personal_freeleech > 0 {
+    } else if torrent.personal_freeleech {
         TorrentCost::PersonalFreeleech
-    } else if torrent.free > 0 {
+    } else if torrent.free {
         TorrentCost::GlobalFreeleech
     } else if wedge {
         TorrentCost::UseWedge

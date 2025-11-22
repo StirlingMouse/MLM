@@ -533,11 +533,11 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             .clone()
             .or_else(|| tags.iter().find_map(|t| t.category.clone()));
         let tags = tags.iter().flat_map(|t| t.tags.clone()).collect();
-        let cost = if torrent.vip > 0 {
+        let cost = if torrent.vip {
             TorrentCost::Vip
-        } else if torrent.personal_freeleech > 0 {
+        } else if torrent.personal_freeleech {
             TorrentCost::PersonalFreeleech
-        } else if torrent.free > 0 {
+        } else if torrent.free {
             TorrentCost::GlobalFreeleech
         } else if cost == Cost::Wedge {
             TorrentCost::UseWedge

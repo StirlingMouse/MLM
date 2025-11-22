@@ -42,9 +42,9 @@
 <form method=post>
 <p>
   Size: {{ meta.size }}
-  {% if mam_torrent.vip > 0 %}<button name=action value=select>Download as VIP</button>
-  {% else if mam_torrent.personal_freeleech > 0 %}<button name=action value=select>Download as Personal Freeleech</button>
-  {% else if mam_torrent.free > 0 %}<button name=action value=select>Download as Global Freeleech</button>
+  {% if mam_torrent.vip %}<button name=action value=select>Download as VIP</button>
+  {% else if mam_torrent.personal_freeleech %}<button name=action value=select>Download as Personal Freeleech</button>
+  {% else if mam_torrent.free %}<button name=action value=select>Download as Global Freeleech</button>
   {% else %}
     <button name=action value=wedge>Download with Wedge</button>
     <button name=action value=select>Download with Ratio</button>

@@ -128,11 +128,11 @@ pub async fn duplicate_torrents_page_post(
                     .collect();
                 let category = tags.iter().find_map(|t| t.category.clone());
                 let tags = tags.iter().flat_map(|t| t.tags.clone()).collect();
-                let cost = if mam_torrent.vip > 0 {
+                let cost = if mam_torrent.vip {
                     TorrentCost::Vip
-                } else if mam_torrent.personal_freeleech > 0 {
+                } else if mam_torrent.personal_freeleech {
                     TorrentCost::PersonalFreeleech
-                } else if mam_torrent.free > 0 {
+                } else if mam_torrent.free {
                     TorrentCost::GlobalFreeleech
                 // TODO: Allow select
                 // } else if cost == Cost::Wedge {

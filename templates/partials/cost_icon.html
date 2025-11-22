@@ -1,11 +1,11 @@
-{% if mam_torrent.personal_freeleech > 0 %}
+{% if mam_torrent.personal_freeleech %}
 <img src="/assets/icons/greenCheck2.png" alt="Personal Freeleech" title="Personal Freeleech" />
-{% elif mam_torrent.vip > 0 %}
+{% elif mam_torrent.vip %}
 {% if mam_torrent.vip_expire > 0 %}
 <img src="/assets/icons/vip.png" alt="VIP (expires {{ mam_torrent.vip_expire() }})" title="VIP (expires {{ mam_torrent.vip_expire() }})" style="filter:hue-rotate(180deg)" />
 {% else %}
-<img src="/assets/icons/vip.png" alt="VIP" />
+<img src="/assets/icons/vip.png" alt="VIP" title="VIP" />
 {% endif %}
-{% elif mam_torrent.free > 0 %}
-<img src="/assets/icons/freedownload.png" alt="Freeleech" />
+{% elif mam_torrent.free %}
+<img src="/assets/icons/freedownload.png" alt="Freeleech" title="Freeleech" />
 {% endif %}
