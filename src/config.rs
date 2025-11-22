@@ -8,7 +8,7 @@ use crate::{
         Language, OldMainCat, Size,
         impls::{parse, parse_opt, parse_opt_date, parse_vec},
     },
-    mam_enums::{Categories, Flags, SearchIn},
+    mam::enums::{Categories, Flags, SearchIn},
 };
 
 #[derive(Debug, Deserialize)]

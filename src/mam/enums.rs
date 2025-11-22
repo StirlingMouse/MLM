@@ -1,11 +1,38 @@
 use std::{collections::HashMap, fmt, marker::PhantomData};
 
 use serde::{
-    Deserialize, Deserializer, Serialize,
+    Deserialize, Deserializer, Serialize, Serializer,
     de::{self, SeqAccess, Visitor},
 };
 
 use crate::data::{AudiobookCategory, EbookCategory};
+
+#[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+pub enum SearchTarget {
+    Bookmarks,
+    New,
+    Mine,
+    AllReseed,
+    MyReseed,
+    Uploader(u64),
+}
+
+impl Serialize for SearchTarget {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            SearchTarget::Bookmarks => serializer.serialize_str("bookmarks"),
+            SearchTarget::New => serializer.serialize_str("torrents"),
+            SearchTarget::Mine => serializer.serialize_str("mine"),
+            SearchTarget::AllReseed => serializer.serialize_str("allRseed"),
+            SearchTarget::MyReseed => serializer.serialize_str("myReseed"),
+            SearchTarget::Uploader(id) => serializer.serialize_str(&format!("u{id}")),
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
@@ -33,6 +60,31 @@ impl SearchIn {
             SearchIn::Title => "title",
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+pub enum SearchKind {
+    /// Last update had 1+ seeders
+    #[serde(rename = "active")]
+    Active,
+    /// Last update has 0 seeders
+    #[serde(rename = "inactive")]
+    Inactive,
+    /// Freeleech torrents
+    #[serde(rename = "fl")]
+    Freeleech,
+    /// Freeleech or VIP torrents
+    #[serde(rename = "fl-VIP")]
+    Free,
+    /// VIP torrents
+    #[serde(rename = "VIP")]
+    Vip,
+    /// Torrents not VIP
+    #[serde(rename = "nVIP")]
+    NotVip,
+    /// Torrents missing meta data (old torrents)
+    #[serde(rename = "nMeta")]
+    NoMeta,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

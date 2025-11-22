@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
 
 use crate::data::{ClientStatus, MediaType, MetadataSource, OldCategory, Series, SeriesEntry};
-use crate::mam_enums::Flags;
+use crate::mam::enums::Flags;
 use crate::web::{MaMState, Page, tables};
 use crate::{
     cleaner::clean_torrent,

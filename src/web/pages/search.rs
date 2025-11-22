@@ -14,7 +14,10 @@ use tracing::info;
 use crate::{
     config::Config,
     data::{OldMainCat, SelectedTorrent, Timestamp, Torrent, TorrentCost, TorrentKey},
-    mam::{SearchQuery, Tor, normalize_title},
+    mam::{
+        meta::normalize_title,
+        search::{SearchQuery, Tor},
+    },
     stats::Triggers,
     web::{AppError, MaMState, MaMTorrentsTemplate, Page},
 };

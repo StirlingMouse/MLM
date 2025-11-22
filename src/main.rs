@@ -11,7 +11,6 @@ mod goodreads;
 mod linker;
 mod logging;
 mod mam;
-mod mam_enums;
 mod qbittorrent;
 mod stats;
 mod web;
@@ -55,7 +54,7 @@ use tracing_subscriber::{
 };
 use web::start_webserver;
 
-use crate::{config::Config, linker::link_torrents_to_library, mam::MaM};
+use crate::{config::Config, linker::link_torrents_to_library, mam::api::MaM};
 
 #[tokio::main]
 async fn main() {

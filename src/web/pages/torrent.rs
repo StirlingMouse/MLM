@@ -27,8 +27,11 @@ use crate::{
         TorrentKey, TorrentMeta,
     },
     linker::{find_library, library_dir, map_path, refresh_metadata, refresh_metadata_relink},
-    mam::{MaM, MaMTorrent, SearchQuery, Tor},
-    mam_enums::SearchIn,
+    mam::{
+        api::MaM,
+        enums::SearchIn,
+        search::{MaMTorrent, SearchQuery, Tor},
+    },
     qbittorrent::{self},
     stats::Triggers,
     web::{

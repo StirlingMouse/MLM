@@ -16,8 +16,7 @@ use crate::{
         ListItem, MediaType, OldCategory, OldMainCat, Size, Torrent, TorrentCost, TorrentMeta,
         TorrentMetaDiff, TorrentMetaField, TorrentStatus,
     },
-    mam::DATE_FORMAT,
-    mam_enums::Flags,
+    mam::{enums::Flags, serde::DATE_FORMAT},
 };
 
 use super::{FlagBits, MetadataSource, Series, VipStatus};

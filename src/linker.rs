@@ -33,7 +33,11 @@ use crate::{
         Timestamp, Torrent, TorrentMeta,
     },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
-    mam::{MaM, MaMTorrent, MetaError, normalize_title},
+    mam::{
+        api::MaM,
+        meta::{MetaError, normalize_title},
+        search::MaMTorrent,
+    },
 };
 
 pub static DISK_PATTERN: Lazy<Regex> =

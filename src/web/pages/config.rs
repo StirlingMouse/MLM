@@ -16,7 +16,7 @@ use crate::{
     autograbber::update_torrent_meta,
     config::{Config, Cost, Library, TorrentFilter, Type},
     data::{AudiobookCategory, EbookCategory, Torrent},
-    mam::DATE_FORMAT,
+    mam::serde::DATE_FORMAT,
     web::{AppError, MaMState, Page, filter, yaml_items},
 };
 

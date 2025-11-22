@@ -15,7 +15,7 @@ use crate::{
     cleaner::clean_torrent,
     config::Config,
     data::{DuplicateTorrent, SelectedTorrent, Timestamp, Torrent, TorrentCost},
-    mam::normalize_title,
+    mam::meta::normalize_title,
     web::{
         AppError, MaMState, Page,
         tables::{Key, SortOn, Sortable, table_styles_rows},

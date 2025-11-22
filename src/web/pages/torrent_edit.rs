@@ -17,7 +17,7 @@ use crate::{
         AudiobookCategory, EbookCategory, FlagBits, Language, MetadataSource, OldCategory, Series,
         Torrent, TorrentMeta, impls::format_serie,
     },
-    mam_enums::Flags,
+    mam::enums::Flags,
     web::{AppError, MaMState, Page},
 };
 

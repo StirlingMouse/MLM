@@ -18,13 +18,17 @@ use tracing::{trace, warn};
 
 use crate::config::GoodreadsList;
 use crate::data::{ListItemTorrent, OldMainCat, Torrent, TorrentKey, TorrentStatus};
-use crate::mam::{clean_value, normalize_title};
 use crate::{
     autograbber::select_torrents,
     config::{Config, Cost, Grab},
     data::{List, ListItem, Timestamp, TorrentMeta},
-    mam::{DATE_FORMAT, MaM, MaMTorrent, SearchQuery, SearchResult, Tor},
-    mam_enums::SearchIn,
+    mam::{
+        api::MaM,
+        enums::SearchIn,
+        meta::{clean_value, normalize_title},
+        search::{MaMTorrent, SearchQuery, SearchResult, Tor},
+        serde::DATE_FORMAT,
+    },
 };
 
 pub static SERIES_PATTERN: Lazy<Regex> =

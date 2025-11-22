@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 use crate::{
     config::{Config, TorrentFilter},
     data::Timestamp,
-    mam::MaM,
+    mam::api::MaM,
     stats::{Stats, Triggers},
     web::{AppError, Page, time},
 };

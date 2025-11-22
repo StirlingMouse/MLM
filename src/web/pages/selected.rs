@@ -18,8 +18,10 @@ use tracing::info;
 use crate::{
     config::Config,
     data::{Language, OldCategory, SelectedTorrent, Size, Timestamp},
-    mam::{Unsats, UserResponse},
-    mam_enums::Flags,
+    mam::{
+        enums::Flags,
+        user_data::{Unsats, UserResponse},
+    },
     web::{
         AppError, MaMState, Page,
         tables::{self, Flex, HidableColumns, Key, SortOn, Sortable},

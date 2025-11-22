@@ -8,8 +8,7 @@ use tracing::error;
 use crate::{
     config::{Filter, GoodreadsList, Library, LibraryLinkMethod, LibraryTagFilters},
     data::{Language, MediaType, OldCategory, Size, Torrent},
-    mam::{DATE_TIME_FORMAT, MaMTorrent},
-    mam_enums::Flags,
+    mam::{enums::Flags, search::MaMTorrent, serde::DATE_TIME_FORMAT},
 };
 
 impl Filter {

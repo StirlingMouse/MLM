@@ -11,8 +11,7 @@ use tracing::{debug, error, instrument, trace};
 use crate::{
     config::AudiobookShelfConfig,
     data::{Torrent, TorrentMeta, impls::format_serie},
-    mam::MaMTorrent,
-    mam_enums::Flags,
+    mam::{enums::Flags, search::MaMTorrent},
 };
 
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
