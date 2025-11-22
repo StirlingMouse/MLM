@@ -14,6 +14,8 @@ pub enum MetaError {
     UnknownLanguage(u8, String),
     #[error("{0}")]
     InvalidSize(String),
+    #[error("{0}")]
+    InvalidSeries(&'static str),
     #[error("Invalid vip_expiry: {0}")]
     InvalidVipExpiry(u64),
     #[error("Unknown error: {0}")]

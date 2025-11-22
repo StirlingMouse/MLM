@@ -16,6 +16,7 @@ use crate::{
 };
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use time::UtcDateTime;
 use tracing::warn;
 
@@ -213,7 +214,7 @@ pub struct MaMTorrent {
     pub personal_freeleech: bool,
     pub seeders: u64,
     #[serde(deserialize_with = "json_or_default")]
-    pub series_info: BTreeMap<u64, (String, String)>,
+    pub series_info: BTreeMap<u64, Vec<Value>>,
     pub size: String,
     #[serde(deserialize_with = "string_or_number")]
     pub tags: String,
@@ -242,7 +243,19 @@ impl MaMTorrent {
         let series = self
             .series_info
             .values()
-            .map(|(series_name, series_num)| {
+            .map(|series| {
+                let Value::String(series_name) = series
+                    .get(0)
+                    .ok_or(MetaError::InvalidSeries("Missing series name"))?
+                else {
+                    return Err(MetaError::InvalidSeries("Series name is not a string").into());
+                };
+                let Value::String(series_num) = series
+                    .get(1)
+                    .ok_or(MetaError::InvalidSeries("Missing series num"))?
+                else {
+                    return Err(MetaError::InvalidSeries("Series num is not a string").into());
+                };
                 let series_name = clean_value(series_name)?;
                 Series::try_from((series_name.clone(), series_num.clone())).or_else(|err| {
                     warn!("error parsing series num: {err}");

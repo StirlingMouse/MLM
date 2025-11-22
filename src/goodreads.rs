@@ -11,6 +11,7 @@ use quick_xml::de::from_reader;
 use regex::Regex;
 use scraper::{Html, Selector};
 use serde::Deserialize;
+use serde_json::Value;
 use tokio::sync::watch::Sender;
 use tokio::time::sleep;
 use tracing::{debug, instrument};
@@ -496,7 +497,14 @@ async fn search_grab(
                 .and_then(|(i_name, i_num)| {
                     t.series_info
                         .values()
-                        .map(|(t_name, t_num)| {
+                        .map(|series| {
+                            let Value::String(t_name) = series.get(0).unwrap_or(&Value::Null)
+                            else {
+                                return 0;
+                            };
+                            let Value::String(t_num) = series.get(1).unwrap_or(&Value::Null) else {
+                                return 0;
+                            };
                             score(i_name, t_name) + score(&i_num.to_string(), t_num)
                         })
                         .max()
