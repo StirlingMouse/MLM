@@ -109,7 +109,7 @@
 </div>
 {% for torrent in torrents %}
 <div>
-  <div><input type=checkbox name=torrent value={{torrent.hash}}></div>
+  <div><input type=checkbox name=torrent value={{torrent.id}}></div>
   <div>
     <span title="{{ torrent.meta.cat_name() }}">{{ item(TorrentsPageFilter::Kind, torrent.meta.media_type.as_str()) }}</span>
     {% if show.category %}
@@ -202,7 +202,7 @@
   <div>{{ self::time(torrent.created_at) }}</div>
   {% endif %}
   <div>
-    <a href="/torrents/{{ torrent.hash }}">open</a>
+    <a href="/torrents/{{torrent.id}}">open</a>
     <a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a>
     {% if let (Some(abs_url), Some(abs_id)) = (abs_url.as_ref(), torrent.abs_id.as_ref()) %}
       <a href="{{ abs_url }}/audiobookshelf/item/{{ abs_id }}" target=_blank>ABS</a>

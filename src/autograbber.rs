@@ -169,7 +169,9 @@ pub async fn search_and_select_torrents(
     mam: &MaM<'_>,
     max_torrents: u64,
 ) -> Result<u64> {
-    let torrents = search_torrents(torrent_search, mam).await?;
+    let torrents = search_torrents(torrent_search, mam)
+        .await
+        .context("select_torrents")?;
 
     select_torrents(
         config,
@@ -506,7 +508,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                     if old_preference <= preference {
                         if let Err(err) = add_duplicate_torrent(
                             rw,
-                            Some(old.hash),
+                            Some(old.id),
                             torrent.dl.clone(),
                             title_search,
                             meta,
@@ -672,7 +674,8 @@ async fn grab_torrent(
     {
         let rw = db.rw_transaction()?;
         rw.insert(data::Torrent {
-            hash: hash.clone(),
+            id: hash.clone(),
+            id_is_hash: true,
             mam_id: torrent.meta.mam_id,
             abs_id: None,
             goodreads_id: torrent.goodreads_id,
@@ -729,25 +732,19 @@ async fn grab_torrent(
 }
 
 #[instrument(skip_all)]
-async fn add_metadata_only_torrent(
+pub async fn add_metadata_only_torrent(
     rw: RwTransaction<'_>,
     torrent: MaMTorrent,
     meta: TorrentMeta,
 ) -> Result<()> {
     info!("Adding metadata only torrent \"{}\"", meta.title,);
-    // let Some(dl_link) = torrent.dl.as_ref() else {
-    //     bail!("missing dl_link");
-    // };
-    //
-    // let torrent_file_bytes = get_mam_torrent_file(mam, dl_link).await?;
-    // let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
-    // let hash = torrent_file.info_hash();
-    let hash = Uuid::new_v4().to_string();
+    let id = Uuid::new_v4().to_string();
 
     let mam_id = torrent.id;
     {
         rw.insert(data::Torrent {
-            hash,
+            id,
+            id_is_hash: false,
             mam_id,
             abs_id: None,
             goodreads_id: None,
@@ -789,9 +786,12 @@ pub async fn update_torrent_meta(
     allow_non_mam: bool,
 ) -> Result<()> {
     if !allow_non_mam && torrent.meta.source != MetadataSource::Mam {
-        // Update VIP status still
-        if torrent.meta.vip_status != meta.vip_status {
+        // Update VIP status and uploaded_at still
+        if torrent.meta.vip_status != meta.vip_status
+            || torrent.meta.uploaded_at != meta.uploaded_at
+        {
             torrent.meta.vip_status = meta.vip_status;
+            torrent.meta.uploaded_at = meta.uploaded_at;
             rw.upsert(torrent.clone())?;
             rw.commit()?;
         }
@@ -816,7 +816,18 @@ pub async fn update_torrent_meta(
         }
     }
 
-    let hash = torrent.hash.clone();
+    // Check uploaded_at
+    if torrent.meta.uploaded_at != meta.uploaded_at {
+        torrent.meta.uploaded_at = meta.uploaded_at;
+        // If uploaded_at was the only change, just silently update the database
+        if torrent.meta == meta {
+            rw.upsert(torrent.clone())?;
+            rw.commit()?;
+            return Ok(());
+        }
+    }
+
+    let id = torrent.id.clone();
     let mam_id = meta.mam_id;
     let diff = torrent.meta.diff(&meta);
     debug!(
@@ -859,11 +870,7 @@ pub async fn update_torrent_meta(
 
     write_event(
         db,
-        Event::new(
-            Some(hash),
-            Some(mam_id),
-            EventType::Updated { fields: diff },
-        ),
+        Event::new(Some(id), Some(mam_id), EventType::Updated { fields: diff }),
     );
     Ok(())
 }

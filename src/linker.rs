@@ -29,8 +29,8 @@ use crate::{
     cleaner::remove_library_files,
     config::{Config, Library, LibraryLinkMethod, QbitConfig},
     data::{
-        ClientStatus, ErroredTorrentId, Event, EventType, LibraryMismatch, SelectedTorrent, Size,
-        Timestamp, Torrent, TorrentMeta,
+        ClientStatus, ErroredTorrentId, Event, EventType, LibraryMismatch, SelectedTorrent,
+        SelectedTorrentKey, Size, Timestamp, Torrent, TorrentMeta,
     },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{
@@ -168,15 +168,10 @@ pub async fn link_torrents_to_library(
         }
 
         {
-            let selected_torrent: Option<SelectedTorrent> = r
-                .scan()
-                .primary::<SelectedTorrent>()?
-                .all()?
-                .find(|t| {
-                    t.as_ref()
-                        .is_ok_and(|t| t.hash.as_ref() == Some(&torrent.hash))
-                })
-                .transpose()?;
+            let selected_torrent: Option<SelectedTorrent> = r.get().secondary::<SelectedTorrent>(
+                SelectedTorrentKey::hash,
+                Some(torrent.hash.clone()),
+            )?;
             if let Some(selected_torrent) = selected_torrent {
                 debug!(
                     "Finished Downloading torrent {} {}",
@@ -307,14 +302,14 @@ pub async fn refresh_metadata(
     config: &Config,
     db: &Database<'_>,
     mam: &MaM<'_>,
-    hash: String,
+    id: String,
 ) -> Result<(Torrent, MaMTorrent)> {
-    let Some(mut torrent): Option<Torrent> = db.r_transaction()?.get().primary(hash)? else {
-        bail!("Could not find torrent hash");
+    let Some(mut torrent): Option<Torrent> = db.r_transaction()?.get().primary(id)? else {
+        bail!("Could not find torrent id");
     };
     debug!("refreshing metadata for torrent {}", torrent.meta.mam_id);
     let Some(mam_torrent) = mam
-        .get_torrent_info(&torrent.hash)
+        .get_torrent_info_by_id(torrent.mam_id)
         .await
         .context("get_mam_info")?
     else {
@@ -523,7 +518,8 @@ async fn link_torrent(
     {
         let rw = db.rw_transaction()?;
         rw.upsert(Torrent {
-            hash: hash.to_owned(),
+            id: hash.to_owned(),
+            id_is_hash: true,
             mam_id: meta.mam_id,
             abs_id: existing_torrent.and_then(|t| t.abs_id.clone()),
             goodreads_id: existing_torrent.and_then(|t| t.goodreads_id),

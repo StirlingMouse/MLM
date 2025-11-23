@@ -77,11 +77,11 @@ pub async fn start_webserver(
             post(torrents_page_post).with_state((config.clone(), db.clone(), mam.clone())),
         )
         .route(
-            "/torrents/{hash}",
+            "/torrents/{id}",
             get(torrent_page).with_state((config.clone(), db.clone(), mam.clone())),
         )
         .route(
-            "/torrents/{hash}",
+            "/torrents/{id}",
             post(torrent_page_post).with_state((
                 config.clone(),
                 db.clone(),
@@ -90,15 +90,15 @@ pub async fn start_webserver(
             )),
         )
         .route(
-            "/torrents/{hash}/edit",
+            "/torrents/{id}/edit",
             get(torrent_edit_page).with_state(db.clone()),
         )
         .route(
-            "/torrents/{hash}/edit",
+            "/torrents/{id}/edit",
             post(torrent_edit_page_post).with_state((config.clone(), db.clone(), mam.clone())),
         )
         .route(
-            "/torrents/{hash}/{filename}",
+            "/torrents/{id}/{filename}",
             get(torrent_file).with_state((config.clone(), db.clone())),
         )
         .route("/events", get(event_page).with_state(db.clone()))
@@ -108,7 +108,12 @@ pub async fn start_webserver(
         )
         .route(
             "/search",
-            post(search_page_post).with_state((config.clone(), db.clone(), mam.clone(), triggers)),
+            post(search_page_post).with_state((
+                config.clone(),
+                db.clone(),
+                mam.clone(),
+                triggers.clone(),
+            )),
         )
         .route(
             "/lists",
@@ -155,7 +160,7 @@ pub async fn start_webserver(
             post(config_page_post).with_state((config.clone(), db.clone(), mam.clone())),
         )
         .route(
-            "/api/torrents/{hash}",
+            "/api/torrents/{id}",
             get(torrent_api).with_state((config.clone(), db.clone(), mam.clone())),
         )
         .nest_service(
@@ -365,12 +370,12 @@ struct Conditional<T: Template> {
 impl<T: Template> HtmlSafe for Conditional<T> {}
 
 /// ```askama
-/// <a href="/torrents/{{ hash }}" class=torrent>{{ title }}</a>
+/// <a href="/torrents/{{ id }}" class=torrent>{{ title }}</a>
 /// ```
 #[derive(Template)]
 #[template(ext = "html", in_doc = true)]
 struct TorrentLink<'a> {
-    hash: &'a str,
+    id: &'a str,
     title: &'a str,
 }
 
@@ -388,6 +393,8 @@ enum AppError {
     SendError2(#[from] SendError<isize>),
     #[error("Meta Error: {0:?}")]
     MetaError(#[from] MetaError),
+    #[error("Toml Parse Error: {0:?}")]
+    Toml(#[from] toml::de::Error),
     #[error("Error: {0:?}")]
     Generic(#[from] anyhow::Error),
     #[error("Page Not Found")]

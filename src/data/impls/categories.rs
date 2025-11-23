@@ -174,7 +174,7 @@ impl Category {
             56 => Some(Category::Superheroes),
             57 => Some(Category::LiteraryFiction),
             58 => Some(Category::ProgressionFantasy),
-            // 59 is already removed?
+            59 => Some(Category::ContemporaryFiction),
             60 => Some(Category::DramaPlays),
             id => Some(Category::Unknown(id)),
         }
@@ -242,6 +242,7 @@ impl Category {
             // instead.
             Category::LiteraryFiction => "General Fiction",
             Category::ProgressionFantasy => "Progression Fantasy",
+            Category::ContemporaryFiction => "Contemporary",
             Category::DramaPlays => "Drama/Plays",
             Category::Unknown(_) => "Unknown Category",
         }
@@ -307,6 +308,7 @@ impl Category {
             Category::Superheroes => 56,
             Category::LiteraryFiction => 57,
             Category::ProgressionFantasy => 58,
+            Category::ContemporaryFiction => 59,
             Category::DramaPlays => 60,
             Category::Unknown(id) => *id,
         }

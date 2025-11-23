@@ -15,64 +15,18 @@ use crate::{
     web::{AppError, MaMState},
 };
 
-// pub async fn torrent_file(
-//     State((config, db)): State<(Arc<Config>, Arc<Database<'static>>)>,
-//     Path((hash, filename)): Path<(String, String)>,
-// ) -> impl IntoResponse {
-//     let Some(torrent) = db.r_transaction()?.get().primary::<Torrent>(hash)? else {
-//         return Err(AppError::NotFound);
-//     };
-//     let Some(path) = (if let (Some(library_path), Some(library_file)) = (
-//         &torrent.library_path,
-//         torrent
-//             .library_files
-//             .iter()
-//             .find(|f| f.to_string_lossy() == filename),
-//     ) {
-//         Some(library_path.join(library_file))
-//     } else if let Some((torrent, qbit, qbit_config)) =
-//         qbittorrent::get_torrent(&config, &torrent.hash).await?
-//     {
-//         qbit.files(&torrent.hash, None)
-//             .await?
-//             .into_iter()
-//             .find(|f| f.name == filename)
-//             .map(|file| map_path(&qbit_config.path_mapping, &torrent.save_path).join(&file.name))
-//     } else {
-//         None
-//     }) else {
-//         return Err(AppError::NotFound);
-//     };
-//     let file = match tokio::fs::File::open(path).await {
-//         Ok(file) => file,
-//         Err(_) => return Err(AppError::NotFound),
-//     };
-//     let stream = ReaderStream::new(file);
-//     let body = Body::from_stream(stream);
-//
-//     let headers = [
-//         (header::CONTENT_TYPE, "text/toml; charset=utf-8".to_string()),
-//         (
-//             header::CONTENT_DISPOSITION,
-//             format!("attachment; filename=\"{}\"", filename),
-//         ),
-//     ];
-//
-//     Ok((headers, body))
-// }
-
 pub async fn torrent_api(
     State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
-    Path(hash_or_id): Path<String>,
+    Path(id_or_mam_id): Path<String>,
 ) -> std::result::Result<Json<serde_json::Value>, AppError> {
-    if let Ok(id) = hash_or_id.parse() {
-        torrent_api_id(State((config, db, mam)), Path(id)).await
+    if let Ok(id) = id_or_mam_id.parse() {
+        torrent_api_mam_id(State((config, db, mam)), Path(id)).await
     } else {
-        torrent_api_hash(State((config, db, mam)), Path(hash_or_id)).await
+        torrent_api_id(State((config, db, mam)), Path(id_or_mam_id)).await
     }
 }
 
-async fn torrent_api_id(
+async fn torrent_api_mam_id(
     State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
     Path(mam_id): Path<u64>,
 ) -> std::result::Result<Json<serde_json::Value>, AppError> {
@@ -81,7 +35,7 @@ async fn torrent_api_id(
         .get()
         .secondary::<Torrent>(TorrentKey::mam_id, mam_id)?
     {
-        return torrent_api_hash(State((config, db, mam)), Path(torrent.hash)).await;
+        return torrent_api_id(State((config, db, mam)), Path(torrent.id)).await;
     };
 
     let Ok(mam) = mam.as_ref() else {
@@ -98,31 +52,27 @@ async fn torrent_api_id(
     })))
 }
 
-async fn torrent_api_hash(
+async fn torrent_api_id(
     State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
-    Path(hash): Path<String>,
+    Path(id): Path<String>,
 ) -> std::result::Result<Json<serde_json::Value>, AppError> {
     let abs = config.audiobookshelf.as_ref().map(Abs::new);
-    let Some(mut torrent) = db.r_transaction()?.get().primary::<Torrent>(hash)? else {
+    let Some(mut torrent) = db.r_transaction()?.get().primary::<Torrent>(id)? else {
         return Err(AppError::NotFound);
     };
-    let replacement_torrent = torrent
-        .replaced_with
-        .as_ref()
-        .map(|(hash, _)| {
-            db.r_transaction()?
-                .get()
-                .primary::<Torrent>(hash.to_string())
-        })
-        .transpose()?
-        .flatten();
-
-    if replacement_torrent.is_none() && torrent.replaced_with.is_some() {
-        let rw = db.rw_transaction()?;
-        torrent.replaced_with = None;
-        rw.upsert(torrent.clone())?;
-        rw.commit()?;
-    }
+    // let replacement_torrent = torrent
+    //     .replaced_with
+    //     .as_ref()
+    //     .map(|(id, _)| db.r_transaction()?.get().primary::<Torrent>(id.to_string()))
+    //     .transpose()?
+    //     .flatten();
+    //
+    // if replacement_torrent.is_none() && torrent.replaced_with.is_some() {
+    //     let rw = db.rw_transaction()?;
+    //     torrent.replaced_with = None;
+    //     rw.upsert(torrent.clone())?;
+    //     rw.commit()?;
+    // }
     // let book = match abs {
     //     Some(abs) => abs?.get_book(&torrent).await?,
     //     None => None,
@@ -152,7 +102,9 @@ async fn torrent_api_hash(
     // let mut wanted_path = None;
     let mut qbit_torrent = None;
     let mut qbit_files = vec![];
-    if let Some((qbit_torrent_, qbit, _)) = qbittorrent::get_torrent(&config, &torrent.hash).await?
+    if torrent.id_is_hash
+        && let Some((qbit_torrent_, qbit, _)) =
+            qbittorrent::get_torrent(&config, &torrent.id).await?
     {
         qbit_torrent = Some(qbit_torrent_);
         // let trackers = qbit.trackers(&torrent.hash).await?;
@@ -176,7 +128,7 @@ async fn torrent_api_hash(
         //     tags,
         // });
 
-        qbit_files = qbit.files(&torrent.hash, None).await?;
+        qbit_files = qbit.files(&torrent.id, None).await?;
     }
 
     Ok::<_, AppError>(Json(json!({
@@ -186,7 +138,7 @@ async fn torrent_api_hash(
             .map(|abs| abs.url.clone())
             .unwrap_or_default(),
         "torrent": torrent,
-        "replacement_torrent": replacement_torrent,
+        // "replacement_torrent": replacement_torrent,
         // "events": events,
         // "book": book,
         // "mam_torrent": mam_torrent,

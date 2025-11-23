@@ -69,7 +69,8 @@ pub async fn config_page_post(
                         let Ok(mam) = mam.as_ref() else {
                             return Err(anyhow::Error::msg("mam_id error").into());
                         };
-                        let Some(mam_torrent) = mam.get_torrent_info(&torrent.hash).await? else {
+                        let Some(mam_torrent) = mam.get_torrent_info_by_id(torrent.mam_id).await?
+                        else {
                             warn!("could not get torrent from mam");
                             continue;
                         };
@@ -93,7 +94,7 @@ pub async fn config_page_post(
                     }
                 };
                 if let Some(category) = &tag_filter.category {
-                    qbit.set_category(Some(vec![torrent.hash.as_str()]), category)
+                    qbit.set_category(Some(vec![torrent.id.as_str()]), category)
                         .await?;
                     info!(
                         "set category {} on torrent {}",
@@ -103,7 +104,7 @@ pub async fn config_page_post(
 
                 if !tag_filter.tags.is_empty() {
                     qbit.add_tags(
-                        Some(vec![torrent.hash.as_str()]),
+                        Some(vec![torrent.id.as_str()]),
                         tag_filter.tags.iter().map(Deref::deref).collect(),
                     )
                     .await?;

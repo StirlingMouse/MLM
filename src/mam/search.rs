@@ -3,14 +3,14 @@ use std::collections::BTreeMap;
 use crate::{
     data::{
         Category, FlagBits, Language, MainCat, MediaType, MetadataSource, OldCategory, Series,
-        SeriesEntries, TorrentMeta, VipStatus,
+        SeriesEntries, Timestamp, TorrentMeta, VipStatus,
     },
     mam::{
         enums::{SearchIn, SearchKind, SearchTarget},
         meta::{MetaError, clean_value},
         serde::{
-            bool_string_or_number, is_false, is_zero, json_or_default, opt_string_or_number,
-            parse_title, string_or_number,
+            DATE_TIME_FORMAT, bool_string_or_number, is_false, is_zero, json_or_default,
+            opt_string_or_number, parse_title, string_or_number,
         },
     },
 };
@@ -172,6 +172,7 @@ pub struct SearchError {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct MaMTorrent {
     pub id: u64,
+    /// format: DATE_TIME_FORMAT
     pub added: String,
     #[serde(deserialize_with = "json_or_default")]
     pub author_info: BTreeMap<u64, String>,
@@ -303,6 +304,12 @@ impl MaMTorrent {
                     .date(),
             )
         };
+        let uploaded_at = match UtcDateTime::parse(&self.added, &DATE_TIME_FORMAT) {
+            Ok(added) => Timestamp::from(added),
+            Err(_) => {
+                return Err(MetaError::InvalidAdded(self.added.clone()));
+            }
+        };
 
         Ok(TorrentMeta {
             mam_id: self.id,
@@ -320,6 +327,7 @@ impl MaMTorrent {
             narrators,
             series,
             source: MetadataSource::Mam,
+            uploaded_at,
         })
     }
 

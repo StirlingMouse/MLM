@@ -16,6 +16,7 @@ use qbit::{
 };
 use reqwest::header;
 use serde::Deserialize;
+use time::UtcDateTime;
 use tokio_util::io::ReaderStream;
 
 use crate::{
@@ -44,9 +45,9 @@ use crate::{
 
 pub async fn torrent_file(
     State((config, db)): State<(Arc<Config>, Arc<Database<'static>>)>,
-    Path((hash, filename)): Path<(String, String)>,
+    Path((id, filename)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let Some(torrent) = db.r_transaction()?.get().primary::<Torrent>(hash)? else {
+    let Some(torrent) = db.r_transaction()?.get().primary::<Torrent>(id)? else {
         return Err(AppError::NotFound);
     };
     let Some(path) = (if let (Some(library_path), Some(library_file)) = (
@@ -58,7 +59,7 @@ pub async fn torrent_file(
     ) {
         Some(library_path.join(library_file))
     } else if let Some((torrent, qbit, qbit_config)) =
-        qbittorrent::get_torrent(&config, &torrent.hash).await?
+        qbittorrent::get_torrent(&config, &torrent.id).await?
     {
         qbit.files(&torrent.hash, None)
             .await?
@@ -90,16 +91,16 @@ pub async fn torrent_file(
 
 pub async fn torrent_page(
     State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
-    Path(hash_or_id): Path<String>,
+    Path(id_or_mam_id): Path<String>,
 ) -> std::result::Result<Html<String>, AppError> {
-    if let Ok(id) = hash_or_id.parse() {
-        torrent_page_id(State((config, db, mam)), Path(id)).await
+    if let Ok(id) = id_or_mam_id.parse() {
+        torrent_page_mam_id(State((config, db, mam)), Path(id)).await
     } else {
-        torrent_page_hash(State((config, db, mam)), Path(hash_or_id)).await
+        torrent_page_id(State((config, db, mam)), Path(id_or_mam_id)).await
     }
 }
 
-async fn torrent_page_id(
+async fn torrent_page_mam_id(
     State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
     Path(mam_id): Path<u64>,
 ) -> std::result::Result<Html<String>, AppError> {
@@ -108,7 +109,7 @@ async fn torrent_page_id(
         .get()
         .secondary::<Torrent>(TorrentKey::mam_id, mam_id)?
     {
-        return torrent_page_hash(State((config, db, mam)), Path(torrent.hash)).await;
+        return torrent_page_id(State((config, db, mam)), Path(torrent.id)).await;
     };
 
     let Ok(mam) = mam.as_ref() else {
@@ -131,22 +132,18 @@ async fn torrent_page_id(
     Ok::<_, AppError>(Html(template.to_string()))
 }
 
-async fn torrent_page_hash(
+async fn torrent_page_id(
     State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
-    Path(hash): Path<String>,
+    Path(id): Path<String>,
 ) -> std::result::Result<Html<String>, AppError> {
     let abs = config.audiobookshelf.as_ref().map(Abs::new);
-    let Some(mut torrent) = db.r_transaction()?.get().primary::<Torrent>(hash)? else {
+    let Some(mut torrent) = db.r_transaction()?.get().primary::<Torrent>(id)? else {
         return Err(AppError::NotFound);
     };
     let replacement_torrent = torrent
         .replaced_with
         .as_ref()
-        .map(|(hash, _)| {
-            db.r_transaction()?
-                .get()
-                .primary::<Torrent>(hash.to_string())
-        })
+        .map(|(id, _)| db.r_transaction()?.get().primary::<Torrent>(id.to_string()))
         .transpose()?
         .flatten();
 
@@ -171,21 +168,33 @@ async fn torrent_page_hash(
             let Ok(t) = t else {
                 return true;
             };
-            t.hash.as_deref() == Some(&torrent.hash)
+            t.torrent_id.as_deref() == Some(&torrent.id)
         })
         .collect::<Result<Vec<_>, _>>()?;
 
     let Ok(mam) = mam.as_ref() else {
         return Err(anyhow::Error::msg("mam_id error").into());
     };
-    let mam_torrent = mam.get_torrent_info(&torrent.hash).await?;
+    let mam_torrent = mam.get_torrent_info_by_id(torrent.mam_id).await?;
     let mam_meta = mam_torrent.as_ref().map(|t| t.as_meta()).transpose()?;
+
+    if let Some(mam_meta) = &mam_meta
+        && torrent.meta.uploaded_at.0 == UtcDateTime::UNIX_EPOCH
+    {
+        let rw = db.rw_transaction()?;
+        torrent.meta.uploaded_at = mam_meta.uploaded_at;
+        rw.upsert(torrent.clone())?;
+        rw.commit()?;
+    }
 
     let mut qbit_data = None;
     let mut wanted_path = None;
     let mut qbit_files = vec![];
-    if let Some((qbit_torrent, qbit, _)) = qbittorrent::get_torrent(&config, &torrent.hash).await? {
-        let trackers = qbit.trackers(&torrent.hash).await?;
+    if torrent.id_is_hash
+        && let Some((qbit_torrent, qbit, _)) =
+            qbittorrent::get_torrent(&config, &torrent.id).await?
+    {
+        let trackers = qbit.trackers(&torrent.id).await?;
         let mut categories = qbit.categories().await?.into_values().collect_vec();
         categories.sort_by(|a, b| a.name.cmp(&b.name));
         let tags = qbit.tags().await?;
@@ -206,7 +215,7 @@ async fn torrent_page_hash(
             tags,
         });
 
-        qbit_files = qbit.files(&torrent.hash, None).await?;
+        qbit_files = qbit.files(&torrent.id, None).await?;
     }
 
     println!("book: {:?}", book);
@@ -253,12 +262,12 @@ pub async fn torrent_page_post(
         MaMState,
         Triggers,
     )>,
-    Path(hash_or_id): Path<String>,
+    Path(id_or_mam_id): Path<String>,
     uri: OriginalUri,
     Form(form): Form<TorrentPageForm>,
 ) -> Result<Redirect, AppError> {
-    if let Ok(id) = hash_or_id.parse() {
-        torrent_page_post_id(
+    if let Ok(id) = id_or_mam_id.parse() {
+        torrent_page_post_mam_id(
             State((config, db, mam, triggers)),
             Path(id),
             uri,
@@ -266,9 +275,9 @@ pub async fn torrent_page_post(
         )
         .await
     } else {
-        torrent_page_post_hash(
+        torrent_page_post_id(
             State((config, db, mam, triggers)),
-            Path(hash_or_id),
+            Path(id_or_mam_id),
             uri,
             Form(form),
         )
@@ -276,7 +285,7 @@ pub async fn torrent_page_post(
     }
 }
 
-pub async fn torrent_page_post_id(
+pub async fn torrent_page_post_mam_id(
     State((config, db, mam, triggers)): State<(
         Arc<Config>,
         Arc<Database<'static>>,
@@ -296,9 +305,9 @@ pub async fn torrent_page_post_id(
         if form.mam_id.is_some() {
             return Err(anyhow::Error::msg("torrent is already downloaded").into());
         }
-        return torrent_page_post_hash(
+        return torrent_page_post_id(
             State((config, db, mam, triggers)),
-            Path(torrent.hash),
+            Path(torrent.id),
             uri,
             Form(form),
         )
@@ -317,14 +326,14 @@ pub async fn torrent_page_post_id(
     Ok(Redirect::to(&uri.to_string()))
 }
 
-pub async fn torrent_page_post_hash(
+pub async fn torrent_page_post_id(
     State((config, db, mam, triggers)): State<(
         Arc<Config>,
         Arc<Database<'static>>,
         MaMState,
         Triggers,
     )>,
-    Path(hash): Path<String>,
+    Path(id): Path<String>,
     uri: OriginalUri,
     Form(form): Form<TorrentPageForm>,
 ) -> Result<Redirect, AppError> {
@@ -336,7 +345,7 @@ pub async fn torrent_page_post_hash(
             select_torrent(&config, &db, mam, &triggers, mam_id, form.action == "wedge").await?;
         }
         "clean" => {
-            let Some(torrent) = db.r_transaction()?.get().primary(hash)? else {
+            let Some(torrent) = db.r_transaction()?.get().primary(id)? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
             clean_torrent(&config, &db, torrent, true).await?;
@@ -345,37 +354,37 @@ pub async fn torrent_page_post_hash(
             let Ok(mam) = mam.as_ref() else {
                 return Err(anyhow::Error::msg("mam_id error").into());
             };
-            refresh_metadata(&config, &db, mam, hash).await?;
+            refresh_metadata(&config, &db, mam, id).await?;
         }
         "refresh-relink" => {
             let Ok(mam) = mam.as_ref() else {
                 return Err(anyhow::Error::msg("mam_id error").into());
             };
-            refresh_metadata_relink(&config, &db, mam, hash).await?;
+            refresh_metadata_relink(&config, &db, mam, id).await?;
         }
         "remove" => {
             let rw = db.rw_transaction()?;
-            let Some(torrent) = rw.get().primary::<Torrent>(hash)? else {
+            let Some(torrent) = rw.get().primary::<Torrent>(id)? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
             rw.remove(torrent)?;
             rw.commit()?;
         }
         "torrent-start" => {
-            let Some((_torrent, qbit, _)) = qbittorrent::get_torrent(&config, &hash).await? else {
+            let Some((_torrent, qbit, _)) = qbittorrent::get_torrent(&config, &id).await? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
-            qbit.start(vec![&hash]).await?;
+            qbit.start(vec![&id]).await?;
         }
         "torrent-stop" => {
-            let Some((_torrent, qbit, _)) = qbittorrent::get_torrent(&config, &hash).await? else {
+            let Some((_torrent, qbit, _)) = qbittorrent::get_torrent(&config, &id).await? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
-            qbit.stop(vec![&hash]).await?;
+            qbit.stop(vec![&id]).await?;
         }
         "clear-replacement" => {
             let rw = db.rw_transaction()?;
-            let Some(mut torrent) = rw.get().primary::<Torrent>(hash)? else {
+            let Some(mut torrent) = rw.get().primary::<Torrent>(id)? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
             torrent.replaced_with.take();
@@ -383,11 +392,11 @@ pub async fn torrent_page_post_hash(
             rw.commit()?;
         }
         "qbit" => {
-            let Some((torrent, qbit, _)) = qbittorrent::get_torrent(&config, &hash).await? else {
+            let Some((torrent, qbit, _)) = qbittorrent::get_torrent(&config, &id).await? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
 
-            qbit.set_category(Some(vec![&hash]), &form.category).await?;
+            qbit.set_category(Some(vec![&id]), &form.category).await?;
             let mut torrent_tags = torrent.tags.split(", ").collect::<BTreeSet<&str>>();
             if torrent.tags.is_empty() {
                 torrent_tags.clear();
@@ -403,7 +412,7 @@ pub async fn torrent_page_post_hash(
                 }
                 if !add_tags.is_empty() {
                     println!("add tags {:?}", add_tags);
-                    qbit.add_tags(Some(vec![&hash]), add_tags.into_iter().collect())
+                    qbit.add_tags(Some(vec![&id]), add_tags.into_iter().collect())
                         .await?;
                 }
             }
@@ -413,14 +422,14 @@ pub async fn torrent_page_post_hash(
             if !torrent_tags.is_empty() {
                 println!("remove tags {torrent_tags:?}");
                 qbit.remove_tags(
-                    Some(vec![&hash]),
+                    Some(vec![&id]),
                     form.tags.iter().map(Deref::deref).collect(),
                 )
                 .await?;
             }
         }
         "remove-torrent" => {
-            // let Some(torrent) = db.r_transaction()?.get().primary(hash)? else {
+            // let Some(torrent) = db.r_transaction()?.get().primary(id)? else {
             //     return Err(anyhow::Error::msg("Could not find torrent").into());
             // };
             // remove_library_files(&torrent)?;
@@ -431,7 +440,7 @@ pub async fn torrent_page_post_hash(
                     &qbit_conf.password,
                 )
                 .await?;
-                qbit.delete(vec![&hash], true).await?;
+                qbit.delete(vec![&id], true).await?;
             }
         }
         action => {
@@ -472,7 +481,7 @@ impl TorrentPageTemplate {
     fn torrent_title<'a>(&'a self, torrent: &'a Option<Torrent>) -> Conditional<TorrentLink<'a>> {
         Conditional {
             template: torrent.as_ref().map(|t| TorrentLink {
-                hash: &t.hash,
+                id: &t.id,
                 title: &t.meta.title,
             }),
         }

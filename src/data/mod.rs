@@ -13,6 +13,7 @@ mod v11;
 mod v12;
 mod v13;
 mod v14;
+mod v15;
 
 use anyhow::Result;
 use native_db::Models;
@@ -24,6 +25,12 @@ use tracing::{info, instrument};
 pub static MODELS: Lazy<Models> = Lazy::new(|| {
     let mut models = Models::new();
     models.define::<v01::Config>().unwrap();
+
+    models.define::<v15::Torrent>().unwrap();
+    models.define::<v15::SelectedTorrent>().unwrap();
+    models.define::<v15::DuplicateTorrent>().unwrap();
+    models.define::<v15::ErroredTorrent>().unwrap();
+    models.define::<v15::Event>().unwrap();
 
     models.define::<v14::Torrent>().unwrap();
     models.define::<v14::SelectedTorrent>().unwrap();
@@ -105,23 +112,23 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
 });
 
 pub type Config = v01::Config;
-pub type Torrent = v14::Torrent;
-pub type TorrentKey = v14::TorrentKey;
-pub type SelectedTorrent = v14::SelectedTorrent;
-pub type SelectedTorrentKey = v14::SelectedTorrentKey;
-pub type DuplicateTorrent = v14::DuplicateTorrent;
-pub type ErroredTorrent = v14::ErroredTorrent;
-pub type ErroredTorrentKey = v14::ErroredTorrentKey;
+pub type Torrent = v15::Torrent;
+pub type TorrentKey = v15::TorrentKey;
+pub type SelectedTorrent = v15::SelectedTorrent;
+pub type SelectedTorrentKey = v15::SelectedTorrentKey;
+pub type DuplicateTorrent = v15::DuplicateTorrent;
+pub type ErroredTorrent = v15::ErroredTorrent;
+pub type ErroredTorrentKey = v15::ErroredTorrentKey;
 pub type ErroredTorrentId = v11::ErroredTorrentId;
-pub type Event = v12::Event;
-pub type EventKey = v12::EventKey;
+pub type Event = v15::Event;
+pub type EventKey = v15::EventKey;
 pub type EventType = v12::EventType;
 pub type List = v05::List;
 pub type ListKey = v05::ListKey;
 pub type ListItem = v05::ListItem;
 pub type ListItemKey = v05::ListItemKey;
 pub type ListItemTorrent = v04::ListItemTorrent;
-pub type TorrentMeta = v14::TorrentMeta;
+pub type TorrentMeta = v15::TorrentMeta;
 pub type TorrentMetaDiff = v12::TorrentMetaDiff;
 pub type TorrentMetaField = v12::TorrentMetaField;
 pub type VipStatus = v11::VipStatus;
@@ -144,7 +151,7 @@ pub type AudiobookCategory = v06::AudiobookCategory;
 pub type EbookCategory = v06::EbookCategory;
 pub type OldCategory = v06::Category;
 pub type MediaType = v13::MediaType;
-pub type Category = v14::Category;
+pub type Category = v15::Category;
 
 #[instrument(skip_all)]
 pub fn migrate(db: &Database<'_>) -> Result<()> {

@@ -63,9 +63,9 @@ pub async fn event_page(
                     },
                     EventPageFilter::Category => {
                         match t
-                            .hash
+                            .torrent_id
                             .as_ref()
-                            .and_then(|hash| r.get().primary::<Torrent>(hash.clone()).ok()?)
+                            .and_then(|id| r.get().primary::<Torrent>(id.clone()).ok()?)
                         {
                             Some(torrent) => {
                                 if value.is_empty() {
@@ -106,13 +106,13 @@ pub async fn event_page(
     }
     for event in events {
         let event = event?;
-        if let Some(hash) = &event.hash {
+        if let Some(id) = &event.torrent_id {
             let r = db.r_transaction()?;
-            let torrent: Option<Torrent> = r.get().primary(hash.clone())?;
+            let torrent: Option<Torrent> = r.get().primary(id.clone())?;
             let replaced_with = torrent
                 .as_ref()
                 .and_then(|t| t.replaced_with.clone())
-                .and_then(|(hash, _)| r.get().primary(hash).ok()?);
+                .and_then(|(id, _)| r.get().primary(id).ok()?);
 
             events_with_torrent.push((event, torrent, replaced_with));
         } else {
@@ -147,7 +147,7 @@ impl<'a> EventPageTemplate<'a> {
     fn torrent_title(&'a self, torrent: &'a Option<Torrent>) -> Conditional<TorrentLink<'a>> {
         Conditional {
             template: torrent.as_ref().map(|t| TorrentLink {
-                hash: &t.hash,
+                id: &t.id,
                 title: &t.meta.title,
             }),
         }

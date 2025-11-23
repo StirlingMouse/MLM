@@ -14,7 +14,7 @@
 {% block content %}
 <div class="row">
   <h1>{{ torrent.meta.title }}</h1>
-  <a href="/torrents/{{ torrent.hash }}/edit" class=btn>edit</a>
+  <a href="/torrents/{{torrent.id}}/edit" class=btn>edit</a>
 </div>
 <div class="row">
   <div>
@@ -71,7 +71,7 @@
   <summary>Files</summary>
   <ul>
   {% for file in torrent.library_files.iter().flatten() %}
-    <li><a href="/torrents/{{torrent.hash}}/{{file.to_string_lossy() | urlencode_strict}}" target=_blank>{{ file.to_string_lossy() }}</a></li>
+    <li><a href="/torrents/{{torrent.id}}/{{file.to_string_lossy() | urlencode_strict}}" target=_blank>{{ file.to_string_lossy() }}</a></li>
   {% endfor %}
   </ul>
 </details>
@@ -79,7 +79,7 @@
 
 {% if let Some(torrent) = replacement_torrent %}
   <div class="row">
-    <h2>Replaced with: <a href="/torrents/{{ torrent.hash }}">{{ torrent.meta.title }}</a></h2>
+    <h2>Replaced with: <a href="/torrents/{{torrent.id}}">{{ torrent.meta.title }}</a></h2>
   </div>
   <p>By {{ items(TorrentsPageFilter::Author, torrent.meta.authors) }}</p>
   {% if !torrent.meta.series.is_empty() %}
@@ -117,7 +117,7 @@
     <summary>Files</summary>
     <ul>
     {% for file in torrent.library_files.iter().flatten() %}
-      <li><a href="/torrents/{{torrent.hash}}/{{file.to_string_lossy() | urlencode_strict}}" target=_blank>{{ file.to_string_lossy() }}</a></li>
+      <li><a href="/torrents/{{torrent.id}}/{{file.to_string_lossy() | urlencode_strict}}" target=_blank>{{ file.to_string_lossy() }}</a></li>
     {% endfor %}
     </ul>
   </details>
@@ -202,7 +202,7 @@
     <summary>Files</summary>
     <ul>
     {% for file in qbit_files.iter() %}
-      <li><a href="/torrents/{{torrent.hash}}/{{file.name | urlencode_strict}}" target=_blank>{{ file.name }}</a></li>
+      <li><a href="/torrents/{{torrent.id}}/{{file.name | urlencode_strict}}" target=_blank>{{ file.name }}</a></li>
     {% endfor %}
     </ul>
   </details>

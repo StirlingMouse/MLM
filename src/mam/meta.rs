@@ -16,6 +16,8 @@ pub enum MetaError {
     InvalidSize(String),
     #[error("{0}")]
     InvalidSeries(&'static str),
+    #[error("Invalid added date: {0}")]
+    InvalidAdded(String),
     #[error("Invalid vip_expiry: {0}")]
     InvalidVipExpiry(u64),
     #[error("Unknown error: {0}")]

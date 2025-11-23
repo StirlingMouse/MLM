@@ -61,10 +61,10 @@ pub fn update_errored_torrent(
 }
 
 impl Event {
-    pub fn new(hash: Option<String>, mam_id: Option<u64>, event: EventType) -> Self {
+    pub fn new(torrent_id: Option<String>, mam_id: Option<u64>, event: EventType) -> Self {
         Self {
             id: Uuid::new(),
-            hash,
+            torrent_id,
             mam_id,
             created_at: Timestamp::now(),
             event,

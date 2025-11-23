@@ -110,7 +110,7 @@ async fn process_batch(
                 "Replacing library torrent \"{}\" {} with {}",
                 remove.meta.title, remove.meta.mam_id, keep.meta.mam_id
             );
-            remove.replaced_with = Some((keep.hash.clone(), Timestamp::now()));
+            remove.replaced_with = Some((keep.id.clone(), Timestamp::now()));
             let result = clean_torrent(
                 config,
                 db,
@@ -121,7 +121,7 @@ async fn process_batch(
             .map_err(|err| anyhow::Error::new(TorrentMetaError(remove.meta.clone(), err)));
             update_errored_torrent(
                 db,
-                ErroredTorrentId::Cleaner(remove.hash),
+                ErroredTorrentId::Cleaner(remove.id),
                 remove.meta.title,
                 result,
             )
@@ -138,34 +138,35 @@ pub async fn clean_torrent(
     mut remove: Torrent,
     delete_in_abs: bool,
 ) -> Result<()> {
-    for qbit_conf in config.qbittorrent.iter() {
-        if let Some(on_cleaned) = &qbit_conf.on_cleaned {
-            let qbit = qbit::Api::new_login_username_password(
-                &qbit_conf.url,
-                &qbit_conf.username,
-                &qbit_conf.password,
-            )
-            .await?;
-
-            if let Some(category) = &on_cleaned.category {
-                qbit.set_category(Some(vec![&remove.hash]), category)
-                    .await?;
-            }
-
-            if !on_cleaned.tags.is_empty() {
-                qbit.add_tags(
-                    Some(vec![&remove.hash]),
-                    on_cleaned.tags.iter().map(Deref::deref).collect(),
+    if remove.id_is_hash {
+        for qbit_conf in config.qbittorrent.iter() {
+            if let Some(on_cleaned) = &qbit_conf.on_cleaned {
+                let qbit = qbit::Api::new_login_username_password(
+                    &qbit_conf.url,
+                    &qbit_conf.username,
+                    &qbit_conf.password,
                 )
                 .await?;
+
+                if let Some(category) = &on_cleaned.category {
+                    qbit.set_category(Some(vec![&remove.id]), category).await?;
+                }
+
+                if !on_cleaned.tags.is_empty() {
+                    qbit.add_tags(
+                        Some(vec![&remove.id]),
+                        on_cleaned.tags.iter().map(Deref::deref).collect(),
+                    )
+                    .await?;
+                }
             }
+            trace!("qbit updated");
         }
-        trace!("qbit updated");
     }
 
     remove_library_files(config, &remove, delete_in_abs).await?;
 
-    let hash = remove.hash.clone();
+    let id = remove.id.clone();
     let mam_id = remove.meta.mam_id;
     let library_path = remove.library_path.take();
     let mut library_files = remove.library_files.clone();
@@ -182,7 +183,7 @@ pub async fn clean_torrent(
         write_event(
             db,
             Event::new(
-                Some(hash),
+                Some(id),
                 Some(mam_id),
                 EventType::Cleaned {
                     library_path,

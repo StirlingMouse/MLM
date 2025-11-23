@@ -70,7 +70,7 @@
 </div>
 {% for (torrent, replacement) in torrents %}
 <div>
-  <div><input type=checkbox name=torrent value={{torrent.hash}}></div>
+  <div><input type=checkbox name=torrent value={{torrent.id}}></div>
   <div>{{ item(TorrentsPageFilter::Kind, torrent.meta.media_type.as_str()) }}</div>
   <div>{{ item(TorrentsPageFilter::Title, torrent.meta.title) }}</div>
   {% if show.authors %}
@@ -96,7 +96,7 @@
   </div>
   <div>{{ self::time(torrent.created_at) }}</div>
   <div>
-    <a href="/torrents/{{ torrent.hash }}">open</a>
+    <a href="/torrents/{{torrent.id}}">open</a>
     <a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a>
     {% if let (Some(abs_url), Some(abs_id)) = (abs_url.as_ref(), torrent.abs_id.as_ref()) %}
       <a href="{{ abs_url }}/audiobookshelf/item/{{ abs_id }}" target=_blank>ABS</a>
@@ -129,7 +129,7 @@
   </div>
   <div>{{ self::time(replacement.created_at) }}</div>
   <div>
-    <a href="/torrents/{{ replacement.hash }}">open</a>
+    <a href="/torrents/{{ replacement.id }}">open</a>
     <a href="https://www.myanonamouse.net/t/{{ replacement.meta.mam_id }}" target=_blank>MaM</a>
     {% if let (Some(abs_url), Some(abs_id)) = (abs_url.as_ref(), replacement.abs_id.as_ref()) %}
       <a href="{{ abs_url }}/audiobookshelf/item/{{ abs_id }}" target=_blank>ABS</a>
