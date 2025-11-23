@@ -23,7 +23,7 @@ use crate::{
         user_data::UserResponse,
     },
 };
-use anyhow::{Context, Error, Result, bail};
+use anyhow::{Context, Error, Result};
 use bytes::Bytes;
 use itertools::Itertools as _;
 use lava_torrent::torrent::v1::Torrent;
@@ -31,6 +31,7 @@ use native_db::{Database, db_type, transaction::RwTransaction};
 use qbit::parameters::{AddTorrent, AddTorrentType, TorrentFile};
 use tokio::{fs, sync::watch::Sender, time::sleep};
 use tracing::{Level, debug, enabled, error, info, instrument, trace, warn};
+use uuid::Uuid;
 
 #[instrument(skip_all)]
 pub async fn run_autograbber(
@@ -73,15 +74,10 @@ pub async fn run_autograbber(
         || autograb_config.cost == Cost::MetadataOnly
         || autograb_config.cost == Cost::MetadataOnlyAdd
     {
-        let selected_torrents = search_torrents(
-            config.clone(),
-            db.clone(),
-            &autograb_config,
-            mam.clone(),
-            max_torrents,
-        )
-        .await
-        .context("search_torrents")?;
+        let selected_torrents =
+            search_and_select_torrents(&config, &db, &autograb_config, &mam, max_torrents)
+                .await
+                .context("search_torrents")?;
         mam.add_unsats(selected_torrents).await;
     }
 
@@ -166,25 +162,49 @@ pub async fn grab_selected_torrents(
 }
 
 #[instrument(skip_all)]
-pub async fn search_torrents(
-    config: Arc<Config>,
-    db: Arc<Database<'_>>,
-    torrent_filter: &TorrentSearch,
-    mam: Arc<MaM<'_>>,
+pub async fn search_and_select_torrents(
+    config: &Config,
+    db: &Database<'_>,
+    torrent_search: &TorrentSearch,
+    mam: &MaM<'_>,
     max_torrents: u64,
 ) -> Result<u64> {
-    let target = match torrent_filter.kind {
+    let torrents = search_torrents(torrent_search, mam).await?;
+
+    select_torrents(
+        config,
+        db,
+        mam,
+        torrents,
+        &torrent_search.filter,
+        torrent_search.cost,
+        torrent_search.unsat_buffer,
+        torrent_search.category.clone(),
+        torrent_search.dry_run,
+        max_torrents,
+        None,
+    )
+    .await
+    .context("select_torrents")
+}
+
+#[instrument(skip_all)]
+pub async fn search_torrents(
+    torrent_search: &TorrentSearch,
+    mam: &MaM<'_>,
+) -> Result<impl Iterator<Item = MaMTorrent>> {
+    let target = match torrent_search.kind {
         Type::Bookmarks => Some(SearchTarget::Bookmarks),
         Type::Mine => Some(SearchTarget::Mine),
         Type::Uploader(id) => Some(SearchTarget::Uploader(id)),
         _ => None,
     };
-    let kind = match (torrent_filter.kind, torrent_filter.cost) {
+    let kind = match (torrent_search.kind, torrent_search.cost) {
         (Type::Freeleech, _) => Some(SearchKind::Freeleech),
         (_, Cost::Free) => Some(SearchKind::Free),
         _ => None,
     };
-    let sort_type = torrent_filter
+    let sort_type = torrent_search
         .sort_by
         .map(|sort_by| match sort_by {
             SortBy::LowSeeders => "seedersAsc",
@@ -192,14 +212,14 @@ pub async fn search_torrents(
             SortBy::OldestFirst => "dateAsc",
             SortBy::Random => "random",
         })
-        .unwrap_or(match torrent_filter.kind {
+        .unwrap_or(match torrent_search.kind {
             Type::New => "dateDesc",
             _ => "",
         });
-    let (flags_is_hide, flags) = torrent_filter.filter.flags.as_search_bitfield();
-    let max_pages = torrent_filter
+    let (flags_is_hide, flags) = torrent_search.filter.flags.as_search_bitfield();
+    let max_pages = torrent_search
         .max_pages
-        .unwrap_or(match torrent_filter.kind {
+        .unwrap_or(match torrent_search.kind {
             Type::Bookmarks | Type::Freeleech | Type::Mine => 50,
             _ => 0,
         });
@@ -214,11 +234,11 @@ pub async fn search_torrents(
                     start_number: results.as_ref().map_or(0, |r| r.data.len() as u64),
                     target,
                     kind,
-                    text: &torrent_filter.query.clone().unwrap_or_default(),
-                    srch_in: torrent_filter.search_in.clone(),
-                    main_cat: torrent_filter.filter.categories.get_main_cats(),
-                    cat: torrent_filter.filter.categories.get_cats(),
-                    browse_lang: torrent_filter
+                    text: &torrent_search.query.clone().unwrap_or_default(),
+                    srch_in: torrent_search.search_in.clone(),
+                    main_cat: torrent_search.filter.categories.get_main_cats(),
+                    cat: torrent_search.filter.categories.get_cats(),
+                    browse_lang: torrent_search
                         .filter
                         .languages
                         .iter()
@@ -230,27 +250,27 @@ pub async fn search_torrents(
                         Some(if flags_is_hide { 0 } else { 1 })
                     },
                     browse_flags: flags.clone(),
-                    start_date: torrent_filter
+                    start_date: torrent_search
                         .filter
                         .uploaded_after
                         .map_or_else(|| Ok(String::new()), |d| d.format(&DATE_FORMAT))?,
-                    end_date: torrent_filter
+                    end_date: torrent_search
                         .filter
                         .uploaded_before
                         .map_or_else(|| Ok(String::new()), |d| d.format(&DATE_FORMAT))?,
-                    min_size: torrent_filter.filter.min_size.bytes(),
-                    max_size: torrent_filter.filter.max_size.bytes(),
-                    unit: torrent_filter
+                    min_size: torrent_search.filter.min_size.bytes(),
+                    max_size: torrent_search.filter.max_size.bytes(),
+                    unit: torrent_search
                         .filter
                         .min_size
                         .unit()
-                        .max(torrent_filter.filter.max_size.unit()),
-                    min_seeders: torrent_filter.filter.min_seeders,
-                    max_seeders: torrent_filter.filter.max_seeders,
-                    min_leechers: torrent_filter.filter.min_leechers,
-                    max_leechers: torrent_filter.filter.max_leechers,
-                    min_snatched: torrent_filter.filter.min_snatched,
-                    max_snatched: torrent_filter.filter.max_snatched,
+                        .max(torrent_search.filter.max_size.unit()),
+                    min_seeders: torrent_search.filter.min_seeders,
+                    max_seeders: torrent_search.filter.max_seeders,
+                    min_leechers: torrent_search.filter.min_leechers,
+                    max_leechers: torrent_search.filter.max_leechers,
+                    min_snatched: torrent_search.filter.min_snatched,
+                    max_snatched: torrent_search.filter.max_snatched,
                     sort_type,
                     ..Default::default()
                 },
@@ -299,23 +319,9 @@ pub async fn search_torrents(
         .unwrap()
         .data
         .into_iter()
-        .filter(|t| torrent_filter.filter.matches(t));
+        .filter(|t| torrent_search.filter.matches(t));
 
-    select_torrents(
-        &config,
-        &db,
-        &mam,
-        torrents,
-        &torrent_filter.filter,
-        torrent_filter.cost,
-        torrent_filter.unsat_buffer,
-        torrent_filter.category.clone(),
-        torrent_filter.dry_run,
-        max_torrents,
-        None,
-    )
-    .await
-    .context("select_torrents")
+    Ok(torrents)
 }
 
 #[instrument(skip_all)]
@@ -405,7 +411,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             }
         }
         if cost == Cost::MetadataOnlyAdd {
-            add_metadata_only_torrent(rw_opt.unwrap(), mam, torrent, meta).await?;
+            add_metadata_only_torrent(rw_opt.unwrap(), torrent, meta).await?;
             continue 'torrent;
         }
         if cost == Cost::MetadataOnly {
@@ -725,23 +731,23 @@ async fn grab_torrent(
 #[instrument(skip_all)]
 async fn add_metadata_only_torrent(
     rw: RwTransaction<'_>,
-    mam: &MaM<'_>,
     torrent: MaMTorrent,
     meta: TorrentMeta,
 ) -> Result<()> {
     info!("Adding metadata only torrent \"{}\"", meta.title,);
-    let Some(dl_link) = torrent.dl.as_ref() else {
-        bail!("missing dl_link");
-    };
-
-    let torrent_file_bytes = get_mam_torrent_file(mam, dl_link).await?;
-    let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
-    let hash = torrent_file.info_hash();
+    // let Some(dl_link) = torrent.dl.as_ref() else {
+    //     bail!("missing dl_link");
+    // };
+    //
+    // let torrent_file_bytes = get_mam_torrent_file(mam, dl_link).await?;
+    // let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
+    // let hash = torrent_file.info_hash();
+    let hash = Uuid::new_v4().to_string();
 
     let mam_id = torrent.id;
     {
         rw.insert(data::Torrent {
-            hash: hash.clone(),
+            hash,
             mam_id,
             abs_id: None,
             goodreads_id: None,
@@ -769,8 +775,6 @@ async fn add_metadata_only_torrent(
         })?;
         rw.commit()?;
     }
-
-    sleep(Duration::from_millis(1000)).await;
 
     Ok(())
 }
