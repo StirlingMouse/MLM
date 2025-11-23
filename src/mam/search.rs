@@ -183,7 +183,7 @@ pub struct MaMTorrent {
     pub mediatype: u8,
     pub maincat: u8,
     #[serde(deserialize_with = "json_or_default")]
-    pub categories: Vec<u64>,
+    pub categories: Vec<u8>,
     pub catname: String,
     pub cat: String,
     pub comments: u64,

@@ -114,7 +114,7 @@ impl std::fmt::Display for MainCat {
 }
 
 impl Category {
-    pub fn from_id(id: u64) -> Option<Category> {
+    pub fn from_id(id: u8) -> Option<Category> {
         match id {
             1 => Some(Category::Action),
             2 => Some(Category::Art),
@@ -176,7 +176,7 @@ impl Category {
             58 => Some(Category::ProgressionFantasy),
             // 59 is already removed?
             60 => Some(Category::DramaPlays),
-            _ => None,
+            id => Some(Category::Unknown(id)),
         }
     }
 

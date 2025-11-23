@@ -7,7 +7,7 @@ pub enum MetaError {
     #[error("{0}")]
     UnknownMediaType(String),
     #[error("Unknown category: {0}")]
-    UnknownCat(u64),
+    UnknownCat(u8),
     #[error("Unknown old category: {0}")]
     UnknownOldCat(String),
     #[error("Unknown language id {0}, code: {1}")]
