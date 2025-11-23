@@ -105,12 +105,10 @@ async fn torrent_page_id(
 ) -> std::result::Result<Html<String>, AppError> {
     if let Some(torrent) = db
         .r_transaction()?
-        .scan()
-        .secondary::<Torrent>(TorrentKey::mam_id)?
-        .range(mam_id..=mam_id)?
-        .next()
+        .get()
+        .secondary::<Torrent>(TorrentKey::mam_id, mam_id)?
     {
-        return torrent_page_hash(State((config, db, mam)), Path(torrent?.hash)).await;
+        return torrent_page_hash(State((config, db, mam)), Path(torrent.hash)).await;
     };
 
     let Ok(mam) = mam.as_ref() else {
@@ -292,11 +290,8 @@ pub async fn torrent_page_post_id(
     let mam_id = form.mam_id.unwrap_or(mam_id);
     if let Some(torrent) = db
         .r_transaction()?
-        .scan()
-        .secondary::<Torrent>(TorrentKey::mam_id)?
-        .range(mam_id..=mam_id)?
-        .next()
-        .transpose()?
+        .get()
+        .secondary::<Torrent>(TorrentKey::mam_id, mam_id)?
     {
         if form.mam_id.is_some() {
             return Err(anyhow::Error::msg("torrent is already downloaded").into());
@@ -572,11 +567,8 @@ async fn other_torrents(
         .map(|mam_torrent| {
             let meta = mam_torrent.as_meta()?;
             let torrent = r
-                .scan()
-                .secondary::<Torrent>(TorrentKey::mam_id)?
-                .range(meta.mam_id..=meta.mam_id)?
-                .next()
-                .transpose()?;
+                .get()
+                .secondary::<Torrent>(TorrentKey::mam_id, meta.mam_id)?;
 
             Ok((mam_torrent, meta, torrent))
         })

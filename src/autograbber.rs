@@ -393,11 +393,9 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
         }
         if let Some(rw) = &rw_opt {
             let old_library = rw
-                .scan()
-                .secondary::<data::Torrent>(TorrentKey::mam_id)?
-                .range(meta.mam_id..=meta.mam_id)?
-                .next();
-            if let Some(old) = old_library.transpose()? {
+                .get()
+                .secondary::<data::Torrent>(TorrentKey::mam_id, meta.mam_id)?;
+            if let Some(old) = old_library {
                 if old.meta != meta {
                     update_torrent_meta(config, db, rw_opt.unwrap(), &torrent, old, meta, false)
                         .await?;

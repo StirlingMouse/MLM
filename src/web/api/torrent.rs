@@ -78,12 +78,10 @@ async fn torrent_api_id(
 ) -> std::result::Result<Json<serde_json::Value>, AppError> {
     if let Some(torrent) = db
         .r_transaction()?
-        .scan()
-        .secondary::<Torrent>(TorrentKey::mam_id)?
-        .range(mam_id..=mam_id)?
-        .next()
+        .get()
+        .secondary::<Torrent>(TorrentKey::mam_id, mam_id)?
     {
-        return torrent_api_hash(State((config, db, mam)), Path(torrent?.hash)).await;
+        return torrent_api_hash(State((config, db, mam)), Path(torrent.hash)).await;
     };
 
     let Ok(mam) = mam.as_ref() else {

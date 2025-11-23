@@ -47,11 +47,8 @@ pub async fn search_page(
         .map(|mam_torrent| {
             let meta = mam_torrent.as_meta()?;
             let torrent = r
-                .scan()
-                .secondary::<Torrent>(TorrentKey::mam_id)?
-                .range(meta.mam_id..=meta.mam_id)?
-                .next()
-                .transpose()?;
+                .get()
+                .secondary::<Torrent>(TorrentKey::mam_id, meta.mam_id)?;
 
             Ok((mam_torrent, meta, torrent))
         })
