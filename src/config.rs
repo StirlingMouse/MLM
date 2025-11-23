@@ -53,7 +53,7 @@ pub struct Config {
 
     #[serde(default)]
     #[serde(rename = "autograb")]
-    pub autograbs: Vec<TorrentFilter>,
+    pub autograbs: Vec<TorrentSearch>,
 
     #[serde(default)]
     #[serde(rename = "goodreads_list")]
@@ -89,7 +89,7 @@ pub struct AudiobookShelfConfig {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct TorrentFilter {
+pub struct TorrentSearch {
     #[serde(rename = "type")]
     pub kind: Type,
     #[serde(default)]
@@ -100,7 +100,7 @@ pub struct TorrentFilter {
     pub sort_by: Option<SortBy>,
     pub max_pages: Option<u8>,
     #[serde(flatten)]
-    pub filter: Filter,
+    pub filter: TorrentFilter,
 
     pub search_interval: Option<u64>,
     pub unsat_buffer: Option<u64>,
@@ -140,14 +140,14 @@ pub struct Grab {
     #[serde(default)]
     pub cost: Cost,
     #[serde(flatten)]
-    pub filter: Filter,
+    pub filter: TorrentFilter,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TagFilter {
     #[serde(flatten)]
-    pub filter: Filter,
+    pub filter: TorrentFilter,
     #[serde(default)]
     pub category: Option<String>,
     #[serde(default)]
@@ -156,7 +156,7 @@ pub struct TagFilter {
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Filter {
+pub struct TorrentFilter {
     #[serde(default)]
     pub name: Option<String>,
 

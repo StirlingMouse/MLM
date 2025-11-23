@@ -6,12 +6,12 @@ use time::UtcDateTime;
 use tracing::error;
 
 use crate::{
-    config::{Filter, GoodreadsList, Library, LibraryLinkMethod, LibraryTagFilters},
+    config::{GoodreadsList, Library, LibraryLinkMethod, LibraryTagFilters, TorrentFilter},
     data::{Language, MediaType, OldCategory, Size, Torrent},
     mam::{enums::Flags, search::MaMTorrent, serde::DATE_TIME_FORMAT},
 };
 
-impl Filter {
+impl TorrentFilter {
     pub fn matches(&self, torrent: &MaMTorrent) -> bool {
         if !self.categories.matches(torrent.category) {
             return false;
@@ -279,12 +279,12 @@ mod tests {
             added: "2025-07-06 05:40:54".to_owned(),
             ..Default::default()
         };
-        let filter = Filter {
+        let filter = TorrentFilter {
             uploaded_after: Some(date!(2025 - 07 - 05)),
             ..Default::default()
         };
         assert!(filter.matches(&torrent));
-        let filter = Filter {
+        let filter = TorrentFilter {
             uploaded_after: Some(date!(2025 - 07 - 07)),
             ..Default::default()
         };
@@ -298,7 +298,7 @@ mod tests {
             added: "2025-07-06 05:40:54".to_owned(),
             ..Default::default()
         };
-        let filter = Filter {
+        let filter = TorrentFilter {
             uploaded_after: Some(date!(2025 - 07 - 06)),
             ..Default::default()
         };
@@ -312,12 +312,12 @@ mod tests {
             added: "2025-07-06 05:40:54".to_owned(),
             ..Default::default()
         };
-        let filter = Filter {
+        let filter = TorrentFilter {
             uploaded_before: Some(date!(2025 - 07 - 07)),
             ..Default::default()
         };
         assert!(filter.matches(&torrent));
-        let filter = Filter {
+        let filter = TorrentFilter {
             uploaded_before: Some(date!(2025 - 07 - 05)),
             ..Default::default()
         };
@@ -331,7 +331,7 @@ mod tests {
             added: "2025-07-06 05:40:54".to_owned(),
             ..Default::default()
         };
-        let filter = Filter {
+        let filter = TorrentFilter {
             uploaded_before: Some(date!(2025 - 07 - 06)),
             ..Default::default()
         };
@@ -364,7 +364,7 @@ mod tests {
 
         #[test]
         fn test_default_filter_matches_all() {
-            let filter = Filter::default();
+            let filter = TorrentFilter::default();
             let torrent = create_default_torrent();
             assert!(
                 filter.matches(&torrent),
@@ -375,12 +375,12 @@ mod tests {
         // --- Category Filtering ---
         #[test]
         fn test_category_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 categories: Categories {
                     audio: Some(vec![AudiobookCategory::GeneralFiction]),
                     ebook: Some(vec![]),
                 },
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(filter.matches(&torrent), "Should match category");
@@ -388,12 +388,12 @@ mod tests {
 
         #[test]
         fn test_category_no_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 categories: Categories {
                     audio: Some(vec![AudiobookCategory::GeneralNonFic]),
                     ebook: Some(vec![]),
                 },
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(!filter.matches(&torrent), "Should not match category");
@@ -402,9 +402,9 @@ mod tests {
         // --- Language Filtering ---
         #[test]
         fn test_language_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 languages: vec![Language::English, Language::German],
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(filter.matches(&torrent), "Should match English language.");
@@ -412,9 +412,9 @@ mod tests {
 
         #[test]
         fn test_language_no_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 languages: vec![Language::French, Language::German],
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(
@@ -425,9 +425,9 @@ mod tests {
 
         #[test]
         fn test_language_parse_fail() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 languages: vec![Language::French],
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let mut torrent = create_default_torrent();
             torrent.language = 99; // Invalid Language
@@ -440,12 +440,12 @@ mod tests {
         // --- Flags Filtering ---
         #[test]
         fn test_flags_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 flags: Flags {
                     violence: Some(true),
                     ..Default::default()
                 },
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(
@@ -456,12 +456,12 @@ mod tests {
 
         #[test]
         fn test_flags_no_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 flags: Flags {
                     explicit: Some(true),
                     ..Default::default()
                 },
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(
@@ -473,9 +473,9 @@ mod tests {
         // --- Size Filtering ---
         #[test]
         fn test_min_size_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 min_size: Size::from_bytes(1_000_000_000),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(
@@ -486,9 +486,9 @@ mod tests {
 
         #[test]
         fn test_min_size_no_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 min_size: Size::from_bytes(10_000_000_000),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(
@@ -499,9 +499,9 @@ mod tests {
 
         #[test]
         fn test_max_size_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 max_size: Size::from_bytes(10_000_000_000),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(
@@ -512,9 +512,9 @@ mod tests {
 
         #[test]
         fn test_max_size_no_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 max_size: Size::from_bytes(1_000_000_000),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(
@@ -525,9 +525,9 @@ mod tests {
 
         #[test]
         fn test_size_parsing_failure() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 min_size: Size::from_bytes(1),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let mut torrent = create_default_torrent();
             torrent.size = "INVALID_SIZE".to_string();
@@ -540,9 +540,9 @@ mod tests {
         // --- Uploader Exclusion ---
         #[test]
         fn test_uploader_excluded() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 exclude_uploader: vec!["BadUploader".to_string(), "TestUploader".to_string()],
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(
@@ -553,9 +553,9 @@ mod tests {
 
         #[test]
         fn test_uploader_not_excluded() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 exclude_uploader: vec!["BadUploader".to_string()],
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(
@@ -567,9 +567,9 @@ mod tests {
         // --- Date Filtering ---
         #[test]
         fn test_uploaded_after_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 uploaded_after: Some(date!(2023 - 01 - 15)),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(
@@ -580,9 +580,9 @@ mod tests {
 
         #[test]
         fn test_uploaded_after_no_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 uploaded_after: Some(date!(2023 - 01 - 25)),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(
@@ -593,9 +593,9 @@ mod tests {
 
         #[test]
         fn test_uploaded_before_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 uploaded_before: Some(date!(2023 - 01 - 25)),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(
@@ -606,9 +606,9 @@ mod tests {
 
         #[test]
         fn test_uploaded_before_no_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 uploaded_before: Some(date!(2023 - 01 - 15)),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(
@@ -619,9 +619,9 @@ mod tests {
 
         #[test]
         fn test_date_parsing_failure() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 uploaded_after: Some(date!(2023 - 01 - 25)),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let mut torrent = create_default_torrent();
             torrent.added = "INVALID_DATE".to_string();
@@ -635,9 +635,9 @@ mod tests {
         // Torrent defaults: seeders: 50, leechers: 5, times_completed: 10
         #[test]
         fn test_min_seeders_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 min_seeders: Some(40),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent(); // seeders: 50
             assert!(filter.matches(&torrent), "50 seeders should be >= 40.");
@@ -645,9 +645,9 @@ mod tests {
 
         #[test]
         fn test_min_seeders_no_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 min_seeders: Some(60),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent(); // seeders: 50
             assert!(!filter.matches(&torrent), "50 seeders should be < 60.");
@@ -655,9 +655,9 @@ mod tests {
 
         #[test]
         fn test_max_seeders_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 max_seeders: Some(60),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent(); // seeders: 50
             assert!(filter.matches(&torrent), "50 seeders should be <= 60.");
@@ -665,9 +665,9 @@ mod tests {
 
         #[test]
         fn test_max_seeders_no_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 max_seeders: Some(40),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent(); // seeders: 50
             assert!(!filter.matches(&torrent), "50 seeders should be > 40.");
@@ -675,9 +675,9 @@ mod tests {
 
         #[test]
         fn test_min_leechers_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 min_leechers: Some(5),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent(); // leechers: 5
             assert!(filter.matches(&torrent), "5 leechers should be >= 5.");
@@ -685,9 +685,9 @@ mod tests {
 
         #[test]
         fn test_max_leechers_no_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 max_leechers: Some(4),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent(); // leechers: 5
             assert!(!filter.matches(&torrent), "5 leechers should be > 4.");
@@ -695,9 +695,9 @@ mod tests {
 
         #[test]
         fn test_min_snatched_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 min_snatched: Some(10),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent(); // times_completed: 10
             assert!(filter.matches(&torrent), "10 completions should be >= 10.");
@@ -705,9 +705,9 @@ mod tests {
 
         #[test]
         fn test_max_snatched_no_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 max_snatched: Some(9),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent(); // times_completed: 10
             assert!(!filter.matches(&torrent), "10 completions should be > 9.");
@@ -716,7 +716,7 @@ mod tests {
         // --- Combined Tests ---
         #[test]
         fn test_combined_success() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 categories: Categories {
                     audio: Some(vec![AudiobookCategory::GeneralFiction]),
                     ebook: Some(vec![]),
@@ -732,7 +732,7 @@ mod tests {
                 uploaded_after: Some(date!(2023 - 01 - 15)),
                 min_seeders: Some(40),
                 max_leechers: Some(10),
-                ..Filter::default()
+                ..TorrentFilter::default()
             };
             let torrent = create_default_torrent();
             assert!(
@@ -790,8 +790,8 @@ mod tests {
             }
         }
 
-        fn create_filter_with_audio_cats(cats: Option<Vec<AudiobookCategory>>) -> Filter {
-            Filter {
+        fn create_filter_with_audio_cats(cats: Option<Vec<AudiobookCategory>>) -> TorrentFilter {
+            TorrentFilter {
                 categories: Categories {
                     audio: cats,
                     ..Default::default()
@@ -803,7 +803,7 @@ mod tests {
         // --- Language Filtering Tests ---
         #[test]
         fn test_lang_match_ok_true() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 languages: vec![Language::English, Language::French],
                 ..Default::default()
             };
@@ -816,7 +816,7 @@ mod tests {
 
         #[test]
         fn test_lang_mismatch_ok_false() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 languages: vec![Language::French],
                 ..Default::default()
             };
@@ -829,7 +829,7 @@ mod tests {
 
         #[test]
         fn test_lang_filter_active_torrent_none_err() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 languages: vec![Language::English],
                 ..Default::default()
             };
@@ -850,7 +850,7 @@ mod tests {
 
         #[test]
         fn test_lang_filter_inactive_torrent_none_ok_true() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 languages: vec![],
                 ..Default::default()
             };
@@ -886,7 +886,7 @@ mod tests {
 
         #[test]
         fn test_cat_filter_inactive_torrent_has_cat_ok_true() {
-            let filter = Filter::default();
+            let filter = TorrentFilter::default();
             let torrent = create_torrent_with_meta(TorrentMeta {
                 cat: Some(OldCategory::Audio(AudiobookCategory::GeneralNonFic)),
                 ..default_meta()
@@ -930,7 +930,7 @@ mod tests {
         // --- Flags Filtering Tests ---
         #[test]
         fn test_flags_match_ok_true() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 flags: Flags {
                     violence: Some(true),
                     ..Default::default()
@@ -953,7 +953,7 @@ mod tests {
 
         #[test]
         fn test_flags_mismatch_ok_false() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 flags: Flags {
                     explicit: Some(true),
                     ..Default::default()
@@ -975,7 +975,7 @@ mod tests {
 
         #[test]
         fn test_flags_filter_active_torrent_none_err() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 flags: Flags {
                     violence: Some(true),
                     ..Default::default()
@@ -999,7 +999,7 @@ mod tests {
         // --- Disallowed Filter Checks (Ensure) ---
         #[test]
         fn test_disallowed_min_size_err() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 min_size: Size::from_bytes(1),
                 ..Default::default()
             };
@@ -1016,7 +1016,7 @@ mod tests {
 
         #[test]
         fn test_disallowed_exclude_uploader_err() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 exclude_uploader: vec!["test".to_string()],
                 ..Default::default()
             };
@@ -1033,7 +1033,7 @@ mod tests {
 
         #[test]
         fn test_disallowed_uploaded_after_err() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 uploaded_after: Some(date!(2023 - 01 - 15)),
                 ..Default::default()
             };
@@ -1050,7 +1050,7 @@ mod tests {
 
         #[test]
         fn test_disallowed_max_seeders_err() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 max_seeders: Some(100),
                 ..Default::default()
             };
@@ -1068,7 +1068,7 @@ mod tests {
         // --- Full Success Case ---
         #[test]
         fn test_full_success_match() {
-            let filter = Filter {
+            let filter = TorrentFilter {
                 languages: vec![Language::English],
                 categories: Categories {
                     audio: Some(vec![AudiobookCategory::GeneralFiction]),

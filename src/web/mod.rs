@@ -43,7 +43,7 @@ use tower::ServiceBuilder;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
-    config::{Config, Filter, SearchConfig},
+    config::{Config, SearchConfig, TorrentFilter},
     data::{AudiobookCategory, EbookCategory, Series, Timestamp, Torrent, TorrentMeta},
     mam::{api::MaM, enums::Flags, meta::MetaError, search::MaMTorrent, serde::DATE_FORMAT},
     stats::{Stats, Triggers},
@@ -302,11 +302,11 @@ impl<'a, T: Key> HtmlSafe for SeriesTmpl<'a, T> {}
 #[derive(Template)]
 #[template(path = "partials/filter.html")]
 struct FilterTemplate<'a> {
-    filter: &'a Filter,
+    filter: &'a TorrentFilter,
 }
 impl<'a> HtmlSafe for FilterTemplate<'a> {}
 
-fn filter<'a>(filter: &'a Filter) -> FilterTemplate<'a> {
+fn filter<'a>(filter: &'a TorrentFilter) -> FilterTemplate<'a> {
     FilterTemplate { filter }
 }
 

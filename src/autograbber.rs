@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     audiobookshelf::{self as abs, Abs},
-    config::{Config, Cost, Filter, SortBy, TorrentFilter, Type},
+    config::{Config, Cost, SortBy, TorrentFilter, TorrentSearch, Type},
     data::{
         self, DuplicateTorrent, ErroredTorrentId, Event, EventType, MetadataSource,
         SelectedTorrent, Size, Timestamp, TorrentCost, TorrentKey, TorrentMeta, VipStatus,
@@ -39,7 +39,7 @@ pub async fn run_autograbber(
     mam: Arc<MaM<'_>>,
     autograb_trigger: Sender<()>,
     index: usize,
-    autograb_config: Arc<TorrentFilter>,
+    autograb_config: Arc<TorrentSearch>,
 ) -> Result<()> {
     let user_info = mam.user_info().await?;
     let max_torrents = user_info.unsat.limit.saturating_sub(user_info.unsat.count);
@@ -169,7 +169,7 @@ pub async fn grab_selected_torrents(
 pub async fn search_torrents(
     config: Arc<Config>,
     db: Arc<Database<'_>>,
-    torrent_filter: &TorrentFilter,
+    torrent_filter: &TorrentSearch,
     mam: Arc<MaM<'_>>,
     max_torrents: u64,
 ) -> Result<u64> {
@@ -325,7 +325,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
     db: &Database<'_>,
     mam: &MaM<'_>,
     torrents: T,
-    grabber: &Filter,
+    grabber: &TorrentFilter,
     cost: Cost,
     unsat_buffer: Option<u64>,
     filter_category: Option<String>,

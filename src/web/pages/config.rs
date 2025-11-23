@@ -14,7 +14,7 @@ use tracing::{info, warn};
 
 use crate::{
     autograbber::update_torrent_meta,
-    config::{Config, Cost, Library, TorrentFilter, Type},
+    config::{Config, Cost, Library, TorrentSearch, Type},
     data::{AudiobookCategory, EbookCategory, Torrent},
     mam::serde::DATE_FORMAT,
     web::{AppError, MaMState, Page, filter, yaml_items},
@@ -143,7 +143,7 @@ struct ConfigPageTemplate {
 
 impl Page for ConfigPageTemplate {}
 
-impl TorrentFilter {
+impl TorrentSearch {
     fn mam_search(&self) -> String {
         let mut url: Url = "https://www.myanonamouse.net/tor/browse.php?thumbnail=true"
             .parse()
