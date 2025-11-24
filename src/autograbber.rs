@@ -81,7 +81,9 @@ pub async fn run_autograbber(
         mam.add_unsats(selected_torrents).await;
     }
 
-    autograb_trigger.send(())?;
+    if !config.qbittorrent.is_empty() {
+        autograb_trigger.send(())?;
+    }
 
     Ok(())
 }
@@ -413,7 +415,18 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             }
         }
         if cost == Cost::MetadataOnlyAdd {
-            add_metadata_only_torrent(rw_opt.unwrap(), torrent, meta).await?;
+            let mam_id = meta.mam_id;
+            add_metadata_only_torrent(rw_opt.unwrap(), torrent, meta)
+                .await
+                .or_else(|err| {
+                    let err = err.downcast::<db_type::Error>()?;
+                    if let db_type::Error::DuplicateKey { .. } = err {
+                        warn!("Got dup key when adding torrent {}", mam_id);
+                        Result::<(), anyhow::Error>::Ok(())
+                    } else {
+                        Err(err.into())
+                    }
+                })?;
             continue 'torrent;
         }
         if cost == Cost::MetadataOnly {
@@ -692,14 +705,6 @@ async fn grab_torrent(
             request_matadata_update: false,
             library_mismatch: None,
             client_status: None,
-        })
-        .or_else(|err| {
-            if let db_type::Error::DuplicateKey { .. } = err {
-                warn!("Got dup key when adding torrent {:?}", torrent);
-                Ok(())
-            } else {
-                Err(err)
-            }
         })?;
         let mut torrent = torrent;
         torrent.hash = Some(hash.clone());
@@ -761,14 +766,6 @@ pub async fn add_metadata_only_torrent(
             request_matadata_update: false,
             library_mismatch: None,
             client_status: None,
-        })
-        .or_else(|err| {
-            if let db_type::Error::DuplicateKey { .. } = err {
-                warn!("Got dup key when adding torrent {:?}", torrent);
-                Ok(())
-            } else {
-                Err(err)
-            }
         })?;
         rw.commit()?;
     }
