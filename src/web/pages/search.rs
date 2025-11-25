@@ -31,6 +31,7 @@ pub async fn search_page(
     };
     let result = mam
         .search(&SearchQuery {
+            media_info: true,
             tor: Tor {
                 text: &query.q,
                 main_cat: vec![OldMainCat::Audio.as_id(), OldMainCat::Ebook.as_id()],

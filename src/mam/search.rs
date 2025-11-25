@@ -10,7 +10,7 @@ use crate::{
         meta::{MetaError, clean_value},
         serde::{
             DATE_TIME_FORMAT, bool_string_or_number, is_false, is_zero, json_or_default,
-            opt_string_or_number, parse_title, string_or_number,
+            opt_string_or_number, parse_title, string_or_number, vec_string_or_number,
         },
     },
 };
@@ -25,6 +25,9 @@ pub struct SearchQuery<'a> {
     /// If this parameter is set, it will display the full description field for the torrent.
     #[serde(skip_serializing_if = "is_false")]
     pub description: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    #[serde(rename = "mediaInfo")]
+    pub media_info: bool,
     /// show hash for dl link (prepend https://www.myanonamouse.net/tor/download.php/ to use) for downloading on something without a session cookie. Alternatively use session cookie and just hit https://www.myanonamouse.net/tor/download.php?tid=# replacing # with the id number.
     #[serde(skip_serializing_if = "is_false")]
     #[serde(rename = "dlLink")]
@@ -193,6 +196,10 @@ pub struct MaMTorrent {
     pub description: Option<String>,
     pub dl: Option<String>,
     pub filetype: String,
+    #[serde(default)]
+    #[serde(rename = "mediainfo")]
+    #[serde(deserialize_with = "json_or_default")]
+    pub media_info: Option<MediaInfo>,
     #[serde(deserialize_with = "bool_string_or_number")]
     pub fl_vip: bool,
     #[serde(deserialize_with = "bool_string_or_number")]
@@ -229,6 +236,44 @@ pub struct MaMTorrent {
     pub w: u64,
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct MediaInfo {
+    #[serde(rename = "General")]
+    pub general: MediaInfoGeneral,
+    #[serde(rename = "Audio1")]
+    pub audio: MediaInfoAudio,
+    #[serde(default)]
+    pub menu: Option<MediaInfoMenu>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct MediaInfoGeneral {
+    #[serde(rename = "Duration")]
+    pub duration: String,
+    #[serde(rename = "Format")]
+    pub format: String,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct MediaInfoAudio {
+    #[serde(rename = "Format")]
+    pub format: String,
+    #[serde(rename = "BitRate")]
+    pub bitrate: String,
+    #[serde(rename = "Channels")]
+    pub channels: u8,
+    #[serde(rename = "BitRate_Mode")]
+    pub mode: String,
+    #[serde(rename = "SamplingRate")]
+    pub sampling_rate: String,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct MediaInfoMenu {
+    #[serde(deserialize_with = "vec_string_or_number")]
+    extra: Vec<String>,
+}
+
 impl MaMTorrent {
     pub fn as_meta(&self) -> Result<TorrentMeta, MetaError> {
         let authors = self
@@ -246,7 +291,7 @@ impl MaMTorrent {
             .values()
             .map(|series| {
                 let Value::String(series_name) = series
-                    .get(0)
+                    .first()
                     .ok_or(MetaError::InvalidSeries("Missing series name"))?
                 else {
                     return Err(MetaError::InvalidSeries("Series name is not a string").into());

@@ -217,6 +217,7 @@ impl<'a> MaM<'a> {
         let mut resp = self
             .search(&SearchQuery {
                 description: true,
+                media_info: true,
                 isbn: true,
                 thumbnail: false,
                 dl_link: true,

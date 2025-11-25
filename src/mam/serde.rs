@@ -44,6 +44,21 @@ where
     }
 }
 
+pub fn vec_string_or_number<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v = Vec::<Value>::deserialize(deserializer)?;
+    v.into_iter()
+        .filter_map(|v| match v {
+            Value::String(v) => Some(Ok(v)),
+            Value::Number(v) => Some(Ok(v.to_string())),
+            Value::Null => None,
+            _ => Some(Err(serde::de::Error::custom("expected number or string"))),
+        })
+        .collect()
+}
+
 pub fn string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: Deserializer<'de>,

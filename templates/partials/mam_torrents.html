@@ -21,7 +21,13 @@
         <i class=faint>narrated by</i> {{ meta.narrators.join(", ") }}<br>
       {% endif %}
       <i>{{ mam_torrent.tags }}</i><br>
-      <span class=faint>{{ meta.filetypes.join(", ") }} | {{ mam_torrent.comments }} comment{{ mam_torrent.comments | pluralize }}</span><br>
+      <span class=faint>
+        {{ meta.filetypes.join(", ") }} |
+        {% if let Some(media_info) = mam_torrent.media_info %}
+          {{ media_info.audio.format }} | {{ media_info.audio.bitrate }} {{ media_info.audio.mode }} | {{ media_info.general.duration }} |
+        {% endif %}
+        {{ mam_torrent.comments }} comment{{ mam_torrent.comments | pluralize }}
+      </span><br>
       {{ meta.categories.iter().join(", ") }}
   </div>
   <div>

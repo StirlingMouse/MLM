@@ -555,6 +555,7 @@ async fn other_torrents(
     // 	.replaceAll(/&|\band\b/g, '(&|and)').trim()
     let result = mam
         .search(&SearchQuery {
+            media_info: true,
             tor: Tor {
                 text: &format!(
                     "{} ({})",
