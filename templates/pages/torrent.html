@@ -41,11 +41,18 @@
   <p>Language: {{ language.to_str() }}</p>
 {% endif %}
 {% if let Some(cat) = torrent.meta.cat %}
-<p>Category: {{ torrent.meta.media_type.as_str() }} - {{ cat.as_str() }} {{ torrent.meta.flag_icons() }}</p>
+  <p>Category: {{ torrent.meta.media_type.as_str() }} - {{ cat.as_str() }} {{ torrent.meta.flag_icons() }}</p>
 {% else %}
   <p>Category: {{ torrent.meta.media_type.as_str() }} {{ torrent.meta.flag_icons() }}</p>
 {% endif %}
+{% if !torrent.meta.categories.is_empty() %}
+  <p>Categories: {{ torrent.meta.categories.iter().join(", ") }}</p>
+{% endif %}
 <p>Size: {{ torrent.meta.size }}</p>
+{% if let Some(mam_torrent) = mam_torrent %}
+  <p>Uploader: {{ mam_torrent.owner_name }}</p>
+{% endif %}
+<p>Uploaded At: {{ self::time(torrent.meta.uploaded_at) }}</p>
 {% if let Some(library_path) = torrent.library_path %}
   <div class=row style="justify-content:flex-start">
     Linked Path: {{ library_path.to_string_lossy() }}

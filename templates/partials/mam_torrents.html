@@ -22,6 +22,7 @@
       {% endif %}
       <i>{{ mam_torrent.tags }}</i><br>
       <span class=faint>{{ meta.filetypes.join(", ") }} | {{ mam_torrent.comments }} comment{{ mam_torrent.comments | pluralize }}</span><br>
+      {{ meta.categories.iter().join(", ") }}
   </div>
   <div>
     {% if torrent.is_some() %}

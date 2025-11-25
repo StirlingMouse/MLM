@@ -227,7 +227,10 @@ async fn torrent_page_id(
     );
     println!("qbit: {:?}", qbit_data);
 
-    if qbit_data.is_none() && torrent.client_status != Some(ClientStatus::NotInClient) {
+    if !config.qbittorrent.is_empty()
+        && qbit_data.is_none()
+        && torrent.client_status != Some(ClientStatus::NotInClient)
+    {
         let rw = db.rw_transaction()?;
         torrent.client_status = Some(ClientStatus::NotInClient);
         rw.upsert(torrent.clone())?;
