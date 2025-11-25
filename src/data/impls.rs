@@ -73,6 +73,7 @@ impl Torrent {
 impl TorrentMeta {
     pub(crate) fn matches(&self, other: &TorrentMeta) -> bool {
         self.media_type.matches(other.media_type)
+            && self.language == other.language
             && self.authors.iter().any(|a| other.authors.contains(a))
             && ((self.narrators.is_empty() && other.narrators.is_empty())
                 || self.narrators.iter().any(|a| other.narrators.contains(a)))
