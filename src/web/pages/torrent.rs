@@ -14,6 +14,7 @@ use qbit::{
     models::{Category, Torrent as QbitTorrent, Tracker},
     parameters::TorrentState,
 };
+use regex::Regex;
 use reqwest::header;
 use serde::Deserialize;
 use time::UtcDateTime;
@@ -546,22 +547,30 @@ async fn other_torrents(
     mam: &MaM<'_>,
     meta: &TorrentMeta,
 ) -> Result<MaMTorrentsTemplate> {
-    // const title = detailPage.querySeleVctor('.TorrentTitle')?.textContent
-    //    .replaceAll(/([\*\?])/g, '"$1"')
-    // 	.replaceAll(/(['`/]| - )/g, ' ')
-    // 	.replaceAll('!', '')
-    //    .replaceAll(/\s+\[[^\]\[]+?\]/g, '')
-    //    .replaceAll(/\s+\([^\)\(]+?\)/g, '')
-    // 	.replaceAll(/&|\band\b/g, '(&|and)').trim()
+    let title = meta
+        .title
+        .split_once(":")
+        .map_or(meta.title.as_str(), |(a, _)| a);
+
+    let title = Regex::new(r#"([\*\?])"#).unwrap().replace(title, r#""$1""#);
+    let title = Regex::new(r#"(['`/]| - )"#).unwrap().replace(&title, " ");
+    let title = Regex::new(r#"\s+\[[^\]\[]+?\]"#)
+        .unwrap()
+        .replace(&title, "");
+    let title = Regex::new(r#"\s+\([^<>\)\(]+?\]"#)
+        .unwrap()
+        .replace(&title, "");
+    let title = Regex::new(r#"&|\band\b"#)
+        .unwrap()
+        .replace(&title, "(&|and)");
+
     let result = mam
         .search(&SearchQuery {
             media_info: true,
             tor: Tor {
                 text: &format!(
                     "{} ({})",
-                    meta.title
-                        .split_once(":")
-                        .map_or(meta.title.as_str(), |(a, _)| a),
+                    title,
                     meta.authors.iter().map(|a| format!("\"{a}\"")).join(" | ")
                 ),
                 srch_in: vec![SearchIn::Title, SearchIn::Author],
