@@ -49,7 +49,10 @@ use crate::{
     mam::{api::MaM, enums::Flags, meta::MetaError, search::MaMTorrent, serde::DATE_FORMAT},
     stats::{Stats, Triggers},
     web::{
-        api::torrent::torrent_api,
+        api::{
+            search::{search_api, search_api_post},
+            torrent::torrent_api,
+        },
         pages::search::{search_page, search_page_post},
     },
 };
@@ -159,6 +162,11 @@ pub async fn start_webserver(
         .route(
             "/config",
             post(config_page_post).with_state((config.clone(), db.clone(), mam.clone())),
+        )
+        .route("/api/search", get(search_api).with_state(mam.clone()))
+        .route(
+            "/api/search",
+            post(search_api_post).with_state((config.clone(), db.clone(), mam.clone())),
         )
         .route(
             "/api/torrents/{id}",

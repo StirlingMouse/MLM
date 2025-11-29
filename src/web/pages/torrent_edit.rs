@@ -102,7 +102,7 @@ pub async fn torrent_edit_page_post(
     };
 
     let rw = db.rw_transaction()?;
-    update_torrent_meta(&config, &db, rw, &mam_torrent, torrent, meta, true).await?;
+    update_torrent_meta(&config, &db, rw, &mam_torrent, torrent, meta, true, false).await?;
 
     Ok(Redirect::to(&format!("/torrents/{}", hash)))
 }

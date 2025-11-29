@@ -406,9 +406,22 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 .get()
                 .secondary::<data::Torrent>(TorrentKey::mam_id, meta.mam_id)?;
             if let Some(old) = old_library {
-                if old.meta != meta {
-                    update_torrent_meta(config, db, rw_opt.unwrap(), &torrent, old, meta, false)
-                        .await?;
+                if old.meta != meta
+                    || (cost == Cost::MetadataOnlyAdd
+                        && old.linker.is_none()
+                        && !torrent.owner_name.is_empty())
+                {
+                    update_torrent_meta(
+                        config,
+                        db,
+                        rw_opt.unwrap(),
+                        &torrent,
+                        old,
+                        meta,
+                        false,
+                        cost == Cost::MetadataOnlyAdd,
+                    )
+                    .await?;
                 }
                 trace!("Torrent {} is already in library", torrent.id);
                 continue 'torrent;
@@ -503,6 +516,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                             &torrent,
                             old,
                             meta,
+                            false,
                             false,
                         )
                         .await?;
@@ -742,7 +756,7 @@ pub async fn add_metadata_only_torrent(
     torrent: MaMTorrent,
     meta: TorrentMeta,
 ) -> Result<()> {
-    info!("Adding metadata only torrent \"{}\"", meta.title,);
+    info!("Adding metadata only torrent \"{}\"", meta.title);
     let id = Uuid::new_v4().to_string();
 
     let mam_id = torrent.id;
@@ -755,7 +769,11 @@ pub async fn add_metadata_only_torrent(
             goodreads_id: None,
             library_path: None,
             library_files: Default::default(),
-            linker: None,
+            linker: if torrent.owner_name.is_empty() {
+                None
+            } else {
+                Some(torrent.owner_name)
+            },
             category: None,
             selected_audio_format: None,
             selected_ebook_format: None,
@@ -781,6 +799,7 @@ pub async fn update_torrent_meta(
     mut torrent: data::Torrent,
     meta: TorrentMeta,
     allow_non_mam: bool,
+    linker_is_owner: bool,
 ) -> Result<()> {
     if !allow_non_mam && torrent.meta.source != MetadataSource::Mam {
         // Update VIP status and uploaded_at still
@@ -824,6 +843,10 @@ pub async fn update_torrent_meta(
         }
     }
 
+    if linker_is_owner && torrent.linker.is_none() {
+        torrent.linker = Some(mam_torrent.owner_name.clone());
+    }
+
     let id = torrent.id.clone();
     let mam_id = meta.mam_id;
     let diff = torrent.meta.diff(&meta);
@@ -865,10 +888,12 @@ pub async fn update_torrent_meta(
         }
     }
 
-    write_event(
-        db,
-        Event::new(Some(id), Some(mam_id), EventType::Updated { fields: diff }),
-    );
+    if !diff.is_empty() {
+        write_event(
+            db,
+            Event::new(Some(id), Some(mam_id), EventType::Updated { fields: diff }),
+        );
+    }
     Ok(())
 }
 
