@@ -38,177 +38,262 @@ pub async fn torrents_page(
     Query(show): Query<TorrentsPageColumnsQuery>,
     Query(paging): Query<PaginationParams>,
 ) -> std::result::Result<Response, AppError> {
-    let torrents = db
-        .r_transaction()?
-        .scan()
-        .secondary::<Torrent>(TorrentKey::created_at)?;
-    let query = filter
+    let r = db.r_transaction()?;
+
+    let torrent_count = r.len().secondary::<Torrent>(TorrentKey::created_at)?;
+    let torrents = r.scan().secondary::<Torrent>(TorrentKey::created_at)?;
+    let mut filter = filter;
+    let query_pos = filter
         .iter()
-        .find(|(field, _)| field == &TorrentsPageFilter::Query)
+        .position(|(field, _)| field == &TorrentsPageFilter::Query);
+    let query = query_pos
+        .map(|i| filter.remove(i))
         .and_then(|(_, value)| if value.is_empty() { None } else { Some(value) });
-    let metadata = filter
+    let metadata_pos = filter
         .iter()
-        .find(|(field, _)| field == &TorrentsPageFilter::Metadata)
+        .position(|(field, _)| field == &TorrentsPageFilter::Metadata);
+    let metadata = metadata_pos
+        .map(|i| filter.remove(i))
         .and_then(|(_, value)| if value.is_empty() { None } else { Some(value) });
+    filter.retain(|(field, _)| {
+        !matches!(
+            field,
+            TorrentsPageFilter::SortBy
+                | TorrentsPageFilter::Asc
+                | TorrentsPageFilter::Show
+                | TorrentsPageFilter::From
+                | TorrentsPageFilter::PageSize
+        )
+    });
     let show = show.show.unwrap_or_default();
 
-    let mut torrents = torrents
-        .all()?
-        .rev()
-        .filter_map(|t| {
-            let Ok(t) = t else {
-                return Some(t.map(|t| (t, 0)));
+    let torrents = torrents.all()?.rev();
+
+    let torrents = torrents.filter_map(|t| {
+        let Ok(t) = t else {
+            return Some(t.map(|t| (t, 0)));
+        };
+        let mut torrent_score = 0;
+        for (field, value) in filter.iter() {
+            let ok = match field {
+                TorrentsPageFilter::Kind => t.meta.media_type.as_str() == value,
+                TorrentsPageFilter::Category => {
+                    if value.is_empty() {
+                        t.meta.cat.is_none()
+                    } else if let Some(cat) = &t.meta.cat {
+                        let cats = value
+                            .split(",")
+                            .filter_map(|id| id.parse().ok())
+                            .filter_map(OldCategory::from_one_id)
+                            .collect::<Vec<_>>();
+                        cats.contains(cat) || cat.as_str() == value
+                    } else {
+                        false
+                    }
+                }
+                TorrentsPageFilter::Flags => {
+                    if value.is_empty() {
+                        t.meta.flags.is_none_or(|f| f.0 == 0)
+                    } else if let Some(flags) = &t.meta.flags {
+                        let flags = Flags::from_bitfield(flags.0);
+                        match value.as_str() {
+                            "violence" => flags.violence == Some(true),
+                            "explicit" => flags.explicit == Some(true),
+                            "some_explicit" => flags.some_explicit == Some(true),
+                            "language" => flags.crude_language == Some(true),
+                            "abridged" => flags.abridged == Some(true),
+                            "lgbt" => flags.lgbt == Some(true),
+                            _ => false,
+                        }
+                    } else {
+                        false
+                    }
+                }
+                TorrentsPageFilter::Title => &t.meta.title == value,
+                TorrentsPageFilter::Author => {
+                    if value.is_empty() {
+                        t.meta.authors.is_empty()
+                    } else {
+                        t.meta.authors.contains(value)
+                    }
+                }
+                TorrentsPageFilter::Narrator => {
+                    if value.is_empty() {
+                        t.meta.narrators.is_empty()
+                    } else {
+                        t.meta.narrators.contains(value)
+                    }
+                }
+                TorrentsPageFilter::Series => {
+                    if value.is_empty() {
+                        t.meta.series.is_empty()
+                    } else {
+                        t.meta.series.iter().any(|s| &s.name == value)
+                    }
+                }
+                TorrentsPageFilter::Language => {
+                    if value.is_empty() {
+                        t.meta.language.is_none()
+                    } else {
+                        t.meta.language == Language::from_str(value).ok()
+                    }
+                }
+                TorrentsPageFilter::Filetype => t.meta.filetypes.contains(value),
+                TorrentsPageFilter::Linker => {
+                    if value.is_empty() {
+                        t.linker.is_none()
+                    } else {
+                        t.linker.as_ref() == Some(value)
+                    }
+                }
+                TorrentsPageFilter::QbitCategory => {
+                    if value.is_empty() {
+                        t.category.is_none()
+                    } else {
+                        t.category.as_ref() == Some(value)
+                    }
+                }
+                TorrentsPageFilter::Linked => t.library_path.is_some() == (value == "true"),
+                TorrentsPageFilter::LibraryMismatch => {
+                    if value.is_empty() {
+                        t.library_mismatch.is_some()
+                    } else {
+                        match t.library_mismatch {
+                            Some(LibraryMismatch::NewLibraryDir(ref path)) => {
+                                value == "new_library" || value.as_str() == path.to_string_lossy()
+                            }
+                            Some(LibraryMismatch::NewPath(ref path)) => {
+                                value == "new_path" || value.as_str() == path.to_string_lossy()
+                            }
+                            Some(LibraryMismatch::NoLibrary) => value == "no_library",
+                            None => false,
+                        }
+                    }
+                }
+                TorrentsPageFilter::ClientStatus => match t.client_status {
+                    Some(ClientStatus::NotInClient) => value == "not_in_client",
+                    Some(ClientStatus::RemovedFromMam) => value == "removed_from_mam",
+                    None => false,
+                },
+                TorrentsPageFilter::Abs => t.abs_id.is_some() == (value == "true"),
+                TorrentsPageFilter::Source => match value.as_str() {
+                    "mam" => t.meta.source == MetadataSource::Mam,
+                    "manual" => t.meta.source == MetadataSource::Manual,
+                    _ => false,
+                },
+                TorrentsPageFilter::Query => true,
+                TorrentsPageFilter::Metadata => true,
+                TorrentsPageFilter::SortBy => true,
+                TorrentsPageFilter::Asc => true,
+                TorrentsPageFilter::Show => true,
+                TorrentsPageFilter::From => true,
+                TorrentsPageFilter::PageSize => true,
             };
-            let mut torrent_score = 0;
-            for (field, value) in filter.iter() {
-                let ok = match field {
-                    TorrentsPageFilter::Kind => t.meta.media_type.as_str() == value,
-                    TorrentsPageFilter::Category => {
-                        if value.is_empty() {
-                            t.meta.cat.is_none()
-                        } else if let Some(cat) = &t.meta.cat {
-                            let cats = value
-                                .split(",")
-                                .filter_map(|id| id.parse().ok())
-                                .filter_map(OldCategory::from_one_id)
-                                .collect::<Vec<_>>();
-                            cats.contains(cat) || cat.as_str() == value
-                        } else {
-                            false
-                        }
-                    }
-                    TorrentsPageFilter::Flags => {
-                        if value.is_empty() {
-                            t.meta.flags.is_none_or(|f| f.0 == 0)
-                        } else if let Some(flags) = &t.meta.flags {
-                            let flags = Flags::from_bitfield(flags.0);
-                            match value.as_str() {
-                                "violence" => flags.violence == Some(true),
-                                "explicit" => flags.explicit == Some(true),
-                                "some_explicit" => flags.some_explicit == Some(true),
-                                "language" => flags.crude_language == Some(true),
-                                "abridged" => flags.abridged == Some(true),
-                                "lgbt" => flags.lgbt == Some(true),
-                                _ => false,
-                            }
-                        } else {
-                            false
-                        }
-                    }
-                    TorrentsPageFilter::Title => &t.meta.title == value,
-                    TorrentsPageFilter::Author => {
-                        if value.is_empty() {
-                            t.meta.authors.is_empty()
-                        } else {
-                            t.meta.authors.contains(value)
-                        }
-                    }
-                    TorrentsPageFilter::Narrator => {
-                        if value.is_empty() {
-                            t.meta.narrators.is_empty()
-                        } else {
-                            t.meta.narrators.contains(value)
-                        }
-                    }
-                    TorrentsPageFilter::Series => {
-                        if value.is_empty() {
-                            t.meta.series.is_empty()
-                        } else {
-                            t.meta.series.iter().any(|s| &s.name == value)
-                        }
-                    }
-                    TorrentsPageFilter::Language => {
-                        if value.is_empty() {
-                            t.meta.language.is_none()
-                        } else {
-                            t.meta.language == Language::from_str(value).ok()
-                        }
-                    }
-                    TorrentsPageFilter::Filetype => t.meta.filetypes.contains(value),
-                    TorrentsPageFilter::Linker => {
-                        if value.is_empty() {
-                            t.linker.is_none()
-                        } else {
-                            t.linker.as_ref() == Some(value)
-                        }
-                    }
-                    TorrentsPageFilter::QbitCategory => {
-                        if value.is_empty() {
-                            t.category.is_none()
-                        } else {
-                            t.category.as_ref() == Some(value)
-                        }
-                    }
-                    TorrentsPageFilter::Linked => t.library_path.is_some() == (value == "true"),
-                    TorrentsPageFilter::LibraryMismatch => {
-                        if value.is_empty() {
-                            t.library_mismatch.is_some()
-                        } else {
-                            match t.library_mismatch {
-                                Some(LibraryMismatch::NewLibraryDir(ref path)) => {
-                                    value == "new_library"
-                                        || value.as_str() == path.to_string_lossy()
-                                }
-                                Some(LibraryMismatch::NewPath(ref path)) => {
-                                    value == "new_path" || value.as_str() == path.to_string_lossy()
-                                }
-                                Some(LibraryMismatch::NoLibrary) => value == "no_library",
-                                None => false,
-                            }
-                        }
-                    }
-                    TorrentsPageFilter::ClientStatus => match t.client_status {
-                        Some(ClientStatus::NotInClient) => value == "not_in_client",
-                        Some(ClientStatus::RemovedFromMam) => value == "removed_from_mam",
-                        None => false,
-                    },
-                    TorrentsPageFilter::Abs => t.abs_id.is_some() == (value == "true"),
-                    TorrentsPageFilter::Source => match value.as_str() {
-                        "mam" => t.meta.source == MetadataSource::Mam,
-                        "manual" => t.meta.source == MetadataSource::Manual,
-                        _ => false,
-                    },
-                    TorrentsPageFilter::Query => true,
-                    TorrentsPageFilter::Metadata => true,
-                    TorrentsPageFilter::SortBy => true,
-                    TorrentsPageFilter::Asc => true,
-                    TorrentsPageFilter::Show => true,
-                    TorrentsPageFilter::From => true,
-                    TorrentsPageFilter::PageSize => true,
-                };
-                if !ok {
-                    return None;
-                }
-                if field == &TorrentsPageFilter::Query && !value.is_empty() {
-                    torrent_score += score(value, &t.meta.title);
-                    if show.authors {
-                        for author in &t.meta.authors {
-                            torrent_score += score(value, author);
-                        }
-                    }
-                    if show.narrators {
-                        for narrator in &t.meta.narrators {
-                            torrent_score += score(value, narrator);
-                        }
-                    }
-                    if show.series {
-                        for s in &t.meta.series {
-                            torrent_score += score(value, &s.name);
-                        }
-                    }
-                }
-            }
-            if query.is_some() && torrent_score < 10 {
+            if !ok {
                 return None;
             }
-            Some(Ok((t, torrent_score)))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+        }
+        if let Some(value) = query.as_deref() {
+            torrent_score += score(value, &t.meta.title);
+            if show.authors {
+                for author in &t.meta.authors {
+                    torrent_score += score(value, author);
+                }
+            }
+            if show.narrators {
+                for narrator in &t.meta.narrators {
+                    torrent_score += score(value, narrator);
+                }
+            }
+            if show.series {
+                for s in &t.meta.series {
+                    torrent_score += score(value, &s.name);
+                }
+            }
+            if torrent_score < 10 {
+                return None;
+            }
+        }
+        Some(Ok((t, torrent_score)))
+    });
 
-    if sort.sort_by.is_none() && query.is_some() {
-        torrents.sort_by_key(|(_, score)| -*score);
-    }
-    let mut torrents = torrents.into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+    let mut paging = match paging.default_page_size(uri, 500, torrent_count as usize) {
+        Ok(paging) => paging,
+        Err(redirect) => return Ok(redirect.into_response()),
+    };
+
+    let mut torrents: Vec<Torrent> = if query.is_some() || sort.sort_by.is_some() {
+        let mut torrents = torrents.collect::<Result<Vec<_>, native_db::db_type::Error>>()?;
+        if let Some(sort_by) = &sort.sort_by {
+            torrents.sort_by(|(a, _), (b, _)| {
+                let ord = match sort_by {
+                    TorrentsPageSort::Kind => a.meta.media_type.cmp(&b.meta.media_type),
+                    TorrentsPageSort::Category => a
+                        .meta
+                        .cat
+                        .partial_cmp(&b.meta.cat)
+                        .unwrap_or(std::cmp::Ordering::Less),
+                    TorrentsPageSort::Title => a.meta.title.cmp(&b.meta.title),
+                    TorrentsPageSort::Authors => a.meta.authors.cmp(&b.meta.authors),
+                    TorrentsPageSort::Narrators => a.meta.narrators.cmp(&b.meta.narrators),
+                    TorrentsPageSort::Series => a
+                        .meta
+                        .series
+                        .cmp(&b.meta.series)
+                        .then(a.meta.media_type.cmp(&b.meta.media_type)),
+                    TorrentsPageSort::Language => a.meta.language.cmp(&b.meta.language),
+                    TorrentsPageSort::Size => a.meta.size.cmp(&b.meta.size),
+                    TorrentsPageSort::Linker => a.linker.cmp(&b.linker),
+                    TorrentsPageSort::QbitCategory => a.category.cmp(&b.category),
+                    TorrentsPageSort::Linked => a.library_path.cmp(&b.library_path),
+                    TorrentsPageSort::CreatedAt => a.created_at.cmp(&b.created_at),
+                };
+                if sort.asc { ord.reverse() } else { ord }
+            });
+        } else {
+            torrents.sort_by_key(|(_, score)| -*score);
+        }
+        if metadata.is_none()
+            && let Some(paging) = &mut paging
+        {
+            paging.total = torrents.len();
+            let torrents: Vec<_> = torrents
+                .into_iter()
+                .map(|(t, _)| t)
+                .skip(paging.from)
+                .take(paging.page_size)
+                .collect();
+            torrents
+        } else {
+            torrents.into_iter().map(|(t, _)| t).collect()
+        }
+    } else if metadata.is_none()
+        && let Some(paging) = &mut paging
+    {
+        if filter.is_empty() {
+            torrents
+                .map(|t| t.map(|(t, _)| t))
+                .skip(paging.from)
+                .take(paging.page_size)
+                .collect::<Result<_, native_db::db_type::Error>>()?
+        } else {
+            let mut torrent_count = 0;
+            let mut new_torrents = vec![];
+            for torrent in torrents.map(|t| t.map(|(t, _)| t)) {
+                torrent_count += 1;
+                if torrent_count >= paging.from && new_torrents.len() < paging.page_size {
+                    new_torrents.push(torrent?);
+                }
+            }
+            paging.total = torrent_count;
+            new_torrents
+        }
+    } else {
+        torrents
+            .map(|t| t.map(|(t, _)| t))
+            .collect::<Result<_, native_db::db_type::Error>>()?
+    };
+
     if let Some(metadata) = metadata {
         match metadata.as_str() {
             "title" => {
@@ -473,46 +558,14 @@ pub async fn torrents_page(
             }
             _ => return Err(anyhow::Error::msg("Unknown metadata filter").into()),
         }
-    }
-
-    let paging = match paging.default_page_size(uri, 500, torrents.len()) {
-        Ok(paging) => paging,
-        Err(redirect) => return Ok(redirect.into_response()),
-    };
-
-    if let Some(sort_by) = &sort.sort_by {
-        torrents.sort_by(|a, b| {
-            let ord = match sort_by {
-                TorrentsPageSort::Kind => a.meta.media_type.cmp(&b.meta.media_type),
-                TorrentsPageSort::Category => a
-                    .meta
-                    .cat
-                    .partial_cmp(&b.meta.cat)
-                    .unwrap_or(std::cmp::Ordering::Less),
-                TorrentsPageSort::Title => a.meta.title.cmp(&b.meta.title),
-                TorrentsPageSort::Authors => a.meta.authors.cmp(&b.meta.authors),
-                TorrentsPageSort::Narrators => a.meta.narrators.cmp(&b.meta.narrators),
-                TorrentsPageSort::Series => a
-                    .meta
-                    .series
-                    .cmp(&b.meta.series)
-                    .then(a.meta.media_type.cmp(&b.meta.media_type)),
-                TorrentsPageSort::Language => a.meta.language.cmp(&b.meta.language),
-                TorrentsPageSort::Size => a.meta.size.cmp(&b.meta.size),
-                TorrentsPageSort::Linker => a.linker.cmp(&b.linker),
-                TorrentsPageSort::QbitCategory => a.category.cmp(&b.category),
-                TorrentsPageSort::Linked => a.library_path.cmp(&b.library_path),
-                TorrentsPageSort::CreatedAt => a.created_at.cmp(&b.created_at),
-            };
-            if sort.asc { ord.reverse() } else { ord }
-        });
-    }
-    if let Some(paging) = &paging {
-        torrents = torrents
-            .into_iter()
-            .skip(paging.from)
-            .take(paging.page_size)
-            .collect();
+        if let Some(paging) = &mut paging {
+            paging.total = torrents.len();
+            torrents = torrents
+                .into_iter()
+                .skip(paging.from)
+                .take(paging.page_size)
+                .collect();
+        }
     }
 
     let template = TorrentsPageTemplate {
@@ -521,7 +574,7 @@ pub async fn torrents_page(
         sort,
         show,
         cols: Default::default(),
-        query: query.map(|q| q.as_str()).unwrap_or("").to_owned(),
+        query: query.as_deref().unwrap_or("").to_owned(),
         torrents,
     };
     Ok::<_, AppError>(Html(template.to_string()).into_response())
