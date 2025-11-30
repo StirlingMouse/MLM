@@ -238,7 +238,7 @@ pub async fn search_torrents(
                     start_number: results.as_ref().map_or(0, |r| r.data.len() as u64),
                     target,
                     kind,
-                    text: &torrent_search.query.clone().unwrap_or_default(),
+                    text: torrent_search.query.clone().unwrap_or_default(),
                     srch_in: torrent_search.search_in.clone(),
                     main_cat: torrent_search.filter.categories.get_main_cats(),
                     cat: torrent_search.filter.categories.get_cats(),
@@ -275,7 +275,7 @@ pub async fn search_torrents(
                     max_leechers: torrent_search.filter.max_leechers,
                     min_snatched: torrent_search.filter.min_snatched,
                     max_snatched: torrent_search.filter.max_snatched,
-                    sort_type,
+                    sort_type: sort_type.to_string(),
                     ..Default::default()
                 },
 

@@ -568,7 +568,7 @@ async fn other_torrents(
         .search(&SearchQuery {
             media_info: true,
             tor: Tor {
-                text: &format!(
+                text: format!(
                     "{} ({})",
                     title,
                     meta.authors.iter().map(|a| format!("\"{a}\"")).join(" | ")

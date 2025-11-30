@@ -33,7 +33,7 @@ pub async fn search_page(
         .search(&SearchQuery {
             media_info: true,
             tor: Tor {
-                text: &query.q,
+                text: query.q.clone(),
                 ..Default::default()
             },
             ..Default::default()

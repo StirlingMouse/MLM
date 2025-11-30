@@ -21,7 +21,7 @@ use time::UtcDateTime;
 use tracing::warn;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct SearchQuery<'a> {
+pub struct SearchQuery {
     /// If this parameter is set, it will display the full description field for the torrent.
     #[serde(skip_serializing_if = "is_false")]
     pub description: bool,
@@ -41,12 +41,11 @@ pub struct SearchQuery<'a> {
     #[serde(skip_serializing_if = "is_zero")]
     pub perpage: u64,
 
-    #[serde(borrow)]
-    pub tor: Tor<'a>,
+    pub tor: Tor,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct Tor<'a> {
+pub struct Tor {
     #[serde(rename = "searchIn")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target: Option<SearchTarget>,
@@ -55,8 +54,8 @@ pub struct Tor<'a> {
     pub kind: Option<SearchKind>,
 
     /// Text to search for
-    #[serde(skip_serializing_if = "str::is_empty")]
-    pub text: &'a str,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub text: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(rename = "srchIn")]
     pub srch_in: Vec<SearchIn>,
@@ -116,8 +115,8 @@ pub struct Tor<'a> {
     pub browse_flags: Vec<u8>,
 
     /// Hexadecimal encoded hash from a torrent
-    #[serde(skip_serializing_if = "str::is_empty")]
-    pub hash: &'a str,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub hash: String,
 
     #[serde(skip_serializing_if = "is_zero")]
     pub id: u64,
@@ -149,8 +148,8 @@ pub struct Tor<'a> {
     // else if searchIn is Bookmarks: same as 'bmkaDesc'
     // else same as 'dateDesc'
     #[serde(rename = "sortType")]
-    #[serde(skip_serializing_if = "str::is_empty")]
-    pub sort_type: &'a str,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub sort_type: String,
 
     /// Number of entries to skip. Used in pagination.
     #[serde(rename = "startNumber")]

@@ -205,7 +205,7 @@ impl<'a> MaM<'a> {
                 isbn: true,
                 thumbnail: false,
                 tor: Tor {
-                    hash,
+                    hash: hash.to_string(),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -231,7 +231,7 @@ impl<'a> MaM<'a> {
         Ok(resp.data.pop())
     }
 
-    pub async fn search(&self, query: &SearchQuery<'_>) -> Result<SearchResult> {
+    pub async fn search(&self, query: &SearchQuery) -> Result<SearchResult> {
         debug!("search: {}", serde_json::to_string_pretty(query)?);
         let resp = self
             .client
@@ -262,7 +262,14 @@ impl<'a> MaM<'a> {
         let timestamp = UtcDateTime::now().unix_timestamp() * 1000;
         let resp: BonusBuyResult = self
             .client
-            .get(format!("https://www.myanonamouse.net/json/bonusBuy.php/{timestamp}?spendtype=personalFL&torrentid={mam_id}&timestamp={timestamp}"))
+            .get(format!(
+                "https://www.myanonamouse.net/json/bonusBuy.php/{timestamp}"
+            ))
+            .query(&[
+                ("spendtype", "personalFL"),
+                ("torrentid", mam_id.to_string().as_str()),
+                ("timestamp", timestamp.to_string().as_str()),
+            ])
             .send()
             .await?
             .json()

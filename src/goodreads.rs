@@ -408,7 +408,7 @@ async fn search_grab(
                 perpage: 100,
                 tor: Tor {
                     start_number: results.as_ref().map_or(0, |r| r.data.len() as u64),
-                    text: &query,
+                    text: query.clone(),
                     srch_in: vec![SearchIn::Title, SearchIn::Author],
                     main_cat: categories.get_main_cats(),
                     cat: categories.get_cats(),
