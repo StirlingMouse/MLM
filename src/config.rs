@@ -5,7 +5,7 @@ use time::Date;
 
 use crate::{
     data::{
-        Language, OldMainCat, Size,
+        Language, OldDbMainCat, Size,
         impls::{parse, parse_opt, parse_opt_date, parse_vec},
     },
     mam::enums::{Categories, Flags, SearchIn},
@@ -126,7 +126,7 @@ pub struct GoodreadsList {
     pub name: Option<String>,
     #[serde(default)]
     #[serde(deserialize_with = "parse_opt")]
-    pub prefer_format: Option<OldMainCat>,
+    pub prefer_format: Option<OldDbMainCat>,
     pub grab: Vec<Grab>,
 
     pub unsat_buffer: Option<u64>,
@@ -335,9 +335,9 @@ fn default_ebook_types() -> Vec<String> {
 }
 
 fn default_music_types() -> Vec<String> {
-    vec![]
+    ["pdf", "mp3"].iter().map(ToString::to_string).collect()
 }
 
 fn default_radio_types() -> Vec<String> {
-    vec![]
+    ["mp3"].iter().map(ToString::to_string).collect()
 }

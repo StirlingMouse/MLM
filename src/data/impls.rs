@@ -13,7 +13,7 @@ use time::{Date, UtcDateTime};
 
 use crate::{
     data::{
-        ListItem, MediaType, OldCategory, OldMainCat, Size, Torrent, TorrentCost, TorrentMeta,
+        ListItem, MediaType, OldCategory, OldDbMainCat, Size, Torrent, TorrentCost, TorrentMeta,
         TorrentMetaDiff, TorrentMetaField, TorrentStatus,
     },
     mam::{enums::Flags, serde::DATE_FORMAT},
@@ -83,6 +83,8 @@ impl TorrentMeta {
         match self.cat {
             Some(OldCategory::Audio(cat)) => cat.to_str(),
             Some(OldCategory::Ebook(cat)) => cat.to_str(),
+            Some(OldCategory::Musicology(cat)) => cat.to_str(),
+            Some(OldCategory::Radio(cat)) => cat.to_str(),
             None => "N/A",
         }
     }
@@ -290,7 +292,7 @@ impl ListItem {
             && !have_audio
             && self
                 .prefer_format
-                .is_none_or(|f| f == OldMainCat::Audio || !have_ebook)
+                .is_none_or(|f| f == OldDbMainCat::Audio || !have_ebook)
     }
 
     pub fn want_ebook(&self) -> bool {
@@ -310,7 +312,7 @@ impl ListItem {
             && !have_ebook
             && self
                 .prefer_format
-                .is_none_or(|f| f == OldMainCat::Ebook || !have_audio)
+                .is_none_or(|f| f == OldDbMainCat::Ebook || !have_audio)
     }
 }
 

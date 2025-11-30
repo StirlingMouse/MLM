@@ -5,7 +5,15 @@ use serde::{
     de::{self, SeqAccess, Visitor},
 };
 
-use crate::data::{AudiobookCategory, EbookCategory};
+use crate::data::{AudiobookCategory, EbookCategory, MusicologyCategory, RadioCategory};
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum OldMainCat {
+    Audio,
+    Ebook,
+    Musicology,
+    Radio,
+}
 
 #[derive(Debug, Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
@@ -87,18 +95,28 @@ pub enum SearchKind {
     NoMeta,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Categories {
+    #[serde(default = "default_categories_field")]
     #[serde(deserialize_with = "categories_parser")]
     pub audio: Option<Vec<AudiobookCategory>>,
+    #[serde(default = "default_categories_field")]
     #[serde(deserialize_with = "categories_parser")]
     pub ebook: Option<Vec<EbookCategory>>,
+    #[serde(default = "default_categories_field")]
+    #[serde(deserialize_with = "categories_parser")]
+    pub musicology: Option<Vec<MusicologyCategory>>,
+    #[serde(default = "default_categories_field")]
+    #[serde(deserialize_with = "categories_parser")]
+    pub radio: Option<Vec<RadioCategory>>,
 }
 
 impl Categories {
     pub fn get_main_cats(&self) -> Vec<u8> {
         if self.audio.as_ref().is_some_and(|c| !c.is_empty())
             || self.ebook.as_ref().is_some_and(|c| !c.is_empty())
+            || self.musicology.as_ref().is_some_and(|c| !c.is_empty())
+            || self.radio.as_ref().is_some_and(|c| !c.is_empty())
         {
             return vec![];
         }
@@ -112,6 +130,14 @@ impl Categories {
                 .as_ref()
                 .is_none_or(|c| !c.is_empty())
                 .then_some(14),
+            self.musicology
+                .as_ref()
+                .is_none_or(|c| !c.is_empty())
+                .then_some(15),
+            self.radio
+                .as_ref()
+                .is_none_or(|c| !c.is_empty())
+                .then_some(16),
         ]
         .into_iter()
         .flatten()
@@ -121,6 +147,8 @@ impl Categories {
     pub fn get_cats(&self) -> Vec<u8> {
         if self.audio.as_ref().is_none_or(|c| c.is_empty())
             && self.ebook.as_ref().is_none_or(|c| c.is_empty())
+            && self.musicology.as_ref().is_none_or(|c| c.is_empty())
+            && self.radio.as_ref().is_none_or(|c| c.is_empty())
         {
             return vec![];
         }
@@ -137,6 +165,20 @@ impl Categories {
                     .iter()
                     .map(|c| c.to_id()),
             )
+            .chain(
+                self.musicology
+                    .clone()
+                    .unwrap_or_else(MusicologyCategory::all)
+                    .iter()
+                    .map(|c| c.to_id()),
+            )
+            .chain(
+                self.radio
+                    .clone()
+                    .unwrap_or_else(RadioCategory::all)
+                    .iter()
+                    .map(|c| c.to_id()),
+            )
             .collect()
     }
 
@@ -145,8 +187,25 @@ impl Categories {
             self.audio.as_ref().is_none_or(|cats| cats.contains(&cat))
         } else if let Some(cat) = EbookCategory::from_id(category) {
             self.ebook.as_ref().is_none_or(|cats| cats.contains(&cat))
+        } else if let Some(cat) = MusicologyCategory::from_id(category) {
+            self.musicology
+                .as_ref()
+                .is_none_or(|cats| cats.contains(&cat))
+        } else if let Some(cat) = RadioCategory::from_id(category) {
+            self.radio.as_ref().is_none_or(|cats| cats.contains(&cat))
         } else {
             false
+        }
+    }
+}
+
+impl Default for Categories {
+    fn default() -> Self {
+        Self {
+            audio: None,
+            ebook: None,
+            musicology: Some(vec![]),
+            radio: Some(vec![]),
         }
     }
 }
@@ -198,6 +257,10 @@ where
     }
 
     deserializer.deserialize_any(CategoriesParser(PhantomData))
+}
+
+fn default_categories_field<T>() -> Option<Vec<T>> {
+    Some(vec![])
 }
 
 #[derive(Clone, Default, Debug, Deserialize)]

@@ -1,7 +1,11 @@
 use std::str::FromStr;
 
-use crate::data::{
-    AudiobookCategory, EbookCategory, OldCategory as Category, OldMainCat as MainCat,
+use crate::{
+    data::{
+        AudiobookCategory, EbookCategory, MusicologyCategory, OldCategory as Category,
+        OldDbMainCat, RadioCategory,
+    },
+    mam::enums::OldMainCat as MainCat,
 };
 
 impl MainCat {
@@ -9,17 +13,19 @@ impl MainCat {
         match self {
             MainCat::Audio => 13,
             MainCat::Ebook => 14,
+            MainCat::Musicology => 15,
+            MainCat::Radio => 16,
         }
     }
 }
 
-impl FromStr for MainCat {
+impl FromStr for OldDbMainCat {
     type Err = String;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let l = match value.to_lowercase().as_str() {
-            "audio" => Some(MainCat::Audio),
-            "ebook" => Some(MainCat::Ebook),
+            "audio" => Some(OldDbMainCat::Audio),
+            "ebook" => Some(OldDbMainCat::Ebook),
             _ => None,
         };
         match l {
@@ -29,7 +35,7 @@ impl FromStr for MainCat {
     }
 }
 
-impl TryFrom<String> for MainCat {
+impl TryFrom<String> for OldDbMainCat {
     type Error = String;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
@@ -42,12 +48,16 @@ impl Category {
         AudiobookCategory::from_id(category)
             .map(Category::Audio)
             .or_else(|| EbookCategory::from_id(category).map(Category::Ebook))
+            .or_else(|| MusicologyCategory::from_id(category).map(Category::Musicology))
+            .or_else(|| RadioCategory::from_id(category).map(Category::Radio))
     }
 
     pub fn as_str(&self) -> &'static str {
         match self {
             Category::Audio(cat) => cat.to_str(),
             Category::Ebook(cat) => cat.to_str(),
+            Category::Musicology(cat) => cat.to_str(),
+            Category::Radio(cat) => cat.to_str(),
         }
     }
 
@@ -55,6 +65,8 @@ impl Category {
         match self {
             Category::Audio(_) => MainCat::Audio,
             Category::Ebook(_) => MainCat::Ebook,
+            Category::Musicology(_) => MainCat::Musicology,
+            Category::Radio(_) => MainCat::Radio,
         }
     }
 
@@ -62,6 +74,8 @@ impl Category {
         match self {
             Category::Audio(cat) => cat.to_id(),
             Category::Ebook(cat) => cat.to_id(),
+            Category::Musicology(cat) => cat.to_id(),
+            Category::Radio(cat) => cat.to_id(),
         }
     }
 }
@@ -562,6 +576,170 @@ impl EbookCategory {
 }
 
 impl TryFrom<String> for EbookCategory {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let l = Self::from_str(&value);
+        match l {
+            Some(l) => Ok(l),
+            None => Err(format!("invalid category {value}")),
+        }
+    }
+}
+
+impl MusicologyCategory {
+    pub fn all() -> Vec<MusicologyCategory> {
+        vec![
+            MusicologyCategory::GuitarBassTabs,
+            MusicologyCategory::IndividualSheet,
+            MusicologyCategory::IndividualSheetMP3,
+            MusicologyCategory::InstructionalBookWithVideo,
+            MusicologyCategory::InstructionalMediaMusic,
+            MusicologyCategory::LickLibraryLTPJamWith,
+            MusicologyCategory::LickLibraryTechniquesQL,
+            MusicologyCategory::MusicCompleteEditions,
+            MusicologyCategory::MusicBook,
+            MusicologyCategory::MusicBookMP3,
+            MusicologyCategory::SheetCollection,
+            MusicologyCategory::SheetCollectionMP3,
+        ]
+    }
+
+    pub fn from_str(value: &str) -> Option<MusicologyCategory> {
+        match value.to_lowercase().as_str() {
+            "guitar/bass tabs" => Some(MusicologyCategory::GuitarBassTabs),
+            "individual sheet" => Some(MusicologyCategory::IndividualSheet),
+            "individual sheet mp3" => Some(MusicologyCategory::IndividualSheetMP3),
+            "instructional book with video" => Some(MusicologyCategory::InstructionalBookWithVideo),
+            "instructional media - music" => Some(MusicologyCategory::InstructionalMediaMusic),
+            "lick library - ltp/jam with" => Some(MusicologyCategory::LickLibraryLTPJamWith),
+            "lick library - techniques/ql" => Some(MusicologyCategory::LickLibraryTechniquesQL),
+            "music - complete editions" => Some(MusicologyCategory::MusicCompleteEditions),
+            "music book" => Some(MusicologyCategory::MusicBook),
+            "music book mp3" => Some(MusicologyCategory::MusicBookMP3),
+            "sheet collection" => Some(MusicologyCategory::SheetCollection),
+            "sheet collection mp3" => Some(MusicologyCategory::SheetCollectionMP3),
+            _ => None,
+        }
+    }
+
+    pub fn from_id(category: u64) -> Option<MusicologyCategory> {
+        match category {
+            19 => Some(MusicologyCategory::GuitarBassTabs),
+            20 => Some(MusicologyCategory::IndividualSheet),
+            24 => Some(MusicologyCategory::IndividualSheetMP3),
+            126 => Some(MusicologyCategory::InstructionalBookWithVideo),
+            22 => Some(MusicologyCategory::InstructionalMediaMusic),
+            113 => Some(MusicologyCategory::LickLibraryLTPJamWith),
+            114 => Some(MusicologyCategory::LickLibraryTechniquesQL),
+            17 => Some(MusicologyCategory::MusicCompleteEditions),
+            26 => Some(MusicologyCategory::MusicBook),
+            27 => Some(MusicologyCategory::MusicBookMP3),
+            30 => Some(MusicologyCategory::SheetCollection),
+            31 => Some(MusicologyCategory::SheetCollectionMP3),
+            _ => None,
+        }
+    }
+
+    pub fn to_id(self) -> u8 {
+        match self {
+            MusicologyCategory::GuitarBassTabs => 19,
+            MusicologyCategory::IndividualSheet => 20,
+            MusicologyCategory::IndividualSheetMP3 => 24,
+            MusicologyCategory::InstructionalBookWithVideo => 126,
+            MusicologyCategory::InstructionalMediaMusic => 22,
+            MusicologyCategory::LickLibraryLTPJamWith => 113,
+            MusicologyCategory::LickLibraryTechniquesQL => 114,
+            MusicologyCategory::MusicCompleteEditions => 17,
+            MusicologyCategory::MusicBook => 26,
+            MusicologyCategory::MusicBookMP3 => 27,
+            MusicologyCategory::SheetCollection => 30,
+            MusicologyCategory::SheetCollectionMP3 => 31,
+        }
+    }
+
+    pub fn to_str(self) -> &'static str {
+        match self {
+            MusicologyCategory::GuitarBassTabs => "Guitar/Bass Tabs",
+            MusicologyCategory::IndividualSheet => "Individual Sheet",
+            MusicologyCategory::IndividualSheetMP3 => "Individual Sheet MP3",
+            MusicologyCategory::InstructionalBookWithVideo => "Instructional Book with Video",
+            MusicologyCategory::InstructionalMediaMusic => "Instructional Media - Music",
+            MusicologyCategory::LickLibraryLTPJamWith => "Lick Library - LTP/Jam With",
+            MusicologyCategory::LickLibraryTechniquesQL => "Lick Library - Techniques/QL",
+            MusicologyCategory::MusicCompleteEditions => "Music - Complete Editions",
+            MusicologyCategory::MusicBook => "Music Book",
+            MusicologyCategory::MusicBookMP3 => "Music Book MP3",
+            MusicologyCategory::SheetCollection => "Sheet Collection",
+            MusicologyCategory::SheetCollectionMP3 => "Sheet Collection MP3",
+        }
+    }
+}
+
+impl TryFrom<String> for MusicologyCategory {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let l = Self::from_str(&value);
+        match l {
+            Some(l) => Ok(l),
+            None => Err(format!("invalid category {value}")),
+        }
+    }
+}
+
+impl RadioCategory {
+    pub fn all() -> Vec<RadioCategory> {
+        vec![
+            RadioCategory::Comedy,
+            RadioCategory::Drama,
+            RadioCategory::FactualDocumentary,
+            RadioCategory::Reading,
+        ]
+    }
+
+    pub fn from_str(value: &str) -> Option<RadioCategory> {
+        match value.to_lowercase().as_str() {
+            "comedy" => Some(RadioCategory::Comedy),
+            "drama" => Some(RadioCategory::Drama),
+            "factual" => Some(RadioCategory::FactualDocumentary),
+            "documentary" => Some(RadioCategory::FactualDocumentary),
+            "factual/documentary" => Some(RadioCategory::FactualDocumentary),
+            "reading" => Some(RadioCategory::Reading),
+            _ => None,
+        }
+    }
+
+    pub fn from_id(category: u64) -> Option<RadioCategory> {
+        match category {
+            127 => Some(RadioCategory::Comedy),
+            130 => Some(RadioCategory::Drama),
+            128 => Some(RadioCategory::FactualDocumentary),
+            132 => Some(RadioCategory::Reading),
+            _ => None,
+        }
+    }
+
+    pub fn to_id(self) -> u8 {
+        match self {
+            RadioCategory::Comedy => 127,
+            RadioCategory::Drama => 130,
+            RadioCategory::FactualDocumentary => 128,
+            RadioCategory::Reading => 132,
+        }
+    }
+
+    pub fn to_str(self) -> &'static str {
+        match self {
+            RadioCategory::Comedy => "Comedy",
+            RadioCategory::Drama => "Drama",
+            RadioCategory::FactualDocumentary => "Factual/Documentary",
+            RadioCategory::Reading => "Reading",
+        }
+    }
+}
+
+impl TryFrom<String> for RadioCategory {
     type Error = String;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {

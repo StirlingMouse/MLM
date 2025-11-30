@@ -14,6 +14,7 @@ mod v12;
 mod v13;
 mod v14;
 mod v15;
+mod v16;
 
 use anyhow::Result;
 use native_db::Models;
@@ -25,6 +26,11 @@ use tracing::{info, instrument};
 pub static MODELS: Lazy<Models> = Lazy::new(|| {
     let mut models = Models::new();
     models.define::<v01::Config>().unwrap();
+
+    models.define::<v16::Torrent>().unwrap();
+    models.define::<v16::SelectedTorrent>().unwrap();
+    models.define::<v16::DuplicateTorrent>().unwrap();
+    models.define::<v16::ErroredTorrent>().unwrap();
 
     models.define::<v15::Torrent>().unwrap();
     models.define::<v15::SelectedTorrent>().unwrap();
@@ -112,13 +118,13 @@ pub static MODELS: Lazy<Models> = Lazy::new(|| {
 });
 
 pub type Config = v01::Config;
-pub type Torrent = v15::Torrent;
-pub type TorrentKey = v15::TorrentKey;
-pub type SelectedTorrent = v15::SelectedTorrent;
-pub type SelectedTorrentKey = v15::SelectedTorrentKey;
-pub type DuplicateTorrent = v15::DuplicateTorrent;
-pub type ErroredTorrent = v15::ErroredTorrent;
-pub type ErroredTorrentKey = v15::ErroredTorrentKey;
+pub type Torrent = v16::Torrent;
+pub type TorrentKey = v16::TorrentKey;
+pub type SelectedTorrent = v16::SelectedTorrent;
+pub type SelectedTorrentKey = v16::SelectedTorrentKey;
+pub type DuplicateTorrent = v16::DuplicateTorrent;
+pub type ErroredTorrent = v16::ErroredTorrent;
+pub type ErroredTorrentKey = v16::ErroredTorrentKey;
 pub type ErroredTorrentId = v11::ErroredTorrentId;
 pub type Event = v15::Event;
 pub type EventKey = v15::EventKey;
@@ -128,12 +134,12 @@ pub type ListKey = v05::ListKey;
 pub type ListItem = v05::ListItem;
 pub type ListItemKey = v05::ListItemKey;
 pub type ListItemTorrent = v04::ListItemTorrent;
-pub type TorrentMeta = v15::TorrentMeta;
+pub type TorrentMeta = v16::TorrentMeta;
 pub type TorrentMetaDiff = v12::TorrentMetaDiff;
 pub type TorrentMetaField = v12::TorrentMetaField;
 pub type VipStatus = v11::VipStatus;
 pub type MetadataSource = v10::MetadataSource;
-pub type OldMainCat = v01::MainCat;
+pub type OldDbMainCat = v01::MainCat;
 pub type MainCat = v12::MainCat;
 pub type Uuid = v03::Uuid;
 pub type Timestamp = v03::Timestamp;
@@ -149,7 +155,9 @@ pub type LibraryMismatch = v08::LibraryMismatch;
 pub type ClientStatus = v08::ClientStatus;
 pub type AudiobookCategory = v06::AudiobookCategory;
 pub type EbookCategory = v06::EbookCategory;
-pub type OldCategory = v06::Category;
+pub type MusicologyCategory = v16::MusicologyCategory;
+pub type RadioCategory = v16::RadioCategory;
+pub type OldCategory = v16::OldCategory;
 pub type MediaType = v13::MediaType;
 pub type Category = v15::Category;
 
@@ -157,6 +165,7 @@ pub type Category = v15::Category;
 pub fn migrate(db: &Database<'_>) -> Result<()> {
     let rw = db.rw_transaction()?;
 
+    info!("Migrations started");
     rw.migrate::<Torrent>()?;
     rw.migrate::<SelectedTorrent>()?;
     rw.migrate::<DuplicateTorrent>()?;

@@ -394,13 +394,6 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
         let preference = preferred_types
             .iter()
             .position(|t| meta.filetypes.contains(t));
-        if preference.is_none() {
-            trace!(
-                "Could not find any wanted formats in torrent {}",
-                meta.mam_id
-            );
-            continue;
-        }
         if let Some(rw) = &rw_opt {
             let old_library = rw
                 .get()
@@ -443,6 +436,13 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             continue 'torrent;
         }
         if cost == Cost::MetadataOnly {
+            continue 'torrent;
+        }
+        if preference.is_none() {
+            debug!(
+                "Could not find any wanted formats in torrent {}, formats: {:?}, wanted: {:?}",
+                meta.mam_id, meta.filetypes, preferred_types
+            );
             continue 'torrent;
         }
         if let Some(rw) = &rw_opt {
@@ -791,6 +791,7 @@ pub async fn add_metadata_only_torrent(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn update_torrent_meta(
     config: &Config,
     db: &Database<'_>,

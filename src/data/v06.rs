@@ -1,4 +1,4 @@
-use super::{v01, v03, v04, v05, v07, v08};
+use super::{v01, v03, v04, v05, v07, v08, v16};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -318,6 +318,17 @@ impl From<v08::TorrentMeta> for TorrentMeta {
             authors: t.authors,
             narrators: t.narrators,
             series: t.series,
+        }
+    }
+}
+
+impl From<v16::OldCategory> for Category {
+    fn from(value: v16::OldCategory) -> Self {
+        match value {
+            v16::OldCategory::Audio(audiobook_category) => Self::Audio(audiobook_category),
+            v16::OldCategory::Ebook(ebook_category) => Self::Ebook(ebook_category),
+            v16::OldCategory::Musicology(_) => unimplemented!(),
+            v16::OldCategory::Radio(_) => unimplemented!(),
         }
     }
 }

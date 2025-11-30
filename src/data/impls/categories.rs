@@ -1,6 +1,7 @@
 use crate::{
     config::Config,
-    data::{Category, MainCat, MediaType, OldMainCat},
+    data::{Category, MainCat, MediaType},
+    mam::enums::OldMainCat,
 };
 
 impl MediaType {
@@ -41,6 +42,7 @@ impl MediaType {
         }
     }
 
+    #[allow(dead_code)]
     pub fn as_id(&self) -> u8 {
         match self {
             MediaType::Audiobook => 1,
@@ -79,6 +81,8 @@ impl From<OldMainCat> for MediaType {
         match value {
             OldMainCat::Audio => MediaType::Audiobook,
             OldMainCat::Ebook => MediaType::Ebook,
+            OldMainCat::Musicology => MediaType::Musicology,
+            OldMainCat::Radio => MediaType::Radio,
         }
     }
 }
@@ -99,6 +103,7 @@ impl MainCat {
         }
     }
 
+    #[allow(dead_code)]
     pub fn as_id(&self) -> u8 {
         match self {
             MainCat::Fiction => 1,
@@ -248,6 +253,7 @@ impl Category {
         }
     }
 
+    #[allow(dead_code)]
     pub fn as_id(&self) -> u8 {
         match self {
             Category::Action => 1,

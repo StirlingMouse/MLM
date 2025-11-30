@@ -60,6 +60,7 @@ impl std::fmt::Display for SeriesEntry {
     }
 }
 
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl PartialOrd for SeriesEntry {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match (self, other) {
@@ -133,7 +134,7 @@ fn series_range(input: &str) -> IResult<&str, SeriesEntry> {
 }
 
 fn series_num(input: &str) -> IResult<&str, SeriesEntry> {
-    map(float, |num| SeriesEntry::Num(num)).parse_complete(input)
+    map(float, SeriesEntry::Num).parse_complete(input)
 }
 
 fn series_entry(input: &str) -> IResult<&str, SeriesEntry> {

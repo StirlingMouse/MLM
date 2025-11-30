@@ -151,6 +151,26 @@ impl TorrentFilter {
                         return Ok(false);
                     }
                 }
+                OldCategory::Musicology(category) => {
+                    if self
+                        .categories
+                        .musicology
+                        .as_ref()
+                        .is_some_and(|cats| !cats.contains(category))
+                    {
+                        return Ok(false);
+                    }
+                }
+                OldCategory::Radio(category) => {
+                    if self
+                        .categories
+                        .radio
+                        .as_ref()
+                        .is_some_and(|cats| !cats.contains(category))
+                    {
+                        return Ok(false);
+                    }
+                }
             }
         } else {
             if self.categories.audio.as_ref().is_some_and(|c| c.is_empty())
@@ -267,7 +287,7 @@ mod tests {
 
     use crate::{
         data::{AudiobookCategory, FlagBits, Timestamp, TorrentMeta},
-        mam_enums::Categories,
+        mam::enums::Categories,
     };
 
     use super::*;
@@ -379,6 +399,8 @@ mod tests {
                 categories: Categories {
                     audio: Some(vec![AudiobookCategory::GeneralFiction]),
                     ebook: Some(vec![]),
+                    musicology: Some(vec![]),
+                    radio: Some(vec![]),
                 },
                 ..TorrentFilter::default()
             };
@@ -392,6 +414,8 @@ mod tests {
                 categories: Categories {
                     audio: Some(vec![AudiobookCategory::GeneralNonFic]),
                     ebook: Some(vec![]),
+                    musicology: Some(vec![]),
+                    radio: Some(vec![]),
                 },
                 ..TorrentFilter::default()
             };
@@ -720,6 +744,8 @@ mod tests {
                 categories: Categories {
                     audio: Some(vec![AudiobookCategory::GeneralFiction]),
                     ebook: Some(vec![]),
+                    musicology: Some(vec![]),
+                    radio: Some(vec![]),
                 },
                 languages: vec![Language::English],
                 flags: Flags {
@@ -751,7 +777,8 @@ mod tests {
             Torrent {
                 meta,
 
-                hash: "".to_string(),
+                id: "".to_string(),
+                id_is_hash: false,
                 mam_id: 0,
                 abs_id: None,
                 goodreads_id: None,
@@ -787,6 +814,7 @@ mod tests {
                 narrators: vec![],
                 series: vec![],
                 source: MetadataSource::Mam,
+                uploaded_at: Timestamp::now(),
             }
         }
 
@@ -1073,6 +1101,8 @@ mod tests {
                 categories: Categories {
                     audio: Some(vec![AudiobookCategory::GeneralFiction]),
                     ebook: None,
+                    musicology: None,
+                    radio: None,
                 },
                 flags: Flags {
                     crude_language: Some(true),

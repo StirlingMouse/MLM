@@ -18,7 +18,8 @@ use tracing::{debug, instrument};
 use tracing::{trace, warn};
 
 use crate::config::GoodreadsList;
-use crate::data::{ListItemTorrent, OldMainCat, Torrent, TorrentKey, TorrentStatus};
+use crate::data::{ListItemTorrent, OldDbMainCat, Torrent, TorrentKey, TorrentStatus};
+use crate::mam::enums::OldMainCat;
 use crate::{
     autograbber::select_torrents,
     config::{Config, Cost, Grab},
@@ -122,9 +123,9 @@ pub async fn run_goodreads_import(
                             }
                         }
                         if (db_item.audio_torrent.is_some() && db_item.ebook_torrent.is_some())
-                            || (list.prefer_format == Some(OldMainCat::Audio)
+                            || (list.prefer_format == Some(OldDbMainCat::Audio)
                                 && db_item.audio_torrent.is_some())
-                            || (list.prefer_format == Some(OldMainCat::Ebook)
+                            || (list.prefer_format == Some(OldDbMainCat::Ebook)
                                 && db_item.ebook_torrent.is_some())
                         {
                             continue;
@@ -193,11 +194,11 @@ async fn search_item(
     let mut has_updates = false;
     if audiobook.is_some() && ebook.is_some() {
         match list.prefer_format {
-            Some(OldMainCat::Audio) => {
+            Some(OldDbMainCat::Audio) => {
                 let updated = not_wanted(&mut db_item.ebook_torrent, &mut ebook);
                 has_updates = updated || has_updates;
             }
-            Some(OldMainCat::Ebook) => {
+            Some(OldDbMainCat::Ebook) => {
                 let updated = not_wanted(&mut db_item.audio_torrent, &mut audiobook);
                 has_updates = updated || has_updates;
             }
