@@ -552,27 +552,35 @@ async fn other_torrents(
         .split_once(":")
         .map_or(meta.title.as_str(), |(a, _)| a);
 
-    let title = Regex::new(r#"([\*\?])"#).unwrap().replace(title, r#""$1""#);
-    let title = Regex::new(r#"(['`/]| - )"#).unwrap().replace(&title, " ");
+    let title = Regex::new(r#"([\*\?])"#)
+        .unwrap()
+        .replace_all(title, r#""$1""#);
+    let title = Regex::new(r#"(?:['`/]|-)"#)
+        .unwrap()
+        .replace_all(&title, " ");
     let title = Regex::new(r#"\s+\[[^\]\[]+?\]"#)
         .unwrap()
-        .replace(&title, "");
+        .replace_all(&title, "");
     let title = Regex::new(r#"\s+\([^<>\)\(]+?\]"#)
         .unwrap()
-        .replace(&title, "");
+        .replace_all(&title, "");
     let title = Regex::new(r#"&|\band\b"#)
         .unwrap()
-        .replace(&title, "(&|and)");
+        .replace_all(&title, "(&|and)");
 
     let result = mam
         .search(&SearchQuery {
             media_info: true,
             tor: Tor {
-                text: format!(
-                    "{} ({})",
-                    title,
-                    meta.authors.iter().map(|a| format!("\"{a}\"")).join(" | ")
-                ),
+                text: if meta.authors.is_empty() {
+                    title.to_string()
+                } else {
+                    format!(
+                        "{} ({})",
+                        title,
+                        meta.authors.iter().map(|a| format!("\"{a}\"")).join(" | ")
+                    )
+                },
                 srch_in: vec![SearchIn::Title, SearchIn::Author],
                 ..Default::default()
             },
