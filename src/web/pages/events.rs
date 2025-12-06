@@ -25,87 +25,94 @@ pub async fn event_page(
 ) -> std::result::Result<Response, AppError> {
     let r = db.r_transaction()?;
     let events = r.scan().secondary::<Event>(EventKey::created_at)?;
+    let event_count = r.len().secondary::<Event>(EventKey::created_at)?;
     let events = events.all()?.rev();
     let mut events_with_torrent = Vec::with_capacity(events.size_hint().0);
-    let mut events = events
-        .filter(|t| {
-            let Ok(t) = t else {
-                return true;
-            };
-            for (field, value) in filter.iter() {
-                let ok = match field {
-                    EventPageFilter::Show => match t.event {
-                        EventType::Grabbed { .. } => value == "grabber",
-                        EventType::Linked { .. } => value == "linker",
-                        EventType::Cleaned { .. } => value == "cleaner",
-                        EventType::Updated { .. } => value == "updated",
-                        EventType::RemovedFromMam { .. } => value == "removed",
-                    },
-                    EventPageFilter::Grabber => match t.event {
-                        EventType::Grabbed { ref grabber, .. } => {
-                            if value.is_empty() {
-                                grabber.is_none()
-                            } else {
-                                grabber.as_ref() == Some(value)
-                            }
-                        }
-                        _ => false,
-                    },
-                    EventPageFilter::Linker => match t.event {
-                        EventType::Linked { ref linker, .. } => {
-                            if value.is_empty() {
-                                linker.is_none()
-                            } else {
-                                linker.as_ref() == Some(value)
-                            }
-                        }
-                        _ => false,
-                    },
-                    EventPageFilter::Category => {
-                        match t
-                            .torrent_id
-                            .as_ref()
-                            .and_then(|id| r.get().primary::<Torrent>(id.clone()).ok()?)
-                        {
-                            Some(torrent) => {
-                                if value.is_empty() {
-                                    torrent.category.is_none()
-                                } else {
-                                    torrent.category.as_ref() == Some(value)
-                                }
-                            }
-                            None => false,
+    let events = events.filter(|t| {
+        let Ok(t) = t else {
+            return true;
+        };
+        for (field, value) in filter.iter() {
+            let ok = match field {
+                EventPageFilter::Show => match t.event {
+                    EventType::Grabbed { .. } => value == "grabber",
+                    EventType::Linked { .. } => value == "linker",
+                    EventType::Cleaned { .. } => value == "cleaner",
+                    EventType::Updated { .. } => value == "updated",
+                    EventType::RemovedFromMam { .. } => value == "removed",
+                },
+                EventPageFilter::Grabber => match t.event {
+                    EventType::Grabbed { ref grabber, .. } => {
+                        if value.is_empty() {
+                            grabber.is_none()
+                        } else {
+                            grabber.as_ref() == Some(value)
                         }
                     }
-                    EventPageFilter::HasUpdates => match t.event {
-                        EventType::Updated { ref fields, .. } => {
-                            fields.iter().any(|f| !f.from.is_empty())
+                    _ => false,
+                },
+                EventPageFilter::Linker => match t.event {
+                    EventType::Linked { ref linker, .. } => {
+                        if value.is_empty() {
+                            linker.is_none()
+                        } else {
+                            linker.as_ref() == Some(value)
                         }
-                        _ => false,
-                    },
-                    EventPageFilter::From => true,
-                    EventPageFilter::PageSize => true,
-                };
-                if !ok {
-                    return false;
+                    }
+                    _ => false,
+                },
+                EventPageFilter::Category => {
+                    match t
+                        .torrent_id
+                        .as_ref()
+                        .and_then(|id| r.get().primary::<Torrent>(id.clone()).ok()?)
+                    {
+                        Some(torrent) => {
+                            if value.is_empty() {
+                                torrent.category.is_none()
+                            } else {
+                                torrent.category.as_ref() == Some(value)
+                            }
+                        }
+                        None => false,
+                    }
                 }
+                EventPageFilter::HasUpdates => match t.event {
+                    EventType::Updated { ref fields, .. } => {
+                        fields.iter().any(|f| !f.from.is_empty())
+                    }
+                    _ => false,
+                },
+                EventPageFilter::From => true,
+                EventPageFilter::PageSize => true,
+            };
+            if !ok {
+                return false;
             }
-            true
-        })
-        .collect::<Vec<_>>();
-    let paging = match paging.default_page_size(uri, 500, events.len()) {
+        }
+        true
+    });
+    let mut paging = match paging.default_page_size(uri, 500, event_count as usize) {
         Ok(paging) => paging,
         Err(redirect) => return Ok(redirect.into_response()),
     };
-    if let Some(paging) = &paging {
-        events = events
-            .into_iter()
+    let events: Result<Vec<Event>, native_db::db_type::Error> = if let Some(paging) = &mut paging {
+        let mut count = 0;
+        let events = events
+            .inspect(|_| {
+                count += 1;
+            })
             .skip(paging.from)
             .take(paging.page_size)
             .collect();
-    }
-    for event in events {
-        let event = event?;
+        if count < paging.page_size + paging.from {
+            paging.total = count;
+        }
+        events
+    } else {
+        events.collect()
+    };
+    for event in events? {
         if let Some(id) = &event.torrent_id {
             let r = db.r_transaction()?;
             let torrent: Option<Torrent> = r.get().primary(id.clone())?;
