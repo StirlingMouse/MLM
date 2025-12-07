@@ -211,7 +211,10 @@ impl<'a> MaM<'a> {
                 ..Default::default()
             })
             .await?;
-        Ok(resp.data.pop())
+        Ok(resp.data.pop().map(|mut t| {
+            t.fix();
+            t
+        }))
     }
     pub async fn get_torrent_info_by_id(&self, mam_id: u64) -> Result<Option<MaMTorrent>> {
         let mut resp = self
@@ -228,7 +231,10 @@ impl<'a> MaM<'a> {
                 ..Default::default()
             })
             .await?;
-        Ok(resp.data.pop())
+        Ok(resp.data.pop().map(|mut t| {
+            t.fix();
+            t
+        }))
     }
 
     pub async fn search(&self, query: &SearchQuery) -> Result<SearchResult> {
@@ -250,10 +256,13 @@ impl<'a> MaM<'a> {
                 return Err(Error::msg(resp.error));
             }
         };
-        let resp: SearchResult = serde_json::from_str(&resp).map_err(|err| {
+        let mut resp: SearchResult = serde_json::from_str(&resp).map_err(|err| {
             error!("Error parsing mam response: {err}\nResponse: {resp}");
             err
         })?;
+        for t in &mut resp.data {
+            t.fix();
+        }
         self.store_cookies();
         Ok(resp)
     }

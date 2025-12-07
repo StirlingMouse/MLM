@@ -214,9 +214,13 @@ pub struct MaMTorrent {
     #[serde(deserialize_with = "json_or_default")]
     pub narrator_info: BTreeMap<u64, String>,
     pub numfiles: u64,
+    #[serde(default)]
     pub owner: u64,
+    #[serde(default)]
     #[serde(deserialize_with = "string_or_number")]
     pub owner_name: String,
+    #[serde(deserialize_with = "json_or_default")]
+    pub ownership: Vec<Value>,
     #[serde(deserialize_with = "bool_string_or_number")]
     pub personal_freeleech: bool,
     pub seeders: u64,
@@ -377,5 +381,18 @@ impl MaMTorrent {
 
     pub fn is_free(&self) -> bool {
         self.free || self.personal_freeleech || self.fl_vip
+    }
+
+    pub fn fix(&mut self) {
+        if self.ownership.len() == 2 {
+            let Some(id) = self.ownership.first().and_then(|v| v.as_u64()) else {
+                return;
+            };
+            self.owner = id;
+            let Some(name) = self.ownership.get(1).and_then(|v| v.as_str()) else {
+                return;
+            };
+            self.owner_name = name.to_owned();
+        }
     }
 }
