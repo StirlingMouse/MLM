@@ -10,7 +10,7 @@ use crate::{
         meta::{MetaError, clean_value},
         serde::{
             DATE_TIME_FORMAT, bool_string_or_number, is_false, is_zero, json_or_default,
-            opt_string_or_number, parse_title, string_or_number, vec_string_or_number,
+            opt_string_or_number, string_or_number, vec_string_or_number,
         },
     },
 };
@@ -231,7 +231,7 @@ pub struct MaMTorrent {
     pub tags: String,
     pub times_completed: u64,
     pub thumbnail: Option<String>,
-    #[serde(deserialize_with = "parse_title")]
+    #[serde(deserialize_with = "string_or_number")]
     pub title: String,
     #[serde(deserialize_with = "bool_string_or_number")]
     pub vip: bool,

@@ -11,7 +11,7 @@ use serde::Deserialize;
 use tokio::sync::Mutex;
 
 use crate::{
-    config::{Config, TorrentSearch},
+    config::{Config, TorrentFilter},
     data::Timestamp,
     mam::api::MaM,
     stats::{Stats, Triggers},
@@ -140,8 +140,8 @@ pub struct IndexPageForm {
     index: Option<usize>,
 }
 
-impl TorrentSearch {
+impl TorrentFilter {
     fn display_name(&self, i: usize) -> String {
-        self.filter.name.clone().unwrap_or_else(|| format!("{i}"))
+        self.name.clone().unwrap_or_else(|| format!("{i}"))
     }
 }

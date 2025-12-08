@@ -22,12 +22,23 @@ no qbittorrent instances configured, all features are disabled
 <div class="infoboxes">
 {% for (i, grab) in config.autograbs.iter().enumerate() %}
 <form method=post class="infobox">
-  <h2>Autograbber: {{ grab.display_name(*i) }}</h2>
+  <h2>Autograbber: {{ grab.filter.display_name(*i) }}</h2>
   <p>Last run: {% match autograbber_run_at.get(i) %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
   <button name=action value=run_search>run now</button>
   <input type=hidden name=index value={{ i }}>
   {% if autograbber_run_at.get(i).is_some() %}
   <p>Result: {% match autograbber_result.get(i) %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
+  {% endif %}
+</form>
+{% endfor %}
+{% for (i, grab) in config.snatchlist.iter().enumerate() %}
+<form method=post class="infobox">
+  <h2>Snatchlist Grabber: {{ grab.filter.display_name(i + config.autograbs.len()) }}</h2>
+  <p>Last run: {% match autograbber_run_at.get(&(i + config.autograbs.len())) %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
+  <button name=action value=run_search>run now</button>
+  <input type=hidden name=index value={{ i + config.autograbs.len() }}>
+  {% if autograbber_run_at.get(&(i + config.autograbs.len())).is_some() %}
+  <p>Result: {% match autograbber_result.get(&(i + config.autograbs.len())) %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
   {% endif %}
 </form>
 {% endfor %}

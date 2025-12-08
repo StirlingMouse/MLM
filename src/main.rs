@@ -12,6 +12,7 @@ mod linker;
 mod logging;
 mod mam;
 mod qbittorrent;
+mod snatchlist;
 mod stats;
 mod web;
 #[cfg(target_family = "windows")]
@@ -54,7 +55,10 @@ use tracing_subscriber::{
 };
 use web::start_webserver;
 
-use crate::{config::Config, linker::link_torrents_to_library, mam::api::MaM};
+use crate::{
+    config::Config, linker::link_torrents_to_library, mam::api::MaM,
+    snatchlist::run_snatchlist_search,
+};
 
 #[tokio::main]
 async fn main() {
@@ -272,15 +276,25 @@ async fn app_main() -> Result<()> {
             let grab = Arc::new(grab.clone());
             tokio::spawn(async move {
                 loop {
-                    select! {
-                        () = sleep(Duration::from_secs(60 * grab.search_interval.unwrap_or(config.search_interval))) => {},
-                        result = rx.changed() => {
-                            if let Err(err) = result {
-                                error!("Error listening on search_rx: {err:?}");
-                                let mut stats = stats.lock().await;
-                                stats.goodreads_result = Some(Err(err.into()));
-                            }
-                        },
+                    let interval = grab.search_interval.unwrap_or(config.search_interval);
+                    if interval > 0 {
+                        select! {
+                            () = sleep(Duration::from_secs(60 * grab.search_interval.unwrap_or(config.search_interval))) => {},
+                            result = rx.changed() => {
+                                if let Err(err) = result {
+                                    error!("Error listening on search_rx: {err:?}");
+                                    let mut stats = stats.lock().await;
+                                    stats.autograbber_result.insert(i, Err(err.into()));
+                                }
+                            },
+                        }
+                    } else {
+                        let result = rx.changed().await;
+                        if let Err(err) = result {
+                            error!("Error listening on search_rx: {err:?}");
+                            let mut stats = stats.lock().await;
+                            stats.autograbber_result.insert(i, Err(err.into()));
+                        }
                     }
                     {
                         let mut stats = stats.lock().await;
@@ -301,6 +315,65 @@ async fn app_main() -> Result<()> {
                     .context("autograbbers");
                     if let Err(err) = &result {
                         error!("Error running autograbbers: {err:?}");
+                    }
+                    {
+                        let mut stats = stats.lock().await;
+                        stats.autograbber_result.insert(i, result);
+                    }
+                }
+            });
+        }
+
+        for (i, grab) in config.snatchlist.iter().enumerate() {
+            let i = i + config.autograbs.len();
+            let config = config.clone();
+            let db = db.clone();
+            let mam = mam.clone();
+            let (tx, mut rx) = watch::channel(());
+            search_tx.insert(i, tx);
+            search_rx.insert(i, rx.clone());
+            let stats = stats.clone();
+            let grab = Arc::new(grab.clone());
+            tokio::spawn(async move {
+                loop {
+                    let interval = grab.search_interval.unwrap_or(config.search_interval);
+                    if interval > 0 {
+                        select! {
+                            () = sleep(Duration::from_secs(60 * interval)) => {},
+                            result = rx.changed() => {
+                                if let Err(err) = result {
+                                    error!("Error listening on search_rx for snatchlist: {err:?}");
+                                    let mut stats = stats.lock().await;
+                                    stats.autograbber_result.insert(i, Err(err.into()));
+                                }
+                            },
+                        }
+                    } else {
+                        let result = rx.changed().await;
+                        if let Err(err) = result {
+                            error!("Error listening on search_rx for snatchlist: {err:?}");
+                            let mut stats = stats.lock().await;
+                            stats.autograbber_result.insert(i, Err(err.into()));
+                        }
+                    }
+                    {
+                        let mut stats = stats.lock().await;
+                        stats
+                            .autograbber_run_at
+                            .insert(i, OffsetDateTime::now_utc());
+                        stats.autograbber_result.remove(&i);
+                    }
+                    let result = run_snatchlist_search(
+                        config.clone(),
+                        db.clone(),
+                        mam.clone(),
+                        i,
+                        grab.clone(),
+                    )
+                    .await
+                    .context("snatchlist_search");
+                    if let Err(err) = &result {
+                        error!("Error running snatchlist_search: {err:?}");
                     }
                     {
                         let mut stats = stats.lock().await;

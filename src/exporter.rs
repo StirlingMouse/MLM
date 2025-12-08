@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::data;
 
+#[allow(unused)]
 #[derive(Serialize, Deserialize, Debug)]
 struct ExportV1 {
     config: Vec<data::Config>,
@@ -18,6 +19,7 @@ struct ExportV1 {
     errored_torrents: Vec<data::ErroredTorrent>,
 }
 
+#[allow(unused)]
 pub fn export_db(db: &Database<'_>) -> Result<()> {
     let r = db.r_transaction()?;
     let export = ExportV1 {

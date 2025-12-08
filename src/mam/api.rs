@@ -15,11 +15,12 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info, trace, warn};
 
 use crate::{
-    config::Config,
+    config::{Config, SnatchlistType},
     data,
     mam::{
         search::{MaMTorrent, SearchError, SearchQuery, SearchResult, Tor},
         user_data::UserResponse,
+        user_torrent::UserDetailsTorrentResponse,
     },
 };
 
@@ -263,6 +264,37 @@ impl<'a> MaM<'a> {
         for t in &mut resp.data {
             t.fix();
         }
+        self.store_cookies();
+        Ok(resp)
+    }
+
+    pub async fn snatchlist(
+        &self,
+        kind: SnatchlistType,
+        page: u64,
+        timestamp: UtcDateTime,
+    ) -> Result<UserDetailsTorrentResponse> {
+        debug!("snatchlist: {:?} {}", kind, page);
+        let user = self.user_info().await?;
+        let resp = self
+            .client
+            .get("https://cdn.myanonamouse.net/json/loadUserDetailsTorrents.php")
+            .query(&(
+                ("uid", user.uid.to_string()),
+                ("iteration", page.to_string()),
+                ("type", kind.to_string()),
+                ("cacheTime", timestamp.unix_timestamp().to_string()),
+            ))
+            .send()
+            .await?
+            .error_for_status()
+            .map_err(RateLimitError::maybe)?
+            .text()
+            .await?;
+        let resp: UserDetailsTorrentResponse = serde_json::from_str(&resp).map_err(|err| {
+            error!("Error parsing mam response: {err}\nResponse: {resp}");
+            err
+        })?;
         self.store_cookies();
         Ok(resp)
     }

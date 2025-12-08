@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap, fmt, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 use time::Date;
@@ -54,6 +54,8 @@ pub struct Config {
     #[serde(default)]
     #[serde(rename = "autograb")]
     pub autograbs: Vec<TorrentSearch>,
+    #[serde(default)]
+    pub snatchlist: Vec<SnatchlistSearch>,
 
     #[serde(default)]
     #[serde(rename = "goodreads_list")]
@@ -110,6 +112,16 @@ pub struct TorrentSearch {
     pub category: Option<String>,
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Type {
+    Bookmarks,
+    Freeleech,
+    New,
+    Mine,
+    Uploader(u64),
+}
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum SortBy {
@@ -117,6 +129,42 @@ pub enum SortBy {
     LowSnatches,
     OldestFirst,
     Random,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SnatchlistSearch {
+    #[serde(rename = "type")]
+    pub kind: SnatchlistType,
+    #[serde(default)]
+    pub cost: Cost,
+    pub max_pages: Option<u8>,
+    #[serde(flatten)]
+    pub filter: TorrentFilter,
+
+    pub search_interval: Option<u64>,
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SnatchlistType {
+    Unsat,
+    SeedUnsat,
+    SeedSat,
+    UploadsActive,
+}
+
+impl fmt::Display for SnatchlistType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SnatchlistType::Unsat => write!(f, "unsat"),
+            SnatchlistType::SeedUnsat => write!(f, "seedUnsat"),
+            SnatchlistType::SeedSat => write!(f, "sSat"),
+            SnatchlistType::UploadsActive => write!(f, "upAct"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -188,16 +236,6 @@ pub struct TorrentFilter {
     pub max_leechers: Option<u64>,
     pub min_snatched: Option<u64>,
     pub max_snatched: Option<u64>,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Type {
-    Bookmarks,
-    Freeleech,
-    New,
-    Mine,
-    Uploader(u64),
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]

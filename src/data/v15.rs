@@ -104,7 +104,7 @@ pub struct TorrentMeta {
     pub uploaded_at: v03::Timestamp,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Category {
     Action,
     Art,

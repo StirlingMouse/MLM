@@ -21,7 +21,7 @@ pub async fn torrent_api(
     if let Ok(id) = id_or_mam_id.parse() {
         torrent_api_mam_id(State((config, db, mam)), Path(id)).await
     } else {
-        torrent_api_id(State((config, db, mam)), Path(id_or_mam_id)).await
+        torrent_api_id(State((config, db)), Path(id_or_mam_id)).await
     }
 }
 
@@ -34,7 +34,7 @@ async fn torrent_api_mam_id(
         .get()
         .secondary::<Torrent>(TorrentKey::mam_id, mam_id)?
     {
-        return torrent_api_id(State((config, db, mam)), Path(torrent.id)).await;
+        return torrent_api_id(State((config, db)), Path(torrent.id)).await;
     };
 
     let Ok(mam) = mam.as_ref() else {
@@ -52,7 +52,7 @@ async fn torrent_api_mam_id(
 }
 
 async fn torrent_api_id(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    State((config, db)): State<(Arc<Config>, Arc<Database<'static>>)>,
     Path(id): Path<String>,
 ) -> std::result::Result<Json<serde_json::Value>, AppError> {
     let Some(torrent) = db.r_transaction()?.get().primary::<Torrent>(id)? else {

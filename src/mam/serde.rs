@@ -1,5 +1,4 @@
 use once_cell::sync::Lazy;
-use regex::Regex;
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use time::format_description::{self, OwnedFormatItem};
@@ -27,6 +26,59 @@ where
     match v {
         Value::String(v) => Ok(v == "yes" || v == "1"),
         Value::Number(v) => Ok(v.as_u64().unwrap_or_default() == 1),
+        _ => Err(serde::de::Error::custom("expected number or string")),
+    }
+}
+
+pub fn num_string_or_number<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: TryFrom<u64>,
+{
+    let v = Value::deserialize(deserializer)?;
+    match v {
+        Value::String(v) => Ok(v
+            .parse::<u64>()
+            .map_err(|_| serde::de::Error::custom("invalid number string"))
+            .and_then(|v| {
+                v.try_into()
+                    .map_err(|_| serde::de::Error::custom("invalid number string"))
+            })?),
+        Value::Number(v) => Ok(v
+            .as_u64()
+            .ok_or_else(|| serde::de::Error::custom("invalid number"))
+            .and_then(|v| {
+                v.try_into()
+                    .map_err(|_| serde::de::Error::custom("invalid number"))
+            })?),
+        _ => Err(serde::de::Error::custom("expected number or string")),
+    }
+}
+
+pub fn opt_num_string_or_number<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: TryFrom<u64>,
+{
+    let v = Option::<Value>::deserialize(deserializer)?;
+    match v {
+        Some(Value::String(v)) => Ok(Some(
+            v.parse::<u64>()
+                .map_err(|_| serde::de::Error::custom("invalid number string"))
+                .and_then(|v| {
+                    v.try_into()
+                        .map_err(|_| serde::de::Error::custom("invalid number string"))
+                })?,
+        )),
+        Some(Value::Number(v)) => Ok(Some(
+            v.as_u64()
+                .ok_or_else(|| serde::de::Error::custom("invalid number"))
+                .and_then(|v| {
+                    v.try_into()
+                        .map_err(|_| serde::de::Error::custom("invalid number"))
+                })?,
+        )),
+        None => Ok(None),
         _ => Err(serde::de::Error::custom("expected number or string")),
     }
 }
@@ -68,22 +120,6 @@ where
         Value::String(v) => Ok(v),
         Value::Number(v) => Ok(v.to_string()),
         _ => Err(serde::de::Error::custom("expected number or string")),
-    }
-}
-
-pub static TITLE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"(.*?) +\[[^\]]*\]$").unwrap());
-
-// Workaround policy to put english translations in torrent titles
-pub fn parse_title<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let title = string_or_number(deserializer)?;
-
-    if let Some(title) = TITLE_PATTERN.captures(&title).and_then(|c| c.get(1)) {
-        Ok(title.as_str().to_owned())
-    } else {
-        Ok(title)
     }
 }
 

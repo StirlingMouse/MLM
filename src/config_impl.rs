@@ -7,8 +7,10 @@ use tracing::error;
 
 use crate::{
     config::{GoodreadsList, Library, LibraryLinkMethod, LibraryTagFilters, TorrentFilter},
-    data::{Language, MediaType, OldCategory, Size, Torrent},
-    mam::{enums::Flags, search::MaMTorrent, serde::DATE_TIME_FORMAT},
+    data::{Language, MediaType, OldCategory, Size, Torrent, TorrentMeta},
+    mam::{
+        enums::Flags, search::MaMTorrent, serde::DATE_TIME_FORMAT, user_torrent::UserDetailsTorrent,
+    },
 };
 
 impl TorrentFilter {
@@ -118,8 +120,80 @@ impl TorrentFilter {
         true
     }
 
+    pub fn matches_user(&self, torrent: &UserDetailsTorrent) -> bool {
+        if !self.categories.matches(torrent.category) {
+            return false;
+        }
+
+        let torrent_flags = Flags::from_bitfield(torrent.browse_flags);
+        if !self.flags.matches(&torrent_flags) {
+            return false;
+        }
+
+        if self.min_size.bytes() > 0 || self.max_size.bytes() > 0 {
+            match Size::try_from(torrent.size.clone()) {
+                Ok(size) => {
+                    if self.min_size.bytes() > 0 && size < self.min_size {
+                        return false;
+                    }
+                    if self.max_size.bytes() > 0 && size > self.max_size {
+                        return false;
+                    }
+                }
+                Err(_) => {
+                    error!(
+                        "Failed parsing size \"{}\" for torrent \"{}\"",
+                        torrent.size, torrent.title
+                    );
+                    return false;
+                }
+            };
+        }
+
+        if self.exclude_uploader.contains(&torrent.uploader_name) {
+            return false;
+        }
+
+        if let Some(min_seeders) = self.min_seeders {
+            if torrent.seeders < min_seeders {
+                return false;
+            }
+        }
+        if let Some(max_seeders) = self.max_seeders {
+            if torrent.seeders > max_seeders {
+                return false;
+            }
+        }
+        if let Some(min_leechers) = self.min_leechers {
+            if torrent.leechers < min_leechers {
+                return false;
+            }
+        }
+        if let Some(max_leechers) = self.max_leechers {
+            if torrent.leechers > max_leechers {
+                return false;
+            }
+        }
+        if let Some(min_snatched) = self.min_snatched {
+            if torrent.times_completed < min_snatched {
+                return false;
+            }
+        }
+        if let Some(max_snatched) = self.max_snatched {
+            if torrent.times_completed > max_snatched {
+                return false;
+            }
+        }
+
+        true
+    }
+
     pub(crate) fn matches_lib(&self, torrent: &Torrent) -> Result<bool, anyhow::Error> {
-        if let Some(language) = &torrent.meta.language {
+        self.matches_meta(&torrent.meta)
+    }
+
+    pub(crate) fn matches_meta(&self, meta: &TorrentMeta) -> Result<bool, anyhow::Error> {
+        if let Some(language) = &meta.language {
             if !self.languages.is_empty() && !self.languages.contains(language) {
                 return Ok(false);
             }
@@ -129,7 +203,7 @@ impl TorrentFilter {
                 "has language selection and no stored language"
             );
         }
-        if let Some(cat) = &torrent.meta.cat {
+        if let Some(cat) = &meta.cat {
             match cat {
                 OldCategory::Audio(category) => {
                     if self
@@ -174,12 +248,12 @@ impl TorrentFilter {
             }
         } else {
             if self.categories.audio.as_ref().is_some_and(|c| c.is_empty())
-                && torrent.meta.media_type == MediaType::Audiobook
+                && meta.media_type == MediaType::Audiobook
             {
                 return Ok(false);
             }
             if self.categories.ebook.as_ref().is_some_and(|c| c.is_empty())
-                && torrent.meta.media_type == MediaType::Ebook
+                && meta.media_type == MediaType::Ebook
             {
                 return Ok(false);
             }
@@ -192,7 +266,7 @@ impl TorrentFilter {
                 "has advanced ebook selection and no stored category"
             );
         }
-        if let Some(flags) = torrent.meta.flags {
+        if let Some(flags) = meta.flags {
             let flags: Flags = flags.into();
             if !self.flags.matches(&flags) {
                 return Ok(false);
