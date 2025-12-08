@@ -349,7 +349,7 @@ impl std::fmt::Display for Size {
             value /= 1024.0;
             unit = "KiB";
         }
-        let value = ((value * 1000.0).round() as u64) / 1000;
+        let value = ((value * 100.0).round() as u64) as f64 / 100.0;
         write!(f, "{} {}", value, unit)
     }
 }
@@ -451,6 +451,14 @@ mod tests {
         assert_eq!(
             Size::from_str("1,016.2 KiB"),
             Ok(Size::from_bytes(1_040_589))
+        );
+    }
+
+    #[test]
+    fn test_size_display() {
+        assert_eq!(
+            format!("{}", Size::from_str("1.43 GiB").unwrap()),
+            "1.43 GiB"
         );
     }
 }
