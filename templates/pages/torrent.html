@@ -16,6 +16,16 @@
   <h1>{{ torrent.meta.title }}</h1>
   <a href="/torrents/{{torrent.id}}/edit" class=btn>edit</a>
 </div>
+{% if let Some(torrent) = replacement_torrent %}
+  <div class="row">
+    <h2>Replaced with: <a href="/torrents/{{torrent.id}}">{{ torrent.meta.title }}</a></h2>
+  </div>
+{% else if torrent.replaced_with.is_some() %}
+  <form method=post class="row warn" style="justify-content:flex-start">
+    Replaced with torrent that has been removed
+    <button name=action value=clear-replacement>clear replaced_with</button>
+  </form>
+{% endif %}
 <div class="row">
   <div>
     id: {{ torrent.mam_id }} {% if let Some(vip_status) = torrent.meta.vip_status %}{{ vip_status }}{% endif %}
@@ -82,57 +92,6 @@
   {% endfor %}
   </ul>
 </details>
-{% endif %}
-
-{% if let Some(torrent) = replacement_torrent %}
-  <div class="row">
-    <h2>Replaced with: <a href="/torrents/{{torrent.id}}">{{ torrent.meta.title }}</a></h2>
-  </div>
-  <p>By {{ items(TorrentsPageFilter::Author, torrent.meta.authors) }}</p>
-  {% if !torrent.meta.series.is_empty() %}
-    <p>Series: {{ series(TorrentsPageFilter::Series, torrent.meta.series) }}</p>
-  {% endif %}
-  {% if !torrent.meta.narrators.is_empty() %}
-    <p>Narrator: {{ items(TorrentsPageFilter::Narrator, torrent.meta.narrators) }}</p>
-  {% endif %}
-  {% if let Some(language) = torrent.meta.language %}
-    <p>Language: {{ language.to_str() }}</p>
-  {% endif %}
-  {% if let Some(cat) = torrent.meta.cat %}
-    <p>Category: {{ torrent.meta.media_type.as_str() }} - {{ cat.as_str() }}</p>
-  {% else %}
-    <p>Category: {{ torrent.meta.media_type.as_str() }}</p>
-  {% endif %}
-  <p>Size: {{ torrent.meta.size }}</p>
-  {% if let Some(library_path) = torrent.library_path %}
-    <div class=row style="justify-content:flex-start">
-      Linked Path: {{ library_path.to_string_lossy() }}
-    </div>
-  {% endif %}
-  {% if wanted_path != torrent.library_path %}
-    {% if let Some(wanted_path) = wanted_path %}
-      <div class=row style="justify-content:flex-start">
-        Wanted Path: {{ wanted_path.to_string_lossy() }}
-      </div>
-    {% else %}
-      <div class=row style="justify-content:flex-start">
-        No longer wanted in library
-      </div>
-    {% endif %}
-  {% endif %}
-  <details>
-    <summary>Files</summary>
-    <ul>
-    {% for file in torrent.library_files.iter().flatten() %}
-      <li><a href="/torrents/{{torrent.id}}/{{file.to_string_lossy() | urlencode_strict}}" target=_blank>{{ file.to_string_lossy() }}</a></li>
-    {% endfor %}
-    </ul>
-  </details>
-{% else if torrent.replaced_with.is_some() %}
-  <form method=post class="row warn" style="justify-content:flex-start">
-    Replaced with torrent that has been removed
-    <button name=action value=clear-replacement>clear replaced_with</button>
-  </form>
 {% endif %}
 
 {% if let Some(qbit) = qbit_data %}
