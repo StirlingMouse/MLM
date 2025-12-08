@@ -162,16 +162,10 @@ async fn torrent_page_id(
     let events = db
         .r_transaction()?
         .scan()
-        .secondary::<Event>(EventKey::created_at)?;
-    let events = events.all()?.rev();
-    let events = events
-        .filter(|t| {
-            let Ok(t) = t else {
-                return true;
-            };
-            t.torrent_id.as_deref() == Some(&torrent.id)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+        .secondary::<Event>(EventKey::mam_id)?;
+    let events = events.range(Some(torrent.mam_id)..=Some(torrent.mam_id))?;
+    let mut events = events.collect::<Result<Vec<_>, _>>()?;
+    events.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
     let Ok(mam) = mam.as_ref() else {
         return Err(anyhow::Error::msg("mam_id error").into());
