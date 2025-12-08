@@ -103,6 +103,12 @@ unsat_buffer = 10
 ```
 How many unsat slots that should be left open so that you have room to download torrents manually or with other autograb blocks.
 
+### Wedge Buffer
+```toml
+wedge_buffer = 10
+```
+How many wedges that should be left unused so that you have can download torrents manually or with other autograb blocks.
+
 ### Max Active Downloads
 ```toml
 name = "My Bookmarks"

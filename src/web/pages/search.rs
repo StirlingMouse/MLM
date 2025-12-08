@@ -163,6 +163,7 @@ pub async fn select_torrent(
             .clone()
             .ok_or_else(|| Error::msg(format!("no dl field for torrent {}", torrent.id)))?,
         unsat_buffer: None,
+        wedge_buffer: None,
         cost,
         category,
         tags,

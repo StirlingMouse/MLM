@@ -51,6 +51,7 @@ pub async fn search_api_post(
             &search.filter,
             search.cost,
             search.unsat_buffer,
+            search.wedge_buffer,
             search.category.clone(),
             search.dry_run,
             u64::MAX,

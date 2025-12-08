@@ -244,6 +244,7 @@ async fn update_torrent_meta(
     meta.media_type = torrent.meta.media_type;
     meta.main_cat = torrent.meta.main_cat;
     meta.language = torrent.meta.language;
+    meta.num_files = torrent.meta.num_files;
     meta.uploaded_at = torrent.meta.uploaded_at;
 
     if torrent.meta.source != MetadataSource::Mam {

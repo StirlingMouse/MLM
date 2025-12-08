@@ -207,6 +207,21 @@ impl TorrentMeta {
                 to: other.title.to_string(),
             });
         }
+        if self.edition != other.edition {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::Edition,
+                from: self
+                    .edition
+                    .as_ref()
+                    .map(|e| e.0.to_string())
+                    .unwrap_or_default(),
+                to: other
+                    .edition
+                    .as_ref()
+                    .map(|e| e.0.to_string())
+                    .unwrap_or_default(),
+            });
+        }
         if self.authors != other.authors {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Authors,
@@ -266,6 +281,7 @@ impl std::fmt::Display for TorrentMetaField {
             TorrentMetaField::Filetypes => write!(f, "filetypes"),
             TorrentMetaField::Size => write!(f, "size"),
             TorrentMetaField::Title => write!(f, "title"),
+            TorrentMetaField::Edition => write!(f, "edition"),
             TorrentMetaField::Authors => write!(f, "authors"),
             TorrentMetaField::Narrators => write!(f, "narrators"),
             TorrentMetaField::Series => write!(f, "series"),

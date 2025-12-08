@@ -1,4 +1,4 @@
-use super::{v01, v03, v04, v06, v08, v09, v10, v11, v13, v14, v15};
+use super::{v01, v03, v04, v06, v08, v09, v10, v11, v13, v14, v15, v17};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -602,6 +602,73 @@ impl From<v15::Event> for Event {
             mam_id: t.mam_id,
             created_at: t.created_at,
             event: t.event,
+        }
+    }
+}
+
+impl From<v17::EventType> for EventType {
+    fn from(t: v17::EventType) -> Self {
+        match t {
+            v17::EventType::Grabbed {
+                grabber,
+                cost,
+                wedged,
+            } => Self::Grabbed {
+                grabber,
+                cost,
+                wedged,
+            },
+            v17::EventType::Linked {
+                linker,
+                library_path,
+            } => Self::Linked {
+                linker,
+                library_path,
+            },
+            v17::EventType::Cleaned {
+                library_path,
+                files,
+            } => Self::Cleaned {
+                library_path,
+                files,
+            },
+            v17::EventType::Updated { fields } => Self::Updated {
+                fields: fields.into_iter().map(Into::into).collect(),
+            },
+            v17::EventType::RemovedFromMam => Self::RemovedFromMam,
+        }
+    }
+}
+
+impl From<v17::TorrentMetaDiff> for TorrentMetaDiff {
+    fn from(value: v17::TorrentMetaDiff) -> Self {
+        Self {
+            field: value.field.into(),
+            from: value.from,
+            to: value.to,
+        }
+    }
+}
+
+impl From<v17::TorrentMetaField> for TorrentMetaField {
+    fn from(value: v17::TorrentMetaField) -> Self {
+        match value {
+            v17::TorrentMetaField::MamId => TorrentMetaField::MamId,
+            v17::TorrentMetaField::Vip => TorrentMetaField::Vip,
+            v17::TorrentMetaField::MediaType => TorrentMetaField::MediaType,
+            v17::TorrentMetaField::MainCat => TorrentMetaField::MainCat,
+            v17::TorrentMetaField::Categories => TorrentMetaField::Categories,
+            v17::TorrentMetaField::Cat => TorrentMetaField::Cat,
+            v17::TorrentMetaField::Language => TorrentMetaField::Language,
+            v17::TorrentMetaField::Flags => TorrentMetaField::Flags,
+            v17::TorrentMetaField::Filetypes => TorrentMetaField::Filetypes,
+            v17::TorrentMetaField::Size => TorrentMetaField::Size,
+            v17::TorrentMetaField::Title => TorrentMetaField::Title,
+            v17::TorrentMetaField::Authors => TorrentMetaField::Authors,
+            v17::TorrentMetaField::Narrators => TorrentMetaField::Narrators,
+            v17::TorrentMetaField::Series => TorrentMetaField::Series,
+            v17::TorrentMetaField::Source => TorrentMetaField::Source,
+            v17::TorrentMetaField::Edition => unimplemented!(),
         }
     }
 }

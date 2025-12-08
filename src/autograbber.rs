@@ -183,6 +183,7 @@ pub async fn search_and_select_torrents(
         &torrent_search.filter,
         torrent_search.cost,
         torrent_search.unsat_buffer,
+        torrent_search.wedge_buffer,
         torrent_search.category.clone(),
         torrent_search.dry_run,
         max_torrents,
@@ -338,6 +339,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
     grabber: &TorrentFilter,
     cost: Cost,
     unsat_buffer: Option<u64>,
+    wedge_buffer: Option<u64>,
     filter_category: Option<String>,
     dry_run: bool,
     max_torrents: u64,
@@ -594,6 +596,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                     .clone()
                     .ok_or_else(|| Error::msg(format!("no dl field for torrent {}", torrent.id)))?,
                 unsat_buffer,
+                wedge_buffer,
                 cost,
                 category,
                 tags,
@@ -632,12 +635,13 @@ async fn grab_torrent(
     let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
     let hash = torrent_file.info_hash();
 
+    let wedge_buffer = torrent.wedge_buffer.unwrap_or(config.wedge_buffer);
     let mut wedged = false;
     if torrent.cost == TorrentCost::UseWedge || torrent.cost == TorrentCost::TryWedge {
-        if user_info.wedges < config.wedge_buffer {
+        if user_info.wedges < wedge_buffer {
             return Err(anyhow::Error::msg(format!(
                 "Fewer wedges ({}) than wedge_buffer ({})",
-                user_info.wedges, config.wedge_buffer
+                user_info.wedges, wedge_buffer
             )));
         }
         info!("Using wedge on torrent \"{}\"", torrent.meta.title);
@@ -833,10 +837,11 @@ pub async fn update_torrent_meta(
         }
     }
 
-    // Check uploaded_at
-    if torrent.meta.uploaded_at != meta.uploaded_at {
+    // Check uploaded_at and num_files
+    if torrent.meta.uploaded_at != meta.uploaded_at || torrent.meta.num_files != meta.num_files {
         torrent.meta.uploaded_at = meta.uploaded_at;
-        // If uploaded_at was the only change, just silently update the database
+        torrent.meta.num_files = meta.num_files;
+        // If uploaded_at or num_files was the only change, just silently update the database
         if torrent.meta == meta {
             rw.upsert(torrent.clone())?;
             rw.commit()?;

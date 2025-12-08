@@ -162,6 +162,7 @@ pub async fn duplicate_torrents_page_post(
                             Error::msg(format!("no dl field for torrent {}", mam_torrent.id))
                         })?,
                     unsat_buffer: None,
+                    wedge_buffer: None,
                     cost,
                     category,
                     tags,

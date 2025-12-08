@@ -1,4 +1,4 @@
-use super::{v03, v04, v06, v08, v09, v10, v11, v12, v13, v14, v16};
+use super::{v03, v04, v06, v08, v09, v10, v11, v12, v13, v14, v16, v17};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -449,6 +449,18 @@ impl From<v16::TorrentMeta> for TorrentMeta {
             series: t.series,
             source: t.source,
             uploaded_at: t.uploaded_at,
+        }
+    }
+}
+
+impl From<v17::Event> for Event {
+    fn from(t: v17::Event) -> Self {
+        Self {
+            id: t.id,
+            torrent_id: t.torrent_id,
+            mam_id: t.mam_id,
+            created_at: t.created_at,
+            event: t.event.into(),
         }
     }
 }

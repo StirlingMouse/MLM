@@ -199,8 +199,11 @@ impl UserDetailsTorrent {
             language: None,
             flags: Some(FlagBits::new(self.browse_flags)),
             filetypes,
+            // TODO: Currently num_files isn't returned
+            num_files: 0,
             size,
             title: clean_value(&self.title)?,
+            edition: None,
             authors,
             narrators,
             series,
