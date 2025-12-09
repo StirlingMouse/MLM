@@ -1,4 +1,12 @@
 <div class="MaMTorrentsTable table2 nohover">
+<style>
+  .MaMTorrentsTable {
+    .title {
+      display: inline-block;
+      margin-bottom: 2px;
+    }
+  }
+</style>
 <div></div>
 {% for (mam_torrent, meta, torrent) in torrents %}
 <div>
@@ -12,13 +20,18 @@
       {% if mam_torrent.lang_code != "ENG" %}
       <span class=faint>[{{ mam_torrent.lang_code }}]</span>
       {% endif %}
-      <a href="/torrents/{{ meta.mam_id }}"><b>{{ meta.title }}</b></a><br>
-      <i class=faint>by</i> {{ meta.authors.join(", ") }}<br>
+      <a href="/torrents/{{ meta.mam_id }}" class=title><b>{{ meta.title }}</b></a><br>
+        <i class=faint>by</i> {% for author in meta.authors %}<a href="/search?q={{ author  | fmt("@author \"{}\"")  | urlencode_strict }}">{{ author }}</a>{% if !loop.last %}, {% endif %}{% endfor %}<br>
       {% if !meta.series.is_empty() %}
-      <i class=faint>series</i> {% for series in meta.series %}<span class=item>{{ series.name }}</span>{% if !series.entries.0.is_empty() %} #{{ series.entries }}{% endif %}{% endfor %}<br>
+        <i class=faint>series</i>
+        {% for series in meta.series %}
+          <a href="/search?q={{ series.name | fmt("@series \"{}\"") | urlencode_strict }}&sort=series" class=item>{{ series.name }}</a>
+          {% if !series.entries.0.is_empty() %}#{{ series.entries }}{% endif %}
+        {% endfor %}
+        <br>
       {% endif %}
       {% if !meta.narrators.is_empty() %}
-        <i class=faint>narrated by</i> {{ meta.narrators.join(", ") }}<br>
+        <i class=faint>narrated by</i> {% for narrator in meta.narrators %}<a href="/search?q={{ narrator  | fmt("@narrator \"{}\"")  | urlencode_strict }}">{{ narrator }}</a>{% if !loop.last %}, {% endif %}{% endfor %}<br>
       {% endif %}
       <i>{{ mam_torrent.tags }}</i><br>
       <span class=faint>

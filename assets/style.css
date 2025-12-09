@@ -416,7 +416,13 @@ summary {
 }
 
 .item {
-        background-color: #aa86b72e;
+        display: inline-block;
+        margin: 2px 0;
         padding: 2px 4px;
         border-radius: 4px;
+        background-color: #aa86b72e;
+
+        & + & {
+                margin-left: 4px;
+        }
 }

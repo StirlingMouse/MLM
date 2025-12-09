@@ -41,7 +41,7 @@ pub async fn search_page(
         .await?;
 
     let r = db.r_transaction()?;
-    let torrents = result
+    let mut torrents = result
         .data
         .into_iter()
         .map(|mam_torrent| {
@@ -52,7 +52,15 @@ pub async fn search_page(
 
             Ok((mam_torrent, meta, torrent))
         })
-        .collect::<Result<_>>()?;
+        .collect::<Result<Vec<_>>>()?;
+
+    if query.sort == "series" {
+        torrents.sort_by(|(_, a, _), (_, b, _)| {
+            a.series
+                .cmp(&b.series)
+                .then(a.media_type.cmp(&b.media_type))
+        })
+    }
 
     let template = SearchPageTemplate {
         query,
@@ -113,6 +121,8 @@ impl Page for SearchPageTemplate {}
 pub struct SearchPageQuery {
     #[serde(default)]
     q: String,
+    #[serde(default)]
+    sort: String,
 }
 
 pub async fn select_torrent(
