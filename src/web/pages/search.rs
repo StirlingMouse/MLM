@@ -167,7 +167,7 @@ pub async fn select_torrent(
         cost,
         category,
         tags,
-        title_search: normalize_title(&torrent.title),
+        title_search: normalize_title(&meta.title),
         meta,
         grabber: None,
         created_at: Timestamp::now(),

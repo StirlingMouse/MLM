@@ -15,6 +15,9 @@
 <div class="row">
   <h1>{{ meta.title }}</h1>
 </div>
+{% if let Some((edition, _)) = meta.edition %}
+  {{ edition }}
+{% endif %}
 <div class="row">
   <div>
     id: {{ meta.mam_id }} {% if let Some(vip_status) = meta.vip_status %}{{ vip_status }}{% endif %}

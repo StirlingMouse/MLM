@@ -391,11 +391,6 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             trace!("Torrent {} is already selected", torrent.id);
             continue;
         }
-        let title_search = normalize_title(&torrent.title);
-        let preferred_types = meta.media_type.preferred_types(config);
-        let preference = preferred_types
-            .iter()
-            .position(|t| meta.filetypes.contains(t));
         if let Some(rw) = &rw_opt {
             let old_library = rw
                 .get()
@@ -440,6 +435,11 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
         if cost == Cost::MetadataOnly {
             continue 'torrent;
         }
+        let title_search = normalize_title(&meta.title);
+        let preferred_types = meta.media_type.preferred_types(config);
+        let preference = preferred_types
+            .iter()
+            .position(|t| meta.filetypes.contains(t));
         if preference.is_none() {
             debug!(
                 "Could not find any wanted formats in torrent {}, formats: {:?}, wanted: {:?}",

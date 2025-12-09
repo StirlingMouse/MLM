@@ -16,6 +16,9 @@
   <h1>{{ torrent.meta.title }}</h1>
   <a href="/torrents/{{torrent.id}}/edit" class=btn>edit</a>
 </div>
+{% if let Some((edition, _)) = torrent.meta.edition %}
+  {{ edition }}
+{% endif %}
 {% if let Some(torrent) = replacement_torrent %}
   <div class="row">
     <h2>Replaced with: <a href="/torrents/{{torrent.id}}">{{ torrent.meta.title }}</a></h2>

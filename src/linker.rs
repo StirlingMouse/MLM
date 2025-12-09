@@ -534,7 +534,7 @@ async fn link_torrent(
             },
             selected_audio_format,
             selected_ebook_format,
-            title_search: normalize_title(&mam_torrent.title),
+            title_search: normalize_title(&meta.title),
             meta: meta.clone(),
             created_at: existing_torrent
                 .map(|t| t.created_at)
@@ -631,6 +631,16 @@ pub fn library_dir(
         None => PathBuf::from(sanitize_filename::sanitize(author).to_string())
             .join(sanitize_filename::sanitize(&meta.title).to_string()),
     };
+    if let Some((edition, _)) = &meta.edition {
+        dir.set_file_name(
+            sanitize_filename::sanitize(format!(
+                "{}, {}",
+                dir.file_name().unwrap().to_string_lossy(),
+                edition
+            ))
+            .to_string(),
+        );
+    }
     if let Some(narrator) = meta.narrators.first()
         && !exclude_narrator_in_library_dir
     {

@@ -1,3 +1,5 @@
+use crate::mam::meta::{normalize_title, parse_edition};
+
 use super::{v03, v04, v08, v09, v10, v11, v12, v13, v15, v16};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
@@ -170,6 +172,7 @@ pub enum TorrentMetaField {
 
 impl From<v16::Torrent> for Torrent {
     fn from(t: v16::Torrent) -> Self {
+        let meta: TorrentMeta = t.meta.into();
         Self {
             id: t.id,
             id_is_hash: t.id_is_hash,
@@ -182,8 +185,8 @@ impl From<v16::Torrent> for Torrent {
             category: t.category,
             selected_audio_format: t.selected_audio_format,
             selected_ebook_format: t.selected_ebook_format,
-            title_search: t.title_search,
-            meta: t.meta.into(),
+            title_search: normalize_title(&meta.title),
+            meta,
             created_at: t.created_at,
             replaced_with: t.replaced_with,
             request_matadata_update: t.request_matadata_update,
@@ -195,6 +198,7 @@ impl From<v16::Torrent> for Torrent {
 
 impl From<v16::SelectedTorrent> for SelectedTorrent {
     fn from(t: v16::SelectedTorrent) -> Self {
+        let meta: TorrentMeta = t.meta.into();
         Self {
             mam_id: t.mam_id,
             goodreads_id: t.goodreads_id,
@@ -205,8 +209,8 @@ impl From<v16::SelectedTorrent> for SelectedTorrent {
             cost: t.cost,
             category: t.category,
             tags: t.tags,
-            title_search: t.title_search,
-            meta: t.meta.into(),
+            title_search: normalize_title(&meta.title),
+            meta,
             grabber: t.grabber,
             created_at: t.created_at,
             started_at: t.started_at,
@@ -217,11 +221,12 @@ impl From<v16::SelectedTorrent> for SelectedTorrent {
 
 impl From<v16::DuplicateTorrent> for DuplicateTorrent {
     fn from(t: v16::DuplicateTorrent) -> Self {
+        let meta: TorrentMeta = t.meta.into();
         Self {
             mam_id: t.mam_id,
             dl_link: t.dl_link,
-            title_search: t.title_search,
-            meta: t.meta.into(),
+            title_search: normalize_title(&meta.title),
+            meta,
             created_at: t.created_at,
             duplicate_of: t.duplicate_of,
         }
@@ -242,6 +247,8 @@ impl From<v16::ErroredTorrent> for ErroredTorrent {
 
 impl From<v16::TorrentMeta> for TorrentMeta {
     fn from(t: v16::TorrentMeta) -> Self {
+        let (title, edition) = parse_edition(&t.title, "");
+
         Self {
             mam_id: t.mam_id,
             vip_status: t.vip_status,
@@ -254,8 +261,8 @@ impl From<v16::TorrentMeta> for TorrentMeta {
             filetypes: t.filetypes,
             num_files: 0,
             size: t.size,
-            title: t.title,
-            edition: None,
+            title,
+            edition,
             authors: t.authors,
             narrators: t.narrators,
             series: t.series,

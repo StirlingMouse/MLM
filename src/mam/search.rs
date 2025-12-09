@@ -7,7 +7,7 @@ use crate::{
     },
     mam::{
         enums::{SearchIn, SearchKind, SearchTarget},
-        meta::{MetaError, clean_value},
+        meta::{MetaError, clean_value, parse_edition},
         serde::{
             DATE_TIME_FORMAT, bool_string_or_number, is_false, is_zero, json_or_default,
             opt_string_or_number, string_or_number, vec_string_or_number,
@@ -279,6 +279,8 @@ pub struct MediaInfoMenu {
 
 impl MaMTorrent {
     pub fn as_meta(&self) -> Result<TorrentMeta, MetaError> {
+        let (title, edition) = parse_edition(&self.title, &self.tags);
+
         let authors = self
             .author_info
             .values()
@@ -371,8 +373,8 @@ impl MaMTorrent {
             filetypes,
             num_files: self.numfiles,
             size,
-            title: self.title.to_owned(),
-            edition: None,
+            title,
+            edition,
             authors,
             narrators,
             series,

@@ -120,7 +120,8 @@ pub async fn duplicate_torrents_page_post(
                     );
                 };
 
-                let title_search = normalize_title(&mam_torrent.title);
+                let meta = mam_torrent.as_meta()?;
+                let title_search = normalize_title(&meta.title);
                 let tags: Vec<_> = config
                     .tags
                     .iter()
@@ -167,7 +168,7 @@ pub async fn duplicate_torrents_page_post(
                     category,
                     tags,
                     title_search,
-                    meta: mam_torrent.as_meta()?,
+                    meta,
                     grabber: None,
                     created_at: Timestamp::now(),
                     started_at: None,

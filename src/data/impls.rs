@@ -74,6 +74,13 @@ impl TorrentMeta {
     pub(crate) fn matches(&self, other: &TorrentMeta) -> bool {
         self.media_type.matches(other.media_type)
             && self.language == other.language
+            && (self.edition.is_none() == other.edition.is_none()
+                || self.edition.as_ref().is_some_and(|this| {
+                    other
+                        .edition
+                        .as_ref()
+                        .is_some_and(|that| this.1 == that.1 && (this.1 != 0 || this.0 == that.0))
+                }))
             && self.authors.iter().any(|a| other.authors.contains(a))
             && ((self.narrators.is_empty() && other.narrators.is_empty())
                 || self.narrators.iter().any(|a| other.narrators.contains(a)))

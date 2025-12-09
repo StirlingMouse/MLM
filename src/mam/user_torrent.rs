@@ -4,7 +4,7 @@ use crate::{
         Timestamp, TorrentMeta, VipStatus,
     },
     mam::{
-        meta::{MetaError, clean_value},
+        meta::{MetaError, clean_value, parse_edition},
         serde::{bool_string_or_number, num_string_or_number, opt_num_string_or_number},
     },
 };
@@ -85,19 +85,19 @@ pub struct UserDetailsTorrent {
     #[serde(rename = "personalFree")]
     #[serde(deserialize_with = "bool_string_or_number")]
     pub personal_free: bool,
-    #[serde(rename = "uploadPretty")]
-    pub upload_pretty: String,
-    #[serde(rename = "downloadPretty")]
-    pub download_pretty: String,
-    #[serde(rename = "ratioColor")]
-    pub ratio_color: String,
-    pub ratio: String,
-    #[serde(rename = "seedtimeColor")]
-    pub seedtime_color: String,
-    #[serde(rename = "seedtimePretty")]
-    pub seedtime_pretty: String,
-    #[serde(rename = "leechtimePretty")]
-    pub leechtime_pretty: String,
+    // #[serde(rename = "uploadPretty")]
+    // pub upload_pretty: String,
+    // #[serde(rename = "downloadPretty")]
+    // pub download_pretty: String,
+    // #[serde(rename = "ratioColor")]
+    // pub ratio_color: String,
+    // pub ratio: String,
+    // #[serde(rename = "seedtimeColor")]
+    // pub seedtime_color: String,
+    // #[serde(rename = "seedtimePretty")]
+    // pub seedtime_pretty: String,
+    // #[serde(rename = "leechtimePretty")]
+    // pub leechtime_pretty: String,
     pub cat: String,
     pub dl: String,
     #[serde(rename = "percentDone")]
@@ -124,6 +124,8 @@ pub struct UserDetailsTorrent {
 
 impl UserDetailsTorrent {
     pub fn as_meta(&self) -> Result<TorrentMeta, MetaError> {
+        let (title, edition) = parse_edition(&clean_value(&self.title)?, &clean_value(&self.tags)?);
+
         let authors = self
             .author
             .iter()
@@ -202,8 +204,8 @@ impl UserDetailsTorrent {
             // TODO: Currently num_files isn't returned
             num_files: 0,
             size,
-            title: clean_value(&self.title)?,
-            edition: None,
+            title,
+            edition,
             authors,
             narrators,
             series,

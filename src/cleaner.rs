@@ -28,7 +28,7 @@ pub async fn run_library_cleaner(config: Arc<Config>, db: Arc<Database<'_>>) -> 
     let mut batch: Vec<data::Torrent> = vec![];
     for torrent in torrents {
         if let Some(current) = batch.first() {
-            if current.title_search != torrent.title_search {
+            if !current.matches(&torrent) {
                 process_batch(&config, &db, mem::take(&mut batch)).await?;
             }
             batch.push(torrent);
@@ -50,82 +50,64 @@ async fn process_batch(
     if batch.len() == 1 {
         return Ok(());
     };
-    let mut batches: Vec<Vec<data::Torrent>> = vec![];
-
-    for torrent in batch {
-        if let Some(sub_batch) = batches
-            .iter_mut()
-            .find(|b| b.iter().any(|t| t.matches(&torrent)))
-        {
-            sub_batch.push(torrent);
-        } else {
-            batches.push(vec![torrent]);
-        }
-    }
-
-    for batch in batches {
-        if batch.len() == 1 {
-            continue;
-        }
-        let mut batch = batch
+    let mut batch = batch
+        .into_iter()
+        .map(|torrent| {
+            let preferred_types = torrent.meta.media_type.preferred_types(config);
+            let preference = preferred_types
+                .iter()
+                .position(|t| torrent.meta.filetypes.contains(t))
+                .unwrap_or(usize::MAX);
+            (torrent, preference)
+        })
+        .collect::<Vec<_>>();
+    batch.sort_by_key(|(_, preference)| *preference);
+    if batch[0].1 == batch[1].1 {
+        trace!(
+            "need to compare torrent \"{}\" and \"{}\" by size",
+            batch[0].0.meta.title, batch[1].0.meta.title
+        );
+        let mut new_batch = batch
             .into_iter()
-            .map(|torrent| {
-                let preferred_types = torrent.meta.media_type.preferred_types(&config);
-                let preference = preferred_types
-                    .iter()
-                    .position(|t| torrent.meta.filetypes.contains(t))
-                    .unwrap_or(usize::MAX);
-                (torrent, preference)
+            .map(|(torrent, preference)| {
+                let mut size = 0;
+                if let Some(library_path) = &torrent.library_path {
+                    for file in &torrent.library_files {
+                        let path = library_path.join(file);
+                        size += fs::metadata(path).map_or(0, |s| file_size(&s));
+                    }
+                }
+                (torrent, preference, size)
             })
             .collect::<Vec<_>>();
-        batch.sort_by_key(|(_, preference)| *preference);
-        if batch[0].1 == batch[1].1 {
-            trace!(
-                "need to compare torrent \"{}\" and \"{}\" by size",
-                batch[0].0.meta.title, batch[1].0.meta.title
-            );
-            let mut new_batch = batch
-                .into_iter()
-                .map(|(torrent, preference)| {
-                    let mut size = 0;
-                    if let Some(library_path) = &torrent.library_path {
-                        for file in &torrent.library_files {
-                            let path = library_path.join(file);
-                            size += fs::metadata(path).map_or(0, |s| file_size(&s));
-                        }
-                    }
-                    (torrent, preference, size)
-                })
-                .collect::<Vec<_>>();
-            new_batch.sort_by(|a, b| a.1.cmp(&b.1).then(b.2.cmp(&a.2)));
-            trace!("new_batch {:?}", new_batch);
-            batch = new_batch
-                .into_iter()
-                .map(|(torrent, preference, _)| (torrent, preference))
-                .collect();
-        }
-        let (keep, _) = batch.remove(0);
-        for (mut remove, _) in batch {
-            info!(
-                "Replacing library torrent \"{}\" {} with {}",
-                remove.meta.title, remove.meta.mam_id, keep.meta.mam_id
-            );
-            remove.replaced_with = Some((keep.id.clone(), Timestamp::now()));
-            let result = clean_torrent(
-                config,
-                db,
-                remove.clone(),
-                keep.library_path.is_some() && keep.library_path != remove.library_path,
-            )
-            .await
-            .map_err(|err| anyhow::Error::new(TorrentMetaError(remove.meta.clone(), err)));
-            update_errored_torrent(
-                db,
-                ErroredTorrentId::Cleaner(remove.id),
-                remove.meta.title,
-                result,
-            )
-        }
+        new_batch.sort_by(|a, b| a.1.cmp(&b.1).then(b.2.cmp(&a.2)));
+        trace!("new_batch {:?}", new_batch);
+        batch = new_batch
+            .into_iter()
+            .map(|(torrent, preference, _)| (torrent, preference))
+            .collect();
+    }
+    let (keep, _) = batch.remove(0);
+    for (mut remove, _) in batch {
+        info!(
+            "Replacing library torrent \"{}\" {} with {}",
+            remove.meta.title, remove.meta.mam_id, keep.meta.mam_id
+        );
+        remove.replaced_with = Some((keep.id.clone(), Timestamp::now()));
+        let result = clean_torrent(
+            config,
+            db,
+            remove.clone(),
+            keep.library_path.is_some() && keep.library_path != remove.library_path,
+        )
+        .await
+        .map_err(|err| anyhow::Error::new(TorrentMetaError(remove.meta.clone(), err)));
+        update_errored_torrent(
+            db,
+            ErroredTorrentId::Cleaner(remove.id),
+            remove.meta.title,
+            result,
+        )
     }
 
     Ok(())
@@ -202,12 +184,12 @@ pub async fn remove_library_files(
     remove: &Torrent,
     delete_in_abs: bool,
 ) -> Result<()> {
-    if delete_in_abs {
-        if let (Some(abs_id), Some(abs_config)) = (&remove.abs_id, &config.audiobookshelf) {
-            let abs = Abs::new(abs_config)?;
-            if let Err(err) = abs.delete_book(abs_id).await {
-                warn!("Failed deleting book from abs: {err}");
-            }
+    if delete_in_abs
+        && let (Some(abs_id), Some(abs_config)) = (&remove.abs_id, &config.audiobookshelf)
+    {
+        let abs = Abs::new(abs_config)?;
+        if let Err(err) = abs.delete_book(abs_id).await {
+            warn!("Failed deleting book from abs: {err}");
         }
     }
 
