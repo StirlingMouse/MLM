@@ -9,7 +9,7 @@ use native_db::Database;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    data::{Event, EventKey, EventType, Torrent, TorrentCost},
+    data::{Event, EventKey, EventType, Torrent, TorrentCost, TorrentKey},
     web::{
         AppError, Conditional, Page, TorrentLink,
         tables::{Key, Pagination, PaginationParams, table_styles},
@@ -27,7 +27,6 @@ pub async fn event_page(
     let events = r.scan().secondary::<Event>(EventKey::created_at)?;
     let event_count = r.len().secondary::<Event>(EventKey::created_at)?;
     let events = events.all()?.rev();
-    let mut events_with_torrent = Vec::with_capacity(events.size_hint().0);
     let events = events.filter(|t| {
         let Ok(t) = t else {
             return true;
@@ -59,27 +58,18 @@ pub async fn event_page(
                             linker.as_ref() == Some(value)
                         }
                     }
-                    _ => false,
+                    _ => true,
                 },
-                EventPageFilter::Category => {
-                    match t
-                        .torrent_id
-                        .as_ref()
-                        .and_then(|id| r.get().primary::<Torrent>(id.clone()).ok()?)
-                    {
-                        Some(torrent) => {
-                            if value.is_empty() {
-                                torrent.category.is_none()
-                            } else {
-                                torrent.category.as_ref() == Some(value)
-                            }
-                        }
-                        None => false,
-                    }
-                }
+                EventPageFilter::Category => true,
                 EventPageFilter::HasUpdates => match t.event {
                     EventType::Updated { ref fields, .. } => {
                         fields.iter().any(|f| !f.from.is_empty())
+                    }
+                    _ => false,
+                },
+                EventPageFilter::Field => match t.event {
+                    EventType::Updated { ref fields, .. } => {
+                        fields.iter().any(|f| &f.field.to_string() == value)
                     }
                     _ => false,
                 },
@@ -92,40 +82,75 @@ pub async fn event_page(
         }
         true
     });
+    let linker_filter = filter.iter().find(|f| f.0 == EventPageFilter::Linker);
+    let category_filter = filter.iter().find(|f| f.0 == EventPageFilter::Category);
+    let r = db.r_transaction()?;
+    let events = events
+        .map(|event| {
+            let event = event?;
+            let torrent: Option<Torrent> = if let Some(id) = &event.torrent_id {
+                r.get().primary(id.clone())?
+            } else if let Some(mam_id) = &event.mam_id {
+                r.get().secondary(TorrentKey::mam_id, *mam_id)?
+            } else {
+                None
+            };
+
+            if let Some(torrent) = torrent {
+                if let Some((_, linker)) = linker_filter
+                    && torrent.linker.as_ref() != Some(linker)
+                {
+                    return Ok(None);
+                }
+                if let Some((_, category)) = category_filter {
+                    let matches = if category.is_empty() {
+                        torrent.category.is_none()
+                    } else {
+                        torrent.category.as_ref() == Some(category)
+                    };
+                    if !matches {
+                        return Ok(None);
+                    }
+                }
+
+                let replaced_with = torrent
+                    .replaced_with
+                    .clone()
+                    .and_then(|(id, _)| r.get().primary(id).ok()?);
+                Ok(Some((event, Some(torrent), replaced_with)))
+            } else {
+                if linker_filter.is_some() || category_filter.is_some() {
+                    return Ok(None);
+                }
+                Ok(Some((event, None, None)))
+            }
+        })
+        .filter_map(|e| match e {
+            Ok(Some((event, torrent, replaced_with))) => Some(Ok((event, torrent, replaced_with))),
+            Err(err) => Some(Err(err)),
+            _ => None,
+        });
     let mut paging = match paging.default_page_size(uri, 500, event_count as usize) {
         Ok(paging) => paging,
         Err(redirect) => return Ok(redirect.into_response()),
     };
-    let events: Result<Vec<Event>, native_db::db_type::Error> = if let Some(paging) = &mut paging {
-        let mut count = 0;
-        let events = events
-            .inspect(|_| {
-                count += 1;
-            })
-            .skip(paging.from)
-            .take(paging.page_size)
-            .collect();
-        if count < paging.page_size + paging.from {
-            paging.total = count;
-        }
-        events
-    } else {
-        events.collect()
-    };
-    for event in events? {
-        if let Some(id) = &event.torrent_id {
-            let r = db.r_transaction()?;
-            let torrent: Option<Torrent> = r.get().primary(id.clone())?;
-            let replaced_with = torrent
-                .as_ref()
-                .and_then(|t| t.replaced_with.clone())
-                .and_then(|(id, _)| r.get().primary(id).ok()?);
-
-            events_with_torrent.push((event, torrent, replaced_with));
+    let events: Result<Vec<EventWithTorrent>, native_db::db_type::Error> =
+        if let Some(paging) = &mut paging {
+            let mut count = 0;
+            let events = events
+                .inspect(|_| {
+                    count += 1;
+                })
+                .skip(paging.from)
+                .take(paging.page_size)
+                .collect();
+            if count < paging.page_size + paging.from {
+                paging.total = count;
+            }
+            events
         } else {
-            events_with_torrent.push((event, None, None));
-        }
-    }
+            events.collect()
+        };
     let template = EventPageTemplate {
         paging: paging.unwrap_or_default(),
         show: filter.iter().find_map(|f| {
@@ -135,17 +160,18 @@ pub async fn event_page(
                 None
             }
         }),
-        events: events_with_torrent,
+        events: events?,
     };
     Ok::<_, AppError>(Html(template.to_string()).into_response())
 }
 
+type EventWithTorrent = (Event, Option<Torrent>, Option<Torrent>);
 #[derive(Template)]
 #[template(path = "pages/events.html")]
 struct EventPageTemplate<'a> {
     paging: Pagination,
     show: Option<&'a str>,
-    events: Vec<(Event, Option<Torrent>, Option<Torrent>)>,
+    events: Vec<EventWithTorrent>,
 }
 
 impl<'a> Page for EventPageTemplate<'a> {}
@@ -176,6 +202,7 @@ pub enum EventPageFilter {
     Linker,
     Category,
     HasUpdates,
+    Field,
     // Workaround sort decode failure
     From,
     PageSize,
