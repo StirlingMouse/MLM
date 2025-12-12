@@ -4,7 +4,7 @@ use std::os::unix::fs::MetadataExt as _;
 use std::os::windows::fs::MetadataExt as _;
 use std::{
     collections::BTreeMap,
-    fs::{self, File, Metadata, create_dir_all},
+    fs::{self, File, Metadata},
     io::{BufWriter, ErrorKind, Write},
     ops::Deref,
     path::{Component, Path, PathBuf},
@@ -21,6 +21,7 @@ use qbit::{
     parameters::TorrentListParams,
 };
 use regex::Regex;
+use tokio::fs::create_dir_all;
 use tracing::{Level, debug, instrument, span, trace, warn};
 
 use crate::{
@@ -451,7 +452,7 @@ async fn link_torrent(
         }
         let metadata = abs::create_metadata(&mam_torrent, meta);
 
-        create_dir_all(&dir)?;
+        create_dir_all(&dir).await?;
         for file in files {
             let span = span!(Level::TRACE, "file: {:?}", file.name);
             let _s = span.enter();
@@ -479,7 +480,7 @@ async fn link_torrent(
             });
             let file_path = if let Some(dir_name) = dir_name {
                 let sub_dir = PathBuf::from(dir_name);
-                create_dir_all(dir.join(&sub_dir))?;
+                create_dir_all(dir.join(&sub_dir)).await?;
                 sub_dir.join(file_name)
             } else {
                 PathBuf::from(&file_name)
