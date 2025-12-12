@@ -27,8 +27,16 @@
         <input type=checkbox name=show {% if show.category %}checked{% endif %} value="category">
       </label>
       <label>
+        Categories
+        <input type=checkbox name=show {% if show.categories %}checked{% endif %} value="categories">
+      </label>
+      <label>
         Flags
         <input type=checkbox name=show {% if show.flags %}checked{% endif %} value="flags">
+      </label>
+      <label>
+        Edition
+        <input type=checkbox name=show {% if show.edition %}checked{% endif %} value="edition">
       </label>
       <label>
         Authors
@@ -70,6 +78,10 @@
         Added At
         <input type=checkbox name=show {% if show.created_at %}checked{% endif %} value="created_at">
       </label>
+      <label>
+        Uploaded At
+        <input type=checkbox name=show {% if show.uploaded_at %}checked{% endif %} value="uploaded_at">
+      </label>
       </div>
     </div>
     <div class="option_group query">
@@ -92,8 +104,10 @@
   {% else %}
   {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", 84) }}
   {% endif %}
+  {{ table_header_if(show.categories, None, "Categories", Flex(1, 130)) }}
   {{ table_header_if(show.flags, None, "Flags", 60) }}
   {{ table_header_s(Some(TorrentsPageSort::Title), "Title", Flex(2, 170)) }}
+  {{ table_header_if(show.edition, Some(TorrentsPageSort::Edition), "Edition", 80) }}
   {{ table_header_if(show.authors, Some(TorrentsPageSort::Authors), "Authors", Flex(1, 130)) }}
   {{ table_header_if(show.narrators, Some(TorrentsPageSort::Narrators), "Narrators", Flex(1, 130)) }}
   {{ table_header_if(show.series, Some(TorrentsPageSort::Series), "Series", Flex(1, 130)) }}
@@ -105,6 +119,7 @@
   {{ table_header_if(!show.path, Some(TorrentsPageSort::Linked), "Linked", 80) }}
   {{ table_header_if(show.path, Some(TorrentsPageSort::Linked), "Path", Flex(2, 200)) }}
   {{ table_header_if(show.created_at, Some(TorrentsPageSort::CreatedAt), "Added At", 157) }}
+  {{ table_header_if(show.uploaded_at, Some(TorrentsPageSort::UploadedAt), "Uploaded At", 157) }}
   {{ table_header_s(None, "", 132) }}
 </div>
 {% for torrent in torrents %}
@@ -118,6 +133,9 @@
     {% endif %}
     {% endif %}
   </div>
+  {% if show.categories %}
+  <div>{{ cats(TorrentsPageFilter::Categories, torrent.meta.categories) }}</div>
+  {% endif %}
   {% if show.flags %}
   <div>{{ torrent.meta.flag_icons() }}</div>
   {% endif %}
@@ -135,6 +153,9 @@
     {% when None %}
     {% endmatch %}
   </div>
+  {% if show.edition %}
+   <div>{% if let Some((edition, _)) = torrent.meta.edition %}{{ edition }}{% endif %}</div>
+  {% endif %}
   {% if show.authors %}
   <div>{{ items(TorrentsPageFilter::Author, torrent.meta.authors) }}</div>
   {% endif %}
@@ -200,6 +221,9 @@
   {% endif %}
   {% if show.created_at %}
   <div>{{ self::time(torrent.created_at) }}</div>
+  {% endif %}
+  {% if show.uploaded_at %}
+  <div>{{ self::time(torrent.meta.uploaded_at) }}</div>
   {% endif %}
   <div>
     <a href="/torrents/{{torrent.id}}">open</a>

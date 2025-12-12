@@ -20,7 +20,7 @@
       {% if mam_torrent.lang_code != "ENG" %}
       <span class=faint>[{{ mam_torrent.lang_code }}]</span>
       {% endif %}
-      <a href="/torrents/{{ meta.mam_id }}" class=title><b>{{ meta.title }}</b></a><br>
+      <a href="/torrents/{{ meta.mam_id }}" class=title><b title="{{ mam_torrent.title }}">{{ meta.title }}</b></a>{% if let Some((edition, _)) = meta.edition %} <i class=faint>{{ edition }}</i>{% endif %}<br>
         <i class=faint>by</i> {% for author in meta.authors %}<a href="/search?q={{ author  | fmt("@author \"{}\"")  | urlencode_strict }}">{{ author }}</a>{% if !loop.last %}, {% endif %}{% endfor %}<br>
       {% if !meta.series.is_empty() %}
         <i class=faint>series</i>

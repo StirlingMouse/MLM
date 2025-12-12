@@ -45,7 +45,7 @@ use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
     config::{Config, SearchConfig, TorrentFilter},
-    data::{AudiobookCategory, EbookCategory, Series, Timestamp, Torrent, TorrentMeta},
+    data::{AudiobookCategory, Category, EbookCategory, Series, Timestamp, Torrent, TorrentMeta},
     mam::{api::MaM, enums::Flags, meta::MetaError, search::MaMTorrent, serde::DATE_FORMAT},
     stats::{Stats, Triggers},
     web::{
@@ -216,7 +216,7 @@ pub trait Page {
         ItemFilter {
             field,
             label,
-            value: Some(value),
+            value: Some(value.to_string()),
             path: self.item_path(),
         }
     }
@@ -225,6 +225,14 @@ pub trait Page {
         ItemFilters {
             field,
             labels,
+            path: self.item_path(),
+        }
+    }
+
+    fn cats<'a, T: Key>(&'a self, field: T, cats: &'a Vec<Category>) -> CatsTmpl<'a, T> {
+        CatsTmpl {
+            field,
+            cats,
             path: self.item_path(),
         }
     }
@@ -306,6 +314,32 @@ impl<'a, T: Key> SeriesTmpl<'a, T> {
             field,
             label,
             value: None,
+            path: self.path,
+        }
+    }
+}
+
+/// ```askama
+/// {% for c in cats %}
+/// {{ item(*field, **c) | safe }}{% if !loop.last %}, {% endif %}
+/// {% endfor %}
+/// ```
+#[derive(Template)]
+#[template(ext = "html", in_doc = true)]
+pub struct CatsTmpl<'a, T: Key> {
+    field: T,
+    cats: &'a Vec<Category>,
+    path: &'a str,
+}
+
+impl<'a, T: Key> HtmlSafe for CatsTmpl<'a, T> {}
+
+impl<'a, T: Key> CatsTmpl<'a, T> {
+    fn item(&'a self, field: T, cat: Category) -> ItemFilter<'a, T> {
+        ItemFilter {
+            field,
+            label: cat.as_str(),
+            value: Some(cat.as_id().to_string()),
             path: self.path,
         }
     }

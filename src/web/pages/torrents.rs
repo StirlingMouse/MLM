@@ -15,7 +15,9 @@ use native_db::Database;
 use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
 
-use crate::data::{ClientStatus, MediaType, MetadataSource, OldCategory, Series, SeriesEntry};
+use crate::data::{
+    Category, ClientStatus, MediaType, MetadataSource, OldCategory, Series, SeriesEntry,
+};
 use crate::mam::enums::Flags;
 use crate::web::{MaMState, Page, tables};
 use crate::{
@@ -89,6 +91,17 @@ pub async fn torrents_page(
                         cats.contains(cat) || cat.as_str() == value
                     } else {
                         false
+                    }
+                }
+                TorrentsPageFilter::Categories => {
+                    if value.is_empty() {
+                        t.meta.categories.is_empty()
+                    } else {
+                        value
+                            .split(",")
+                            .filter_map(|id| id.parse().ok())
+                            .filter_map(Category::from_id)
+                            .all(|cat| t.meta.categories.contains(&cat))
                     }
                 }
                 TorrentsPageFilter::Flags => {
@@ -234,6 +247,13 @@ pub async fn torrents_page(
                         .partial_cmp(&b.meta.cat)
                         .unwrap_or(std::cmp::Ordering::Less),
                     TorrentsPageSort::Title => a.meta.title.cmp(&b.meta.title),
+                    TorrentsPageSort::Edition => a
+                        .meta
+                        .edition
+                        .as_ref()
+                        .map(|e| e.1)
+                        .cmp(&b.meta.edition.as_ref().map(|e| e.1))
+                        .then(a.meta.edition.cmp(&b.meta.edition)),
                     TorrentsPageSort::Authors => a.meta.authors.cmp(&b.meta.authors),
                     TorrentsPageSort::Narrators => a.meta.narrators.cmp(&b.meta.narrators),
                     TorrentsPageSort::Series => a
@@ -247,6 +267,7 @@ pub async fn torrents_page(
                     TorrentsPageSort::QbitCategory => a.category.cmp(&b.category),
                     TorrentsPageSort::Linked => a.library_path.cmp(&b.library_path),
                     TorrentsPageSort::CreatedAt => a.created_at.cmp(&b.created_at),
+                    TorrentsPageSort::UploadedAt => a.meta.uploaded_at.cmp(&b.meta.uploaded_at),
                 };
                 if sort.asc { ord.reverse() } else { ord }
             });
@@ -662,6 +683,7 @@ pub enum TorrentsPageSort {
     Kind,
     Category,
     Title,
+    Edition,
     Authors,
     Narrators,
     Series,
@@ -671,6 +693,7 @@ pub enum TorrentsPageSort {
     QbitCategory,
     Linked,
     CreatedAt,
+    UploadedAt,
 }
 
 impl Key for TorrentsPageSort {}
@@ -680,6 +703,7 @@ impl Key for TorrentsPageSort {}
 pub enum TorrentsPageFilter {
     Kind,
     Category,
+    Categories,
     Flags,
     Title,
     Author,
@@ -710,7 +734,9 @@ impl Key for TorrentsPageFilter {}
 #[serde(try_from = "String")]
 struct TorrentsPageColumns {
     category: bool,
+    categories: bool,
     flags: bool,
+    edition: bool,
     authors: bool,
     narrators: bool,
     series: bool,
@@ -721,6 +747,7 @@ struct TorrentsPageColumns {
     qbit_category: bool,
     path: bool,
     created_at: bool,
+    uploaded_at: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -732,7 +759,9 @@ impl Default for TorrentsPageColumns {
     fn default() -> Self {
         TorrentsPageColumns {
             category: false,
+            categories: false,
             flags: false,
+            edition: false,
             authors: true,
             narrators: true,
             series: true,
@@ -743,6 +772,7 @@ impl Default for TorrentsPageColumns {
             qbit_category: false,
             path: false,
             created_at: true,
+            uploaded_at: false,
         }
     }
 }
@@ -753,7 +783,9 @@ impl TryFrom<String> for TorrentsPageColumns {
     fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
         let mut columns = TorrentsPageColumns {
             category: false,
+            categories: false,
             flags: false,
+            edition: false,
             authors: false,
             narrators: false,
             series: false,
@@ -764,11 +796,14 @@ impl TryFrom<String> for TorrentsPageColumns {
             qbit_category: false,
             path: false,
             created_at: false,
+            uploaded_at: false,
         };
         for column in value.split(",") {
             match column {
                 "category" => columns.category = true,
+                "categories" => columns.categories = true,
                 "flags" => columns.flags = true,
+                "edition" => columns.edition = true,
                 "author" => columns.authors = true,
                 "narrator" => columns.narrators = true,
                 "series" => columns.series = true,
@@ -779,6 +814,7 @@ impl TryFrom<String> for TorrentsPageColumns {
                 "qbit_category" => columns.qbit_category = true,
                 "path" => columns.path = true,
                 "created_at" => columns.created_at = true,
+                "uploaded_at" => columns.uploaded_at = true,
                 "" => {}
                 _ => {
                     return Err(format!("Unknown column {column}"));

@@ -362,7 +362,7 @@ pub fn table_styles_rows(cols: u64, rows: u64) -> String {
 pub struct ItemFilter<'a, T: Key> {
     pub field: T,
     pub label: &'a str,
-    pub value: Option<&'a str>,
+    pub value: Option<String>,
     pub path: &'a str,
 }
 impl<'a, T: Key> HtmlSafe for ItemFilter<'a, T> {}
@@ -377,7 +377,7 @@ impl<'a, T: Key> ItemFilter<'a, T> {
             "{}?{}={}",
             self.path,
             key,
-            &urlencoding::encode(self.value.unwrap_or(self.label))
+            &urlencoding::encode(self.value.as_deref().unwrap_or(self.label))
         )
     }
 }
