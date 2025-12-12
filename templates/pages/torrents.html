@@ -102,7 +102,7 @@
   {% if show.category %}
   {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", 130) }}
   {% else %}
-  {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", 84) }}
+  {{ table_header_s(Some(TorrentsPageSort::Kind), "Type", 89) }}
   {% endif %}
   {{ table_header_if(show.categories, None, "Categories", Flex(1, 130)) }}
   {{ table_header_if(show.flags, None, "Flags", 60) }}
@@ -112,11 +112,11 @@
   {{ table_header_if(show.narrators, Some(TorrentsPageSort::Narrators), "Narrators", Flex(1, 130)) }}
   {{ table_header_if(show.series, Some(TorrentsPageSort::Series), "Series", Flex(1, 130)) }}
   {{ table_header_if(show.language, Some(TorrentsPageSort::Language), "Language", 100) }}
-  {{ table_header_if(show.size, Some(TorrentsPageSort::Size), "Size", 80) }}
+  {{ table_header_if(show.size, Some(TorrentsPageSort::Size), "Size", 81) }}
   {{ table_header_if(show.filetypes, None, "Filetypes", 100) }}
   {{ table_header_if(show.linker, Some(TorrentsPageSort::Linker), "Linker", 130) }}
   {{ table_header_if(show.qbit_category, Some(TorrentsPageSort::QbitCategory), "Qbit Category", 100) }}
-  {{ table_header_if(!show.path, Some(TorrentsPageSort::Linked), "Linked", 80) }}
+  {{ table_header_if(!show.path, Some(TorrentsPageSort::Linked), "Linked", 72) }}
   {{ table_header_if(show.path, Some(TorrentsPageSort::Linked), "Path", Flex(2, 200)) }}
   {{ table_header_if(show.created_at, Some(TorrentsPageSort::CreatedAt), "Added At", 157) }}
   {{ table_header_if(show.uploaded_at, Some(TorrentsPageSort::UploadedAt), "Uploaded At", 157) }}
