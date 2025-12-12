@@ -15,6 +15,7 @@ use crate::{
     config::Config,
     data::{SelectedTorrent, Timestamp, Torrent, TorrentCost, TorrentKey},
     mam::{
+        enums::SearchTarget,
         meta::normalize_title,
         search::{SearchQuery, Tor},
     },
@@ -33,6 +34,7 @@ pub async fn search_page(
         .search(&SearchQuery {
             media_info: true,
             tor: Tor {
+                target: query.uploader.map(SearchTarget::Uploader),
                 text: query.q.clone(),
                 ..Default::default()
             },
@@ -123,6 +125,8 @@ pub struct SearchPageQuery {
     q: String,
     #[serde(default)]
     sort: String,
+    #[serde(default)]
+    uploader: Option<u64>,
 }
 
 pub async fn select_torrent(

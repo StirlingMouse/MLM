@@ -64,12 +64,14 @@
     {% endif %}
   </div>
   <div>
-      {{ mam_torrent.numfiles }}<br>
-      {{ meta.size }}
+    {{ mam_torrent.numfiles }}<br>
+    {{ meta.size }}
   </div>
   <div>
-      {{ mam_torrent.added }}<br>
-      {{ mam_torrent.owner_name }}
+    {{ mam_torrent.added }}<br>
+    {% if mam_torrent.owner != 0 %}
+      <a href=/search?uploader={{ mam_torrent.owner }}>{{ mam_torrent.owner_name }}</a>
+    {% endif %}
   </div>
   <div>
       {{ mam_torrent.seeders }} <img src="/assets/icons/upBig3.png" alt="seeders" /><br>

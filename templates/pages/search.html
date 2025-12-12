@@ -19,6 +19,12 @@
 <form class="row">
   <h1>MaM Search</h1>
   <label>
+    {% if !query.sort.is_empty() %}
+      <input type="hidden" name="sort" value="{{ query.sort }}">
+    {% endif %}
+    {% if let Some(id) = query.uploader %}
+      <input type="hidden" name="uploader" value="{{ id }}">
+    {% endif %}
     <input type="submit" style="display:none">
     Search: <input type=text value="{{ query.q }}" name=q>
     <button is="clear-button" type="button"></button>
