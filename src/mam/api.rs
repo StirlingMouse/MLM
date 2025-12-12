@@ -99,6 +99,7 @@ impl<'a> MaM<'a> {
         let client = reqwest::Client::builder()
             .cookie_provider(jar.clone())
             .user_agent("MLM")
+            .timeout(Duration::from_secs(20))
             .build()?;
 
         let mam = MaM {
