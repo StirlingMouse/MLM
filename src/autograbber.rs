@@ -638,7 +638,7 @@ async fn grab_torrent(
     let wedge_buffer = torrent.wedge_buffer.unwrap_or(config.wedge_buffer);
     let mut wedged = false;
     if torrent.cost == TorrentCost::UseWedge || torrent.cost == TorrentCost::TryWedge {
-        if user_info.wedges < wedge_buffer {
+        if user_info.wedges <= wedge_buffer {
             return Err(anyhow::Error::msg(format!(
                 "Fewer wedges ({}) than wedge_buffer ({})",
                 user_info.wedges, wedge_buffer
