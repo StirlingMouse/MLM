@@ -4,7 +4,7 @@ use crate::{
         Timestamp, TorrentMeta, VipStatus,
     },
     mam::{
-        meta::{MetaError, clean_value, parse_edition},
+        meta::{MetaError, clean_value},
         serde::{bool_string_or_number, num_string_or_number, opt_num_string_or_number},
     },
 };
@@ -124,30 +124,27 @@ pub struct UserDetailsTorrent {
 
 impl UserDetailsTorrent {
     pub fn as_meta(&self) -> Result<TorrentMeta, MetaError> {
-        let (title, edition) = parse_edition(&clean_value(&self.title)?, &clean_value(&self.tags)?);
-
         let authors = self
             .author
             .iter()
             .sorted_by(|a, b| a.id.cmp(&b.id))
-            .map(|a| clean_value(&a.name))
-            .collect::<Result<Vec<_>>>()?;
+            .map(|a| a.name.clone())
+            .collect();
         let narrators = self
             .narrator
             .iter()
             .sorted_by(|a, b| a.id.cmp(&b.id))
-            .map(|n| clean_value(&n.name))
-            .collect::<Result<Vec<_>>>()?;
+            .map(|a| a.name.clone())
+            .collect();
         let series = self
             .series
             .iter()
             .sorted_by(|a, b| a.id.cmp(&b.id))
             .map(|series| {
-                let series_name = clean_value(&series.name)?;
-                Series::try_from((series_name.clone(), series.number.clone())).or_else(|err| {
+                Series::try_from((series.name.clone(), series.number.clone())).or_else(|err| {
                     warn!("error parsing series num: {err}");
                     Ok(Series {
-                        name: series_name,
+                        name: series.name.clone(),
                         entries: SeriesEntries::new(vec![]),
                     })
                 })
@@ -204,15 +201,16 @@ impl UserDetailsTorrent {
             // TODO: Currently num_files isn't returned
             num_files: 0,
             size,
-            title,
-            edition,
+            title: clean_value(&self.title)?,
+            edition: None,
             authors,
             narrators,
             series,
             source: MetadataSource::Mam,
             // TODO: Currently added isn't returned
             uploaded_at: Timestamp::from(UtcDateTime::UNIX_EPOCH),
-        })
+        }
+        .clean(&clean_value(&self.tags)?)?)
     }
 }
 

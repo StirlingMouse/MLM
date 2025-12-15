@@ -4,6 +4,8 @@ use once_cell::sync::Lazy;
 use regex::{Captures, Match, Regex};
 use unidecode::unidecode;
 
+use crate::data::TorrentMeta;
+
 #[derive(thiserror::Error, Debug)]
 pub enum MetaError {
     #[error("{0}")]
@@ -34,6 +36,47 @@ pub fn normalize_title(value: &str) -> String {
     unidecode(value).to_lowercase().replace(" & ", " and ")
 }
 
+impl TorrentMeta {
+    pub fn clean(mut self, tags: &str) -> Result<Self> {
+        for author in &mut self.authors {
+            *author = clean_value(author)?;
+        }
+        for narrator in &mut self.narrators {
+            *narrator = clean_value(narrator)?;
+        }
+        for series in &mut self.series {
+            series.name = SERIES_CLEANUP
+                .replace_all(&clean_value(&series.name)?, "")
+                .to_string();
+        }
+
+        let (title, edition) = parse_edition(&self.title, tags);
+        self.title = title;
+        self.edition = edition;
+
+        if self.authors.len() == 1
+            && let Some(author) = self.authors.first()
+        {
+            if let Some(title) = self.title.strip_suffix(author) {
+                if let Some(title) = title
+                    .strip_suffix(" by ")
+                    .or_else(|| title.strip_suffix(" - "))
+                {
+                    self.title = title.trim().to_string();
+                }
+            } else if let Some(title) = self.title.strip_prefix(author)
+                && let Some(title) = title.strip_prefix(" - ")
+            {
+                self.title = title.trim().to_string();
+            }
+        }
+
+        self.title = TITLE_CLEANUP.replace_all(&self.title, "").to_string();
+
+        Ok(self)
+    }
+}
+
 static EDITION_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)^(.*?)(?:(?:(?:\s*[-–.:;|,]\s*)((\w+?)\s+(?:[a-z]+\s+)*(?:Edition|ed\.))|(?:\s*[-–.:;|,]\s*)?(?:\s*[(\[]\s*)((\w*?)\s+(?:[a-z]+\s+)*(?:Edition|ed\.))(?:\s*[)\]]\s*))(?:\s*[-:;,]\s*)?(.*?)|\s+((\d+\w*?)\s+(?:Edition|ed\.)))$").unwrap()
 });
@@ -41,6 +84,16 @@ static EDITION_REGEX: Lazy<Regex> = Lazy::new(|| {
 static EDITION_START_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)((\d+(?:st|nd|rd|th)|first|second|third|fifth|sixth|seventh|eight|ninth|tenth|new|revised|updated)\s+(?:[a-z']+\s+)*(?:Edition|ed\.)|(\w+?)\s+(?:Edition|ed\.))").unwrap()
 });
+
+static TITLE_CLEANUP: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?i)(?:: A (?:Novel|Memoir)$)|(?:\s*-\s*\d+(?:\.| - )epub$)|(?:\s*[\(\[](?:digital|light novel|epub|cbz|tpb)[\)\]])*",
+    )
+    .unwrap()
+});
+
+static SERIES_CLEANUP: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)(?:\s*\((?:digital|light novel)\))*").unwrap());
 
 pub fn parse_edition(title: &str, tags: &str) -> (String, Option<(String, u64)>) {
     if let Some(captures) = EDITION_REGEX.captures(title)

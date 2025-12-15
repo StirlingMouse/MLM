@@ -7,7 +7,7 @@ use crate::{
     },
     mam::{
         enums::{SearchIn, SearchKind, SearchTarget},
-        meta::{MetaError, clean_value, parse_edition},
+        meta::MetaError,
         serde::{
             DATE_TIME_FORMAT, bool_string_or_number, is_false, is_zero, json_or_default,
             opt_string_or_number, string_or_number, vec_string_or_number,
@@ -279,18 +279,8 @@ pub struct MediaInfoMenu {
 
 impl MaMTorrent {
     pub fn as_meta(&self) -> Result<TorrentMeta, MetaError> {
-        let (title, edition) = parse_edition(&self.title, &self.tags);
-
-        let authors = self
-            .author_info
-            .values()
-            .map(|a| clean_value(a))
-            .collect::<Result<Vec<_>>>()?;
-        let narrators = self
-            .narrator_info
-            .values()
-            .map(|n| clean_value(n))
-            .collect::<Result<Vec<_>>>()?;
+        let authors = self.author_info.values().cloned().collect();
+        let narrators = self.narrator_info.values().cloned().collect();
         let series = self
             .series_info
             .values()
@@ -307,11 +297,10 @@ impl MaMTorrent {
                 else {
                     return Err(MetaError::InvalidSeries("Series num is not a string").into());
                 };
-                let series_name = clean_value(series_name)?;
                 Series::try_from((series_name.clone(), series_num.clone())).or_else(|err| {
                     warn!("error parsing series num: {err}");
                     Ok(Series {
-                        name: series_name,
+                        name: series_name.to_string(),
                         entries: SeriesEntries::new(vec![]),
                     })
                 })
@@ -373,14 +362,15 @@ impl MaMTorrent {
             filetypes,
             num_files: self.numfiles,
             size,
-            title,
-            edition,
+            title: self.title.clone(),
+            edition: None,
             authors,
             narrators,
             series,
             source: MetadataSource::Mam,
             uploaded_at,
-        })
+        }
+        .clean(&self.tags)?)
     }
 
     pub fn is_free(&self) -> bool {
