@@ -8,7 +8,7 @@
   }
 </style>
 <div></div>
-{% for (mam_torrent, meta, torrent) in torrents %}
+{% for (mam_torrent, meta, torrent, selected_torrent) in torrents %}
 <div>
   <div>
     {% if let Some(cat) = meta.cat %}
@@ -44,22 +44,37 @@
       {{ meta.categories.iter().join(", ") }}
   </div>
   <div>
-    {% if torrent.is_some() %}
-    <img src="/assets/icons/greenCheck2.png" alt="Torrent is downloaded" title="Torrent is downloaded" />
+    {% if selected_torrent.is_some() %}
+      <img src="/assets/icons/greenCheck2.png" alt="Torrent is downloading" title="Torrent is downloading" style="filter:hue-rotate(130deg)" />
+    {% else if torrent.is_some() || selected_torrent.is_some() %}
+      <img src="/assets/icons/greenCheck2.png" alt="Torrent is downloaded" title="Torrent is downloaded" />
     {% else %}
     <form method=post inline>
       <input type=hidden name=mam_id value="{{ meta.mam_id }}">
       {% if let Some(wedge_over) = config.wedge_over %}
         {% if &meta.size >= &wedge_over && !mam_torrent.is_free() %}
-        <button name=action value=wedge style="filter:hue-rotate(180deg)">
-          <img src="/assets/icons/down.png" alt="Download with Wedge" title="Download with Wedge" />
-        </button>
+          <button name=action value=wedge class="icon" style="filter:hue-rotate(180deg)">
+            <img src="/assets/icons/down.png" alt="Download with Wedge" title="Download with Wedge" />
+            <template class=optimistic>
+              <img src="/assets/icons/down.png" style="filter:saturate(0)" />
+            </template>
+          </button>
         {% else %}
-        <button name=action value=select><img src="/assets/icons/down.png" alt="Download" title="Download" /></button>
+          <button name=action value=select class="icon">
+            <img src="/assets/icons/down.png" alt="Download" title="Download" />
+          </button>
         {% endif %}
       {% else %}
-      <button name=action value=select><img src="/assets/icons/down.png" alt="Download" title="Download" /></button>
+        <button name=action value=select class="icon">
+          <img src="/assets/icons/down.png" alt="Download" title="Download" />
+        </button>
       {% endif %}
+      <template class=optimistic>
+        <img src="/assets/icons/down.png" style="filter:saturate(0)" />
+      </template>
+      <template class=final>
+        <img src="/assets/icons/greenCheck2.png" alt="Torrent is downloading" title="Torrent is downloading" style="filter:hue-rotate(130deg)" />
+      </template>
     </form>
     {% endif %}
   </div>

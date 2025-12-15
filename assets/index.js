@@ -13,17 +13,28 @@ document.body.addEventListener('submit', e => {
                 if (e.submitter && e.submitter instanceof HTMLButtonElement && e.submitter.name) {
                         data.append(e.submitter.name, e.submitter.value)
                 }
+                /** @type {HTMLTemplateElement} */
+                const optimistic = e.submitter.querySelector('template.optimistic') ?? form.querySelector('template.optimistic')
+                if (optimistic) {
+                        e.submitter.replaceChildren(optimistic.content.cloneNode(true))
+                }
 
                 fetch(location.href, {
                         method: form.method,
                         body: data,
                 })
-                        .then(r => r.text())
-                        .then(html => {
-                                const parser = new DOMParser()
-                                const newDocument = parser.parseFromString(html, 'text/html')
-                                const main = document.querySelector('main')
-                                main.replaceWith(newDocument.querySelector('main'))
+                        .then(async r => {
+                                /** @type {HTMLTemplateElement} */
+                                const final = e.submitter.querySelector('template.final') ?? form.querySelector('template.final')
+                                if (final && r.ok) {
+                                        e.submitter.replaceChildren(final.content.cloneNode(true))
+                                } else {
+                                        const html = await r.text()
+                                        const parser = new DOMParser()
+                                        const newDocument = parser.parseFromString(html, 'text/html')
+                                        const main = document.querySelector('main')
+                                        main.replaceWith(newDocument.querySelector('main'))
+                                }
                         })
         }
 })

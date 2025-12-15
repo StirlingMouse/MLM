@@ -51,13 +51,14 @@ pub async fn search_page(
             let torrent = r
                 .get()
                 .secondary::<Torrent>(TorrentKey::mam_id, meta.mam_id)?;
+            let selected_torrent = r.get().primary(mam_torrent.id)?;
 
-            Ok((mam_torrent, meta, torrent))
+            Ok((mam_torrent, meta, torrent, selected_torrent))
         })
         .collect::<Result<Vec<_>>>()?;
 
     if query.sort == "series" {
-        torrents.sort_by(|(_, a, _), (_, b, _)| {
+        torrents.sort_by(|(_, a, _, _), (_, b, _, _)| {
             a.series
                 .cmp(&b.series)
                 .then(a.media_type.cmp(&b.media_type))

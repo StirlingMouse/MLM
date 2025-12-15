@@ -592,8 +592,9 @@ async fn other_torrents(
             let torrent = r
                 .get()
                 .secondary::<Torrent>(TorrentKey::mam_id, meta.mam_id)?;
+            let selected_torrent = r.get().primary(mam_torrent.id)?;
 
-            Ok((mam_torrent, meta, torrent))
+            Ok((mam_torrent, meta, torrent, selected_torrent))
         })
         .collect::<Result<_>>()?;
 

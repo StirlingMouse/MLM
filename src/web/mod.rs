@@ -45,7 +45,10 @@ use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
     config::{Config, SearchConfig, TorrentFilter},
-    data::{AudiobookCategory, Category, EbookCategory, Series, Timestamp, Torrent, TorrentMeta},
+    data::{
+        AudiobookCategory, Category, EbookCategory, SelectedTorrent, Series, Timestamp, Torrent,
+        TorrentMeta,
+    },
     mam::{api::MaM, enums::Flags, meta::MetaError, search::MaMTorrent, serde::DATE_FORMAT},
     stats::{Stats, Triggers},
     web::{
@@ -399,7 +402,12 @@ impl MaMTorrent {
 #[template(path = "partials/mam_torrents.html")]
 struct MaMTorrentsTemplate {
     config: SearchConfig,
-    torrents: Vec<(MaMTorrent, TorrentMeta, Option<Torrent>)>,
+    torrents: Vec<(
+        MaMTorrent,
+        TorrentMeta,
+        Option<Torrent>,
+        Option<SelectedTorrent>,
+    )>,
 }
 impl HtmlSafe for MaMTorrentsTemplate {}
 

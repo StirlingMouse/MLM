@@ -71,6 +71,7 @@ button {
                 color: var(--warn);
         }
 
+        &.icon,
         &:has(> img:only-child) {
                 padding: 4px;
                 width: 28px;
