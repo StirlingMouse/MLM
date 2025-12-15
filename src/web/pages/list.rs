@@ -12,7 +12,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     data::{
-        AudiobookCategory, EbookCategory, List, ListItem, ListItemKey, Timestamp, TorrentStatus,
+        AudiobookCategory, DatabaseExt as _, EbookCategory, List, ListItem, ListItemKey, Timestamp,
+        TorrentStatus,
     },
     web::{AppError, Page, time},
 };
@@ -75,7 +76,7 @@ pub async fn list_page_post(
 ) -> Result<Redirect, AppError> {
     match form.action.as_str() {
         "mark-done" => {
-            let rw = db.rw_transaction()?;
+            let (_guard, rw) = db.rw_async().await?;
             let Some(mut item) = rw.get().primary::<ListItem>((list_id, form.item_id))? else {
                 return Err(anyhow::Error::msg("Could not find item").into());
             };

@@ -13,6 +13,7 @@ use axum_extra::extract::Form;
 use native_db::Database;
 use serde::{Deserialize, Serialize};
 
+use crate::data::DatabaseExt as _;
 use crate::web::{MaMState, Page, tables};
 use crate::{
     config::Config,
@@ -153,7 +154,7 @@ pub async fn replaced_torrents_page_post(
         }
         "remove" => {
             for torrent in form.torrents {
-                let rw = db.rw_transaction()?;
+                let (_guard, rw) = db.rw_async().await?;
                 let Some(torrent) = rw.get().primary::<Torrent>(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };

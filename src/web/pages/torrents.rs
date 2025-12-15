@@ -16,7 +16,8 @@ use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
 
 use crate::data::{
-    Category, ClientStatus, MediaType, MetadataSource, OldCategory, Series, SeriesEntry,
+    Category, ClientStatus, DatabaseExt as _, MediaType, MetadataSource, OldCategory, Series,
+    SeriesEntry,
 };
 use crate::mam::enums::Flags;
 use crate::web::{MaMState, Page, tables};
@@ -640,7 +641,7 @@ pub async fn torrents_page_post(
         }
         "remove" => {
             for torrent in form.torrents {
-                let rw = db.rw_transaction()?;
+                let (_guard, rw) = db.rw_async().await?;
                 let Some(torrent) = rw.get().primary::<Torrent>(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };

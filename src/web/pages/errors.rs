@@ -13,7 +13,7 @@ use native_db::Database;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    data::{ErroredTorrent, ErroredTorrentId, ErroredTorrentKey},
+    data::{DatabaseExt as _, ErroredTorrent, ErroredTorrentId, ErroredTorrentKey},
     web::{
         AppError, Page,
         tables::{self, Flex, HidableColumns, Key, SortOn, Sortable},
@@ -80,7 +80,7 @@ pub async fn errors_page_post(
                 let Ok(error) = serde_json::from_str::<ErroredTorrentId>(&error) else {
                     return Err(anyhow::Error::msg("Could not parse error").into());
                 };
-                let rw = db.rw_transaction()?;
+                let (_guard, rw) = db.rw_async().await?;
                 let Some(error) = rw.get().primary::<ErroredTorrent>(error)? else {
                     return Err(anyhow::Error::msg("Could not find error").into());
                 };

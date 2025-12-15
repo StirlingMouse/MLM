@@ -5,7 +5,7 @@ use native_db::Database;
 use tracing::{error, warn};
 
 use crate::data::{
-    ErroredTorrent, ErroredTorrentId, Event, EventType, Timestamp, TorrentMeta, Uuid,
+    DatabaseExt, ErroredTorrent, ErroredTorrentId, Event, EventType, Timestamp, TorrentMeta, Uuid,
 };
 
 #[derive(Debug)]
@@ -21,14 +21,14 @@ impl std::error::Error for TorrentMetaError {
     }
 }
 
-pub fn update_errored_torrent(
+pub async fn update_errored_torrent(
     db: &Database<'_>,
     id: ErroredTorrentId,
     torrent: String,
     result: Result<(), Error>,
 ) {
     let is_ok = result.is_ok();
-    if let Err(err) = db.rw_transaction().and_then(|rw| {
+    if let Err(err) = db.rw_async().await.and_then(|(_guard, rw)| {
         if let Err(err) = result {
             let name = match id {
                 ErroredTorrentId::Grabber(_) => "Autograbber",
@@ -50,7 +50,8 @@ pub fn update_errored_torrent(
         } else if let Some(error) = rw.get().primary::<ErroredTorrent>(id)? {
             rw.remove(error)?;
         }
-        rw.commit()
+        rw.commit()?;
+        Ok(())
     }) {
         if is_ok {
             error!("Error clearing error from db: {err:?}");
@@ -72,10 +73,11 @@ impl Event {
     }
 }
 
-pub fn write_event(db: &Database<'_>, event: Event) {
-    if let Err(err) = db.rw_transaction().and_then(|rw| {
+pub async fn write_event(db: &Database<'_>, event: Event) {
+    if let Err(err) = db.rw_async().await.and_then(|(_guard, rw)| {
         rw.upsert(event.clone())?;
-        rw.commit()
+        rw.commit()?;
+        Ok(())
     }) {
         error!("Error writing event: {err:?}, event: {event:?}");
     }

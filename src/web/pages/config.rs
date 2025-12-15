@@ -15,7 +15,7 @@ use tracing::{info, warn};
 use crate::{
     autograbber::update_torrent_meta,
     config::{Config, Cost, Library, TorrentSearch, Type},
-    data::{AudiobookCategory, EbookCategory, Torrent},
+    data::{AudiobookCategory, DatabaseExt as _, EbookCategory, Torrent},
     mam::serde::DATE_FORMAT,
     web::{AppError, MaMState, Page, filter, yaml_items},
 };
@@ -76,11 +76,10 @@ pub async fn config_page_post(
                         };
                         let new_meta = mam_torrent.as_meta()?;
                         if new_meta != torrent.meta {
-                            let rw = db.rw_transaction()?;
                             update_torrent_meta(
                                 &config,
                                 &db,
-                                rw,
+                                db.rw_async().await?,
                                 &mam_torrent,
                                 torrent.clone(),
                                 new_meta,

@@ -7,7 +7,7 @@ use tracing::{debug, info, instrument, trace, warn};
 use crate::{
     audiobookshelf::Abs,
     config::Config,
-    data::{self, ErroredTorrentId, Event, EventType, Timestamp, Torrent},
+    data::{self, DatabaseExt as _, ErroredTorrentId, Event, EventType, Timestamp, Torrent},
     linker::file_size,
     logging::{TorrentMetaError, update_errored_torrent, write_event},
 };
@@ -108,6 +108,7 @@ async fn process_batch(
             remove.meta.title,
             result,
         )
+        .await
     }
 
     Ok(())
@@ -156,7 +157,7 @@ pub async fn clean_torrent(
     remove.abs_id = None;
     library_files.sort();
     {
-        let rw = db.rw_transaction()?;
+        let (_guard, rw) = db.rw_async().await?;
         rw.upsert(remove)?;
         rw.commit()?;
     }
@@ -172,7 +173,8 @@ pub async fn clean_torrent(
                     files: library_files,
                 },
             ),
-        );
+        )
+        .await;
     }
 
     Ok(())

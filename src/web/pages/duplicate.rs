@@ -14,7 +14,7 @@ use tracing::info;
 use crate::{
     cleaner::clean_torrent,
     config::Config,
-    data::{DuplicateTorrent, SelectedTorrent, Timestamp, Torrent, TorrentCost},
+    data::{DatabaseExt as _, DuplicateTorrent, SelectedTorrent, Timestamp, Torrent, TorrentCost},
     mam::meta::normalize_title,
     web::{
         AppError, MaMState, Page,
@@ -150,38 +150,40 @@ pub async fn duplicate_torrents_page_post(
                     mam_torrent.title, mam_torrent.filetype, cost, category, tags
                 );
 
-                let rw = db.rw_transaction()?;
-                rw.insert(SelectedTorrent {
-                    mam_id: mam_torrent.id,
-                    goodreads_id: None,
-                    hash: None,
-                    dl_link: mam_torrent
-                        .dl
-                        .clone()
-                        .or_else(|| duplicate_torrent.dl_link.clone())
-                        .ok_or_else(|| {
-                            Error::msg(format!("no dl field for torrent {}", mam_torrent.id))
-                        })?,
-                    unsat_buffer: None,
-                    wedge_buffer: None,
-                    cost,
-                    category,
-                    tags,
-                    title_search,
-                    meta,
-                    grabber: None,
-                    created_at: Timestamp::now(),
-                    started_at: None,
-                    removed_at: None,
-                })?;
-                rw.remove(duplicate_torrent)?;
-                rw.commit()?;
+                {
+                    let (_guard, rw) = db.rw_async().await?;
+                    rw.insert(SelectedTorrent {
+                        mam_id: mam_torrent.id,
+                        goodreads_id: None,
+                        hash: None,
+                        dl_link: mam_torrent
+                            .dl
+                            .clone()
+                            .or_else(|| duplicate_torrent.dl_link.clone())
+                            .ok_or_else(|| {
+                                Error::msg(format!("no dl field for torrent {}", mam_torrent.id))
+                            })?,
+                        unsat_buffer: None,
+                        wedge_buffer: None,
+                        cost,
+                        category,
+                        tags,
+                        title_search,
+                        meta,
+                        grabber: None,
+                        created_at: Timestamp::now(),
+                        started_at: None,
+                        removed_at: None,
+                    })?;
+                    rw.remove(duplicate_torrent)?;
+                    rw.commit()?;
+                }
                 clean_torrent(&config, &db, duplicate_of, false).await?;
             }
         }
         "remove" => {
             for torrent in form.torrents {
-                let rw = db.rw_transaction()?;
+                let (_guard, rw) = db.rw_async().await?;
                 let Some(torrent) = rw.get().primary::<DuplicateTorrent>(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };

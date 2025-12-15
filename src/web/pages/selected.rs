@@ -17,7 +17,7 @@ use tracing::info;
 
 use crate::{
     config::Config,
-    data::{Language, OldCategory, SelectedTorrent, Size, Timestamp},
+    data::{DatabaseExt as _, Language, OldCategory, SelectedTorrent, Size, Timestamp},
     mam::{enums::Flags, user_data::UserResponse},
     web::{
         AppError, MaMState, Page,
@@ -178,7 +178,7 @@ pub async fn selected_torrents_page_post(
     match form.action.as_str() {
         "remove" => {
             for torrent in form.torrents {
-                let rw = db.rw_transaction()?;
+                let (_guard, rw) = db.rw_async().await?;
                 let Some(mut torrent) = rw.get().primary::<SelectedTorrent>(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };
@@ -194,7 +194,7 @@ pub async fn selected_torrents_page_post(
         }
         "update" => {
             for torrent in form.torrents {
-                let rw = db.rw_transaction()?;
+                let (_guard, rw) = db.rw_async().await?;
                 let Some(mut torrent) = rw.get().primary::<SelectedTorrent>(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };

@@ -10,7 +10,7 @@ use tracing::{debug, error, instrument, trace};
 
 use crate::{
     config::AudiobookShelfConfig,
-    data::{Torrent, TorrentMeta, impls::format_serie},
+    data::{DatabaseExt as _, Torrent, TorrentMeta, impls::format_serie},
     mam::{enums::Flags, search::MaMTorrent},
 };
 
@@ -505,7 +505,7 @@ pub async fn match_torrents_to_abs(
             torrent.meta.mam_id, torrent.meta.title
         );
         torrent.abs_id = Some(book.id);
-        let rw = db.rw_transaction()?;
+        let (_guard, rw) = db.rw_async().await?;
         rw.upsert(torrent)?;
         rw.commit()?;
     }

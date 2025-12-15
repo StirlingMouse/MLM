@@ -110,6 +110,8 @@ pub struct TorrentSearch {
     pub wedge_buffer: Option<u64>,
     #[serde(default)]
     pub dry_run: bool,
+    #[serde(default)]
+    pub mark_removed: bool,
     pub category: Option<String>,
 }
 

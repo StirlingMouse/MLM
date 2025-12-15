@@ -30,8 +30,8 @@ use crate::{
     cleaner::remove_library_files,
     config::{Config, Library, LibraryLinkMethod, QbitConfig},
     data::{
-        ClientStatus, ErroredTorrentId, Event, EventType, LibraryMismatch, SelectedTorrent,
-        SelectedTorrentKey, Size, Timestamp, Torrent, TorrentMeta,
+        ClientStatus, DatabaseExt as _, ErroredTorrentId, Event, EventType, LibraryMismatch,
+        SelectedTorrent, SelectedTorrentKey, Size, Timestamp, Torrent, TorrentMeta,
     },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{
@@ -67,7 +67,7 @@ pub async fn link_torrents_to_library(
         if let Some(t) = &mut existing_torrent {
             let library_name = library.and_then(|l| l.tag_filters().name.as_ref());
             if t.linker.as_ref() != library_name {
-                let rw = db.rw_transaction()?;
+                let (_guard, rw) = db.rw_async().await?;
                 t.linker = library_name.map(ToOwned::to_owned);
                 rw.upsert(t.clone())?;
                 rw.commit()?;
@@ -78,7 +78,7 @@ pub async fn link_torrents_to_library(
                 Some(torrent.category.as_str())
             };
             if t.category.as_deref() != category {
-                let rw = db.rw_transaction()?;
+                let (_guard, rw) = db.rw_async().await?;
                 t.category = category.map(ToOwned::to_owned);
                 rw.upsert(t.clone())?;
                 rw.commit()?;
@@ -88,10 +88,12 @@ pub async fn link_torrents_to_library(
                 if let Some(mam_tracker) = trackers.last()
                     && mam_tracker.msg == "torrent not registered with this tracker"
                 {
-                    let rw = db.rw_transaction()?;
-                    t.client_status = Some(ClientStatus::RemovedFromMam);
-                    rw.upsert(t.clone())?;
-                    rw.commit()?;
+                    {
+                        let (_guard, rw) = db.rw_async().await?;
+                        t.client_status = Some(ClientStatus::RemovedFromMam);
+                        rw.upsert(t.clone())?;
+                        rw.commit()?;
+                    }
                     write_event(
                         &db,
                         Event::new(
@@ -99,7 +101,8 @@ pub async fn link_torrents_to_library(
                             Some(t.mam_id),
                             EventType::RemovedFromMam,
                         ),
-                    );
+                    )
+                    .await;
                 }
             }
             if let Some(library_path) = &t.library_path {
@@ -107,7 +110,7 @@ pub async fn link_torrents_to_library(
                     if t.library_mismatch != Some(LibraryMismatch::NoLibrary) {
                         debug!("no library: {library_path:?}",);
                         t.library_mismatch = Some(LibraryMismatch::NoLibrary);
-                        let rw = db.rw_transaction()?;
+                        let (_guard, rw) = db.rw_async().await?;
                         rw.upsert(t.clone())?;
                         rw.commit()?;
                     }
@@ -123,7 +126,7 @@ pub async fn link_torrents_to_library(
                             library.library_dir()
                         );
                         t.library_mismatch = wanted;
-                        let rw = db.rw_transaction()?;
+                        let (_guard, rw) = db.rw_async().await?;
                         rw.upsert(t.clone())?;
                         rw.commit()?;
                     }
@@ -150,12 +153,12 @@ pub async fn link_torrents_to_library(
                         if is_wrong {
                             debug!("path differs: {library_path:?} != {:?}", wanted);
                             t.library_mismatch = wanted;
-                            let rw = db.rw_transaction()?;
+                            let (_guard, rw) = db.rw_async().await?;
                             rw.upsert(t.clone())?;
                             rw.commit()?;
                         } else if t.library_mismatch.is_some() {
                             t.library_mismatch = None;
-                            let rw = db.rw_transaction()?;
+                            let (_guard, rw) = db.rw_async().await?;
                             rw.upsert(t.clone())?;
                             rw.commit()?;
                         }
@@ -178,7 +181,7 @@ pub async fn link_torrents_to_library(
                     "Finished Downloading torrent {} {}",
                     selected_torrent.mam_id, selected_torrent.meta.title
                 );
-                let rw = db.rw_transaction()?;
+                let (_guard, rw) = db.rw_async().await?;
                 rw.remove(selected_torrent)?;
                 rw.commit()?;
             }
@@ -213,6 +216,7 @@ pub async fn link_torrents_to_library(
             torrent.name,
             result,
         )
+        .await;
     }
 
     Ok(())
@@ -322,7 +326,7 @@ pub async fn refresh_metadata(
         update_torrent_meta(
             config,
             db,
-            db.rw_transaction()?,
+            db.rw_async().await?,
             &mam_torrent,
             torrent.clone(),
             meta.clone(),
@@ -518,7 +522,7 @@ async fn link_torrent(
     };
 
     {
-        let rw = db.rw_transaction()?;
+        let (_guard, rw) = db.rw_async().await?;
         rw.upsert(Torrent {
             id: hash.to_owned(),
             id_is_hash: true,
@@ -559,7 +563,8 @@ async fn link_torrent(
                     library_path,
                 },
             ),
-        );
+        )
+        .await;
     }
 
     Ok(())

@@ -18,7 +18,9 @@ use tracing::{debug, instrument};
 use tracing::{trace, warn};
 
 use crate::config::GoodreadsList;
-use crate::data::{ListItemTorrent, OldDbMainCat, Torrent, TorrentKey, TorrentStatus};
+use crate::data::{
+    DatabaseExt as _, ListItemTorrent, OldDbMainCat, Torrent, TorrentKey, TorrentStatus,
+};
 use crate::mam::enums::OldMainCat;
 use crate::{
     autograbber::select_torrents,
@@ -65,7 +67,7 @@ pub async fn run_goodreads_import(
             let list_id = list.list_id()?;
 
             if !list.dry_run {
-                let rw = db.rw_transaction()?;
+                let (_guard, rw) = db.rw_async().await?;
                 rw.upsert(List {
                     id: list_id.clone(),
                     title: rss.channel.title,
@@ -117,7 +119,7 @@ pub async fn run_goodreads_import(
                             db_item.title = item.title.clone();
                             db_item.series = item.series.iter().cloned().collect();
                             if !list.dry_run {
-                                let rw = db.rw_transaction()?;
+                                let (_guard, rw) = db.rw_async().await?;
                                 rw.upsert(db_item.clone())?;
                                 rw.commit()?;
                             }
@@ -135,7 +137,7 @@ pub async fn run_goodreads_import(
                     None => {
                         let db_item = item.as_list_item(&list_id, list);
                         if !list.dry_run {
-                            let rw = db.rw_transaction()?;
+                            let (_guard, rw) = db.rw_async().await?;
                             rw.insert(db_item.clone())?;
                             rw.commit()?;
                         }
@@ -173,7 +175,7 @@ async fn search_item(
 
     let has_updates = search_library(config, db, &mut db_item, item).context("search_library")?;
     if !list.dry_run && has_updates {
-        let rw = db.rw_transaction()?;
+        let (_guard, rw) = db.rw_async().await?;
         rw.upsert(db_item.clone())?;
         rw.commit()?;
     }
@@ -206,7 +208,7 @@ async fn search_item(
         }
     }
     if !list.dry_run && has_updates {
-        let rw = db.rw_transaction()?;
+        let (_guard, rw) = db.rw_async().await?;
         rw.upsert(db_item.clone())?;
         rw.commit()?;
     }
@@ -219,7 +221,7 @@ async fn search_item(
         has_updates = true;
     }
     if !list.dry_run && has_updates {
-        let rw = db.rw_transaction()?;
+        let (_guard, rw) = db.rw_async().await?;
         rw.upsert(db_item.clone())?;
         rw.commit()?;
     }
@@ -252,7 +254,7 @@ async fn search_item(
         has_updates = true;
     }
     if !list.dry_run && has_updates {
-        let rw = db.rw_transaction()?;
+        let (_guard, rw) = db.rw_async().await?;
         rw.upsert(db_item.clone())?;
         rw.commit()?;
     }
@@ -501,7 +503,7 @@ async fn search_grab(
                     t.series_info
                         .values()
                         .map(|series| {
-                            let Value::String(t_name) = series.get(0).unwrap_or(&Value::Null)
+                            let Value::String(t_name) = series.first().unwrap_or(&Value::Null)
                             else {
                                 return 0;
                             };

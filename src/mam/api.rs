@@ -16,7 +16,7 @@ use tracing::{debug, error, info, trace, warn};
 
 use crate::{
     config::{Config, SnatchlistType},
-    data,
+    data::{self, DatabaseExt as _},
     mam::{
         search::{MaMTorrent, SearchError, SearchQuery, SearchResult, Tor},
         user_data::UserResponse,
@@ -144,7 +144,7 @@ impl<'a> MaM<'a> {
             bail!("Bad status for checkCookie: {}", status)
         }
 
-        self.store_cookies();
+        self.store_cookies().await;
         Ok(())
     }
 
@@ -166,7 +166,7 @@ impl<'a> MaM<'a> {
             .map_err(RateLimitError::maybe)?
             .json()
             .await?;
-        self.store_cookies();
+        self.store_cookies().await;
         cache.replace((SystemTime::now(), resp.clone()));
         Ok(resp)
     }
@@ -265,7 +265,7 @@ impl<'a> MaM<'a> {
         for t in &mut resp.data {
             t.fix();
         }
-        self.store_cookies();
+        self.store_cookies().await;
         Ok(resp)
     }
 
@@ -296,7 +296,7 @@ impl<'a> MaM<'a> {
             error!("Error parsing mam response: {err}\nResponse: {resp}");
             err
         })?;
-        self.store_cookies();
+        self.store_cookies().await;
         Ok(resp)
     }
 
@@ -316,7 +316,7 @@ impl<'a> MaM<'a> {
             .await?
             .json()
             .await?;
-        self.store_cookies();
+        self.store_cookies().await;
         if resp.success {
             return Ok(());
         }
@@ -330,25 +330,28 @@ impl<'a> MaM<'a> {
         Err(anyhow::Error::new(err))
     }
 
-    fn store_cookies(&self) {
-        if let Some(cookie) = self
-            .jar
-            .read()
-            .unwrap()
-            .get("myanonamouse.net", "/", "mam_id")
-            && let Ok(rw) = self.db.rw_transaction()
-        {
-            let ok = rw
-                .upsert(data::Config {
-                    key: "mam_id".to_string(),
-                    value: cookie.value().to_string(),
-                })
-                .and_then(|_| rw.commit())
-                .is_ok();
+    async fn store_cookies(&self) {
+        let Ok(jar) = self.jar.read() else {
+            return;
+        };
+        let Some(cookie) = jar.get("myanonamouse.net", "/", "mam_id") else {
+            return;
+        };
+        let value = cookie.value().to_string();
+        drop(jar);
+        let Ok((_guard, rw)) = self.db.rw_try() else {
+            return;
+        };
+        let ok = rw
+            .upsert(data::Config {
+                key: "mam_id".to_string(),
+                value,
+            })
+            .and_then(|_| rw.commit())
+            .is_ok();
 
-            if ok {
-                trace!("stored new mam_id");
-            }
+        if ok {
+            trace!("stored new mam_id");
         }
     }
 }

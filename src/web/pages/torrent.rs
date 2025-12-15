@@ -25,8 +25,8 @@ use crate::{
     cleaner::clean_torrent,
     config::Config,
     data::{
-        ClientStatus, Event, EventKey, EventType, Size, Torrent, TorrentCost, TorrentKey,
-        TorrentMeta,
+        ClientStatus, DatabaseExt as _, Event, EventKey, EventType, Size, Torrent, TorrentCost,
+        TorrentKey, TorrentMeta,
     },
     linker::{find_library, library_dir, map_path, refresh_metadata, refresh_metadata_relink},
     mam::{
@@ -149,7 +149,7 @@ async fn torrent_page_id(
         .flatten();
 
     if replacement_torrent.is_none() && torrent.replaced_with.is_some() {
-        let rw = db.rw_transaction()?;
+        let (_guard, rw) = db.rw_async().await?;
         torrent.replaced_with = None;
         rw.upsert(torrent.clone())?;
         rw.commit()?;
@@ -176,7 +176,7 @@ async fn torrent_page_id(
     if let Some(mam_meta) = &mam_meta
         && torrent.meta.uploaded_at.0 == UtcDateTime::UNIX_EPOCH
     {
-        let rw = db.rw_transaction()?;
+        let (_guard, rw) = db.rw_async().await?;
         torrent.meta.uploaded_at = mam_meta.uploaded_at;
         rw.upsert(torrent.clone())?;
         rw.commit()?;
@@ -226,7 +226,7 @@ async fn torrent_page_id(
         && qbit_data.is_none()
         && torrent.client_status != Some(ClientStatus::NotInClient)
     {
-        let rw = db.rw_transaction()?;
+        let (_guard, rw) = db.rw_async().await?;
         torrent.client_status = Some(ClientStatus::NotInClient);
         rw.upsert(torrent.clone())?;
         rw.commit()?;
@@ -361,7 +361,7 @@ pub async fn torrent_page_post_id(
             refresh_metadata_relink(&config, &db, mam, id).await?;
         }
         "remove" => {
-            let rw = db.rw_transaction()?;
+            let (_guard, rw) = db.rw_async().await?;
             let Some(torrent) = rw.get().primary::<Torrent>(id)? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
@@ -381,7 +381,7 @@ pub async fn torrent_page_post_id(
             qbit.stop(vec![&id]).await?;
         }
         "clear-replacement" => {
-            let rw = db.rw_transaction()?;
+            let (_guard, rw) = db.rw_async().await?;
             let Some(mut torrent) = rw.get().primary::<Torrent>(id)? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };

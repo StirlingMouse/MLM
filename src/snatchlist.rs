@@ -2,7 +2,10 @@ use std::{sync::Arc, time::Duration};
 
 use crate::{
     config::{Config, Cost, SnatchlistSearch, TorrentFilter},
-    data::{self, Event, EventType, MetadataSource, Timestamp, TorrentKey, TorrentMeta, VipStatus},
+    data::{
+        self, DatabaseExt, Event, EventType, MetadataSource, Timestamp, TorrentKey, TorrentMeta,
+        VipStatus,
+    },
     logging::write_event,
     mam::{
         api::MaM,
@@ -14,7 +17,7 @@ use anyhow::{Context, Result, bail};
 use itertools::Itertools as _;
 use native_db::{Database, db_type, transaction::RwTransaction};
 use time::UtcDateTime;
-use tokio::time::sleep;
+use tokio::{sync::MutexGuard, time::sleep};
 use tracing::{Level, debug, enabled, info, instrument, trace, warn};
 use uuid::Uuid;
 
@@ -143,9 +146,9 @@ async fn update_torrents<T: Iterator<Item = UserDetailsTorrent>>(
         let rw_opt = if dry_run {
             None
         } else {
-            Some(db.rw_transaction()?)
+            Some(db.rw_async().await?)
         };
-        if let Some(rw) = &rw_opt {
+        if let Some((_, rw)) = &rw_opt {
             let old_library = rw
                 .get()
                 .secondary::<data::Torrent>(TorrentKey::mam_id, meta.mam_id)?;
@@ -193,7 +196,7 @@ async fn update_torrents<T: Iterator<Item = UserDetailsTorrent>>(
 
 #[instrument(skip_all)]
 async fn add_metadata_only_torrent(
-    rw: RwTransaction<'_>,
+    (_guard, rw): (MutexGuard<'_, ()>, RwTransaction<'_>),
     torrent: UserDetailsTorrent,
     meta: TorrentMeta,
 ) -> Result<()> {
@@ -234,7 +237,7 @@ async fn add_metadata_only_torrent(
 
 async fn update_torrent_meta(
     db: &Database<'_>,
-    rw: RwTransaction<'_>,
+    (guard, rw): (MutexGuard<'_, ()>, RwTransaction<'_>),
     mam_torrent: &UserDetailsTorrent,
     mut torrent: data::Torrent,
     mut meta: TorrentMeta,
@@ -295,12 +298,14 @@ async fn update_torrent_meta(
     torrent.title_search = normalize_title(&meta.title);
     rw.upsert(torrent.clone())?;
     rw.commit()?;
+    drop(guard);
 
     if !diff.is_empty() {
         write_event(
             db,
             Event::new(Some(id), Some(mam_id), EventType::Updated { fields: diff }),
-        );
+        )
+        .await;
     }
     Ok(())
 }

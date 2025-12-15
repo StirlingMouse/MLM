@@ -13,7 +13,7 @@ use tracing::info;
 
 use crate::{
     config::Config,
-    data::{SelectedTorrent, Timestamp, Torrent, TorrentCost, TorrentKey},
+    data::{DatabaseExt as _, SelectedTorrent, Timestamp, Torrent, TorrentCost, TorrentKey},
     mam::{
         enums::SearchTarget,
         meta::normalize_title,
@@ -167,28 +167,30 @@ pub async fn select_torrent(
         "Selecting torrent \"{}\" in format {}, cost: {:?}, with category {:?} and tags {:?}",
         torrent.title, torrent.filetype, cost, category, tags
     );
-    let rw = db.rw_transaction()?;
-    rw.insert(SelectedTorrent {
-        mam_id: torrent.id,
-        goodreads_id: None,
-        hash: None,
-        dl_link: torrent
-            .dl
-            .clone()
-            .ok_or_else(|| Error::msg(format!("no dl field for torrent {}", torrent.id)))?,
-        unsat_buffer: None,
-        wedge_buffer: None,
-        cost,
-        category,
-        tags,
-        title_search: normalize_title(&meta.title),
-        meta,
-        grabber: None,
-        created_at: Timestamp::now(),
-        started_at: None,
-        removed_at: None,
-    })?;
-    rw.commit()?;
+    {
+        let (_guard, rw) = db.rw_async().await?;
+        rw.insert(SelectedTorrent {
+            mam_id: torrent.id,
+            goodreads_id: None,
+            hash: None,
+            dl_link: torrent
+                .dl
+                .clone()
+                .ok_or_else(|| Error::msg(format!("no dl field for torrent {}", torrent.id)))?,
+            unsat_buffer: None,
+            wedge_buffer: None,
+            cost,
+            category,
+            tags,
+            title_search: normalize_title(&meta.title),
+            meta,
+            grabber: None,
+            created_at: Timestamp::now(),
+            started_at: None,
+            removed_at: None,
+        })?;
+        rw.commit()?;
+    }
     triggers.downloader_tx.send(())?;
 
     Ok(())

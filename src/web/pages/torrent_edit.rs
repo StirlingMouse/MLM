@@ -14,8 +14,8 @@ use crate::{
     autograbber::update_torrent_meta,
     config::Config,
     data::{
-        AudiobookCategory, EbookCategory, FlagBits, Language, MetadataSource, OldCategory, Series,
-        Torrent, TorrentMeta, impls::format_serie,
+        AudiobookCategory, DatabaseExt as _, EbookCategory, FlagBits, Language, MetadataSource,
+        OldCategory, Series, Torrent, TorrentMeta, impls::format_serie,
     },
     mam::enums::Flags,
     web::{AppError, MaMState, Page},
@@ -101,8 +101,17 @@ pub async fn torrent_edit_page_post(
         ..torrent.meta.clone()
     };
 
-    let rw = db.rw_transaction()?;
-    update_torrent_meta(&config, &db, rw, &mam_torrent, torrent, meta, true, false).await?;
+    update_torrent_meta(
+        &config,
+        &db,
+        db.rw_async().await?,
+        &mam_torrent,
+        torrent,
+        meta,
+        true,
+        false,
+    )
+    .await?;
 
     Ok(Redirect::to(&format!("/torrents/{}", hash)))
 }

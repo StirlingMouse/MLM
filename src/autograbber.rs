@@ -10,8 +10,9 @@ use crate::{
     audiobookshelf::{self as abs, Abs},
     config::{Config, Cost, SortBy, TorrentFilter, TorrentSearch, Type},
     data::{
-        self, DuplicateTorrent, ErroredTorrentId, Event, EventType, MetadataSource,
-        SelectedTorrent, Size, Timestamp, TorrentCost, TorrentKey, TorrentMeta, VipStatus,
+        self, ClientStatus, DatabaseExt as _, DuplicateTorrent, ErroredTorrentId, Event, EventType,
+        MetadataSource, SelectedTorrent, Size, Timestamp, TorrentCost, TorrentKey, TorrentMeta,
+        VipStatus,
     },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     mam::{
@@ -29,9 +30,15 @@ use itertools::Itertools as _;
 use lava_torrent::torrent::v1::Torrent;
 use native_db::{Database, db_type, transaction::RwTransaction};
 use qbit::parameters::{AddTorrent, AddTorrentType, TorrentFile};
-use tokio::{fs, sync::watch::Sender, time::sleep};
+use tokio::{
+    fs,
+    sync::{MutexGuard, watch::Sender},
+    time::sleep,
+};
 use tracing::{Level, debug, enabled, error, info, instrument, trace, warn};
 use uuid::Uuid;
+
+static AUTOGRABBER_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[instrument(skip_all)]
 pub async fn run_autograbber(
@@ -42,6 +49,9 @@ pub async fn run_autograbber(
     index: usize,
     autograb_config: Arc<TorrentSearch>,
 ) -> Result<()> {
+    // Make sure we are only running one autograbber at a time
+    let _guard = AUTOGRABBER_MUTEX.lock().await;
+
     let user_info = mam.user_info().await?;
     let max_torrents = user_info.unsat.limit.saturating_sub(user_info.unsat.count);
     let name = autograb_config
@@ -156,7 +166,8 @@ pub async fn grab_selected_torrents(
             ErroredTorrentId::Grabber(torrent.mam_id),
             torrent.meta.title,
             result,
-        );
+        )
+        .await;
 
         sleep(Duration::from_millis(1000)).await;
     }
@@ -173,7 +184,31 @@ pub async fn search_and_select_torrents(
 ) -> Result<u64> {
     let torrents = search_torrents(torrent_search, mam)
         .await
-        .context("select_torrents")?;
+        .context("search_torrents")?;
+
+    if torrent_search.mark_removed {
+        let torrents = torrents.collect::<Vec<_>>();
+        mark_removed_torrents(db, mam, &torrents)
+            .await
+            .context("mark_removed_torrents")?;
+
+        return select_torrents(
+            config,
+            db,
+            mam,
+            torrents.into_iter(),
+            &torrent_search.filter,
+            torrent_search.cost,
+            torrent_search.unsat_buffer,
+            torrent_search.wedge_buffer,
+            torrent_search.category.clone(),
+            torrent_search.dry_run,
+            max_torrents,
+            None,
+        )
+        .await
+        .context("select_torrents");
+    }
 
     select_torrents(
         config,
@@ -234,6 +269,9 @@ pub async fn search_torrents(
         let mut page_results = mam
             .search(&SearchQuery {
                 dl_link: true,
+                // description: true,
+                // media_info: true,
+                // isbn: true,
                 perpage: 100,
                 tor: Tor {
                     start_number: results.as_ref().map_or(0, |r| r.data.len() as u64),
@@ -330,6 +368,40 @@ pub async fn search_torrents(
 }
 
 #[instrument(skip_all)]
+pub async fn mark_removed_torrents(
+    db: &Database<'_>,
+    mam: &MaM<'_>,
+    torrents: &[MaMTorrent],
+) -> Result<()> {
+    if let (Some(first), Some(last)) = (torrents.first(), torrents.last()) {
+        let ids = first.id.min(last.id)..=first.id.max(last.id);
+        for id in ids {
+            let is_removed = torrents.iter().all(|t| t.id != id);
+            if is_removed {
+                let (guard, rw) = db.rw_async().await?;
+                let torrent = rw
+                    .get()
+                    .secondary::<data::Torrent>(TorrentKey::mam_id, id)?;
+                if let Some(mut torrent) = torrent
+                    && torrent.client_status != Some(ClientStatus::RemovedFromMam)
+                {
+                    if mam.get_torrent_info_by_id(id).await?.is_none() {
+                        torrent.client_status = Some(ClientStatus::RemovedFromMam);
+                        let tid = Some(torrent.id.clone());
+                        rw.upsert(torrent)?;
+                        rw.commit()?;
+                        drop(guard);
+                        write_event(db, Event::new(tid, Some(id), EventType::RemovedFromMam)).await;
+                    }
+                    sleep(Duration::from_millis(400)).await;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[instrument(skip_all)]
 #[allow(clippy::too_many_arguments)]
 pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
     config: &Config,
@@ -365,9 +437,9 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
         let rw_opt = if dry_run {
             None
         } else {
-            Some(db.rw_transaction()?)
+            Some(db.rw_async().await?)
         };
-        if let Some(rw) = &rw_opt
+        if let Some((_, rw)) = &rw_opt
             && let Some(old_selected) = rw
                 .get()
                 .primary::<data::SelectedTorrent>(torrent.id)
@@ -383,7 +455,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                     update_selected_torrent_meta(db, rw_opt.unwrap(), mam, updated, meta).await?;
                 } else {
                     rw.update(old_selected, updated)?;
-                    rw_opt.unwrap().commit()?;
+                    rw_opt.unwrap().1.commit()?;
                 }
             } else if old_selected.meta != meta {
                 update_selected_torrent_meta(db, rw_opt.unwrap(), mam, old_selected, meta).await?;
@@ -391,7 +463,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             trace!("Torrent {} is already selected", torrent.id);
             continue;
         }
-        if let Some(rw) = &rw_opt {
+        if let Some((_, rw)) = &rw_opt {
             let old_library = rw
                 .get()
                 .secondary::<data::Torrent>(TorrentKey::mam_id, meta.mam_id)?;
@@ -447,7 +519,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             );
             continue 'torrent;
         }
-        if let Some(rw) = &rw_opt {
+        if let Some((_, rw)) = &rw_opt {
             let old_selected = {
                 rw.scan()
                     .secondary::<data::SelectedTorrent>(data::SelectedTorrentKey::title_search)?
@@ -476,7 +548,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         {
                             error!("Error writing duplicate torrent: {err}");
                         }
-                        rw_opt.unwrap().commit()?;
+                        rw_opt.unwrap().1.commit()?;
                         trace!(
                             "Skipping torrent {} as we have {} selected",
                             torrent.id, old.meta.mam_id
@@ -501,7 +573,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 }
             }
         }
-        if let Some(rw) = &rw_opt {
+        if let Some((_, rw)) = &rw_opt {
             let old_library = {
                 rw.scan()
                     .secondary::<data::Torrent>(data::TorrentKey::title_search)?
@@ -544,7 +616,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         ) {
                             error!("Error writing duplicate torrent: {err}");
                         }
-                        rw_opt.unwrap().commit()?;
+                        rw_opt.unwrap().1.commit()?;
                         trace!(
                             "Skipping torrent {} as we have {} in libary",
                             torrent.id, old.meta.mam_id
@@ -585,7 +657,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             "Selecting torrent \"{}\" in format {}, cost: {:?}, with category {:?} and tags {:?}",
             torrent.title, torrent.filetype, cost, category, tags
         );
-        if let Some(rw) = &rw_opt {
+        if let Some((_, rw)) = &rw_opt {
             selected_torrents += 1;
             rw.insert(data::SelectedTorrent {
                 mam_id: torrent.id,
@@ -607,7 +679,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 started_at: None,
                 removed_at: None,
             })?;
-            rw_opt.unwrap().commit()?;
+            rw_opt.unwrap().1.commit()?;
             if selected_torrents >= max_torrents {
                 break;
             }
@@ -703,7 +775,7 @@ async fn grab_torrent(
     let cost = Some(torrent.cost);
     let grabber = torrent.grabber.clone();
     {
-        let rw = db.rw_transaction()?;
+        let (_guard, rw) = db.rw_async().await?;
         rw.insert(data::Torrent {
             id: hash.clone(),
             id_is_hash: true,
@@ -749,14 +821,15 @@ async fn grab_torrent(
                 wedged,
             },
         ),
-    );
+    )
+    .await;
 
     Ok(())
 }
 
 #[instrument(skip_all)]
 pub async fn add_metadata_only_torrent(
-    rw: RwTransaction<'_>,
+    (_guard, rw): (MutexGuard<'_, ()>, RwTransaction<'_>),
     torrent: MaMTorrent,
     meta: TorrentMeta,
 ) -> Result<()> {
@@ -799,7 +872,7 @@ pub async fn add_metadata_only_torrent(
 pub async fn update_torrent_meta(
     config: &Config,
     db: &Database<'_>,
-    rw: RwTransaction<'_>,
+    (guard, rw): (MutexGuard<'_, ()>, RwTransaction<'_>),
     mam_torrent: &MaMTorrent,
     mut torrent: data::Torrent,
     meta: TorrentMeta,
@@ -867,6 +940,7 @@ pub async fn update_torrent_meta(
     torrent.title_search = normalize_title(&meta.title);
     rw.upsert(torrent.clone())?;
     rw.commit()?;
+    drop(guard);
 
     if let Some(library_path) = &torrent.library_path
         && let serde_json::Value::Object(new) = abs::create_metadata(mam_torrent, &meta)
@@ -898,14 +972,15 @@ pub async fn update_torrent_meta(
         write_event(
             db,
             Event::new(Some(id), Some(mam_id), EventType::Updated { fields: diff }),
-        );
+        )
+        .await;
     }
     Ok(())
 }
 
 async fn update_selected_torrent_meta(
     db: &Database<'_>,
-    rw: RwTransaction<'_>,
+    (guard, rw): (MutexGuard<'_, ()>, RwTransaction<'_>),
     mam: &MaM<'_>,
     torrent: SelectedTorrent,
     meta: TorrentMeta,
@@ -924,10 +999,12 @@ async fn update_selected_torrent_meta(
     torrent.meta = meta;
     rw.upsert(torrent)?;
     rw.commit()?;
+    drop(guard);
     write_event(
         db,
         Event::new(hash, Some(mam_id), EventType::Updated { fields: diff }),
-    );
+    )
+    .await;
     Ok(())
 }
 

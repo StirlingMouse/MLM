@@ -22,6 +22,7 @@ use native_db::Models;
 use native_db::transaction::RwTransaction;
 use native_db::{Database, ToInput, db_type};
 use once_cell::sync::Lazy;
+use tokio::sync::MutexGuard;
 use tracing::{info, instrument};
 
 pub static MODELS: Lazy<Models> = Lazy::new(|| {
@@ -210,4 +211,32 @@ where
     }
 
     Ok(())
+}
+
+static RW_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+pub trait DatabaseExt {
+    fn db(&self) -> &Database<'_>;
+
+    async fn rw_async(&self) -> Result<(MutexGuard<'_, ()>, RwTransaction<'_>)> {
+        // Make sure we are only running one rw_transaction at a time
+        let guard = RW_MUTEX.lock().await;
+        let rw = self.db().rw_transaction()?;
+        Ok((guard, rw))
+    }
+
+    fn rw_try(&self) -> Result<(MutexGuard<'_, ()>, RwTransaction<'_>)> {
+        // Make sure we are only running one rw_transaction at a time
+        let Ok(guard) = RW_MUTEX.try_lock() else {
+            return Err(anyhow::Error::msg("Failed to acquire lock"));
+        };
+        let rw = self.db().rw_transaction()?;
+        Ok((guard, rw))
+    }
+}
+
+impl DatabaseExt for Database<'_> {
+    fn db(&self) -> &Database<'_> {
+        self
+    }
 }
