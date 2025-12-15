@@ -42,11 +42,7 @@ use figment::{
 use goodreads::run_goodreads_import;
 use stats::{Stats, Triggers};
 use time::OffsetDateTime;
-use tokio::{
-    select,
-    sync::{Mutex, watch},
-    time::sleep,
-};
+use tokio::{select, sync::watch, time::sleep};
 use tracing::error;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{
@@ -197,7 +193,7 @@ async fn app_main() -> Result<()> {
     #[cfg(target_family = "windows")]
     let _tray = windows::tray::start_tray_icon(log_dir, config_file.clone(), config.clone())?;
 
-    let stats: Arc<Mutex<Stats>> = Default::default();
+    let stats = Stats::new();
 
     let (mut search_tx, mut search_rx) = (BTreeMap::new(), BTreeMap::new());
     let (linker_tx, linker_rx) = watch::channel(());
@@ -234,9 +230,13 @@ async fn app_main() -> Result<()> {
                                 Ok(q) => qbit = Some(q),
                                 Err(err) => {
                                     error!("Error logging in to qbit {}: {err}", qbit_conf.url);
-                                    let mut stats = stats.lock().await;
-                                    stats.downloader_run_at = Some(OffsetDateTime::now_utc());
-                                    stats.downloader_result = Some(Err(err.into()));
+                                    stats
+                                        .update(|stats| {
+                                            stats.downloader_run_at =
+                                                Some(OffsetDateTime::now_utc());
+                                            stats.downloader_result = Some(Err(err.into()));
+                                        })
+                                        .await;
                                 }
                             };
                         }
@@ -244,9 +244,12 @@ async fn app_main() -> Result<()> {
                             continue;
                         };
                         {
-                            let mut stats = stats.lock().await;
-                            stats.downloader_run_at = Some(OffsetDateTime::now_utc());
-                            stats.downloader_result = None;
+                            stats
+                                .update(|stats| {
+                                    stats.downloader_run_at = Some(OffsetDateTime::now_utc());
+                                    stats.downloader_result = None;
+                                })
+                                .await;
                         }
                         let result = grab_selected_torrents(&config, &db, qbit, &mam)
                             .await
@@ -256,8 +259,11 @@ async fn app_main() -> Result<()> {
                             error!("Error grabbing selected torrents: {err:?}");
                         }
                         {
-                            let mut stats = stats.lock().await;
-                            stats.downloader_result = Some(result);
+                            stats
+                                .update(|stats| {
+                                    stats.downloader_result = Some(result);
+                                })
+                                .await;
                         }
                     }
                 }
@@ -283,8 +289,9 @@ async fn app_main() -> Result<()> {
                             result = rx.changed() => {
                                 if let Err(err) = result {
                                     error!("Error listening on search_rx: {err:?}");
-                                    let mut stats = stats.lock().await;
-                                    stats.autograbber_result.insert(i, Err(err.into()));
+                                    stats.update(|stats| {
+                                        stats.autograbber_result.insert(i, Err(err.into()));
+                                    }).await;
                                 }
                             },
                         }
@@ -292,16 +299,22 @@ async fn app_main() -> Result<()> {
                         let result = rx.changed().await;
                         if let Err(err) = result {
                             error!("Error listening on search_rx: {err:?}");
-                            let mut stats = stats.lock().await;
-                            stats.autograbber_result.insert(i, Err(err.into()));
+                            stats
+                                .update(|stats| {
+                                    stats.autograbber_result.insert(i, Err(err.into()));
+                                })
+                                .await;
                         }
                     }
                     {
-                        let mut stats = stats.lock().await;
                         stats
-                            .autograbber_run_at
-                            .insert(i, OffsetDateTime::now_utc());
-                        stats.autograbber_result.remove(&i);
+                            .update(|stats| {
+                                stats
+                                    .autograbber_run_at
+                                    .insert(i, OffsetDateTime::now_utc());
+                                stats.autograbber_result.remove(&i);
+                            })
+                            .await;
                     }
                     let result = run_autograbber(
                         config.clone(),
@@ -317,8 +330,11 @@ async fn app_main() -> Result<()> {
                         error!("Error running autograbbers: {err:?}");
                     }
                     {
-                        let mut stats = stats.lock().await;
-                        stats.autograbber_result.insert(i, result);
+                        stats
+                            .update(|stats| {
+                                stats.autograbber_result.insert(i, result);
+                            })
+                            .await;
                     }
                 }
             });
@@ -343,8 +359,9 @@ async fn app_main() -> Result<()> {
                             result = rx.changed() => {
                                 if let Err(err) = result {
                                     error!("Error listening on search_rx for snatchlist: {err:?}");
-                                    let mut stats = stats.lock().await;
-                                    stats.autograbber_result.insert(i, Err(err.into()));
+                                    stats.update(|stats| {
+                                        stats.autograbber_result.insert(i, Err(err.into()));
+                                    }).await;
                                 }
                             },
                         }
@@ -352,16 +369,22 @@ async fn app_main() -> Result<()> {
                         let result = rx.changed().await;
                         if let Err(err) = result {
                             error!("Error listening on search_rx for snatchlist: {err:?}");
-                            let mut stats = stats.lock().await;
-                            stats.autograbber_result.insert(i, Err(err.into()));
+                            stats
+                                .update(|stats| {
+                                    stats.autograbber_result.insert(i, Err(err.into()));
+                                })
+                                .await;
                         }
                     }
                     {
-                        let mut stats = stats.lock().await;
                         stats
-                            .autograbber_run_at
-                            .insert(i, OffsetDateTime::now_utc());
-                        stats.autograbber_result.remove(&i);
+                            .update(|stats| {
+                                stats
+                                    .autograbber_run_at
+                                    .insert(i, OffsetDateTime::now_utc());
+                                stats.autograbber_result.remove(&i);
+                            })
+                            .await;
                     }
                     let result = run_snatchlist_search(
                         config.clone(),
@@ -376,8 +399,11 @@ async fn app_main() -> Result<()> {
                         error!("Error running snatchlist_search: {err:?}");
                     }
                     {
-                        let mut stats = stats.lock().await;
-                        stats.autograbber_result.insert(i, result);
+                        stats
+                            .update(|stats| {
+                                stats.autograbber_result.insert(i, result);
+                            })
+                            .await;
                     }
                 }
             });
@@ -396,15 +422,20 @@ async fn app_main() -> Result<()> {
                         result = goodreads_rx.changed() => {
                             if let Err(err) = result {
                                 error!("Error listening on goodreads_rx: {err:?}");
-                                let mut stats = stats.lock().await;
-                                stats.goodreads_result = Some(Err(err.into()));
+                                stats
+                                    .update(|stats| {
+                                        stats.goodreads_result = Some(Err(err.into()));
+                                    }).await;
                             }
                         },
                     }
                     {
-                        let mut stats = stats.lock().await;
-                        stats.goodreads_run_at = Some(OffsetDateTime::now_utc());
-                        stats.goodreads_result = None;
+                        stats
+                            .update(|stats| {
+                                stats.goodreads_run_at = Some(OffsetDateTime::now_utc());
+                                stats.goodreads_result = None;
+                            })
+                            .await;
                     }
                     let result = run_goodreads_import(
                         config.clone(),
@@ -418,8 +449,11 @@ async fn app_main() -> Result<()> {
                         error!("Error running goodreads import: {err:?}");
                     }
                     {
-                        let mut stats = stats.lock().await;
-                        stats.goodreads_result = Some(result);
+                        stats
+                            .update(|stats| {
+                                stats.goodreads_result = Some(result);
+                            })
+                            .await;
                     }
                 }
             });
@@ -444,12 +478,16 @@ async fn app_main() -> Result<()> {
                             Ok(qbit) => qbit,
                             Err(err) => {
                                 error!("Error logging in to qbit {}: {err}", qbit_conf.url);
-                                let mut stats = stats.lock().await;
-                                stats.linker_run_at = Some(OffsetDateTime::now_utc());
-                                stats.linker_result = Some(Err(anyhow::Error::msg(format!(
-                                    "Error logging in to qbit {}: {err}",
-                                    qbit_conf.url,
-                                ))));
+                                stats
+                                    .update(|stats| {
+                                        stats.linker_run_at = Some(OffsetDateTime::now_utc());
+                                        stats.linker_result =
+                                            Some(Err(anyhow::Error::msg(format!(
+                                                "Error logging in to qbit {}: {err}",
+                                                qbit_conf.url,
+                                            ))));
+                                    })
+                                    .await;
                                 return;
                             }
                         };
@@ -458,16 +496,21 @@ async fn app_main() -> Result<()> {
                             result = linker_rx.changed() => {
                                 if let Err(err) = result {
                                     error!("Error listening on link_rx: {err:?}");
-                                    let mut stats = stats.lock().await;
-                                    stats.linker_run_at = Some(OffsetDateTime::now_utc());
-                                    stats.linker_result = Some(Err(err.into()));
+                                    stats
+                                        .update(|stats| {
+                                            stats.linker_run_at = Some(OffsetDateTime::now_utc());
+                                            stats.linker_result = Some(Err(err.into()));
+                                        }).await;
                                 }
                             },
                         }
                         {
-                            let mut stats = stats.lock().await;
-                            stats.linker_run_at = Some(OffsetDateTime::now_utc());
-                            stats.linker_result = None;
+                            stats
+                                .update(|stats| {
+                                    stats.linker_run_at = Some(OffsetDateTime::now_utc());
+                                    stats.linker_result = None;
+                                })
+                                .await;
                         }
                         let result = link_torrents_to_library(
                             config.clone(),
@@ -481,10 +524,13 @@ async fn app_main() -> Result<()> {
                             error!("Error running linker: {err:?}");
                         }
                         {
-                            let mut stats = stats.lock().await;
-                            stats.linker_result = Some(result);
-                            stats.cleaner_run_at = Some(OffsetDateTime::now_utc());
-                            stats.cleaner_result = None;
+                            stats
+                                .update(|stats| {
+                                    stats.linker_result = Some(result);
+                                    stats.cleaner_run_at = Some(OffsetDateTime::now_utc());
+                                    stats.cleaner_result = None;
+                                })
+                                .await;
                         }
                         let result = run_library_cleaner(config.clone(), db.clone())
                             .await
@@ -493,8 +539,11 @@ async fn app_main() -> Result<()> {
                             error!("Error running library_cleaner: {err:?}");
                         }
                         {
-                            let mut stats = stats.lock().await;
-                            stats.cleaner_result = Some(result);
+                            stats
+                                .update(|stats| {
+                                    stats.cleaner_result = Some(result);
+                                })
+                                .await;
                         }
                     }
                 });
@@ -513,15 +562,21 @@ async fn app_main() -> Result<()> {
                     result = audiobookshelf_rx.changed() => {
                         if let Err(err) = result {
                             error!("Error listening on audiobookshelf_rx: {err:?}");
-                            let mut stats = stats.lock().await;
-                            stats.audiobookshelf_result = Some(Err(err.into()));
+                        stats
+                            .update(|stats| {
+                                stats.audiobookshelf_result = Some(Err(err.into()));
+                            })
+                            .await;
                         }
                     },
                 }
                 {
-                    let mut stats = stats.lock().await;
-                    stats.audiobookshelf_run_at = Some(OffsetDateTime::now_utc());
-                    stats.audiobookshelf_result = None;
+                    stats
+                        .update(|stats| {
+                            stats.audiobookshelf_run_at = Some(OffsetDateTime::now_utc());
+                            stats.audiobookshelf_result = None;
+                        })
+                        .await;
                 }
                 let result = match_torrents_to_abs(&config, db.clone())
                     .await
@@ -530,8 +585,11 @@ async fn app_main() -> Result<()> {
                     error!("Error running audiobookshelf matcher: {err:?}");
                 }
                 {
-                    let mut stats = stats.lock().await;
-                    stats.audiobookshelf_result = Some(result);
+                    stats
+                        .update(|stats| {
+                            stats.audiobookshelf_result = Some(result);
+                        })
+                        .await;
                 }
             }
         });

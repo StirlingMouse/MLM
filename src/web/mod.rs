@@ -38,7 +38,7 @@ use time::{
     Date, UtcDateTime, UtcOffset,
     format_description::{self, OwnedFormatItem},
 };
-use tokio::sync::{Mutex, watch::error::SendError};
+use tokio::sync::watch::error::SendError;
 use tower::ServiceBuilder;
 #[allow(unused)]
 use tower_http::services::{ServeDir, ServeFile};
@@ -53,7 +53,10 @@ use crate::{
             search::{search_api, search_api_post},
             torrent::torrent_api,
         },
-        pages::search::{search_page, search_page_post},
+        pages::{
+            index::stats_updates,
+            search::{search_page, search_page_post},
+        },
     },
 };
 
@@ -62,16 +65,17 @@ pub type MaMState = Arc<Result<Arc<MaM<'static>>>>;
 pub async fn start_webserver(
     config: Arc<Config>,
     db: Arc<Database<'static>>,
-    stats: Arc<Mutex<Stats>>,
+    stats: Stats,
     mam: Arc<Result<Arc<MaM<'static>>>>,
     triggers: Triggers,
 ) -> Result<()> {
     let app = Router::new()
         .route(
             "/",
-            get(index_page).with_state((config.clone(), stats, mam.clone())),
+            get(index_page).with_state((config.clone(), stats.clone(), mam.clone())),
         )
         .route("/", post(index_page_post).with_state(triggers.clone()))
+        .route("/stats-updates", get(stats_updates).with_state(stats))
         .route(
             "/torrents",
             get(torrents_page).with_state((config.clone(), db.clone())),

@@ -47,7 +47,7 @@
     {% if torrent.is_some() %}
     <img src="/assets/icons/greenCheck2.png" alt="Torrent is downloaded" title="Torrent is downloaded" />
     {% else %}
-    <form method=post>
+    <form method=post inline>
       <input type=hidden name=mam_id value="{{ meta.mam_id }}">
       {% if let Some(wedge_over) = config.wedge_over %}
         {% if &meta.size >= &wedge_over && !mam_torrent.is_free() %}

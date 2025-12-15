@@ -1,14 +1,18 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, convert::Infallible, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use askama::Template;
 use axum::{
     extract::{OriginalUri, State},
-    response::{Html, Redirect},
+    response::{
+        Html, Redirect, Sse,
+        sse::{Event, KeepAlive},
+    },
 };
 use axum_extra::extract::Form;
+use futures::Stream;
 use serde::Deserialize;
-use tokio::sync::Mutex;
+use tokio_stream::{StreamExt as _, wrappers::WatchStream};
 
 use crate::{
     config::{Config, TorrentFilter},
@@ -19,13 +23,9 @@ use crate::{
 };
 
 pub async fn index_page(
-    State((config, stats, mam)): State<(
-        Arc<Config>,
-        Arc<Mutex<Stats>>,
-        Arc<Result<Arc<MaM<'static>>>>,
-    )>,
+    State((config, stats, mam)): State<(Arc<Config>, Stats, Arc<Result<Arc<MaM<'static>>>>)>,
 ) -> std::result::Result<Html<String>, AppError> {
-    let stats = stats.lock().await;
+    let stats = stats.values.lock().await;
     let username = match mam.as_ref() {
         Ok(mam) => mam.cached_user_info().await.map(|u| u.username),
         Err(_) => None,
@@ -72,6 +72,14 @@ pub async fn index_page(
             .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
     };
     Ok::<_, AppError>(Html(template.to_string()))
+}
+
+pub async fn stats_updates(
+    State(stats): State<Stats>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let stream =
+        WatchStream::new(stats.updates()).map(|time| Ok(Event::default().data(time.to_string())));
+    Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(10)))
 }
 
 pub async fn index_page_post(

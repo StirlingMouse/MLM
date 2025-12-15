@@ -1,3 +1,33 @@
+document.body.addEventListener('submit', e => {
+        // @ts-ignore
+        const form = e.target.form || e.target
+        if (!(form instanceof HTMLFormElement)) return
+
+        if (form.getAttribute('inline') !== null) {
+                e.preventDefault()
+                const data = new URLSearchParams();
+                // @ts-ignore
+                for (const pair of new FormData(form)) {
+                        data.append(pair[0], pair[1]);
+                }
+                if (e.submitter && e.submitter instanceof HTMLButtonElement && e.submitter.name) {
+                        data.append(e.submitter.name, e.submitter.value)
+                }
+
+                fetch(location.href, {
+                        method: form.method,
+                        body: data,
+                })
+                        .then(r => r.text())
+                        .then(html => {
+                                const parser = new DOMParser()
+                                const newDocument = parser.parseFromString(html, 'text/html')
+                                const main = document.querySelector('main')
+                                main.replaceWith(newDocument.querySelector('main'))
+                        })
+        }
+})
+
 document.body.addEventListener('formdata', e => {
         const formData = e.formData;
         const show = formData.getAll('show')
@@ -22,6 +52,7 @@ document.body.addEventListener('click', e => {
                 const show = link.get('show') ?? current.get('show')
                 const from = link.get('from') ?? current.get('from')
                 const page_size = link.get('page_size') ?? current.get('page_size')
+                // @ts-ignore
                 const filters = [...link.entries(), ...current.entries()]
                         .filter(([key,]) => key !== 'sort_by' && key !== 'asc' && key !== 'show' && key !== 'from' && key !== 'page_size')
                 const combined = new URLSearchParams()
@@ -44,10 +75,13 @@ document.body.addEventListener('click', e => {
 })
 
 document.body.addEventListener('change', e => {
+        // @ts-ignore
         const toggles = e.target.closest('.option_group')
         if (toggles?.classList.contains('query')) {
                 setTimeout(() => {
+                        // @ts-ignore
                         const value = e.target.tagName === 'SELECT'
+                                // @ts-ignore
                                 ? [e.target.value]
                                 : Array.from(toggles.querySelectorAll('input[type="checkbox"],input[type="radio"]'))
                                         .filter(i => i.checked)
@@ -55,8 +89,10 @@ document.body.addEventListener('change', e => {
                         const params = new URLSearchParams(location.search)
                         const value_str = value.join(',')
                         if (value_str) {
+                                // @ts-ignore
                                 params.set(e.target.name, value_str)
                         } else {
+                                // @ts-ignore
                                 params.delete(e.target.name)
                         }
                         const target = new URL(location.href)
@@ -65,15 +101,20 @@ document.body.addEventListener('change', e => {
                 })
                 return
         }
+        // @ts-ignore
         if (e.target.type === 'checkbox') {
+                // @ts-ignore
                 const table = e.target.closest('.table,.table2')
                 if (table) {
+                        // @ts-ignore
                         const name = e.target.name
                         if (name.endsWith('_all')) {
                                 for (const checkbox of Array.from(table.querySelectorAll(`input[type="checkbox"][name="${name.slice(0, -4)}"]`))) {
+                                        // @ts-ignore
                                         checkbox.checked = e.target.checked
                                 }
                                 const actions = document.querySelector(`.actions.actions_${name.slice(0, -4)}`)
+                                // @ts-ignore
                                 actions.style.display = e.target.checked ? 'flex' : 'none';
                         } else {
                                 const all = table.querySelector(`input[type="checkbox"][name="${name}_all"]`)
@@ -84,10 +125,12 @@ document.body.addEventListener('change', e => {
                                         if (allNotChecked) {
                                                 all.checked = false
                                                 all.indeterminate = false
+                                                // @ts-ignore
                                                 if (actions) actions.style.display = 'none';
                                                 return
                                         }
 
+                                        // @ts-ignore
                                         if (actions) actions.style.display = 'flex';
 
                                         const allChecked = checkboxes.every(c => c.checked)
