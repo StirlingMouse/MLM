@@ -521,13 +521,13 @@ async fn other_torrents(
     let title = Regex::new(r#"([\*\?])"#)
         .unwrap()
         .replace_all(title, r#""$1""#);
-    let title = Regex::new(r#"(?:['`/]|-)"#)
+    let title = Regex::new(r#"(?:['`/-])"#)
         .unwrap()
         .replace_all(&title, " ");
     let title = Regex::new(r#"\s+\[[^\]\[]+?\]"#)
         .unwrap()
         .replace_all(&title, "");
-    let title = Regex::new(r#"\s+\([^<>\)\(]+?\]"#)
+    let title = Regex::new(r#"\s+\([^<>\)\(]+?\)|\s+\[[^<>\]\[]+?\]|@"#)
         .unwrap()
         .replace_all(&title, "");
     let title = Regex::new(r#"&|\band\b"#)
