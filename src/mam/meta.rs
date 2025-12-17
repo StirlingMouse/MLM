@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 use regex::{Captures, Match, Regex};
 use unidecode::unidecode;
 
-use crate::data::TorrentMeta;
+use crate::data::{MediaType, OldCategory, TorrentMeta};
 
 #[derive(thiserror::Error, Debug)]
 pub enum MetaError {
@@ -38,6 +38,12 @@ pub fn normalize_title(value: &str) -> String {
 
 impl TorrentMeta {
     pub fn clean(mut self, tags: &str) -> Result<Self> {
+        // A large amount of audiobook torrents have been incorrectly set to ebook
+        if self.media_type == MediaType::Ebook
+            && let Some(OldCategory::Audio(_)) = self.cat
+        {
+            self.media_type = MediaType::Audiobook;
+        }
         for author in &mut self.authors {
             *author = clean_value(author)?;
         }
