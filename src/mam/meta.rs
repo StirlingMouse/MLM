@@ -45,10 +45,10 @@ impl TorrentMeta {
             self.media_type = MediaType::Audiobook;
         }
         for author in &mut self.authors {
-            *author = clean_value(author)?;
+            clean_name(author)?;
         }
         for narrator in &mut self.narrators {
-            *narrator = clean_value(narrator)?;
+            clean_name(narrator)?;
         }
         for series in &mut self.series {
             series.name = SERIES_CLEANUP
@@ -81,6 +81,51 @@ impl TorrentMeta {
 
         Ok(self)
     }
+}
+
+fn clean_name(name: &mut String) -> Result<()> {
+    *name = clean_value(name)?;
+
+    let mut to_lowercase = vec![];
+    let mut to_uppercase = vec![];
+    let mut start = 0;
+
+    let mut check_word = |start, end| {
+        let word = &name.get(start..end);
+        if let Some(word) = word
+            && word.len() > 3
+            && word.chars().all(|c| c.is_uppercase())
+        {
+            to_lowercase.push((start + 1)..end);
+        } else if let Some(word) = word
+            && word.len() > 3
+            && word.chars().all(|c| c.is_lowercase())
+        {
+            to_uppercase.push(start);
+        }
+    };
+    for (i, char) in name.char_indices() {
+        if char == ' ' {
+            check_word(start, i);
+            start = i + 1;
+        }
+    }
+    check_word(start, name.len());
+
+    for range in to_lowercase {
+        let Some(part) = name.get(range.clone()) else {
+            continue;
+        };
+        name.replace_range(range, &part.to_lowercase());
+    }
+    for i in to_uppercase {
+        let Some(part) = name.get(i..=i) else {
+            continue;
+        };
+        name.replace_range(i..=i, &part.to_uppercase());
+    }
+
+    Ok(())
 }
 
 static EDITION_REGEX: Lazy<Regex> = Lazy::new(|| {
