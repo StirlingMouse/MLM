@@ -16,25 +16,27 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::{
-    config::Config,
     data::{DatabaseExt as _, Language, OldCategory, SelectedTorrent, Size, Timestamp},
     mam::{enums::Flags, user_data::UserResponse},
+    stats::Context,
     web::{
-        AppError, MaMState, Page,
+        AppError, Page,
         tables::{self, Flex, HidableColumns, Key, SortOn, Sortable},
         time,
     },
 };
 
 pub async fn selected_page(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    State(context): State<Context>,
     Query(sort): Query<SortOn<SelectedPageSort>>,
     Query(filter): Query<Vec<(SelectedPageFilter, String)>>,
     Query(show): Query<TorrentsPageColumnsQuery>,
 ) -> std::result::Result<Html<String>, AppError> {
+    let config = context.config().await;
     let show = show.show.unwrap_or_default();
 
-    let mut torrents = db
+    let mut torrents = context
+        .db
         .r_transaction()?
         .scan()
         .primary::<SelectedTorrent>()?
@@ -132,7 +134,8 @@ pub async fn selected_page(
             if sort.asc { ord.reverse() } else { ord }
         });
     }
-    let downloading_size: f64 = db
+    let downloading_size: f64 = context
+        .db
         .r_transaction()?
         .scan()
         .primary::<SelectedTorrent>()?
@@ -147,7 +150,7 @@ pub async fn selected_page(
         })
         .map(|t| t.meta.size.bytes() as f64)
         .sum();
-    let user_info = match mam.as_ref() {
+    let user_info = match context.mam.as_ref() {
         Ok(mam) => mam.user_info().await.ok(),
         _ => None,
     };

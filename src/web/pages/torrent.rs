@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, ops::Deref, path::PathBuf, sync::Arc};
+use std::{collections::BTreeSet, ops::Deref, path::PathBuf};
 
 use anyhow::Result;
 use askama::Template;
@@ -35,9 +35,9 @@ use crate::{
         search::{MaMTorrent, SearchQuery, Tor},
     },
     qbittorrent::{self},
-    stats::Triggers,
+    stats::Context,
     web::{
-        AppError, Conditional, MaMState, MaMTorrentsTemplate, Page, TorrentLink,
+        AppError, Conditional, MaMTorrentsTemplate, Page, TorrentLink,
         pages::{search::select_torrent, torrents::TorrentsPageFilter},
         tables::table_styles,
         time,
@@ -45,10 +45,11 @@ use crate::{
 };
 
 pub async fn torrent_file(
-    State((config, db)): State<(Arc<Config>, Arc<Database<'static>>)>,
+    State(context): State<Context>,
     Path((id, filename)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let Some(torrent) = db.r_transaction()?.get().primary::<Torrent>(id)? else {
+    let config = context.config().await;
+    let Some(torrent) = context.db.r_transaction()?.get().primary::<Torrent>(id)? else {
         return Err(AppError::NotFound);
     };
     let Some(path) = (if let (Some(library_path), Some(library_file)) = (
@@ -91,31 +92,30 @@ pub async fn torrent_file(
 }
 
 pub async fn torrent_page(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    State(context): State<Context>,
     Path(id_or_mam_id): Path<String>,
 ) -> std::result::Result<Html<String>, AppError> {
     if let Ok(id) = id_or_mam_id.parse() {
-        torrent_page_mam_id(State((config, db, mam)), Path(id)).await
+        torrent_page_mam_id(State(context), Path(id)).await
     } else {
-        torrent_page_id(State((config, db, mam)), Path(id_or_mam_id)).await
+        torrent_page_id(State(context), Path(id_or_mam_id)).await
     }
 }
 
 async fn torrent_page_mam_id(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    State(context): State<Context>,
     Path(mam_id): Path<u64>,
 ) -> std::result::Result<Html<String>, AppError> {
-    if let Some(torrent) = db
+    if let Some(torrent) = context
+        .db
         .r_transaction()?
         .get()
         .secondary::<Torrent>(TorrentKey::mam_id, mam_id)?
     {
-        return torrent_page_id(State((config, db, mam)), Path(torrent.id)).await;
+        return torrent_page_id(State(context), Path(torrent.id)).await;
     };
 
-    let Ok(mam) = mam.as_ref() else {
-        return Err(anyhow::Error::msg("mam_id error").into());
-    };
+    let mam = context.mam()?;
     let Some(mam_torrent) = mam.get_torrent_info_by_id(mam_id).await? else {
         return Err(AppError::NotFound);
     };
@@ -123,7 +123,8 @@ async fn torrent_page_mam_id(
 
     println!("mam_torrent: {:?}", mam_torrent);
     println!("mam_meta: {:?}", meta);
-    let other_torrents = other_torrents(&config, &db, mam, &meta).await?;
+    let config = context.config.lock().await.clone();
+    let other_torrents = other_torrents(&config, &context.db, &mam, &meta).await?;
 
     let template = TorrentMamPageTemplate {
         mam_torrent,
@@ -134,22 +135,29 @@ async fn torrent_page_mam_id(
 }
 
 async fn torrent_page_id(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    State(context): State<Context>,
     Path(id): Path<String>,
 ) -> std::result::Result<Html<String>, AppError> {
+    let config = context.config().await;
     let abs = config.audiobookshelf.as_ref().map(Abs::new);
-    let Some(mut torrent) = db.r_transaction()?.get().primary::<Torrent>(id)? else {
+    let Some(mut torrent) = context.db.r_transaction()?.get().primary::<Torrent>(id)? else {
         return Err(AppError::NotFound);
     };
     let replacement_torrent = torrent
         .replaced_with
         .as_ref()
-        .map(|(id, _)| db.r_transaction()?.get().primary::<Torrent>(id.to_string()))
+        .map(|(id, _)| {
+            context
+                .db
+                .r_transaction()?
+                .get()
+                .primary::<Torrent>(id.to_string())
+        })
         .transpose()?
         .flatten();
 
     if replacement_torrent.is_none() && torrent.replaced_with.is_some() {
-        let (_guard, rw) = db.rw_async().await?;
+        let (_guard, rw) = context.db.rw_async().await?;
         torrent.replaced_with = None;
         rw.upsert(torrent.clone())?;
         rw.commit()?;
@@ -159,7 +167,8 @@ async fn torrent_page_id(
         None => None,
     };
 
-    let events = db
+    let events = context
+        .db
         .r_transaction()?
         .scan()
         .secondary::<Event>(EventKey::mam_id)?;
@@ -167,16 +176,14 @@ async fn torrent_page_id(
     let mut events = events.collect::<Result<Vec<_>, _>>()?;
     events.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
-    let Ok(mam) = mam.as_ref() else {
-        return Err(anyhow::Error::msg("mam_id error").into());
-    };
+    let mam = context.mam()?;
     let mam_torrent = mam.get_torrent_info_by_id(torrent.mam_id).await?;
     let mam_meta = mam_torrent.as_ref().map(|t| t.as_meta()).transpose()?;
 
     if let Some(mam_meta) = &mam_meta
         && torrent.meta.uploaded_at.0 == UtcDateTime::UNIX_EPOCH
     {
-        let (_guard, rw) = db.rw_async().await?;
+        let (_guard, rw) = context.db.rw_async().await?;
         torrent.meta.uploaded_at = mam_meta.uploaded_at;
         rw.upsert(torrent.clone())?;
         rw.commit()?;
@@ -226,12 +233,12 @@ async fn torrent_page_id(
         && qbit_data.is_none()
         && torrent.client_status != Some(ClientStatus::NotInClient)
     {
-        let (_guard, rw) = db.rw_async().await?;
+        let (_guard, rw) = context.db.rw_async().await?;
         torrent.client_status = Some(ClientStatus::NotInClient);
         rw.upsert(torrent.clone())?;
         rw.commit()?;
     }
-    let other_torrents = other_torrents(&config, &db, mam, &torrent.meta).await?;
+    let other_torrents = other_torrents(&config, &context.db, &mam, &torrent.meta).await?;
 
     let template = TorrentPageTemplate {
         abs_url: config
@@ -254,48 +261,27 @@ async fn torrent_page_id(
 }
 
 pub async fn torrent_page_post(
-    State((config, db, mam, triggers)): State<(
-        Arc<Config>,
-        Arc<Database<'static>>,
-        MaMState,
-        Triggers,
-    )>,
+    State(context): State<Context>,
     Path(id_or_mam_id): Path<String>,
     uri: OriginalUri,
     Form(form): Form<TorrentPageForm>,
 ) -> Result<Redirect, AppError> {
     if let Ok(id) = id_or_mam_id.parse() {
-        torrent_page_post_mam_id(
-            State((config, db, mam, triggers)),
-            Path(id),
-            uri,
-            Form(form),
-        )
-        .await
+        torrent_page_post_mam_id(State(context), Path(id), uri, Form(form)).await
     } else {
-        torrent_page_post_id(
-            State((config, db, mam, triggers)),
-            Path(id_or_mam_id),
-            uri,
-            Form(form),
-        )
-        .await
+        torrent_page_post_id(State(context), Path(id_or_mam_id), uri, Form(form)).await
     }
 }
 
 pub async fn torrent_page_post_mam_id(
-    State((config, db, mam, triggers)): State<(
-        Arc<Config>,
-        Arc<Database<'static>>,
-        MaMState,
-        Triggers,
-    )>,
+    State(context): State<Context>,
     Path(mam_id): Path<u64>,
     uri: OriginalUri,
     Form(form): Form<TorrentPageForm>,
 ) -> Result<Redirect, AppError> {
     let mam_id = form.mam_id.unwrap_or(mam_id);
-    if let Some(torrent) = db
+    if let Some(torrent) = context
+        .db
         .r_transaction()?
         .get()
         .secondary::<Torrent>(TorrentKey::mam_id, mam_id)?
@@ -303,18 +289,12 @@ pub async fn torrent_page_post_mam_id(
         if form.mam_id.is_some() {
             return Err(anyhow::Error::msg("torrent is already downloaded").into());
         }
-        return torrent_page_post_id(
-            State((config, db, mam, triggers)),
-            Path(torrent.id),
-            uri,
-            Form(form),
-        )
-        .await;
+        return torrent_page_post_id(State(context), Path(torrent.id), uri, Form(form)).await;
     };
 
     match form.action.as_str() {
         "select" | "wedge" => {
-            select_torrent(&config, &db, mam, &triggers, mam_id, form.action == "wedge").await?;
+            select_torrent(&context, mam_id, form.action == "wedge").await?;
         }
         action => {
             eprintln!("unknown action: {action}");
@@ -325,43 +305,35 @@ pub async fn torrent_page_post_mam_id(
 }
 
 pub async fn torrent_page_post_id(
-    State((config, db, mam, triggers)): State<(
-        Arc<Config>,
-        Arc<Database<'static>>,
-        MaMState,
-        Triggers,
-    )>,
+    State(context): State<Context>,
     Path(id): Path<String>,
     uri: OriginalUri,
     Form(form): Form<TorrentPageForm>,
 ) -> Result<Redirect, AppError> {
+    let config = context.config().await;
     match form.action.as_str() {
         "select" | "wedge" => {
             let Some(mam_id) = form.mam_id else {
                 return Err(anyhow::Error::msg("torrent is already downloaded").into());
             };
-            select_torrent(&config, &db, mam, &triggers, mam_id, form.action == "wedge").await?;
+            select_torrent(&context, mam_id, form.action == "wedge").await?;
         }
         "clean" => {
-            let Some(torrent) = db.r_transaction()?.get().primary(id)? else {
+            let Some(torrent) = context.db.r_transaction()?.get().primary(id)? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
-            clean_torrent(&config, &db, torrent, true).await?;
+            clean_torrent(&config, &context.db, torrent, true).await?;
         }
         "refresh" => {
-            let Ok(mam) = mam.as_ref() else {
-                return Err(anyhow::Error::msg("mam_id error").into());
-            };
-            refresh_metadata(&config, &db, mam, id).await?;
+            let mam = context.mam()?;
+            refresh_metadata(&config, &context.db, &mam, id).await?;
         }
         "refresh-relink" => {
-            let Ok(mam) = mam.as_ref() else {
-                return Err(anyhow::Error::msg("mam_id error").into());
-            };
-            refresh_metadata_relink(&config, &db, mam, id).await?;
+            let mam = context.mam()?;
+            refresh_metadata_relink(&config, &context.db, &mam, id).await?;
         }
         "remove" => {
-            let (_guard, rw) = db.rw_async().await?;
+            let (_guard, rw) = context.db.rw_async().await?;
             let Some(torrent) = rw.get().primary::<Torrent>(id)? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
@@ -381,7 +353,7 @@ pub async fn torrent_page_post_id(
             qbit.stop(vec![&id]).await?;
         }
         "clear-replacement" => {
-            let (_guard, rw) = db.rw_async().await?;
+            let (_guard, rw) = context.db.rw_async().await?;
             let Some(mut torrent) = rw.get().primary::<Torrent>(id)? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
@@ -427,7 +399,7 @@ pub async fn torrent_page_post_id(
             }
         }
         "remove-torrent" => {
-            // let Some(torrent) = db.r_transaction()?.get().primary(id)? else {
+            // let Some(torrent) = context.db.r_transaction()?.get().primary(id)? else {
             //     return Err(anyhow::Error::msg("Could not find torrent").into());
             // };
             // remove_library_files(&torrent)?;

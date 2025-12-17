@@ -15,7 +15,6 @@ use axum::{
     routing::{get, post},
 };
 use itertools::Itertools;
-use native_db::Database;
 use once_cell::sync::Lazy;
 use pages::{
     config::{config_page, config_page_post},
@@ -44,13 +43,13 @@ use tower::ServiceBuilder;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
-    config::{Config, SearchConfig, TorrentFilter},
+    config::{SearchConfig, TorrentFilter},
     data::{
         AudiobookCategory, Category, EbookCategory, SelectedTorrent, Series, Timestamp, Torrent,
         TorrentMeta,
     },
     mam::{api::MaM, enums::Flags, meta::MetaError, search::MaMTorrent, serde::DATE_FORMAT},
-    stats::{Stats, Triggers},
+    stats::Context,
     web::{
         api::{
             search::{search_api, search_api_post},
@@ -65,119 +64,98 @@ use crate::{
 
 pub type MaMState = Arc<Result<Arc<MaM<'static>>>>;
 
-pub async fn start_webserver(
-    config: Arc<Config>,
-    db: Arc<Database<'static>>,
-    stats: Stats,
-    mam: Arc<Result<Arc<MaM<'static>>>>,
-    triggers: Triggers,
-) -> Result<()> {
+pub async fn start_webserver(context: Context) -> Result<()> {
+    let config = context.config().await;
+
     let app = Router::new()
+        .route("/", get(index_page).with_state(context.clone()))
+        .route("/", post(index_page_post).with_state(context.clone()))
         .route(
-            "/",
-            get(index_page).with_state((config.clone(), stats.clone(), mam.clone())),
+            "/stats-updates",
+            get(stats_updates).with_state(context.clone()),
         )
-        .route("/", post(index_page_post).with_state(triggers.clone()))
-        .route("/stats-updates", get(stats_updates).with_state(stats))
+        .route("/torrents", get(torrents_page).with_state(context.clone()))
         .route(
             "/torrents",
-            get(torrents_page).with_state((config.clone(), db.clone())),
-        )
-        .route(
-            "/torrents",
-            post(torrents_page_post).with_state((config.clone(), db.clone(), mam.clone())),
+            post(torrents_page_post).with_state(context.clone()),
         )
         .route(
             "/torrents/{id}",
-            get(torrent_page).with_state((config.clone(), db.clone(), mam.clone())),
+            get(torrent_page).with_state(context.clone()),
         )
         .route(
             "/torrents/{id}",
-            post(torrent_page_post).with_state((
-                config.clone(),
-                db.clone(),
-                mam.clone(),
-                triggers.clone(),
-            )),
+            post(torrent_page_post).with_state(context.clone()),
         )
         .route(
             "/torrents/{id}/edit",
-            get(torrent_edit_page).with_state(db.clone()),
+            get(torrent_edit_page).with_state(context.db.clone()),
         )
         .route(
             "/torrents/{id}/edit",
-            post(torrent_edit_page_post).with_state((config.clone(), db.clone(), mam.clone())),
+            post(torrent_edit_page_post).with_state(context.clone()),
         )
         .route(
             "/torrents/{id}/{filename}",
-            get(torrent_file).with_state((config.clone(), db.clone())),
+            get(torrent_file).with_state(context.clone()),
         )
-        .route("/events", get(event_page).with_state(db.clone()))
+        .route("/events", get(event_page).with_state(context.db.clone()))
+        .route("/search", get(search_page).with_state(context.clone()))
         .route(
             "/search",
-            get(search_page).with_state((config.clone(), db.clone(), mam.clone())),
+            post(search_page_post).with_state(context.clone()),
         )
-        .route(
-            "/search",
-            post(search_page_post).with_state((
-                config.clone(),
-                db.clone(),
-                mam.clone(),
-                triggers.clone(),
-            )),
-        )
-        .route(
-            "/lists",
-            get(lists_page).with_state((config.clone(), db.clone())),
-        )
-        .route("/lists/{list_id}", get(list_page).with_state(db.clone()))
+        .route("/lists", get(lists_page).with_state(context.clone()))
         .route(
             "/lists/{list_id}",
-            post(list_page_post).with_state(db.clone()),
-        )
-        .route("/errors", get(errors_page).with_state(db.clone()))
-        .route("/errors", post(errors_page_post).with_state(db.clone()))
-        .route(
-            "/selected",
-            get(selected_page).with_state((config.clone(), db.clone(), mam.clone())),
+            get(list_page).with_state(context.db.clone()),
         )
         .route(
+            "/lists/{list_id}",
+            post(list_page_post).with_state(context.db.clone()),
+        )
+        .route("/errors", get(errors_page).with_state(context.db.clone()))
+        .route(
+            "/errors",
+            post(errors_page_post).with_state(context.db.clone()),
+        )
+        .route("/selected", get(selected_page).with_state(context.clone()))
+        .route(
             "/selected",
-            post(selected_torrents_page_post).with_state(db.clone()),
+            post(selected_torrents_page_post).with_state(context.db.clone()),
         )
         .route(
             "/replaced",
-            get(replaced_torrents_page).with_state((config.clone(), db.clone())),
+            get(replaced_torrents_page).with_state(context.clone()),
         )
         .route(
             "/replaced",
-            post(replaced_torrents_page_post).with_state((config.clone(), db.clone(), mam.clone())),
+            post(replaced_torrents_page_post).with_state(context.clone()),
         )
         .route(
             "/duplicate",
-            get(duplicate_page).with_state((config.clone(), db.clone())),
+            get(duplicate_page).with_state(context.clone()),
         )
         .route(
             "/duplicate",
-            post(duplicate_torrents_page_post).with_state((
-                config.clone(),
-                db.clone(),
-                mam.clone(),
-            )),
+            post(duplicate_torrents_page_post).with_state(context.clone()),
         )
         .route("/config", get(config_page).with_state(config.clone()))
         .route(
             "/config",
-            post(config_page_post).with_state((config.clone(), db.clone(), mam.clone())),
+            post(config_page_post).with_state(context.clone()),
         )
-        .route("/api/search", get(search_api).with_state(mam.clone()))
         .route(
             "/api/search",
-            post(search_api_post).with_state((config.clone(), db.clone(), mam.clone())),
+            get(search_api).with_state(context.mam.clone()),
+        )
+        .route(
+            "/api/search",
+            post(search_api_post).with_state(context.clone()),
         )
         .route(
             "/api/torrents/{id}",
-            get(torrent_api).with_state((config.clone(), db.clone(), mam.clone())),
+            get(torrent_api).with_state(context.clone()),
         )
         .nest_service(
             "/assets",

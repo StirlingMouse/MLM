@@ -1,7 +1,7 @@
 use std::cell::Ref;
+use std::cell::RefCell;
 use std::mem;
 use std::str::FromStr;
-use std::{cell::RefCell, sync::Arc};
 
 use anyhow::Result;
 use askama::Template;
@@ -11,7 +11,6 @@ use axum::{
     response::{Html, Redirect},
 };
 use axum_extra::extract::Form;
-use native_db::Database;
 use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
 
@@ -20,10 +19,10 @@ use crate::data::{
     SeriesEntry,
 };
 use crate::mam::enums::Flags;
-use crate::web::{MaMState, Page, tables};
+use crate::stats::Context;
+use crate::web::{Page, tables};
 use crate::{
     cleaner::clean_torrent,
-    config::Config,
     data::{Language, LibraryMismatch, Torrent, TorrentKey},
     linker::{refresh_metadata, refresh_metadata_relink},
     web::{
@@ -34,14 +33,14 @@ use crate::{
 };
 
 pub async fn torrents_page(
-    State((config, db)): State<(Arc<Config>, Arc<Database<'static>>)>,
+    State(context): State<Context>,
     uri: OriginalUri,
     Query(sort): Query<SortOn<TorrentsPageSort>>,
     Query(filter): Query<Vec<(TorrentsPageFilter, String)>>,
     Query(show): Query<TorrentsPageColumnsQuery>,
     Query(paging): Query<PaginationParams>,
 ) -> std::result::Result<Response, AppError> {
-    let r = db.r_transaction()?;
+    let r = context.db.r_transaction()?;
 
     let torrent_count = r.len().secondary::<Torrent>(TorrentKey::created_at)?;
     let torrents = r.scan().secondary::<Torrent>(TorrentKey::created_at)?;
@@ -591,7 +590,13 @@ pub async fn torrents_page(
     }
 
     let template = TorrentsPageTemplate {
-        abs_url: config.audiobookshelf.as_ref().map(|abs| abs.url.clone()),
+        abs_url: context
+            .config
+            .lock()
+            .await
+            .audiobookshelf
+            .as_ref()
+            .map(|abs| abs.url.clone()),
         paging: paging.unwrap_or_default(),
         sort,
         show,
@@ -610,38 +615,41 @@ fn score(query: &str, target: &str) -> isize {
 }
 
 pub async fn torrents_page_post(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    State(context): State<Context>,
     uri: OriginalUri,
     Form(form): Form<TorrentsPageForm>,
 ) -> Result<Redirect, AppError> {
+    let config = context.config().await;
     match form.action.as_str() {
         "clean" => {
             for torrent in form.torrents {
-                let Some(torrent) = db.r_transaction()?.get().primary(torrent)? else {
+                let Some(torrent) = context.db.r_transaction()?.get().primary(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };
-                clean_torrent(&config, &db, torrent, true).await?;
+                clean_torrent(&config, &context.db, torrent, true).await?;
             }
         }
         "refresh" => {
-            let Ok(mam) = mam.as_ref() else {
-                return Err(anyhow::Error::msg("mam_id error").into());
-            };
+            let mam = context.mam()?;
             for torrent in form.torrents {
-                refresh_metadata(&config, &db, mam, torrent).await?;
+                refresh_metadata(&config, &context.db, &mam, torrent).await?;
             }
         }
         "refresh-relink" => {
-            let Ok(mam) = mam.as_ref() else {
-                return Err(anyhow::Error::msg("mam_id error").into());
-            };
+            let mam = context.mam()?;
             for torrent in form.torrents {
-                refresh_metadata_relink(&config, &db, mam, torrent).await?;
+                refresh_metadata_relink(
+                    context.config.lock().await.as_ref(),
+                    &context.db,
+                    &mam,
+                    torrent,
+                )
+                .await?;
             }
         }
         "remove" => {
             for torrent in form.torrents {
-                let (_guard, rw) = db.rw_async().await?;
+                let (_guard, rw) = context.db.rw_async().await?;
                 let Some(torrent) = rw.get().primary::<Torrent>(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };

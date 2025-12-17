@@ -17,22 +17,22 @@ use tokio_stream::{StreamExt as _, wrappers::WatchStream};
 use crate::{
     config::{Config, TorrentFilter},
     data::Timestamp,
-    mam::api::MaM,
-    stats::{Stats, Triggers},
+    stats::Context,
     web::{AppError, Page, time},
 };
 
 pub async fn index_page(
-    State((config, stats, mam)): State<(Arc<Config>, Stats, Arc<Result<Arc<MaM<'static>>>>)>,
+    State(context): State<Context>,
 ) -> std::result::Result<Html<String>, AppError> {
-    let stats = stats.values.lock().await;
-    let username = match mam.as_ref() {
+    let stats = context.stats.values.lock().await;
+    let username = match context.mam.as_ref() {
         Ok(mam) => mam.cached_user_info().await.map(|u| u.username),
         Err(_) => None,
     };
+    let config = context.config.lock().await;
     let template = IndexPageTemplate {
         config: config.clone(),
-        mam_error: mam.as_ref().as_ref().err().map(|e| format!("{e}")),
+        mam_error: context.mam.as_ref().as_ref().err().map(|e| format!("{e}")),
         has_no_qbits: config.qbittorrent.is_empty(),
         username,
         autograbber_run_at: stats
@@ -75,24 +75,24 @@ pub async fn index_page(
 }
 
 pub async fn stats_updates(
-    State(stats): State<Stats>,
+    State(context): State<Context>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let stream =
-        WatchStream::new(stats.updates()).map(|time| Ok(Event::default().data(time.to_string())));
+    let stream = WatchStream::new(context.stats.updates())
+        .map(|time| Ok(Event::default().data(time.to_string())));
     Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(10)))
 }
 
 pub async fn index_page_post(
-    State(triggers): State<Triggers>,
+    State(context): State<Context>,
     uri: OriginalUri,
     Form(form): Form<IndexPageForm>,
 ) -> Result<Redirect, AppError> {
     match form.action.as_str() {
         "run_linker" => {
-            triggers.linker_tx.send(())?;
+            context.triggers.linker_tx.send(())?;
         }
         "run_search" => {
-            if let Some(tx) = triggers.search_tx.get(
+            if let Some(tx) = context.triggers.search_tx.get(
                 &form
                     .index
                     .ok_or_else(|| anyhow::Error::msg("Invalid index"))?,
@@ -103,13 +103,13 @@ pub async fn index_page_post(
             }
         }
         "run_goodreads" => {
-            triggers.goodreads_tx.send(())?;
+            context.triggers.goodreads_tx.send(())?;
         }
         "run_downloader" => {
-            triggers.downloader_tx.send(())?;
+            context.triggers.downloader_tx.send(())?;
         }
         "run_abs_matcher" => {
-            triggers.audiobookshelf_tx.send(())?;
+            context.triggers.audiobookshelf_tx.send(())?;
         }
         action => {
             eprintln!("unknown action: {action}");

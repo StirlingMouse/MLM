@@ -1,6 +1,6 @@
 use std::cell::Ref;
+use std::cell::RefCell;
 use std::str::FromStr;
-use std::{cell::RefCell, sync::Arc};
 
 use anyhow::Result;
 use askama::Template;
@@ -10,13 +10,12 @@ use axum::{
     response::{Html, Redirect},
 };
 use axum_extra::extract::Form;
-use native_db::Database;
 use serde::{Deserialize, Serialize};
 
 use crate::data::DatabaseExt as _;
-use crate::web::{MaMState, Page, tables};
+use crate::stats::Context;
+use crate::web::{Page, tables};
 use crate::{
-    config::Config,
     data::{Language, Torrent, TorrentKey},
     linker::{refresh_metadata, refresh_metadata_relink},
     web::{
@@ -27,14 +26,16 @@ use crate::{
 };
 
 pub async fn replaced_torrents_page(
-    State((config, db)): State<(Arc<Config>, Arc<Database<'static>>)>,
+    State(context): State<Context>,
     uri: OriginalUri,
     Query(sort): Query<SortOn<TorrentsPageSort>>,
     Query(filter): Query<Vec<(TorrentsPageFilter, String)>>,
     Query(show): Query<TorrentsPageColumnsQuery>,
     Query(paging): Query<PaginationParams>,
 ) -> std::result::Result<Response, AppError> {
-    let torrents = db
+    let config = context.config().await;
+    let torrents = context
+        .db
         .r_transaction()?
         .scan()
         .secondary::<Torrent>(TorrentKey::created_at)?;
@@ -113,7 +114,7 @@ pub async fn replaced_torrents_page(
         let Some((with, _)) = &torrent.replaced_with else {
             continue;
         };
-        let Some(replacement) = db.r_transaction()?.get().primary(with.clone())? else {
+        let Some(replacement) = context.db.r_transaction()?.get().primary(with.clone())? else {
             continue;
         };
         torrents.push((torrent, replacement));
@@ -131,30 +132,27 @@ pub async fn replaced_torrents_page(
 }
 
 pub async fn replaced_torrents_page_post(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    State(context): State<Context>,
     uri: OriginalUri,
     Form(form): Form<TorrentsPageForm>,
 ) -> Result<Redirect, AppError> {
+    let config = context.config().await;
     match form.action.as_str() {
         "refresh" => {
-            let Ok(mam) = mam.as_ref() else {
-                return Err(anyhow::Error::msg("mam_id error").into());
-            };
+            let mam = context.mam()?;
             for torrent in form.torrents {
-                refresh_metadata(&config, &db, mam, torrent).await?;
+                refresh_metadata(&config, &context.db, &mam, torrent).await?;
             }
         }
         "refresh-relink" => {
-            let Ok(mam) = mam.as_ref() else {
-                return Err(anyhow::Error::msg("mam_id error").into());
-            };
+            let mam = context.mam()?;
             for torrent in form.torrents {
-                refresh_metadata_relink(&config, &db, mam, torrent).await?;
+                refresh_metadata_relink(&config, &context.db, &mam, torrent).await?;
             }
         }
         "remove" => {
             for torrent in form.torrents {
-                let (_guard, rw) = db.rw_async().await?;
+                let (_guard, rw) = context.db.rw_async().await?;
                 let Some(torrent) = rw.get().primary::<Torrent>(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };

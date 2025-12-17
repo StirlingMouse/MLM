@@ -1,20 +1,20 @@
-use std::sync::Arc;
-
 use askama::Template;
 use axum::{extract::State, response::Html};
 use itertools::Itertools as _;
-use native_db::Database;
 
 use crate::{
-    config::{Config, GoodreadsList},
+    config::GoodreadsList,
     data::{List, ListKey},
+    stats::Context,
     web::{AppError, Page, time},
 };
 
 pub async fn lists_page(
-    State((config, db)): State<(Arc<Config>, Arc<Database<'static>>)>,
+    State(context): State<Context>,
 ) -> std::result::Result<Html<String>, AppError> {
-    let db_lists = db
+    let config = context.config().await;
+    let db_lists = context
+        .db
         .r_transaction()?
         .scan()
         .secondary::<List>(ListKey::title)?;

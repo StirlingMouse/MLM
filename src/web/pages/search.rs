@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use anyhow::{Error, Result};
 use askama::Template;
 use axum::{
@@ -7,29 +5,25 @@ use axum::{
     response::{Html, Redirect},
 };
 use axum_extra::extract::Form;
-use native_db::Database;
 use serde::Deserialize;
 use tracing::info;
 
 use crate::{
-    config::Config,
     data::{DatabaseExt as _, SelectedTorrent, Timestamp, Torrent, TorrentCost, TorrentKey},
     mam::{
         enums::SearchTarget,
         meta::normalize_title,
         search::{SearchQuery, Tor},
     },
-    stats::Triggers,
-    web::{AppError, MaMState, MaMTorrentsTemplate, Page},
+    stats::Context,
+    web::{AppError, MaMTorrentsTemplate, Page},
 };
 
 pub async fn search_page(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    State(context): State<Context>,
     Query(query): Query<SearchPageQuery>,
 ) -> std::result::Result<Html<String>, AppError> {
-    let Ok(mam) = mam.as_ref() else {
-        return Err(anyhow::Error::msg("mam_id error").into());
-    };
+    let mam = context.mam()?;
     let result = mam
         .search(&SearchQuery {
             media_info: true,
@@ -42,7 +36,7 @@ pub async fn search_page(
         })
         .await?;
 
-    let r = db.r_transaction()?;
+    let r = context.db.r_transaction()?;
     let mut torrents = result
         .data
         .into_iter()
@@ -68,7 +62,7 @@ pub async fn search_page(
     let template = SearchPageTemplate {
         query,
         torrents: MaMTorrentsTemplate {
-            config: config.search.clone(),
+            config: context.config().await.search.clone(),
             torrents,
         },
     };
@@ -76,26 +70,13 @@ pub async fn search_page(
 }
 
 pub async fn search_page_post(
-    State((config, db, mam, triggers)): State<(
-        Arc<Config>,
-        Arc<Database<'static>>,
-        MaMState,
-        Triggers,
-    )>,
+    State(context): State<Context>,
     uri: OriginalUri,
     Form(form): Form<SearchPageForm>,
 ) -> Result<Redirect, AppError> {
     match form.action.as_str() {
         "select" | "wedge" => {
-            select_torrent(
-                &config,
-                &db,
-                mam,
-                &triggers,
-                form.mam_id,
-                form.action == "wedge",
-            )
-            .await?;
+            select_torrent(&context, form.mam_id, form.action == "wedge").await?;
         }
         action => {
             eprintln!("unknown action: {action}");
@@ -130,22 +111,15 @@ pub struct SearchPageQuery {
     uploader: Option<u64>,
 }
 
-pub async fn select_torrent(
-    config: &Config,
-    db: &Database<'_>,
-    mam: MaMState,
-    triggers: &Triggers,
-    mam_id: u64,
-    wedge: bool,
-) -> Result<(), AppError> {
-    let Ok(mam) = mam.as_ref() else {
-        return Err(anyhow::Error::msg("mam_id error").into());
-    };
+pub async fn select_torrent(context: &Context, mam_id: u64, wedge: bool) -> Result<(), AppError> {
+    let mam = context.mam()?;
     let Some(torrent) = mam.get_torrent_info_by_id(mam_id).await? else {
         return Err(AppError::NotFound);
     };
 
     let meta = torrent.as_meta()?;
+    let config = context.config().await;
+
     let tags: Vec<_> = config
         .tags
         .iter()
@@ -169,7 +143,7 @@ pub async fn select_torrent(
         torrent.title, torrent.filetype, cost, category, tags
     );
     {
-        let (_guard, rw) = db.rw_async().await?;
+        let (_guard, rw) = context.db.rw_async().await?;
         rw.insert(SelectedTorrent {
             mam_id: torrent.id,
             goodreads_id: None,
@@ -192,7 +166,7 @@ pub async fn select_torrent(
         })?;
         rw.commit()?;
     }
-    triggers.downloader_tx.send(())?;
+    context.triggers.downloader_tx.send(())?;
 
     Ok(())
 }

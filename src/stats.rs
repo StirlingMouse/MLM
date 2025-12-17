@@ -1,11 +1,14 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::Result;
+use native_db::Database;
 use time::{OffsetDateTime, UtcDateTime};
 use tokio::sync::{
     Mutex,
     watch::{self, Receiver, Sender},
 };
+
+use crate::{config::Config, data::Event, mam::api::MaM};
 
 #[derive(Default)]
 pub struct StatsValues {
@@ -49,10 +52,39 @@ impl Stats {
 }
 
 #[derive(Clone)]
+pub struct Events {
+    pub event: (Sender<Option<Event>>, Receiver<Option<Event>>),
+}
+
+#[derive(Clone)]
 pub struct Triggers {
     pub search_tx: BTreeMap<usize, Sender<()>>,
     pub linker_tx: Sender<()>,
     pub goodreads_tx: Sender<()>,
     pub downloader_tx: Sender<()>,
     pub audiobookshelf_tx: Sender<()>,
+}
+
+#[derive(Clone)]
+pub struct Context {
+    pub config: Arc<Mutex<Arc<Config>>>,
+    pub db: Arc<Database<'static>>,
+    pub mam: Arc<Result<Arc<MaM<'static>>>>,
+    pub stats: Stats,
+    // pub events: Events,
+    pub triggers: Triggers,
+}
+
+impl Context {
+    pub async fn config(&self) -> Arc<Config> {
+        self.config.lock().await.clone()
+    }
+
+    pub fn mam(&self) -> Result<Arc<MaM<'static>>> {
+        let Ok(mam) = self.mam.as_ref() else {
+            return Err(anyhow::Error::msg("mam_id error"));
+        };
+
+        Ok(mam.clone())
+    }
 }

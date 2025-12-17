@@ -29,7 +29,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context as _, Result};
 use audiobookshelf::match_torrents_to_abs;
 use autograbber::{grab_selected_torrents, run_autograbber};
 use cleaner::run_library_cleaner;
@@ -42,7 +42,11 @@ use figment::{
 use goodreads::run_goodreads_import;
 use stats::{Stats, Triggers};
 use time::OffsetDateTime;
-use tokio::{select, sync::watch, time::sleep};
+use tokio::{
+    select,
+    sync::{Mutex, watch},
+    time::sleep,
+};
 use tracing::error;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{
@@ -53,7 +57,7 @@ use web::start_webserver;
 
 use crate::{
     config::Config, linker::link_torrents_to_library, mam::api::MaM,
-    snatchlist::run_snatchlist_search,
+    snatchlist::run_snatchlist_search, stats::Context,
 };
 
 #[tokio::main]
@@ -602,8 +606,15 @@ async fn app_main() -> Result<()> {
         downloader_tx,
         audiobookshelf_tx,
     };
+    let context = Context {
+        config: Arc::new(Mutex::new(config)),
+        db,
+        mam: Arc::new(mam),
+        stats,
+        triggers,
+    };
 
-    let result = start_webserver(config.clone(), db, stats, Arc::new(mam), triggers).await;
+    let result = start_webserver(context).await;
 
     #[cfg(target_family = "windows")]
     if let Err(err) = &result {

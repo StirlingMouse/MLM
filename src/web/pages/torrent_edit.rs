@@ -12,13 +12,13 @@ use serde::Deserialize;
 
 use crate::{
     autograbber::update_torrent_meta,
-    config::Config,
     data::{
         AudiobookCategory, DatabaseExt as _, EbookCategory, FlagBits, Language, MetadataSource,
         OldCategory, Series, Torrent, TorrentMeta, impls::format_serie,
     },
     mam::enums::Flags,
-    web::{AppError, MaMState, Page},
+    stats::Context,
+    web::{AppError, Page},
 };
 
 pub async fn torrent_edit_page(
@@ -37,14 +37,18 @@ pub async fn torrent_edit_page(
 }
 
 pub async fn torrent_edit_page_post(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    State(context): State<Context>,
     Path(hash): Path<String>,
     Form(form): Form<TorrentPageForm>,
 ) -> Result<Redirect, AppError> {
-    let Ok(mam) = mam.as_ref() else {
-        return Err(anyhow::Error::msg("mam_id error").into());
-    };
-    let Some(torrent) = db.r_transaction()?.get().primary::<Torrent>(hash.clone())? else {
+    let config = context.config().await;
+    let mam = context.mam()?;
+    let Some(torrent) = context
+        .db
+        .r_transaction()?
+        .get()
+        .primary::<Torrent>(hash.clone())?
+    else {
         return Err(anyhow::Error::msg("Could not find torrent").into());
     };
     let Some(mam_torrent) = mam.get_torrent_info(&hash).await? else {
@@ -103,8 +107,8 @@ pub async fn torrent_edit_page_post(
 
     update_torrent_meta(
         &config,
-        &db,
-        db.rw_async().await?,
+        &context.db,
+        context.db.rw_async().await?,
         &mam_torrent,
         torrent,
         meta,

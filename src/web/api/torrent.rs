@@ -1,45 +1,41 @@
-use std::sync::Arc;
-
 use axum::{
     Json,
     extract::{Path, State},
 };
-use native_db::Database;
 use serde_json::json;
 
 use crate::{
-    config::Config,
     data::{Torrent, TorrentKey},
     qbittorrent::{self},
-    web::{AppError, MaMState},
+    stats::Context,
+    web::AppError,
 };
 
 pub async fn torrent_api(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    State(context): State<Context>,
     Path(id_or_mam_id): Path<String>,
 ) -> std::result::Result<Json<serde_json::Value>, AppError> {
     if let Ok(id) = id_or_mam_id.parse() {
-        torrent_api_mam_id(State((config, db, mam)), Path(id)).await
+        torrent_api_mam_id(State(context), Path(id)).await
     } else {
-        torrent_api_id(State((config, db)), Path(id_or_mam_id)).await
+        torrent_api_id(State(context), Path(id_or_mam_id)).await
     }
 }
 
 async fn torrent_api_mam_id(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    State(context): State<Context>,
     Path(mam_id): Path<u64>,
 ) -> std::result::Result<Json<serde_json::Value>, AppError> {
-    if let Some(torrent) = db
+    if let Some(torrent) = context
+        .db
         .r_transaction()?
         .get()
         .secondary::<Torrent>(TorrentKey::mam_id, mam_id)?
     {
-        return torrent_api_id(State((config, db)), Path(torrent.id)).await;
+        return torrent_api_id(State(context), Path(torrent.id)).await;
     };
 
-    let Ok(mam) = mam.as_ref() else {
-        return Err(anyhow::Error::msg("mam_id error").into());
-    };
+    let mam = context.mam()?;
     let Some(mam_torrent) = mam.get_torrent_info_by_id(mam_id).await? else {
         return Err(AppError::NotFound);
     };
@@ -52,10 +48,11 @@ async fn torrent_api_mam_id(
 }
 
 async fn torrent_api_id(
-    State((config, db)): State<(Arc<Config>, Arc<Database<'static>>)>,
+    State(context): State<Context>,
     Path(id): Path<String>,
 ) -> std::result::Result<Json<serde_json::Value>, AppError> {
-    let Some(torrent) = db.r_transaction()?.get().primary::<Torrent>(id)? else {
+    let config = context.config().await;
+    let Some(torrent) = context.db.r_transaction()?.get().primary::<Torrent>(id)? else {
         return Err(AppError::NotFound);
     };
     let mut qbit_torrent = None;

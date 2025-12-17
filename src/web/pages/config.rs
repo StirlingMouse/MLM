@@ -7,7 +7,6 @@ use axum::{
     response::{Html, Redirect},
 };
 use axum_extra::extract::Form;
-use native_db::Database;
 use reqwest::Url;
 use serde::Deserialize;
 use tracing::{info, warn};
@@ -17,7 +16,8 @@ use crate::{
     config::{Config, Cost, Library, TorrentSearch, Type},
     data::{AudiobookCategory, DatabaseExt as _, EbookCategory, Torrent},
     mam::serde::DATE_FORMAT,
-    web::{AppError, MaMState, Page, filter, yaml_items},
+    stats::Context,
+    web::{AppError, Page, filter, yaml_items},
 };
 
 pub async fn config_page(
@@ -32,10 +32,11 @@ pub async fn config_page(
 }
 
 pub async fn config_page_post(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    State(context): State<Context>,
     uri: OriginalUri,
     Form(form): Form<ConfigPageForm>,
 ) -> Result<Redirect, AppError> {
+    let config = context.config().await;
     match form.action.as_str() {
         "apply" => {
             let tag_filter = form
@@ -55,7 +56,7 @@ pub async fn config_page_post(
                 &qbit_conf.password,
             )
             .await?;
-            let torrents = db.r_transaction()?.scan().primary::<Torrent>()?;
+            let torrents = context.db.r_transaction()?.scan().primary::<Torrent>()?;
             for torrent in torrents.all()? {
                 let torrent = torrent?;
                 match tag_filter.filter.matches_lib(&torrent) {
@@ -66,9 +67,7 @@ pub async fn config_page_post(
                     }
                     Err(err) => {
                         info!("need to ask mam due to: {err}");
-                        let Ok(mam) = mam.as_ref() else {
-                            return Err(anyhow::Error::msg("mam_id error").into());
-                        };
+                        let mam = context.mam()?;
                         let Some(mam_torrent) = mam.get_torrent_info_by_id(torrent.mam_id).await?
                         else {
                             warn!("could not get torrent from mam");
@@ -78,8 +77,8 @@ pub async fn config_page_post(
                         if new_meta != torrent.meta {
                             update_torrent_meta(
                                 &config,
-                                &db,
-                                db.rw_async().await?,
+                                &context.db,
+                                context.db.rw_async().await?,
                                 &mam_torrent,
                                 torrent.clone(),
                                 new_meta,

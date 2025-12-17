@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use anyhow::{Error, Result};
 use askama::Template;
 use axum::{
@@ -7,28 +5,29 @@ use axum::{
     response::{Html, Redirect},
 };
 use axum_extra::extract::Form;
-use native_db::Database;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::{
     cleaner::clean_torrent,
-    config::Config,
     data::{DatabaseExt as _, DuplicateTorrent, SelectedTorrent, Timestamp, Torrent, TorrentCost},
     mam::meta::normalize_title,
+    stats::Context,
     web::{
-        AppError, MaMState, Page,
+        AppError, Page,
         tables::{Key, SortOn, Sortable, table_styles_rows},
         time,
     },
 };
 
 pub async fn duplicate_page(
-    State((config, db)): State<(Arc<Config>, Arc<Database<'static>>)>,
+    State(context): State<Context>,
     Query(sort): Query<SortOn<DuplicatePageSort>>,
     Query(filter): Query<Vec<(DuplicatePageFilter, String)>>,
 ) -> std::result::Result<Html<String>, AppError> {
-    let mut duplicate_torrents = db
+    let config = context.config().await;
+    let mut duplicate_torrents = context
+        .db
         .r_transaction()?
         .scan()
         .primary::<DuplicateTorrent>()?
@@ -74,7 +73,7 @@ pub async fn duplicate_page(
         let Some(with) = &torrent.duplicate_of else {
             continue;
         };
-        let Some(duplicate) = db.r_transaction()?.get().primary(with.clone())? else {
+        let Some(duplicate) = context.db.r_transaction()?.get().primary(with.clone())? else {
             continue;
         };
         torrents.push((torrent, duplicate));
@@ -88,17 +87,16 @@ pub async fn duplicate_page(
 }
 
 pub async fn duplicate_torrents_page_post(
-    State((config, db, mam)): State<(Arc<Config>, Arc<Database<'static>>, MaMState)>,
+    State(context): State<Context>,
     uri: OriginalUri,
     Form(form): Form<TorrentsPageForm>,
 ) -> Result<Redirect, AppError> {
+    let config = context.config().await;
     match form.action.as_str() {
         "replace" => {
-            let Ok(mam) = mam.as_ref() else {
-                return Err(anyhow::Error::msg("mam_id error").into());
-            };
+            let mam = context.mam()?;
             for torrent in form.torrents {
-                let r = db.r_transaction()?;
+                let r = context.db.r_transaction()?;
                 let Some(duplicate_torrent) = r.get().primary::<DuplicateTorrent>(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };
@@ -151,7 +149,7 @@ pub async fn duplicate_torrents_page_post(
                 );
 
                 {
-                    let (_guard, rw) = db.rw_async().await?;
+                    let (_guard, rw) = context.db.rw_async().await?;
                     rw.insert(SelectedTorrent {
                         mam_id: mam_torrent.id,
                         goodreads_id: None,
@@ -178,12 +176,12 @@ pub async fn duplicate_torrents_page_post(
                     rw.remove(duplicate_torrent)?;
                     rw.commit()?;
                 }
-                clean_torrent(&config, &db, duplicate_of, false).await?;
+                clean_torrent(&config, &context.db, duplicate_of, false).await?;
             }
         }
         "remove" => {
             for torrent in form.torrents {
-                let (_guard, rw) = db.rw_async().await?;
+                let (_guard, rw) = context.db.rw_async().await?;
                 let Some(torrent) = rw.get().primary::<DuplicateTorrent>(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };
