@@ -105,7 +105,7 @@ async fn search_and_update_torrents(
         .await
         .context("update_torrents")?;
 
-        if page >= max_pages as u64 || row_count < 250 {
+        if page >= max_pages as u64 || row_count < 250 || row_count > 250 {
             break;
         }
         sleep(Duration::from_millis(400)).await;
