@@ -25,6 +25,8 @@ use once_cell::sync::Lazy;
 use tokio::sync::MutexGuard;
 use tracing::{info, instrument};
 
+use crate::mam::meta::normalize_title;
+
 pub static MODELS: Lazy<Models> = Lazy::new(|| {
     let mut models = Models::new();
     models.define::<v01::Config>().unwrap();
@@ -209,6 +211,26 @@ where
         })?;
         rw.remove(old)?;
     }
+
+    Ok(())
+}
+
+#[instrument(skip_all)]
+pub fn update_search_title(db: &Database<'_>) -> Result<()> {
+    let rw = db.rw_transaction()?;
+
+    info!("Update search title started");
+    let torrents = rw
+        .scan()
+        .primary::<Torrent>()?
+        .all()?
+        .collect::<Result<Vec<_>, _>>()?;
+    for mut torrent in torrents {
+        torrent.title_search = normalize_title(&torrent.meta.title);
+        rw.upsert(torrent)?;
+    }
+    rw.commit()?;
+    info!("Update search title done");
 
     Ok(())
 }

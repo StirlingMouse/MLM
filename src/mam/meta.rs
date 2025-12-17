@@ -33,7 +33,9 @@ pub fn clean_value(value: &str) -> Result<String> {
 }
 
 pub fn normalize_title(value: &str) -> String {
-    unidecode(value).to_lowercase().replace(" & ", " and ")
+    let title = unidecode(value).to_lowercase().replace(" & ", " and ");
+    let title = SEARCH_TITLE_CLEANUP.replace_all(&title, "");
+    SEARCH_TITLE_VOLUME.replace_all(&title, "").to_string()
 }
 
 impl TorrentMeta {
@@ -138,10 +140,16 @@ static EDITION_START_REGEX: Lazy<Regex> = Lazy::new(|| {
 
 static TITLE_CLEANUP: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r"(?i)(?:: A (?:Novel|Memoir)$)|(?:\s*-\s*\d+(?:\.| - )epub$)|(?:\s*[\(\[](?:digital|light novel|epub|cbz|tpb)[\)\]])*",
+        r"(?i)(?:: A (?:Novel|Memoir)$)|(?:\s*-\s*\d+(?:\.| - )epub$)|(?:\s*[\(\[](?:digital|light novel|epub|cbz|cbr|tpb|fixed|unabridged)[\)\]])*",
     )
     .unwrap()
 });
+
+static SEARCH_TITLE_CLEANUP: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)^(?:the|a|an)\s+|[^\w ]").unwrap());
+
+static SEARCH_TITLE_VOLUME: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)(?:volume|vol\.)").unwrap());
 
 static SERIES_CLEANUP: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)(?:\s*\((?:digital|light novel)\))*").unwrap());

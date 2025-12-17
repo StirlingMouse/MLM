@@ -56,7 +56,7 @@ use tracing_subscriber::{
 use web::start_webserver;
 
 use crate::{
-    config::Config, linker::link_torrents_to_library, mam::api::MaM,
+    config::Config, data::update_search_title, linker::link_torrents_to_library, mam::api::MaM,
     snatchlist::run_snatchlist_search, stats::Context,
 };
 
@@ -190,6 +190,12 @@ async fn app_main() -> Result<()> {
 
     let db = native_db::Builder::new().create(&data::MODELS, database_file)?;
     data::migrate(&db)?;
+
+    if env::args().any(|arg| arg == "--update-search-title") {
+        update_search_title(&db)?;
+        return Ok(());
+    }
+
     // export_db(&db)?;
     // return Ok(());
     let db = Arc::new(db);

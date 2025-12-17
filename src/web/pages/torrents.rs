@@ -318,12 +318,22 @@ pub async fn torrents_page(
     if let Some(metadata) = metadata {
         match metadata.as_str() {
             "title" => {
-                torrents.sort_by(|a, b| a.title_search.cmp(&b.title_search));
+                torrents.sort_by(|a, b| {
+                    a.title_search
+                        .cmp(&b.title_search)
+                        .then_with(|| a.meta.authors.cmp(&b.meta.authors))
+                });
                 let mut batch: Vec<Torrent> = vec![];
                 let mut new_torrents: Vec<Torrent> = vec![];
                 for torrent in torrents {
                     if let Some(current) = batch.first() {
-                        if current.title_search != torrent.title_search {
+                        if current.title_search != torrent.title_search
+                            || current
+                                .meta
+                                .authors
+                                .iter()
+                                .all(|a| !torrent.meta.authors.contains(a))
+                        {
                             if batch.len() > 1
                                 && !batch.iter().all(|t| t.meta.title == current.meta.title)
                             {
