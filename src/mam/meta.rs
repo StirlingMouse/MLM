@@ -62,7 +62,10 @@ impl TorrentMeta {
         self.title = title;
         self.edition = edition;
 
-        if self.authors.len() == 1
+        // Apparently authors is getting removed from periodicals
+        if self.media_type != MediaType::PeriodicalEbook
+            && self.media_type != MediaType::PeriodicalAudiobook
+            && self.authors.len() == 1
             && let Some(author) = self.authors.first()
         {
             if let Some(title) = self.title.strip_suffix(author) {
@@ -79,7 +82,10 @@ impl TorrentMeta {
             }
         }
 
-        self.title = TITLE_CLEANUP.replace_all(&self.title, "").to_string();
+        self.title = TITLE_CLEANUP
+            .replace_all(&self.title, "")
+            .trim()
+            .to_string();
 
         Ok(self)
     }
@@ -140,7 +146,7 @@ static EDITION_START_REGEX: Lazy<Regex> = Lazy::new(|| {
 
 static TITLE_CLEANUP: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r"(?i)(?:: A (?:Novel|Memoir)$)|(?:\s*-\s*\d+(?:\.| - )epub$)|(?:\s*[\(\[](?:digital|light novel|epub|cbz|cbr|tpb|fixed|unabridged)[\)\]])*",
+        r"(?i)(?:: A (?:Novel|Memoir)$)|(?:\s*-\s*\d+(?:\.| - )epub$)|(?:\s*[\(\[]\.?(?:digital|light novel|epub|pdf|cbz|cbr|mp3|m4b|tpb|fixed|unabridged)[\)\]])*",
     )
     .unwrap()
 });
