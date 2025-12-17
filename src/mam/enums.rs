@@ -121,7 +121,7 @@ impl Categories {
             return vec![];
         }
 
-        [
+        let main_cats = [
             self.audio
                 .as_ref()
                 .is_none_or(|c| !c.is_empty())
@@ -141,7 +141,13 @@ impl Categories {
         ]
         .into_iter()
         .flatten()
-        .collect()
+        .collect::<Vec<_>>();
+
+        if main_cats.len() == 4 {
+            return vec![];
+        }
+
+        main_cats
     }
 
     pub fn get_cats(&self) -> Vec<u8> {
