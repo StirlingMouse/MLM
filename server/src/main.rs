@@ -632,6 +632,8 @@ async fn app_main() -> Result<()> {
         downloader_tx,
         audiobookshelf_tx,
     };
+    #[cfg(target_family = "windows")]
+    let web_port = config.web_port;
     let context = Context {
         config: Arc::new(Mutex::new(config)),
         db,
@@ -648,7 +650,7 @@ async fn app_main() -> Result<()> {
             "MLM Webserver Error".to_string(),
             format!(
                 "{err}\r\n\r\nThis usually mean that your port is in use.\r\nConfigured port: {}",
-                config.web_port
+                web_port
             ),
             Some(config_file.clone()),
         )

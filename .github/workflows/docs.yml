@@ -1,11 +1,11 @@
-name: Deploy
+name: Docs
 on:
   push:
     branches:
       - main
 
 jobs:
-  deploy:
+  docs:
     runs-on: ubuntu-latest
     permissions:
       contents: write  # To push a branch 
