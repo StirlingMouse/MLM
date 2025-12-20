@@ -1,37 +1,29 @@
-use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use itertools::Itertools;
-use matchr::score;
 use mlm_db::{
     DatabaseExt as _, List, ListItem, ListItemTorrent, OldDbMainCat, OldMainCat, Timestamp,
-    Torrent, TorrentKey, TorrentMeta, TorrentStatus,
+    TorrentMeta, TorrentStatus,
 };
-use mlm_parse::{clean_value, normalize_title};
+use mlm_parse::clean_value;
 use native_db::Database;
 use once_cell::sync::Lazy;
 use quick_xml::de::from_reader;
 use regex::Regex;
 use scraper::{Html, Selector};
 use serde::Deserialize;
-use serde_json::Value;
 use tokio::sync::watch::Sender;
 use tokio::time::sleep;
 use tracing::{debug, instrument};
 use tracing::{trace, warn};
 
 use crate::config::GoodreadsList;
+use crate::lists::{search_grab, search_library};
 use crate::{
     autograbber::select_torrents,
     config::{Config, Cost, Grab},
-    mam::{
-        api::MaM,
-        enums::SearchIn,
-        search::{MaMTorrent, SearchQuery, SearchResult, Tor},
-        serde::DATE_FORMAT,
-    },
+    mam::{api::MaM, search::MaMTorrent},
 };
 
 pub static SERIES_PATTERN: Lazy<Regex> =
@@ -172,7 +164,7 @@ async fn search_item(
         return Ok(0);
     }
 
-    let has_updates = search_library(config, db, &mut db_item, item).context("search_library")?;
+    let has_updates = search_library(config, db, &mut db_item).context("search_library")?;
     if !list.dry_run && has_updates {
         let (_guard, rw) = db.rw_async().await?;
         rw.upsert(db_item.clone())?;
@@ -184,7 +176,7 @@ async fn search_item(
 
     let mut torrents = vec![];
     for grab in &list.grab {
-        let results = search_grab(config, mam, item, &db_item, grab)
+        let results = search_grab(config, mam, &db_item, grab)
             .await
             .context("search_grab")?;
         torrents.push(results);
@@ -297,253 +289,6 @@ async fn search_item(
     }
 
     Ok(selected_torrents)
-}
-
-#[instrument(skip_all)]
-fn search_library(
-    config: &Config,
-    db: &Database<'_>,
-    db_item: &mut ListItem,
-    item: &Item,
-) -> Result<bool> {
-    let r = db.r_transaction()?;
-    let title_search = normalize_title(&item.title);
-    let mut library = {
-        r.scan()
-            .secondary::<Torrent>(TorrentKey::title_search)?
-            .start_with(title_search.as_str())?
-            .filter(|t| t.as_ref().is_ok_and(|t| db_item.matches(&t.meta)))
-            .collect::<Result<Vec<_>, _>>()
-    }?;
-
-    library.sort_by_key(|torrent| {
-        let preferred_types = config.preferred_types(&torrent.meta.media_type);
-        preferred_types
-            .iter()
-            .position(|t| torrent.meta.filetypes.contains(t))
-    });
-
-    let audiobook = library
-        .iter()
-        .find(|t| t.meta.media_type.matches(OldMainCat::Audio.into()));
-    let ebook = library
-        .iter()
-        .find(|t| t.meta.media_type.matches(OldMainCat::Ebook.into()));
-
-    let mut updated_any = false;
-    if let Some(audiobook) = audiobook {
-        let updated = set_existing(&mut db_item.audio_torrent, audiobook);
-        trace!(
-            "Found old audiobook torrent matching RSS item: {}",
-            audiobook.meta.title
-        );
-        updated_any = updated || updated_any;
-    }
-    if let Some(ebook) = ebook {
-        let updated = set_existing(&mut db_item.ebook_torrent, ebook);
-        trace!(
-            "Found old ebook torrent matching RSS item: {}",
-            ebook.meta.title
-        );
-        updated_any = updated || updated_any;
-    }
-
-    Ok(updated_any)
-}
-
-fn set_existing(field: &mut Option<ListItemTorrent>, torrent: &Torrent) -> bool {
-    if let Some(field) = field {
-        if field.status == TorrentStatus::Selected {
-            return false;
-        }
-        if field.status == TorrentStatus::Existing && field.mam_id == torrent.meta.mam_id {
-            return false;
-        }
-    }
-    field.replace(ListItemTorrent {
-        mam_id: torrent.meta.mam_id,
-        status: TorrentStatus::Existing,
-        at: Timestamp::now(),
-    });
-    true
-}
-
-pub static BAD_CHARATERS: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"['`/?]|\s+[\(\[][^\)\]]+[\)\]]").unwrap());
-
-pub static AND: Lazy<Regex> = Lazy::new(|| Regex::new(r"&|\band\b").unwrap());
-
-#[instrument(skip_all)]
-async fn search_grab(
-    config: &Config,
-    mam: &MaM<'_>,
-    item: &Item,
-    db_item: &ListItem,
-    grab: &Grab,
-) -> Result<Vec<(MaMTorrent, TorrentMeta, usize, Grab)>> {
-    let (flags_is_hide, flags) = grab.filter.flags.as_search_bitfield();
-
-    let title_query = db_item.title.replace("*", "\"*\"");
-    let title_query = BAD_CHARATERS.replace_all(&title_query, " ");
-    let mut title_query = AND.replace_all(&title_query, "(and|&)");
-    if let Some((primary_title, _)) = title_query.split_once(':') {
-        title_query = Cow::from(format!("(\"{primary_title}\"|\"{title_query}\")"));
-    }
-    let query = format!(
-        "@title {} @author ({})",
-        title_query,
-        db_item.authors.iter().map(|a| format!("\"{a}\"")).join("|")
-    );
-
-    let mut categories = grab.filter.categories.clone();
-    if db_item.audio_torrent.is_some() {
-        categories.audio = Some(vec![])
-    }
-    if db_item.ebook_torrent.is_some() {
-        categories.ebook = Some(vec![])
-    }
-
-    let mut results: Option<SearchResult> = None;
-    loop {
-        let mut page_results = mam
-            .search(&SearchQuery {
-                dl_link: true,
-                perpage: 100,
-                tor: Tor {
-                    start_number: results.as_ref().map_or(0, |r| r.data.len() as u64),
-                    text: query.clone(),
-                    srch_in: vec![SearchIn::Title, SearchIn::Author],
-                    main_cat: categories.get_main_cats(),
-                    cat: categories.get_cats(),
-                    browse_lang: grab.filter.languages.iter().map(|l| l.to_id()).collect(),
-                    browse_flags_hide_vs_show: if flags.is_empty() {
-                        None
-                    } else {
-                        Some(if flags_is_hide { 0 } else { 1 })
-                    },
-                    browse_flags: flags.clone(),
-                    start_date: grab
-                        .filter
-                        .uploaded_after
-                        .map_or_else(|| Ok(String::new()), |d| d.format(&DATE_FORMAT))?,
-                    end_date: grab
-                        .filter
-                        .uploaded_before
-                        .map_or_else(|| Ok(String::new()), |d| d.format(&DATE_FORMAT))?,
-                    min_size: grab.filter.min_size.bytes(),
-                    max_size: grab.filter.max_size.bytes(),
-                    unit: grab.filter.min_size.unit().max(grab.filter.max_size.unit()),
-                    min_seeders: grab.filter.min_seeders,
-                    max_seeders: grab.filter.max_seeders,
-                    min_leechers: grab.filter.min_leechers,
-                    max_leechers: grab.filter.max_leechers,
-                    min_snatched: grab.filter.min_snatched,
-                    max_snatched: grab.filter.max_snatched,
-                    ..Default::default()
-                },
-
-                ..Default::default()
-            })
-            .await
-            .context("search")?;
-
-        debug!(
-            "result: perpage: {}, start: {}, data: {}, total: {}, found: {}",
-            page_results.perpage,
-            page_results.start,
-            page_results.data.len(),
-            page_results.total,
-            page_results.found
-        );
-
-        if page_results.data.is_empty() {
-            if results.is_none() {
-                results = Some(page_results);
-            }
-            break;
-        }
-
-        if let Some(results) = &mut results {
-            results.data.append(&mut page_results.data);
-        } else {
-            results = Some(page_results);
-        }
-
-        let results = results.as_ref().unwrap();
-        if results.data.len() >= results.found {
-            break;
-        }
-    }
-
-    let mut torrents = results
-        .unwrap()
-        .data
-        .into_iter()
-        .filter(|t| grab.filter.matches(t))
-        .map(|t| {
-            let title_score = score(&item.title, &t.title);
-            let author_score = t
-                .author_info
-                .values()
-                .map(|author| {
-                    db_item
-                        .authors
-                        .iter()
-                        .map(|author_name| score(author_name, author))
-                        .max()
-                        .unwrap_or_default()
-                })
-                .max()
-                .unwrap_or_default();
-            let series_score = item
-                .series
-                .as_ref()
-                .and_then(|(i_name, i_num)| {
-                    t.series_info
-                        .values()
-                        .map(|series| {
-                            let Value::String(t_name) = series.first().unwrap_or(&Value::Null)
-                            else {
-                                return 0;
-                            };
-                            let Value::String(t_num) = series.get(1).unwrap_or(&Value::Null) else {
-                                return 0;
-                            };
-                            score(i_name, t_name) + score(&i_num.to_string(), t_num)
-                        })
-                        .max()
-                })
-                .unwrap_or_default();
-            (t, title_score * 2 + author_score * 2 + series_score)
-        })
-        .collect::<Vec<_>>();
-    torrents.sort_by_key(|t| -(t.1 as i64));
-
-    if torrents.is_empty() {
-        return Ok(Default::default());
-    }
-    let max_score = torrents[0].1;
-    let mut torrents = torrents
-        .into_iter()
-        .take_while(|t| t.1 > max_score - 100)
-        .map(|(t, _)| {
-            let meta = t.as_meta()?;
-            let preferred_types = config.preferred_types(&meta.media_type);
-            let preference = preferred_types
-                .iter()
-                .position(|t| meta.filetypes.contains(t));
-            Ok((t, meta, preference.unwrap_or_default(), grab.clone()))
-        })
-        .collect::<Result<Vec<_>>>()?;
-    torrents.sort_by(|a, b| {
-        a.2.cmp(&b.2).then(
-            a.0.numfiles
-                .cmp(&b.0.numfiles)
-                .then(a.1.size.bytes().cmp(&b.1.size.bytes()).reverse()),
-        )
-    });
-
-    Ok(torrents)
 }
 
 #[derive(Debug, Deserialize)]

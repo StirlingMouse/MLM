@@ -6,8 +6,8 @@ mod cleaner;
 mod config;
 mod config_impl;
 mod exporter;
-mod goodreads;
 mod linker;
+mod lists;
 mod logging;
 mod mam;
 mod qbittorrent;
@@ -38,7 +38,7 @@ use figment::{
     Figment,
     providers::{Env, Format, Toml},
 };
-use goodreads::run_goodreads_import;
+use lists::goodreads::run_goodreads_import;
 use stats::{Stats, Triggers};
 use time::OffsetDateTime;
 use tokio::{
