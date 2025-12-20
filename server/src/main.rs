@@ -38,7 +38,6 @@ use figment::{
     Figment,
     providers::{Env, Format, Toml},
 };
-use lists::goodreads::run_goodreads_import;
 use stats::{Stats, Triggers};
 use time::OffsetDateTime;
 use tokio::{
@@ -55,8 +54,12 @@ use tracing_subscriber::{
 use web::start_webserver;
 
 use crate::{
-    config::Config, linker::link_torrents_to_library, mam::api::MaM,
-    snatchlist::run_snatchlist_search, stats::Context,
+    config::Config,
+    linker::link_torrents_to_library,
+    lists::{get_lists, run_list_import},
+    mam::api::MaM,
+    snatchlist::run_snatchlist_search,
+    stats::Context,
 };
 
 #[tokio::main]
@@ -205,8 +208,8 @@ async fn app_main() -> Result<()> {
     let stats = Stats::new();
 
     let (mut search_tx, mut search_rx) = (BTreeMap::new(), BTreeMap::new());
+    let (mut import_tx, mut import_rx) = (BTreeMap::new(), BTreeMap::new());
     let (linker_tx, linker_rx) = watch::channel(());
-    let (goodreads_tx, mut goodreads_rx) = watch::channel(());
     let (downloader_tx, mut downloader_rx) = watch::channel(());
     let (audiobookshelf_tx, mut audiobookshelf_rx) = watch::channel(());
 
@@ -418,49 +421,67 @@ async fn app_main() -> Result<()> {
             });
         }
 
-        if !config.goodreads_lists.is_empty() {
+        for (i, list) in get_lists(&config).into_iter().enumerate() {
             let config = config.clone();
             let db = db.clone();
             let mam = mam.clone();
-            let stats = stats.clone();
             let downloader_tx = downloader_tx.clone();
+            let (tx, mut rx) = watch::channel(());
+            import_tx.insert(i, tx);
+            import_rx.insert(i, rx.clone());
+            let stats = stats.clone();
+            let list = Arc::new(list);
             tokio::spawn(async move {
                 loop {
-                    select! {
-                        () = sleep(Duration::from_secs(60 * config.goodreads_interval)) => {},
-                        result = goodreads_rx.changed() => {
-                            if let Err(err) = result {
-                                error!("Error listening on goodreads_rx: {err:?}");
-                                stats
-                                    .update(|stats| {
-                                        stats.goodreads_result = Some(Err(err.into()));
+                    let interval = list.search_interval().unwrap_or(config.import_interval);
+                    if interval > 0 {
+                        select! {
+                            () = sleep(Duration::from_secs(60 * interval)) => {},
+                            result = rx.changed() => {
+                                if let Err(err) = result {
+                                    error!("Error listening on import_rx: {err:?}");
+                                    stats.update(|stats| {
+                                        stats.import_result.insert(i, Err(err.into()));
                                     }).await;
-                            }
-                        },
+                                }
+                            },
+                        }
+                    } else {
+                        let result = rx.changed().await;
+                        if let Err(err) = result {
+                            error!("Error listening on import_rx: {err:?}");
+                            stats
+                                .update(|stats| {
+                                    stats.import_result.insert(i, Err(err.into()));
+                                })
+                                .await;
+                        }
                     }
                     {
                         stats
                             .update(|stats| {
-                                stats.goodreads_run_at = Some(OffsetDateTime::now_utc());
-                                stats.goodreads_result = None;
+                                stats.import_run_at.insert(i, OffsetDateTime::now_utc());
+                                stats.import_result.remove(&i);
                             })
                             .await;
                     }
-                    let result = run_goodreads_import(
+                    let result = run_list_import(
                         config.clone(),
                         db.clone(),
                         mam.clone(),
+                        list.clone(),
+                        i,
                         downloader_tx.clone(),
                     )
                     .await
-                    .context("goodreads_import");
+                    .context("import");
                     if let Err(err) = &result {
-                        error!("Error running goodreads import: {err:?}");
+                        error!("Error running import: {err:?}");
                     }
                     {
                         stats
                             .update(|stats| {
-                                stats.goodreads_result = Some(result);
+                                stats.import_result.insert(i, result);
                             })
                             .await;
                     }
@@ -606,8 +627,8 @@ async fn app_main() -> Result<()> {
 
     let triggers = Triggers {
         search_tx,
+        import_tx,
         linker_tx,
-        goodreads_tx,
         downloader_tx,
         audiobookshelf_tx,
     };

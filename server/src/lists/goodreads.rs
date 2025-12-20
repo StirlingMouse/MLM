@@ -13,139 +13,129 @@ use quick_xml::de::from_reader;
 use regex::Regex;
 use scraper::{Html, Selector};
 use serde::Deserialize;
-use tokio::sync::watch::Sender;
 use tokio::time::sleep;
-use tracing::{debug, instrument};
-use tracing::{trace, warn};
+use tracing::{debug, instrument, trace, warn};
 
-use crate::config::GoodreadsList;
-use crate::lists::{search_grab, search_library};
 use crate::{
     autograbber::select_torrents,
-    config::{Config, Cost, Grab},
+    config::{Config, Cost, GoodreadsList, Grab},
+    lists::{search_grab, search_library},
     mam::{api::MaM, search::MaMTorrent},
 };
 
 pub static SERIES_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(.*?) \(([^)]*?),? #?(\d+(?:\.\d+)?)\)$").unwrap());
 
+static IMPORT_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[instrument(skip_all)]
 pub async fn run_goodreads_import(
     config: Arc<Config>,
     db: Arc<Database<'_>>,
     mam: Arc<MaM<'_>>,
-    autograb_trigger: Sender<()>,
+    list: &GoodreadsList,
+    max_torrents: u64,
 ) -> Result<()> {
-    let user_info = mam.user_info().await?;
-    let max_torrents = user_info.unsat.limit.saturating_sub(user_info.unsat.count);
-    debug!(
-        "goodreads import, unsats: {:#?}; max_torrents: {max_torrents}",
-        user_info.unsat
-    );
+    // Make sure we are only running one import at a time
+    let _guard = IMPORT_MUTEX.lock().await;
 
-    let mut selected_torrents = 0;
-    for list in &config.goodreads_lists {
-        let max_torrents = max_torrents
-            .saturating_sub(list.unsat_buffer.unwrap_or(config.unsat_buffer))
-            .saturating_sub(selected_torrents);
+    let content = reqwest::Client::new()
+        .get(&list.url)
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36")
+        .send()
+        .await?
+        .bytes()
+        .await?;
 
-        if max_torrents > 0 {
-            let content = reqwest::get(&list.url).await?.bytes().await?;
+    let mut rss: Rss = from_reader(&content[..])?;
+    trace!("Scanning Goodreads list {}", rss.channel.title);
 
-            let mut rss: Rss = from_reader(&content[..])?;
-            trace!("Scanning Goodreads list {}", rss.channel.title);
+    let list_id = list.list_id()?;
 
-            let list_id = list.list_id()?;
+    if !list.dry_run {
+        let (_guard, rw) = db.rw_async().await?;
+        rw.upsert(List {
+            id: list_id.clone(),
+            title: rss.channel.title,
+            updated_at: Some(Timestamp::now()),
+            // TODO: Parse
+            build_date: Some(Timestamp::now()),
+        })?;
+        rw.commit()?;
+    }
 
-            if !list.dry_run {
-                let (_guard, rw) = db.rw_async().await?;
-                rw.upsert(List {
-                    id: list_id.clone(),
-                    title: rss.channel.title,
-                    updated_at: Some(Timestamp::now()),
-                    // TODO: Parse
-                    build_date: Some(Timestamp::now()),
-                })?;
-                rw.commit()?;
-            }
-
-            for item in rss.channel.items.iter_mut() {
-                if let Some((_, [title, series_name, series_num])) =
-                    SERIES_PATTERN.captures(&item.title).map(|c| c.extract())
-                {
-                    item.series = Some((series_name.to_owned(), series_num.parse()?));
-                    item.title = title.to_owned();
-                }
-            }
-
-            for mut item in rss.channel.items.into_iter() {
-                if let Ok(title) = clean_value(&item.title) {
-                    item.title = title;
-                }
-                if let Some(author_name) = &item.author_name
-                    && let Ok(author_name) = clean_value(author_name)
-                {
-                    item.author_name = Some(author_name);
-                }
-                if let Some((series_name, num)) = &item.series
-                    && let Ok(series_name) = clean_value(series_name)
-                {
-                    item.series = Some((series_name, *num));
-                }
-                let db_item = match db
-                    .r_transaction()?
-                    .get()
-                    .primary::<ListItem>((list_id.clone(), item.guid.clone()))?
-                {
-                    Some(mut db_item) => {
-                        if db_item.prefer_format != list.prefer_format
-                            || db_item.allow_audio != list.allow_audio()
-                            || db_item.allow_ebook != list.allow_ebook()
-                            || db_item.title != item.title
-                            || db_item.series.first() != item.series.as_ref()
-                        {
-                            db_item.prefer_format = list.prefer_format;
-                            db_item.allow_audio = list.allow_audio();
-                            db_item.allow_ebook = list.allow_ebook();
-                            db_item.title = item.title.clone();
-                            db_item.series = item.series.iter().cloned().collect();
-                            if !list.dry_run {
-                                let (_guard, rw) = db.rw_async().await?;
-                                rw.upsert(db_item.clone())?;
-                                rw.commit()?;
-                            }
-                        }
-                        if (db_item.audio_torrent.is_some() && db_item.ebook_torrent.is_some())
-                            || (list.prefer_format == Some(OldDbMainCat::Audio)
-                                && db_item.audio_torrent.is_some())
-                            || (list.prefer_format == Some(OldDbMainCat::Ebook)
-                                && db_item.ebook_torrent.is_some())
-                        {
-                            continue;
-                        }
-                        db_item
-                    }
-                    None => {
-                        let db_item = item.as_list_item(&list_id, list);
-                        if !list.dry_run {
-                            let (_guard, rw) = db.rw_async().await?;
-                            rw.insert(db_item.clone())?;
-                            rw.commit()?;
-                        }
-                        db_item
-                    }
-                };
-                trace!("Searching for book {} from Goodreads list", item.title);
-                selected_torrents +=
-                    search_item(&config, &db, &mam, list, &item, db_item, max_torrents)
-                        .await
-                        .context("search goodreads book")?;
-                sleep(Duration::from_millis(400)).await;
-            }
+    for item in rss.channel.items.iter_mut() {
+        if let Some((_, [title, series_name, series_num])) =
+            SERIES_PATTERN.captures(&item.title).map(|c| c.extract())
+        {
+            item.series = Some((series_name.to_owned(), series_num.parse()?));
+            item.title = title.to_owned();
         }
     }
 
-    autograb_trigger.send(())?;
+    for mut item in rss.channel.items.into_iter() {
+        if let Ok(title) = clean_value(&item.title) {
+            item.title = title;
+        }
+        if let Some(author_name) = &item.author_name
+            && let Ok(author_name) = clean_value(author_name)
+        {
+            item.author_name = Some(author_name);
+        }
+        if let Some((series_name, num)) = &item.series
+            && let Ok(series_name) = clean_value(series_name)
+        {
+            item.series = Some((series_name, *num));
+        }
+        let db_item = match db
+            .r_transaction()?
+            .get()
+            .primary::<ListItem>((list_id.clone(), item.guid.clone()))?
+        {
+            Some(mut db_item) => {
+                if db_item.prefer_format != list.prefer_format
+                    || db_item.allow_audio != list.allow_audio()
+                    || db_item.allow_ebook != list.allow_ebook()
+                    || db_item.title != item.title
+                    || db_item.series.first() != item.series.as_ref()
+                {
+                    db_item.prefer_format = list.prefer_format;
+                    db_item.allow_audio = list.allow_audio();
+                    db_item.allow_ebook = list.allow_ebook();
+                    db_item.title = item.title.clone();
+                    db_item.series = item.series.iter().cloned().collect();
+                    if !list.dry_run {
+                        let (_guard, rw) = db.rw_async().await?;
+                        rw.upsert(db_item.clone())?;
+                        rw.commit()?;
+                    }
+                }
+                if (db_item.audio_torrent.is_some() && db_item.ebook_torrent.is_some())
+                    || (list.prefer_format == Some(OldDbMainCat::Audio)
+                        && db_item.audio_torrent.is_some())
+                    || (list.prefer_format == Some(OldDbMainCat::Ebook)
+                        && db_item.ebook_torrent.is_some())
+                {
+                    continue;
+                }
+                db_item
+            }
+            None => {
+                let db_item = item.as_list_item(&list_id, &list);
+                if !list.dry_run {
+                    let (_guard, rw) = db.rw_async().await?;
+                    rw.insert(db_item.clone())?;
+                    rw.commit()?;
+                }
+                db_item
+            }
+        };
+        trace!("Searching for book {} from Goodreads list", item.title);
+        search_item(&config, &db, &mam, &list, &item, db_item, max_torrents)
+            .await
+            .context("search goodreads book")?;
+        sleep(Duration::from_millis(400)).await;
+    }
 
     Ok(())
 }

@@ -1,6 +1,7 @@
-pub mod goodreads;
+mod goodreads;
+mod notion;
 
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 
 use anyhow::{Context, Result};
 use itertools::Itertools;
@@ -13,10 +14,12 @@ use native_db::Database;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde_json::Value;
+use tokio::sync::watch::Sender;
 use tracing::{debug, instrument, trace};
 
 use crate::{
-    config::{Config, Grab},
+    config::{Config, GoodreadsList, Grab, NotionList},
+    lists::{goodreads::run_goodreads_import, notion::run_notion_import},
     mam::{
         api::MaM,
         enums::SearchIn,
@@ -24,6 +27,89 @@ use crate::{
         serde::DATE_FORMAT,
     },
 };
+
+pub enum List {
+    Goodreads(GoodreadsList),
+    Notion(NotionList),
+}
+
+impl List {
+    pub fn list_type(&self) -> &'static str {
+        match self {
+            List::Goodreads(_) => "Goodreads",
+            List::Notion(_) => "Notion",
+        }
+    }
+
+    pub fn display_name(&self, index: usize) -> String {
+        match self {
+            List::Goodreads(list) => list.name.clone().unwrap_or_else(|| index.to_string()),
+            List::Notion(list) => list.name.clone(),
+        }
+    }
+
+    pub fn search_interval(&self) -> Option<u64> {
+        match self {
+            List::Goodreads(list) => list.search_interval,
+            List::Notion(list) => list.search_interval,
+        }
+    }
+
+    fn unsat_buffer(&self) -> Option<u64> {
+        match self {
+            List::Goodreads(list) => list.unsat_buffer,
+            List::Notion(list) => list.unsat_buffer,
+        }
+    }
+}
+
+pub fn get_lists(config: &Config) -> Vec<List> {
+    let mut lists = vec![];
+    for goodreads in &config.goodreads_lists {
+        lists.push(List::Goodreads(goodreads.clone()));
+    }
+    for notion in &config.notion_lists {
+        lists.push(List::Notion(notion.clone()));
+    }
+    lists
+}
+
+#[instrument(skip_all)]
+pub async fn run_list_import(
+    config: Arc<Config>,
+    db: Arc<Database<'_>>,
+    mam: Arc<MaM<'_>>,
+    list: Arc<List>,
+    index: usize,
+    autograb_trigger: Sender<()>,
+) -> Result<()> {
+    let user_info = mam.user_info().await?;
+    let max_torrents = user_info.unsat.limit.saturating_sub(user_info.unsat.count);
+    debug!(
+        "{} import, name: {}, unsats: {:#?}; max_torrents: {max_torrents}",
+        list.list_type(),
+        list.display_name(index),
+        user_info.unsat
+    );
+
+    let max_torrents =
+        max_torrents.saturating_sub(list.unsat_buffer().unwrap_or(config.unsat_buffer));
+
+    if max_torrents > 0 {
+        match list.as_ref() {
+            List::Goodreads(list) => {
+                run_goodreads_import(config, db, mam, list, max_torrents).await?;
+            }
+            List::Notion(list) => {
+                run_notion_import(config, db, mam, list, max_torrents).await?;
+            }
+        }
+    }
+
+    autograb_trigger.send(())?;
+
+    Ok(())
+}
 
 static BAD_CHARATERS: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"['`/?]|\s+[\(\[][^\)\]]+[\)\]]").unwrap());

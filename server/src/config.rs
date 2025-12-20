@@ -34,8 +34,8 @@ pub struct Config {
     pub search_interval: u64,
     #[serde(default = "default_link_interval")]
     pub link_interval: u64,
-    #[serde(default = "default_goodreads_interval")]
-    pub goodreads_interval: u64,
+    #[serde(default = "default_import_interval")]
+    pub import_interval: u64,
     #[serde(default)]
     pub ignore_torrents: Vec<u64>,
 
@@ -61,6 +61,9 @@ pub struct Config {
     #[serde(default)]
     #[serde(rename = "goodreads_list")]
     pub goodreads_lists: Vec<GoodreadsList>,
+    #[serde(default)]
+    #[serde(rename = "notion_list")]
+    pub notion_lists: Vec<NotionList>,
 
     #[serde(default)]
     #[serde(rename = "tag")]
@@ -181,6 +184,23 @@ pub struct GoodreadsList {
     pub prefer_format: Option<OldDbMainCat>,
     pub grab: Vec<Grab>,
 
+    pub search_interval: Option<u64>,
+    pub unsat_buffer: Option<u64>,
+    pub wedge_buffer: Option<u64>,
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NotionList {
+    pub data_source: String,
+    pub token: String,
+    pub name: String,
+    pub mam_fields: Vec<String>,
+    pub grab: Vec<Grab>,
+
+    pub search_interval: Option<u64>,
     pub unsat_buffer: Option<u64>,
     pub wedge_buffer: Option<u64>,
     #[serde(default)]
@@ -355,8 +375,8 @@ fn default_link_interval() -> u64 {
     10
 }
 
-fn default_goodreads_interval() -> u64 {
-    60
+fn default_import_interval() -> u64 {
+    135
 }
 
 fn default_abs_interval() -> u64 {

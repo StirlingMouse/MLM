@@ -17,6 +17,7 @@ use tokio_stream::{StreamExt as _, wrappers::WatchStream};
 
 use crate::{
     config::{Config, TorrentFilter},
+    lists::{List, get_lists},
     stats::Context,
     web::{AppError, Page, time},
 };
@@ -32,6 +33,7 @@ pub async fn index_page(
     let config = context.config.lock().await;
     let template = IndexPageTemplate {
         config: config.clone(),
+        lists: get_lists(&config),
         mam_error: context.mam.as_ref().as_ref().err().map(|e| format!("{e}")),
         has_no_qbits: config.qbittorrent.is_empty(),
         username,
@@ -45,6 +47,16 @@ pub async fn index_page(
             .iter()
             .map(|(i, r)| (*i, r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))))
             .collect(),
+        import_run_at: stats
+            .import_run_at
+            .iter()
+            .map(|(i, time)| (*i, Timestamp::from(*time)))
+            .collect(),
+        import_result: stats
+            .import_result
+            .iter()
+            .map(|(i, r)| (*i, r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))))
+            .collect(),
         linker_run_at: stats.linker_run_at.map(Into::into),
         linker_result: stats
             .linker_result
@@ -53,11 +65,6 @@ pub async fn index_page(
         cleaner_run_at: stats.cleaner_run_at.map(Into::into),
         cleaner_result: stats
             .cleaner_result
-            .as_ref()
-            .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
-        goodreads_run_at: stats.goodreads_run_at.map(Into::into),
-        goodreads_result: stats
-            .goodreads_result
             .as_ref()
             .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
         downloader_run_at: stats.downloader_run_at.map(Into::into),
@@ -102,8 +109,16 @@ pub async fn index_page_post(
                 return Err(anyhow::Error::msg("Invalid index").into());
             }
         }
-        "run_goodreads" => {
-            context.triggers.goodreads_tx.send(())?;
+        "run_import" => {
+            if let Some(tx) = context.triggers.import_tx.get(
+                &form
+                    .index
+                    .ok_or_else(|| anyhow::Error::msg("Invalid index"))?,
+            ) {
+                tx.send(())?;
+            } else {
+                return Err(anyhow::Error::msg("Invalid index").into());
+            }
         }
         "run_downloader" => {
             context.triggers.downloader_tx.send(())?;
@@ -123,17 +138,18 @@ pub async fn index_page_post(
 #[template(path = "pages/index.html")]
 struct IndexPageTemplate {
     config: Arc<Config>,
+    lists: Vec<List>,
     mam_error: Option<String>,
     has_no_qbits: bool,
     username: Option<String>,
     autograbber_run_at: BTreeMap<usize, Timestamp>,
     autograbber_result: BTreeMap<usize, Result<(), String>>,
+    import_run_at: BTreeMap<usize, Timestamp>,
+    import_result: BTreeMap<usize, Result<(), String>>,
     linker_run_at: Option<Timestamp>,
     linker_result: Option<Result<(), String>>,
     cleaner_run_at: Option<Timestamp>,
     cleaner_result: Option<Result<(), String>>,
-    goodreads_run_at: Option<Timestamp>,
-    goodreads_result: Option<Result<(), String>>,
     downloader_run_at: Option<Timestamp>,
     downloader_result: Option<Result<(), String>>,
     audiobookshelf_run_at: Option<Timestamp>,

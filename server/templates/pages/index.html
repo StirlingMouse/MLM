@@ -45,15 +45,20 @@ no qbittorrent instances configured, all features are disabled
 </div>
 
 <div class="infoboxes">
+  {% for (i, list) in lists.iter().enumerate() %}
 <form method=post class="infobox" inline>
-  <h2>Goodreads Import</h2>
-  <p>Last run: {% match goodreads_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
-  <button name=action value=run_goodreads>run now</button>
-  {% if goodreads_run_at.is_some() %}
-  <p>Result: {% match goodreads_result %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
+  <h2>{{ list.list_type() }} Import: {{ list.display_name(*i) }}</h2>
+  <p>Last run: {% match import_run_at.get(i) %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
+  <button name=action value=run_import>run now</button>
+  <input type=hidden name=index value={{ i }}>
+  {% if import_run_at.get(i).is_some() %}
+  <p>Result: {% match import_result.get(i) %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
   {% endif %}
 </form>
+{% endfor %}
+</div>
 
+<div class="infoboxes">
 <form method=post class="infobox" inline>
   <h2>Linker</h2>
   <p>Last run: {% match linker_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}

@@ -15,12 +15,12 @@ use crate::{config::Config, mam::api::MaM};
 pub struct StatsValues {
     pub autograbber_run_at: BTreeMap<usize, OffsetDateTime>,
     pub autograbber_result: BTreeMap<usize, Result<()>>,
+    pub import_run_at: BTreeMap<usize, OffsetDateTime>,
+    pub import_result: BTreeMap<usize, Result<()>>,
     pub linker_run_at: Option<OffsetDateTime>,
     pub linker_result: Option<Result<()>>,
     pub cleaner_run_at: Option<OffsetDateTime>,
     pub cleaner_result: Option<Result<()>>,
-    pub goodreads_run_at: Option<OffsetDateTime>,
-    pub goodreads_result: Option<Result<()>>,
     pub downloader_run_at: Option<OffsetDateTime>,
     pub downloader_result: Option<Result<()>>,
     pub audiobookshelf_run_at: Option<OffsetDateTime>,
@@ -60,8 +60,8 @@ pub struct Events {
 #[derive(Clone)]
 pub struct Triggers {
     pub search_tx: BTreeMap<usize, Sender<()>>,
+    pub import_tx: BTreeMap<usize, Sender<()>>,
     pub linker_tx: Sender<()>,
-    pub goodreads_tx: Sender<()>,
     pub downloader_tx: Sender<()>,
     pub audiobookshelf_tx: Sender<()>,
 }
