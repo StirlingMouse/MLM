@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}MLM - {{ list.title }}{% endblock %}
+
+{% block content %}
+<div class="row">
+  <h1>{{ list.title }}</h1>
+  <div class="option_group query">
+    Show:
+    <label>
+      All
+      <input type=radio name=show {% if show.is_none() %}checked{% endif %}>
+    </label>
+    <label>
+      Any Missing
+      <input type=radio name=show {% if show == Some("any") %}checked{% endif %} value="any">
+    </label>
+    <label>
+      Audio Missing
+      <input type=radio name=show {% if show == Some("audio") %}checked{% endif %} value="audio">
+    </label>
+    <label>
+      Ebook Missing
+      <input type=radio name=show {% if show == Some("ebook") %}checked{% endif %} value="ebook">
+    </label>
+  </div>
+</div>
+
+{% for item in items %}
+  <form method=post class=list_item>
+    <input type=hidden name=item_id value="{{ item.guid.1 }}">
+    <img src="{{ item.cover_url }}">
+    <div>
+    <div class="row">
+      <h3>{{ item.title }}</h3>
+      <div>
+        <a href="{{ self::mam_search(&item) }}" target=_blank>search on MaM</a>
+        {% if let Some(url) = item.book_url %}<a href="{{ url }}" target=_blank>goodreads</a>{% endif %}
+      </div>
+    </div>
+    <p class=author>by {{ item.authors.join(", ") }}</p>
+    {% if !item.series.is_empty() %}
+      <p>{% for (name, num) in item.series %}
+        {{ name }} #{{num}}{% if !loop.last %}, {% endif %}
+      {% endfor %}</p>
+    {% endif %}
+    {% if let Some(torrent) = item.audio_torrent %}
+      {% match torrent.status %}
+      {% when TorrentStatus::Selected %}
+      Downloaded audiobook <a href="/torrents/{{ torrent.mam_id }}" target=_blank>torrent</a> at {{ self::time(torrent.at) }}<br />
+      {% when TorrentStatus::Wanted %}
+      Suggest wedge audiobook <a href="/torrents/{{ torrent.mam_id }}" target=_blank>torrent</a> at {{ self::time(torrent.at) }}<br />
+      {% when TorrentStatus::NotWanted %}
+      Skipped audiobook <a href="/torrents/{{ torrent.mam_id }}" target=_blank>torrent</a> as an ebook was found at {{ self::time(torrent.at) }}<br />
+      {% when TorrentStatus::Existing %}
+      Found matching audiobook <a href="/torrents/{{ torrent.mam_id }}" target=_blank>torrent</a> in library at {{ self::time(torrent.at) }}<br />
+      {% endmatch %}
+    {% elif item.want_audio() %}
+      <span class=missing>Audiobook missing</span><br />
+    {% endif %}
+    {% if let Some(torrent) = item.ebook_torrent %}
+      {% match torrent.status %}
+      {% when TorrentStatus::Selected %}
+      Downloaded ebook <a href="/torrents/{{ torrent.mam_id }}" target=_blank>torrent</a> at {{ self::time(torrent.at) }}<br />
+      {% when TorrentStatus::Wanted %}
+      Suggest wedge ebook <a href="/torrents/{{ torrent.mam_id }}" target=_blank>torrent</a> at {{ self::time(torrent.at) }}<br />
+      {% when TorrentStatus::NotWanted %}
+      Skipped ebook <a href="/torrents/{{ torrent.mam_id }}" target=_blank>torrent</a> as an ebook was found at {{ self::time(torrent.at) }}<br />
+      {% when TorrentStatus::Existing %}
+      Found matching ebook <a href="/torrents/{{ torrent.mam_id }}" target=_blank>torrent</a> in library at {{ self::time(torrent.at) }}<br />
+      {% endmatch %}
+    {% elif item.want_ebook() %}
+      <span class=missing>Ebook missing</span><br />
+    {% endif %}
+    {% if item.want_audio() || item.want_ebook() %}
+      <button name=action value=mark-done>mark done</button>
+    {% endif %}
+    </div>
+  </form>
+{% endfor %}
+{% if items.is_empty() %}
+<p><i>The list is empty</i>
+{% endif %}
+{% endblock %}

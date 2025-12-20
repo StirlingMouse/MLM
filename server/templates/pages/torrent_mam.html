@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}MLM - {{ meta.title }}{% endblock %}
+
+{% block head %}
+  <style>
+    .EventsTable {
+      {{self::table_styles(2) | safe}}
+      grid-template-columns: auto 1fr;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <h1>{{ meta.title }}</h1>
+</div>
+{% if let Some((edition, _)) = meta.edition %}
+  {{ edition }}
+{% endif %}
+<div class="row">
+  <div>
+    id: {{ meta.mam_id }} {% if let Some(vip_status) = meta.vip_status %}{{ vip_status }}{% endif %}
+    <a href="https://www.myanonamouse.net/t/{{ mam_torrent.id }}" target=_blank class=btn>Open in MaM</a>
+  </div>
+  <form method=post>
+    <button name=action value=remove data-prompt="Are you sure you want to remove this torrents?">remove torrent from MLM</button>
+  </form>
+</div>
+<p>By {{ items(TorrentsPageFilter::Author, meta.authors) }}</p>
+{% if !meta.series.is_empty() %}
+  <p>Series: {{ series(TorrentsPageFilter::Series, meta.series) }}</p>
+{% endif %}
+{% if !meta.narrators.is_empty() %}
+  <p>Narrator: {{ items(TorrentsPageFilter::Narrator, meta.narrators) }}</p>
+{% endif %}
+{% if let Some(language) = meta.language %}
+  <p>Language: {{ language.to_str() }}</p>
+{% endif %}
+{% if let Some(cat) = meta.cat %}
+  <p>Category: {{ meta.media_type.as_str() }} - {{ cat.as_str() }} {{ self::flag_icons(meta) }}</p>
+{% else %}
+  <p>Category: {{ meta.media_type.as_str() }} {{ self::flag_icons(meta) }}</p>
+{% endif %}
+{% if !meta.categories.is_empty() %}
+  <p>Categories: {{ meta.categories.iter().join(", ") }}</p>
+{% endif %}
+<form method=post>
+<p>
+  Size: {{ meta.size }}
+  {% if mam_torrent.vip %}<button name=action value=select>Download as VIP</button>
+  {% else if mam_torrent.personal_freeleech %}<button name=action value=select>Download as Personal Freeleech</button>
+  {% else if mam_torrent.free %}<button name=action value=select>Download as Global Freeleech</button>
+  {% else %}
+    <button name=action value=wedge>Download with Wedge</button>
+    <button name=action value=select>Download with Ratio</button>
+  {% endif %}
+</p>
+</form>
+<p>Uploader: {{ mam_torrent.owner_name }}</p>
+<p>Uploaded At: {{ self::time(meta.uploaded_at) }}</p>
+
+<p>{{ mam_torrent.tags }}</p>
+<details open>
+  <summary>Description</summary>
+  {% if let Some(description) = mam_torrent.description %}
+    <p>{{ description | safe }}</p>
+  {% endif %}
+</details>
+
+<h2>Other Torrents</h2>
+{{ other_torrents }}
+{% endblock %}

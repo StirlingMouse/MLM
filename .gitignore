@@ -1,3 +1,6 @@
 /target
+node_modules
+docs/book
 config.toml
 data.db
+data.db.*
