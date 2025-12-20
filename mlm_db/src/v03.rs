@@ -256,6 +256,12 @@ impl Uuid {
     }
 }
 
+impl Default for Uuid {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ToKey for Uuid {
     fn to_key(&self) -> Key {
         Key::new(self.0.as_bytes().to_vec())
