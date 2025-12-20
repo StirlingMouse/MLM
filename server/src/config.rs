@@ -34,7 +34,7 @@ pub struct Config {
     pub search_interval: u64,
     #[serde(default = "default_link_interval")]
     pub link_interval: u64,
-    #[serde(default = "default_import_interval")]
+    #[serde(default = "default_import_interval", alias = "goodreads_interval")]
     pub import_interval: u64,
     #[serde(default)]
     pub ignore_torrents: Vec<u64>,
