@@ -1,13 +1,5 @@
 use std::collections::BTreeMap;
 
-use crate::mam::{
-    enums::{SearchIn, SearchKind, SearchTarget},
-    meta::{MetaError, clean_meta},
-    serde::{
-        DATE_TIME_FORMAT, bool_string_or_number, is_false, is_zero, json_or_default,
-        opt_string_or_number, string_or_number, vec_string_or_number,
-    },
-};
 use anyhow::Result;
 use mlm_db::{
     Category, FlagBits, Language, MainCat, MediaType, MetadataSource, OldCategory, Series,
@@ -17,6 +9,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use time::UtcDateTime;
 use tracing::warn;
+
+use crate::{
+    enums::{SearchIn, SearchKind, SearchTarget},
+    meta::{MetaError, clean_meta},
+    serde::{
+        DATE_TIME_FORMAT, bool_string_or_number, is_false, is_zero, json_or_default,
+        opt_string_or_number, string_or_number, vec_string_or_number,
+    },
+};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct SearchQuery {

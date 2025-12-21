@@ -1,22 +1,23 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::{
-    config::{Config, Cost, SnatchlistSearch, TorrentFilter},
-    logging::write_event,
-    mam::{api::MaM, meta::MetaError, user_torrent::UserDetailsTorrent},
-};
 use anyhow::{Context, Result, bail};
 use itertools::Itertools as _;
 use mlm_db::{
     DatabaseExt, Event, EventType, MetadataSource, Timestamp, Torrent, TorrentKey, TorrentMeta,
     VipStatus,
 };
+use mlm_mam::{api::MaM, meta::MetaError, user_torrent::UserDetailsTorrent};
 use mlm_parse::normalize_title;
 use native_db::{Database, db_type, transaction::RwTransaction};
 use time::UtcDateTime;
 use tokio::{sync::MutexGuard, time::sleep};
 use tracing::{Level, debug, enabled, info, instrument, trace, warn};
 use uuid::Uuid;
+
+use crate::{
+    config::{Config, Cost, SnatchlistSearch, TorrentFilter},
+    logging::write_event,
+};
 
 #[instrument(skip_all)]
 pub async fn run_snatchlist_search(

@@ -1,7 +1,3 @@
-use crate::mam::{
-    meta::{MetaError, clean_meta},
-    serde::{bool_string_or_number, num_string_or_number, opt_num_string_or_number},
-};
 use anyhow::Result;
 use itertools::Itertools as _;
 use mlm_db::{
@@ -12,6 +8,11 @@ use mlm_parse::clean_value;
 use serde::{Deserialize, Serialize};
 use time::UtcDateTime;
 use tracing::warn;
+
+use crate::{
+    meta::{MetaError, clean_meta},
+    serde::{bool_string_or_number, num_string_or_number, opt_num_string_or_number},
+};
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UserDetailsTorrentResponse {

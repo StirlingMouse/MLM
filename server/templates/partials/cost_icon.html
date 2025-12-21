@@ -2,7 +2,7 @@
 <img src="/assets/icons/freedownload.png" alt="Personal Freeleech" title="Personal Freeleech" style="filter:hue-rotate(180deg)" />
 {% elif mam_torrent.vip %}
 {% if mam_torrent.vip_expire > 0 %}
-<img src="/assets/icons/vip.png" alt="VIP (expires {{ mam_torrent.vip_expire() }})" title="VIP (expires {{ mam_torrent.vip_expire() }})" style="filter:hue-rotate(180deg)" />
+<img src="/assets/icons/vip.png" alt="VIP (expires {{ self::vip_expire(mam_torrent) }})" title="VIP (expires {{ self::vip_expire(mam_torrent) }})" style="filter:hue-rotate(180deg)" />
 {% else %}
 <img src="/assets/icons/vip.png" alt="VIP" title="VIP" />
 {% endif %}

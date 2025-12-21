@@ -13,6 +13,11 @@ use mlm_db::{
     ClientStatus, DatabaseExt as _, Event, EventKey, EventType, Size, Torrent, TorrentCost,
     TorrentKey, TorrentMeta,
 };
+use mlm_mam::{
+    api::MaM,
+    enums::SearchIn,
+    search::{MaMTorrent, SearchFields, SearchQuery, Tor},
+};
 use native_db::Database;
 use qbit::{
     models::{Category, Torrent as QbitTorrent, Tracker},
@@ -29,11 +34,6 @@ use crate::{
     cleaner::clean_torrent,
     config::Config,
     linker::{find_library, library_dir, map_path, refresh_metadata, refresh_metadata_relink},
-    mam::{
-        api::MaM,
-        enums::SearchIn,
-        search::{MaMTorrent, SearchFields, SearchQuery, Tor},
-    },
     qbittorrent::{self},
     stats::Context,
     web::{

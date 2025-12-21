@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::Result;
 use mlm_db::Event;
+use mlm_mam::api::MaM;
 use native_db::Database;
 use time::{OffsetDateTime, UtcDateTime};
 use tokio::sync::{
@@ -9,7 +10,7 @@ use tokio::sync::{
     watch::{self, Receiver, Sender},
 };
 
-use crate::{config::Config, mam::api::MaM};
+use crate::config::Config;
 
 #[derive(Default)]
 pub struct StatsValues {

@@ -9,6 +9,12 @@ use matchr::score;
 use mlm_db::{
     ListItem, ListItemTorrent, OldMainCat, Torrent, TorrentKey, TorrentMeta, TorrentStatus,
 };
+use mlm_mam::{
+    api::MaM,
+    enums::SearchIn,
+    search::{MaMTorrent, SearchFields, SearchQuery, SearchResult, Tor},
+    serde::DATE_FORMAT,
+};
 use mlm_parse::normalize_title;
 use native_db::Database;
 use once_cell::sync::Lazy;
@@ -20,12 +26,6 @@ use tracing::{debug, instrument, trace};
 use crate::{
     config::{Config, GoodreadsList, Grab, NotionList},
     lists::{goodreads::run_goodreads_import, notion::run_notion_import},
-    mam::{
-        api::MaM,
-        enums::SearchIn,
-        search::{MaMTorrent, SearchFields, SearchQuery, SearchResult, Tor},
-        serde::DATE_FORMAT,
-    },
 };
 
 pub enum List {

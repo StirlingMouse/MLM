@@ -16,12 +16,11 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info, trace, warn};
 
 use crate::{
-    config::{Config, SnatchlistType},
-    mam::{
-        search::{MaMTorrent, SearchError, SearchFields, SearchQuery, SearchResult, Tor},
-        user_data::UserResponse,
-        user_torrent::UserDetailsTorrentResponse,
-    },
+    // config::{Config, SnatchlistType},
+    enums::SnatchlistType,
+    search::{MaMTorrent, SearchError, SearchFields, SearchQuery, SearchResult, Tor},
+    user_data::UserResponse,
+    user_torrent::UserDetailsTorrentResponse,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -72,7 +71,7 @@ pub struct MaM<'a> {
 }
 
 impl<'a> MaM<'a> {
-    pub async fn new(config: &Config, db: Arc<Database<'a>>) -> Result<MaM<'a>> {
+    pub async fn new(mam_id: &str, db: Arc<Database<'a>>) -> Result<MaM<'a>> {
         let jar: CookieStoreRwLock = Default::default();
         let url = "https://www.myanonamouse.net/json".parse::<Url>().unwrap();
 
@@ -88,7 +87,7 @@ impl<'a> MaM<'a> {
             info!("Using mam_id from config");
         }
         let has_stored_mam_id = stored_mam_id.is_some();
-        let cookie = Cookie::build(("mam_id", stored_mam_id.unwrap_or(config.mam_id.clone())))
+        let cookie = Cookie::build(("mam_id", stored_mam_id.unwrap_or(mam_id.to_owned())))
             .expires(OffsetDateTime::now_local()? + Duration::from_mins(10))
             .build();
         jar.write()
@@ -111,7 +110,7 @@ impl<'a> MaM<'a> {
         if let Err(err) = mam.check_mam_id().await {
             if has_stored_mam_id {
                 warn!("Stored mam_id failed with {err}, falling back to config value");
-                let cookie = Cookie::build(("mam_id", config.mam_id.clone()))
+                let cookie = Cookie::build(("mam_id", mam_id.to_owned()))
                     .expires(OffsetDateTime::now_local()? + Duration::from_mins(10))
                     .build();
                 mam.jar

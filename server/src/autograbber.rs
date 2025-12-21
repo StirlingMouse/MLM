@@ -6,19 +6,6 @@ use std::{
     time::Duration,
 };
 
-use crate::{
-    audiobookshelf::{self as abs, Abs},
-    config::{Config, Cost, SortBy, TorrentFilter, TorrentSearch, Type},
-    logging::{TorrentMetaError, update_errored_torrent, write_event},
-    mam::{
-        api::{MaM, RateLimitError, WedgeBuyError},
-        enums::{SearchKind, SearchTarget},
-        meta::MetaError,
-        search::{MaMTorrent, SearchFields, SearchQuery, SearchResult, Tor},
-        serde::DATE_FORMAT,
-        user_data::UserResponse,
-    },
-};
 use anyhow::{Context, Error, Result};
 use bytes::Bytes;
 use itertools::Itertools as _;
@@ -27,6 +14,14 @@ use mlm_db::{
     ClientStatus, DatabaseExt as _, DuplicateTorrent, ErroredTorrentId, Event, EventType,
     MetadataSource, SelectedTorrent, Size, Timestamp, TorrentCost, TorrentKey, TorrentMeta,
     VipStatus,
+};
+use mlm_mam::{
+    api::{MaM, RateLimitError, WedgeBuyError},
+    enums::{SearchKind, SearchTarget},
+    meta::MetaError,
+    search::{MaMTorrent, SearchFields, SearchQuery, SearchResult, Tor},
+    serde::DATE_FORMAT,
+    user_data::UserResponse,
 };
 use mlm_parse::normalize_title;
 use native_db::{Database, db_type, transaction::RwTransaction};
@@ -38,6 +33,12 @@ use tokio::{
 };
 use tracing::{Level, debug, enabled, error, info, instrument, trace, warn};
 use uuid::Uuid;
+
+use crate::{
+    audiobookshelf::{self as abs, Abs},
+    config::{Config, Cost, SortBy, TorrentFilter, TorrentSearch, Type},
+    logging::{TorrentMetaError, update_errored_torrent, write_event},
+};
 
 static AUTOGRABBER_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 

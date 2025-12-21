@@ -1,7 +1,6 @@
 use anyhow::{Error, Result};
-use mlm_parse::{SERIES_CLEANUP, TITLE_CLEANUP, clean_name, clean_value, parse_edition};
-
 use mlm_db::{MediaType, OldCategory, TorrentMeta};
+use mlm_parse::{SERIES_CLEANUP, TITLE_CLEANUP, clean_name, clean_value, parse_edition};
 
 #[derive(thiserror::Error, Debug)]
 pub enum MetaError {

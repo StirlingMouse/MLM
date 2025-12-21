@@ -15,7 +15,7 @@
       <img src="/assets/icons/cats/{{ cat.as_id() }}_b.png" alt="{{ meta.media_type.as_str() }} - {{ meta.cat_name() }}"  title="{{ meta.media_type.as_str() }} - {{ meta.cat_name() }}" />
     {% endif %}
   </div>
-  <div>{{ mam_torrent.cost_icon() }}{{ self::flag_icons(&meta) }}</div>
+  <div>{{ self::cost_icon(&mam_torrent) }}{{ self::flag_icons(&meta) }}</div>
   <div>
       {% if mam_torrent.lang_code != "ENG" %}
       <span class=faint>[{{ mam_torrent.lang_code }}]</span>

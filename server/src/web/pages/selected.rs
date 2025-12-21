@@ -12,12 +12,12 @@ use axum::{
 };
 use axum_extra::extract::Form;
 use mlm_db::{DatabaseExt as _, Flags, Language, OldCategory, SelectedTorrent, Size, Timestamp};
+use mlm_mam::user_data::UserResponse;
 use native_db::Database;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::{
-    mam::user_data::UserResponse,
     stats::Context,
     web::{
         AppError, Page, flag_icons,

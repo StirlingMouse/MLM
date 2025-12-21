@@ -6,15 +6,15 @@ use axum::{
 };
 use axum_extra::extract::Form;
 use mlm_db::{DatabaseExt as _, SelectedTorrent, Timestamp, Torrent, TorrentCost, TorrentKey};
+use mlm_mam::{
+    enums::SearchTarget,
+    search::{SearchFields, SearchQuery, Tor},
+};
 use mlm_parse::normalize_title;
 use serde::Deserialize;
 use tracing::info;
 
 use crate::{
-    mam::{
-        enums::SearchTarget,
-        search::{SearchFields, SearchQuery, Tor},
-    },
     stats::Context,
     web::{AppError, MaMTorrentsTemplate, Page},
 };

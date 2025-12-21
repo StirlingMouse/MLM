@@ -18,6 +18,7 @@ use mlm_db::{
     ClientStatus, DatabaseExt as _, ErroredTorrentId, Event, EventType, LibraryMismatch,
     SelectedTorrent, SelectedTorrentKey, Size, Timestamp, Torrent, TorrentMeta,
 };
+use mlm_mam::{api::MaM, meta::MetaError, search::MaMTorrent};
 use mlm_parse::normalize_title;
 use native_db::Database;
 use once_cell::sync::Lazy;
@@ -35,7 +36,6 @@ use crate::{
     cleaner::remove_library_files,
     config::{Config, Library, LibraryLinkMethod, QbitConfig},
     logging::{TorrentMetaError, update_errored_torrent, write_event},
-    mam::{api::MaM, meta::MetaError, search::MaMTorrent},
 };
 
 pub static DISK_PATTERN: Lazy<Regex> =

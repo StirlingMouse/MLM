@@ -6,6 +6,7 @@ use mlm_db::{
     DatabaseExt as _, List, ListItem, ListItemTorrent, OldDbMainCat, OldMainCat, Timestamp,
     TorrentMeta, TorrentStatus,
 };
+use mlm_mam::{api::MaM, search::MaMTorrent};
 use mlm_parse::clean_value;
 use native_db::Database;
 use once_cell::sync::Lazy;
@@ -20,7 +21,6 @@ use crate::{
     autograbber::select_torrents,
     config::{Config, Cost, GoodreadsList, Grab},
     lists::{search_grab, search_library},
-    mam::{api::MaM, search::MaMTorrent},
 };
 
 pub static SERIES_PATTERN: Lazy<Regex> =

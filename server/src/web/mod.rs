@@ -19,6 +19,7 @@ use mlm_db::{
     AudiobookCategory, Category, EbookCategory, Flags, SelectedTorrent, Series, Timestamp, Torrent,
     TorrentMeta,
 };
+use mlm_mam::{api::MaM, meta::MetaError, search::MaMTorrent, serde::DATE_FORMAT};
 use once_cell::sync::Lazy;
 use pages::{
     config::{config_page, config_page_post},
@@ -48,7 +49,6 @@ use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
     config::{SearchConfig, TorrentFilter},
-    mam::{api::MaM, meta::MetaError, search::MaMTorrent, serde::DATE_FORMAT},
     stats::Context,
     web::{
         api::{
@@ -363,15 +363,13 @@ pub struct CostIconTemplate<'a> {
 }
 impl<'a> HtmlSafe for CostIconTemplate<'a> {}
 
-impl MaMTorrent {
-    pub fn cost_icon(&self) -> CostIconTemplate<'_> {
-        CostIconTemplate { mam_torrent: self }
-    }
-    pub fn vip_expire(&self) -> Date {
-        UtcDateTime::from_unix_timestamp(self.vip_expire as i64)
-            .unwrap_or(UtcDateTime::UNIX_EPOCH)
-            .date()
-    }
+pub fn cost_icon(mam_torrent: &MaMTorrent) -> CostIconTemplate<'_> {
+    CostIconTemplate { mam_torrent }
+}
+pub fn vip_expire(mam_torrent: &MaMTorrent) -> Date {
+    UtcDateTime::from_unix_timestamp(mam_torrent.vip_expire as i64)
+        .unwrap_or(UtcDateTime::UNIX_EPOCH)
+        .date()
 }
 
 #[derive(Template)]

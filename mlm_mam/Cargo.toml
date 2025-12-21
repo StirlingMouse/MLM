@@ -1,0 +1,30 @@
+[package]
+name = "mlm_mam"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+bytes = "1.11.0"
+cookie = "0.18.1"
+itertools = "0.14.0"
+mlm_db = { path = "../mlm_db" }
+mlm_parse = { path = "../mlm_parse" }
+native_db = { git = "https://github.com/StirlingMouse/native_db.git", branch = "0.8.x" }
+native_model = "0.4.20"
+once_cell = "1.21.3"
+reqwest = "0.12.20"
+reqwest_cookie_store = "0.8.0"
+serde = "1.0.136"
+serde_derive = "1.0.136"
+serde_json = "1.0.140"
+serde-nested-json = "0.1.3"
+thiserror = "2.0.17"
+time = { version = "0.3.41", features = [
+  "formatting",
+  "local-offset",
+  "macros",
+  "serde",
+] }
+tokio = { version = "1.45.1", features = ["full"] }
+tracing = "0.1"

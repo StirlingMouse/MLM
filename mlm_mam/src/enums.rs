@@ -1,11 +1,10 @@
 use std::{fmt, marker::PhantomData};
 
+use mlm_db::{AudiobookCategory, EbookCategory, MusicologyCategory, RadioCategory};
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{self, SeqAccess, Visitor},
 };
-
-use mlm_db::{AudiobookCategory, EbookCategory, MusicologyCategory, RadioCategory};
 
 #[derive(Debug, Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
@@ -85,6 +84,26 @@ pub enum SearchKind {
     /// Torrents missing meta data (old torrents)
     #[serde(rename = "nMeta")]
     NoMeta,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SnatchlistType {
+    Unsat,
+    SeedUnsat,
+    SeedSat,
+    UploadsActive,
+}
+
+impl fmt::Display for SnatchlistType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SnatchlistType::Unsat => write!(f, "unsat"),
+            SnatchlistType::SeedUnsat => write!(f, "seedUnsat"),
+            SnatchlistType::SeedSat => write!(f, "sSat"),
+            SnatchlistType::UploadsActive => write!(f, "upAct"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

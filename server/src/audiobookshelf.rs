@@ -3,13 +3,14 @@ use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 use anyhow::Result;
 use axum::http::HeaderMap;
 use mlm_db::{DatabaseExt as _, Flags, Torrent, TorrentMeta, impls::format_serie};
+use mlm_mam::search::MaMTorrent;
 use native_db::Database;
 use reqwest::{Url, header::AUTHORIZATION};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{debug, error, instrument, trace};
 
-use crate::{config::AudiobookShelfConfig, mam::search::MaMTorrent};
+use crate::config::AudiobookShelfConfig;
 
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 pub struct LibrariesResponse {

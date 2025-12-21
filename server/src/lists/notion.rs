@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use mlm_db::{Torrent, TorrentKey};
+use mlm_mam::api::MaM;
 use native_db::Database;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -11,7 +12,6 @@ use tracing::{instrument, trace};
 use crate::{
     autograbber::select_torrents,
     config::{Config, NotionList},
-    mam::api::MaM,
 };
 
 static IMPORT_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());

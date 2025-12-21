@@ -1,16 +1,15 @@
-use std::{collections::BTreeMap, fmt, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use mlm_db::{
     Flags, Language, OldDbMainCat, Size,
     impls::{parse, parse_opt, parse_vec},
 };
-use serde::{Deserialize, Serialize};
-use time::Date;
-
-use crate::mam::{
-    enums::{Categories, SearchIn},
+use mlm_mam::{
+    enums::{Categories, SearchIn, SnatchlistType},
     serde::parse_opt_date,
 };
+use serde::{Deserialize, Serialize};
+use time::Date;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -152,26 +151,6 @@ pub struct SnatchlistSearch {
     pub search_interval: Option<u64>,
     #[serde(default)]
     pub dry_run: bool,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SnatchlistType {
-    Unsat,
-    SeedUnsat,
-    SeedSat,
-    UploadsActive,
-}
-
-impl fmt::Display for SnatchlistType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SnatchlistType::Unsat => write!(f, "unsat"),
-            SnatchlistType::SeedUnsat => write!(f, "seedUnsat"),
-            SnatchlistType::SeedSat => write!(f, "sSat"),
-            SnatchlistType::UploadsActive => write!(f, "upAct"),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Deserialize)]

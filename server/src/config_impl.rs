@@ -2,13 +2,13 @@ use std::path::PathBuf;
 
 use anyhow::{Result, ensure};
 use mlm_db::{Flags, Language, MediaType, OldCategory, Size, Torrent, TorrentMeta};
+use mlm_mam::{search::MaMTorrent, serde::DATE_TIME_FORMAT, user_torrent::UserDetailsTorrent};
 use reqwest::Url;
 use time::UtcDateTime;
 use tracing::error;
 
-use crate::{
-    config::{Config, GoodreadsList, Library, LibraryLinkMethod, LibraryTagFilters, TorrentFilter},
-    mam::{search::MaMTorrent, serde::DATE_TIME_FORMAT, user_torrent::UserDetailsTorrent},
+use crate::config::{
+    Config, GoodreadsList, Library, LibraryLinkMethod, LibraryTagFilters, TorrentFilter,
 };
 
 impl Config {
@@ -373,7 +373,7 @@ mod tests {
     use mlm_db::{AudiobookCategory, FlagBits, Timestamp, TorrentMeta};
     use time::macros::date;
 
-    use crate::mam::enums::Categories;
+    use mlm_mam::enums::Categories;
 
     use super::*;
 

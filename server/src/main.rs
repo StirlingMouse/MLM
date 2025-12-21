@@ -9,7 +9,6 @@ mod exporter;
 mod linker;
 mod lists;
 mod logging;
-mod mam;
 mod qbittorrent;
 mod snatchlist;
 mod stats;
@@ -38,6 +37,7 @@ use figment::{
     Figment,
     providers::{Env, Format, Toml},
 };
+use mlm_mam::api::MaM;
 use stats::{Stats, Triggers};
 use time::OffsetDateTime;
 use tokio::{
@@ -57,7 +57,6 @@ use crate::{
     config::Config,
     linker::link_torrents_to_library,
     lists::{get_lists, run_list_import},
-    mam::api::MaM,
     snatchlist::run_snatchlist_search,
     stats::Context,
 };
@@ -216,7 +215,7 @@ async fn app_main() -> Result<()> {
     let mam = if config.mam_id.is_empty() {
         Err(anyhow::Error::msg("No mam_id set"))
     } else {
-        MaM::new(&config, db.clone()).await.map(Arc::new)
+        MaM::new(&config.mam_id, db.clone()).await.map(Arc::new)
     };
     if let Ok(mam) = &mam {
         {

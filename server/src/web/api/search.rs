@@ -6,13 +6,13 @@ use axum::{
     extract::{Query, State},
 };
 use axum_extra::extract::Form;
+use mlm_mam::search::{MaMTorrent, SearchFields};
 use serde::{Deserialize, Serialize};
 use tokio::fs::create_dir_all;
 
 use crate::{
     autograbber::{mark_removed_torrents, search_torrents, select_torrents},
     config::{Cost, TorrentSearch},
-    mam::search::{MaMTorrent, SearchFields},
     stats::Context,
     web::{AppError, MaMState},
 };
