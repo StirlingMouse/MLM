@@ -20,6 +20,18 @@ use tracing::warn;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct SearchQuery {
+    #[serde(flatten)]
+    pub fields: SearchFields,
+
+    /// int in range of 5 to 100, telling how many results to return
+    #[serde(skip_serializing_if = "is_zero")]
+    pub perpage: u64,
+
+    pub tor: Tor,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, Clone, Copy)]
+pub struct SearchFields {
     /// If this parameter is set, it will display the full description field for the torrent.
     #[serde(skip_serializing_if = "is_false")]
     pub description: bool,
@@ -35,11 +47,6 @@ pub struct SearchQuery {
     pub isbn: bool,
     #[serde(skip_serializing_if = "is_false")]
     pub thumbnail: bool,
-    /// int in range of 5 to 100, telling how many results to return
-    #[serde(skip_serializing_if = "is_zero")]
-    pub perpage: u64,
-
-    pub tor: Tor,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]

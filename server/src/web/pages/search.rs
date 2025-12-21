@@ -13,7 +13,7 @@ use tracing::info;
 use crate::{
     mam::{
         enums::SearchTarget,
-        search::{SearchQuery, Tor},
+        search::{SearchFields, SearchQuery, Tor},
     },
     stats::Context,
     web::{AppError, MaMTorrentsTemplate, Page},
@@ -26,7 +26,10 @@ pub async fn search_page(
     let mam = context.mam()?;
     let result = mam
         .search(&SearchQuery {
-            media_info: true,
+            fields: SearchFields {
+                media_info: true,
+                ..Default::default()
+            },
             tor: Tor {
                 target: query.uploader.map(SearchTarget::Uploader),
                 text: query.q.clone(),

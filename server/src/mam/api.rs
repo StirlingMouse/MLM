@@ -18,7 +18,7 @@ use tracing::{debug, error, info, trace, warn};
 use crate::{
     config::{Config, SnatchlistType},
     mam::{
-        search::{MaMTorrent, SearchError, SearchQuery, SearchResult, Tor},
+        search::{MaMTorrent, SearchError, SearchFields, SearchQuery, SearchResult, Tor},
         user_data::UserResponse,
         user_torrent::UserDetailsTorrentResponse,
     },
@@ -203,9 +203,11 @@ impl<'a> MaM<'a> {
     pub async fn get_torrent_info(&self, hash: &str) -> Result<Option<MaMTorrent>> {
         let mut resp = self
             .search(&SearchQuery {
-                description: true,
-                isbn: true,
-                thumbnail: false,
+                fields: SearchFields {
+                    description: true,
+                    isbn: true,
+                    ..Default::default()
+                },
                 tor: Tor {
                     hash: hash.to_string(),
                     ..Default::default()
@@ -221,11 +223,13 @@ impl<'a> MaM<'a> {
     pub async fn get_torrent_info_by_id(&self, mam_id: u64) -> Result<Option<MaMTorrent>> {
         let mut resp = self
             .search(&SearchQuery {
-                description: true,
-                media_info: true,
-                isbn: true,
-                thumbnail: false,
-                dl_link: true,
+                fields: SearchFields {
+                    description: true,
+                    media_info: true,
+                    isbn: true,
+                    dl_link: true,
+                    ..Default::default()
+                },
                 tor: Tor {
                     id: mam_id,
                     ..Default::default()

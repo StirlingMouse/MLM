@@ -32,7 +32,7 @@ use crate::{
     mam::{
         api::MaM,
         enums::SearchIn,
-        search::{MaMTorrent, SearchQuery, Tor},
+        search::{MaMTorrent, SearchFields, SearchQuery, Tor},
     },
     qbittorrent::{self},
     stats::Context,
@@ -536,7 +536,10 @@ async fn other_torrents(
 
     let result = mam
         .search(&SearchQuery {
-            media_info: true,
+            fields: SearchFields {
+                media_info: true,
+                ..Default::default()
+            },
             tor: Tor {
                 text: if meta.authors.is_empty() {
                     title.to_string()

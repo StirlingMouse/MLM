@@ -23,7 +23,7 @@ use crate::{
     mam::{
         api::MaM,
         enums::SearchIn,
-        search::{MaMTorrent, SearchQuery, SearchResult, Tor},
+        search::{MaMTorrent, SearchFields, SearchQuery, SearchResult, Tor},
         serde::DATE_FORMAT,
     },
 };
@@ -213,7 +213,10 @@ async fn search_grab(
     loop {
         let mut page_results = mam
             .search(&SearchQuery {
-                dl_link: true,
+                fields: SearchFields {
+                    dl_link: true,
+                    ..Default::default()
+                },
                 perpage: 100,
                 tor: Tor {
                     start_number: results.as_ref().map_or(0, |r| r.data.len() as u64),

@@ -11,8 +11,8 @@ use tokio::fs::create_dir_all;
 
 use crate::{
     autograbber::{mark_removed_torrents, search_torrents, select_torrents},
-    config::TorrentSearch,
-    mam::search::MaMTorrent,
+    config::{Cost, TorrentSearch},
+    mam::search::{MaMTorrent, SearchFields},
     stats::Context,
     web::{AppError, MaMState},
 };
@@ -25,7 +25,18 @@ pub async fn search_api(
         return Err(anyhow::Error::msg("mam_id error").into());
     };
     let search: TorrentSearch = toml::from_str(&query.toml)?;
-    let torrents = search_torrents(&search, mam).await?.collect::<Vec<_>>();
+    let torrents = search_torrents(
+        &search,
+        SearchFields {
+            description: true,
+            isbn: true,
+            media_info: true,
+            ..Default::default()
+        },
+        mam,
+    )
+    .await?
+    .collect::<Vec<_>>();
 
     Ok::<_, AppError>(Json(SearchApiResponse {
         torrents: Some(torrents),
@@ -40,7 +51,21 @@ pub async fn search_api_post(
     let config = context.config().await;
     let mam = context.mam()?;
     let search: TorrentSearch = toml::from_str(&form.toml)?;
-    let torrents = search_torrents(&search, &mam).await?.collect::<Vec<_>>();
+    let torrents = search_torrents(
+        &search,
+        SearchFields {
+            description: true,
+            isbn: true,
+            media_info: true,
+            dl_link: form.add
+                && search.cost != Cost::MetadataOnly
+                && search.cost != Cost::MetadataOnlyAdd,
+            ..Default::default()
+        },
+        &mam,
+    )
+    .await?
+    .collect::<Vec<_>>();
     if form.write_json {
         for torrent in &torrents {
             let id_str = torrent.id.to_string();

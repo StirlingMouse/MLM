@@ -14,7 +14,7 @@ use crate::{
         api::{MaM, RateLimitError, WedgeBuyError},
         enums::{SearchKind, SearchTarget},
         meta::MetaError,
-        search::{MaMTorrent, SearchQuery, SearchResult, Tor},
+        search::{MaMTorrent, SearchFields, SearchQuery, SearchResult, Tor},
         serde::DATE_FORMAT,
         user_data::UserResponse,
     },
@@ -85,10 +85,19 @@ pub async fn run_autograbber(
         || autograb_config.cost == Cost::MetadataOnly
         || autograb_config.cost == Cost::MetadataOnlyAdd
     {
-        let selected_torrents =
-            search_and_select_torrents(&config, &db, &autograb_config, &mam, max_torrents)
-                .await
-                .context("search_torrents")?;
+        let selected_torrents = search_and_select_torrents(
+            &config,
+            &db,
+            &autograb_config,
+            SearchFields {
+                dl_link: true,
+                ..Default::default()
+            },
+            &mam,
+            max_torrents,
+        )
+        .await
+        .context("search_torrents")?;
         mam.add_unsats(selected_torrents).await;
     }
 
@@ -180,10 +189,11 @@ pub async fn search_and_select_torrents(
     config: &Config,
     db: &Database<'_>,
     torrent_search: &TorrentSearch,
+    fields: SearchFields,
     mam: &MaM<'_>,
     max_torrents: u64,
 ) -> Result<u64> {
-    let torrents = search_torrents(torrent_search, mam)
+    let torrents = search_torrents(torrent_search, fields, mam)
         .await
         .context("search_torrents")?;
 
@@ -232,6 +242,7 @@ pub async fn search_and_select_torrents(
 #[instrument(skip_all)]
 pub async fn search_torrents(
     torrent_search: &TorrentSearch,
+    fields: SearchFields,
     mam: &MaM<'_>,
 ) -> Result<impl Iterator<Item = MaMTorrent>> {
     let target = match torrent_search.kind {
@@ -269,10 +280,7 @@ pub async fn search_torrents(
     for page in 1.. {
         let mut page_results = mam
             .search(&SearchQuery {
-                dl_link: true,
-                // description: true,
-                // media_info: true,
-                // isbn: true,
+                fields,
                 perpage: 100,
                 tor: Tor {
                     start_number: results.as_ref().map_or(0, |r| r.data.len() as u64),
