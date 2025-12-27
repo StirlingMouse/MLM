@@ -77,7 +77,10 @@ pub async fn run_autograbber(
             .scan()
             .primary::<SelectedTorrent>()?
             .all()?
-            .filter(|t| t.as_ref().is_ok_and(|t| t.grabber.as_ref() == Some(&name)))
+            .filter(|t| {
+                t.as_ref()
+                    .is_ok_and(|t| t.grabber.as_ref() == Some(&name) && t.removed_at.is_none())
+            })
             .count() as u64;
         max_torrents = max_torrents.min(max_active_downloads.saturating_sub(downloading_torrents));
     }
