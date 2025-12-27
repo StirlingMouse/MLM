@@ -17,7 +17,7 @@ use crate::{
     autograbber::update_torrent_meta,
     config::{Config, Cost, Library, TorrentSearch, Type},
     stats::Context,
-    web::{AppError, Page, filter, yaml_items},
+    web::{AppError, Page, filter, yaml_items, yaml_nums},
 };
 
 pub async fn config_page(

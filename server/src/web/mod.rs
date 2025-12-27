@@ -241,26 +241,37 @@ async fn set_static_cache_control(request: Request<Body>, next: Next) -> Respons
 }
 
 /// ```askama
-/// {% if values.len() >= 5 %}
+/// {% if values.len() > 5 %}
 /// [<br>
 /// {% for v in values %}
-///   <span class=string>{{ v | json }}</span>,<br>
+///   <span class={{ class }}>{{ v | json }}</span>,<br>
 /// {% endfor %}
 /// ]
 /// {% else %}
-/// [ {% for v in values %}<span class=string>{{ v | json }}</span>{% if !loop.last %}, {% endif %}{% endfor %} ]
+/// [ {% for v in values %}<span class={{ class }}>{{ v | json }}</span>{% if !loop.last %}, {% endif %}{% endfor %} ]
 /// {% endif %}
 /// ```
 #[derive(Template)]
 #[template(ext = "html", in_doc = true)]
 struct YamlItems<'a, V: Serialize> {
     values: &'a [V],
+    class: &'static str,
 }
 
 impl<'a, V: Serialize> HtmlSafe for YamlItems<'a, V> {}
 
 fn yaml_items<'a, V: Serialize>(values: &'a [V]) -> YamlItems<'a, V> {
-    YamlItems { values }
+    YamlItems {
+        values,
+        class: "string",
+    }
+}
+
+fn yaml_nums<'a, V: Serialize>(values: &'a [V]) -> YamlItems<'a, V> {
+    YamlItems {
+        values,
+        class: "num",
+    }
 }
 
 fn date(date: &Date) -> String {

@@ -5,6 +5,29 @@
 {% block content %}
 <h1>Config</h1>
 
+<div class="infoboxes">
+  <div class="configbox">
+    <span class=key>unsat_buffer</span> = <span class=num>{{ config.unsat_buffer }}</span><br>
+    <span class=key>wedge_buffer</span> = <span class=num>{{ config.wedge_buffer }}</span><br>
+    {% if config.add_torrents_stopped %}
+    <span class=key>add_torrents_stopped</span> = <span class=num>{{ config.add_torrents_stopped }}</span><br>
+    {% endif %}
+    {% if config.exclude_narrator_in_library_dir %}
+    <span class=key>exclude_narrator_in_library_dir</span> = <span class=num>{{ config.exclude_narrator_in_library_dir }}</span><br>
+    {% endif %}
+    <span class=key>search_interval</span> = <span class=num>{{ config.search_interval }}</span><br>
+    <span class=key>link_interval</span> = <span class=num>{{ config.link_interval }}</span><br>
+    <span class=key>import_interval</span> = <span class=num>{{ config.import_interval }}</span><br>
+    {% if !config.ignore_torrents.is_empty() %}
+    <span class=key>ignore_torrents</span> = {{ self::yaml_nums(config.ignore_torrents) }}<br>
+    {% endif %}
+    <span class=key>audio_types</span> = {{ self::yaml_items(config.audio_types) }}<br>
+    <span class=key>ebook_types</span> = {{ self::yaml_items(config.ebook_types) }}<br>
+    <span class=key>music_types</span> = {{ self::yaml_items(config.music_types) }}<br>
+    <span class=key>radio_types</span> = {{ self::yaml_items(config.radio_types) }}<br>
+  </div>
+</div>
+
 {% for qbit in config.qbittorrent %}
 <div class="infoboxes">
   <div class="configbox">
@@ -61,12 +84,54 @@
     {% if let Some(unsat_buffer) = autograb.unsat_buffer %}
     <span class=key>unsat_buffer</span> = <span class=num>{{ unsat_buffer }}</span><br>
     {% endif %}
+    {% if let Some(max_active_downloads) = autograb.max_active_downloads %}
+    <span class=key>max_active_downloads</span> = <span class=num>{{ max_active_downloads }}</span><br>
+    {% endif %}
+    {% if let Some(wedge_buffer) = autograb.wedge_buffer %}
+    <span class=key>wedge_buffer</span> = <span class=num>{{ wedge_buffer }}</span><br>
+    {% endif %}
     {% if autograb.dry_run %}
     <span class=key>dry_run</span> = <span class=num>{{ autograb.dry_run }}</span><br>
     {% endif %}
     {% if let Some(category) = autograb.category %}
     <span class=key>category</span> = <span class=string>{{ category | json }}</span><br>
     {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+{% for list in config.goodreads_lists %}
+<div class="infoboxes">
+  <div class="configbox">
+    <div class=row>
+      <h3>[[goodreads_list]]</h3>
+    </div>
+    {% if let Some(name) = list.name %}
+    <span class=key>name</span> = <span class=string>{{ name | json }}</span><br>
+    {% endif %}
+    {% if let Some(search_interval) = list.search_interval %}
+    <span class=key>search_interval</span> = <span class=num>{{ search_interval }}</span><br>
+    {% endif %}
+    {% if let Some(unsat_buffer) = list.unsat_buffer %}
+    <span class=key>unsat_buffer</span> = <span class=num>{{ unsat_buffer }}</span><br>
+    {% endif %}
+    {% if let Some(wedge_buffer) = list.wedge_buffer %}
+    <span class=key>wedge_buffer</span> = <span class=num>{{ wedge_buffer }}</span><br>
+    {% endif %}
+    {% if list.dry_run %}
+    <span class=key>dry_run</span> = <span class=num>{{ list.dry_run }}</span><br>
+    {% endif %}
+    {% for grab in list.grab %}
+    <div class="infoboxes">
+      <div class="configbox">
+        <div class=row>
+          <h4>[[goodreads_list.grab]]</h4>
+        </div>
+        <span class=key>cost</span> = <span class=string>{{ grab.cost | json }}</span><br>
+        {{ self::filter(grab.filter) }}
+      </div>
+    </div>
+    {% endfor %}
   </div>
 </div>
 {% endfor %}
@@ -123,6 +188,16 @@
     {% endif %}
     {% if library.tag_filters().method != Default::default() %}
     <span class=key>method</span> = <span class=string>{{ library.tag_filters().method | json }}</span><br>
+    {% endif %}
+    {% if let Some(audio_types) = library.tag_filters().audio_types %}
+      {% if !audio_types.is_empty() %}
+      <span class=key>audio_types</span> = {{ self::yaml_items(audio_types) }}<br>
+      {% endif %}
+    {% endif %}
+    {% if let Some(ebook_types) = library.tag_filters().ebook_types %}
+      {% if !ebook_types.is_empty() %}
+      <span class=key>ebook_types</span> = {{ self::yaml_items(ebook_types) }}<br>
+      {% endif %}
     {% endif %}
   </div>
 </div>
