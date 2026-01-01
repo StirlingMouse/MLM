@@ -28,6 +28,13 @@ impl Config {
 
 impl TorrentFilter {
     pub fn matches(&self, torrent: &MaMTorrent) -> bool {
+        if !self.media_type.is_empty()
+            && MediaType::from_id(torrent.mediatype)
+                .is_none_or(|media_type| !self.media_type.contains(&media_type))
+        {
+            return false;
+        }
+
         if !self.categories.matches(torrent.category) {
             return false;
         }

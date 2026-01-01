@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use mlm_db::{
-    Flags, Language, OldDbMainCat, Size,
+    Flags, Language, MediaType, OldDbMainCat, Size,
     impls::{parse, parse_opt, parse_vec},
 };
 use mlm_mam::{
@@ -212,6 +212,9 @@ pub struct TorrentFilter {
     #[serde(default)]
     pub name: Option<String>,
 
+    #[serde(default)]
+    #[serde(deserialize_with = "parse_vec")]
+    pub media_type: Vec<MediaType>,
     #[serde(default)]
     pub categories: Categories,
     #[serde(default)]

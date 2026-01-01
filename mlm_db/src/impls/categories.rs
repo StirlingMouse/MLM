@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::{Category, MainCat, MediaType, OldMainCat};
 
 impl MediaType {
@@ -56,6 +58,29 @@ impl MediaType {
 impl std::fmt::Display for MediaType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
+    }
+}
+
+impl FromStr for MediaType {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.to_lowercase().as_str() {
+            "audiobook" => Ok(MediaType::Audiobook),
+            "ebook" => Ok(MediaType::Ebook),
+            "musicology" => Ok(MediaType::Musicology),
+            "radio" => Ok(MediaType::Radio),
+            "manga" => Ok(MediaType::Manga),
+            "comic book / graphic novel" => Ok(MediaType::ComicBook),
+            "comic book" => Ok(MediaType::ComicBook),
+            "comics" => Ok(MediaType::ComicBook),
+            "graphic novel" => Ok(MediaType::ComicBook),
+            "periodical_ebook" => Ok(MediaType::PeriodicalEbook),
+            "periodical ebook" => Ok(MediaType::PeriodicalEbook),
+            "periodical_audiobook" => Ok(MediaType::PeriodicalAudiobook),
+            "periodical audiobook" => Ok(MediaType::PeriodicalAudiobook),
+            _ => Err(format!("Unknown media type: {}", value)),
+        }
     }
 }
 
