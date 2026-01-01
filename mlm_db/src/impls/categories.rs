@@ -170,6 +170,16 @@ impl Category {
 
     pub fn as_str(&self) -> &'static str {
         match self {
+            // Since there is no replacement for general fiction, literary fiction is being used
+            // instead.
+            Category::LiteraryFiction => "General Fiction",
+            Category::ContemporaryFiction => "Contemporary",
+            _ => self.as_raw_str(),
+        }
+    }
+
+    pub fn as_raw_str(&self) -> &'static str {
+        match self {
             Category::Action => "Action/Adventure",
             Category::Art => "Art/Photography",
             Category::Biographical => "Biographical",
@@ -226,12 +236,14 @@ impl Category {
             Category::Western => "Western",
             Category::YoungAdult => "Young Adult",
             Category::Superheroes => "Superheroes",
-            // Since there is no replacement for general fiction, literary fiction is being used
-            // instead.
-            Category::LiteraryFiction => "General Fiction",
+            Category::LiteraryFiction => "Literary Fiction",
             Category::ProgressionFantasy => "Progression Fantasy",
-            Category::ContemporaryFiction => "Contemporary",
+            Category::ContemporaryFiction => "Contemporary Fiction",
             Category::DramaPlays => "Drama/Plays",
+            Category::Unknown(61) => "Occult / Metaphysical Practices",
+            Category::Unknown(62) => "Unknown Category (id: 62)",
+            Category::Unknown(63) => "Unknown Category (id: 63)",
+            Category::Unknown(64) => "Unknown Category (id: 64)",
             Category::Unknown(_) => "Unknown Category",
         }
     }

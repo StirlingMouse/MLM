@@ -96,11 +96,15 @@ impl TorrentMeta {
         if self.categories != other.categories {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Categories,
-                from: self.categories.iter().map(|cat| cat.to_string()).join(", "),
+                from: self
+                    .categories
+                    .iter()
+                    .map(|cat| cat.as_raw_str().to_string())
+                    .join(", "),
                 to: other
                     .categories
                     .iter()
-                    .map(|cat| cat.to_string())
+                    .map(|cat| cat.as_raw_str().to_string())
                     .join(", "),
             });
         }
