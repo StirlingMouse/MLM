@@ -100,8 +100,8 @@ pub struct UserDetailsTorrent {
     // pub leechtime_pretty: String,
     pub cat: String,
     pub dl: String,
-    #[serde(rename = "percentDone")]
-    pub percent_done: i64,
+    // #[serde(rename = "percentDone")]
+    // pub percent_done: f64,
     pub to_go_pretty: String,
     #[serde(rename = "STG")]
     /// Seed Time to Go, format: "1d 12:10:28", "23:46:38"
