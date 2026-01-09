@@ -47,7 +47,7 @@
 {% endif %}
 <form method=post>
 <p>
-  Size: {{ meta.size }}
+  Size: {{ meta.size }} {{ meta.filetypes.join(", ") }} Files: {{ meta.num_files }}
   {% if mam_torrent.vip %}<button name=action value=select>Download as VIP</button>
   {% else if mam_torrent.personal_freeleech %}<button name=action value=select>Download as Personal Freeleech</button>
   {% else if mam_torrent.free %}<button name=action value=select>Download as Global Freeleech</button>
