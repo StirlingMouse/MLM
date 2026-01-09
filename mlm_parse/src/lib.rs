@@ -69,7 +69,7 @@ static EDITION_START_REGEX: Lazy<Regex> = Lazy::new(|| {
 
 pub static TITLE_CLEANUP: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r"(?i)(?:: A (?:Novel|Memoir)$)|(?:\s*-\s*\d+(?:\.| - )epub$)|(?:\s*[\(\[]\.?(?:digital|light novel|epub|pdf|cbz|cbr|mp3|m4b|tpb|fixed|unabridged)[\)\]])*",
+        r"(?i)(?:: A (?:Novel|Memoir)$)|(?:: An? (?:\w+ )(?:Fantasy Adventure)$)|(?:: An? (?:\w+ ){1,3}(?:Romance)$)|(?:\s*-\s*\d+(?:\.| - )epub$)|(?:\s*[\(\[]\.?(?:digital|light novel|epub|pdf|cbz|cbr|mp3|m4b|tpb|fixed|unabridged)[\)\]])*",
     )
     .unwrap()
 });
