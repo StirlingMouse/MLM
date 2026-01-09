@@ -21,7 +21,6 @@ use mlm_mam::{
     meta::MetaError,
     search::{MaMTorrent, SearchFields, SearchQuery, SearchResult, Tor},
     serde::DATE_FORMAT,
-    user_data::UserResponse,
 };
 use mlm_parse::normalize_title;
 use native_db::{Database, db_type, transaction::RwTransaction};
@@ -166,7 +165,7 @@ pub async fn grab_selected_torrents(
             continue;
         }
 
-        let result = grab_torrent(config, db, qbit, mam, &user_info, torrent.clone())
+        let result = grab_torrent(config, db, qbit, mam, torrent.clone())
             .await
             .map_err(|err| anyhow::Error::new(TorrentMetaError(torrent.meta.clone(), err)));
 
@@ -708,7 +707,6 @@ async fn grab_torrent(
     db: &Database<'_>,
     qbit: &qbit::Api,
     mam: &MaM<'_>,
-    user_info: &UserResponse,
     torrent: SelectedTorrent,
 ) -> Result<()> {
     info!(
@@ -716,6 +714,7 @@ async fn grab_torrent(
         torrent.meta.title, torrent.category, torrent.tags,
     );
 
+    let user_info = mam.user_info().await?;
     let torrent_file_bytes = get_mam_torrent_file(mam, &torrent.dl_link).await?;
     let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
     let hash = torrent_file.info_hash();
@@ -789,26 +788,26 @@ async fn grab_torrent(
     let grabber = torrent.grabber.clone();
     {
         let (_guard, rw) = db.rw_async().await?;
-        rw.insert(mlm_db::Torrent {
-            id: hash.clone(),
-            id_is_hash: true,
-            mam_id: torrent.meta.mam_id,
-            abs_id: None,
-            goodreads_id: torrent.goodreads_id,
-            library_path: None,
-            library_files: Default::default(),
-            linker: None,
-            category: torrent.category.clone(),
-            selected_audio_format: None,
-            selected_ebook_format: None,
-            title_search: torrent.title_search.clone(),
-            meta: torrent.meta.clone(),
-            created_at: Timestamp::now(),
-            replaced_with: None,
-            request_matadata_update: false,
-            library_mismatch: None,
-            client_status: None,
-        })?;
+        // rw.insert(mlm_db::Torrent {
+        //     id: hash.clone(),
+        //     id_is_hash: true,
+        //     mam_id: torrent.meta.mam_id,
+        //     abs_id: None,
+        //     goodreads_id: torrent.goodreads_id,
+        //     library_path: None,
+        //     library_files: Default::default(),
+        //     linker: None,
+        //     category: torrent.category.clone(),
+        //     selected_audio_format: None,
+        //     selected_ebook_format: None,
+        //     title_search: torrent.title_search.clone(),
+        //     meta: torrent.meta.clone(),
+        //     created_at: Timestamp::now(),
+        //     replaced_with: None,
+        //     request_matadata_update: false,
+        //     library_mismatch: None,
+        //     client_status: None,
+        // })?;
         let mut torrent = torrent;
         torrent.hash = Some(hash.clone());
         torrent.started_at = Some(Timestamp::now());
