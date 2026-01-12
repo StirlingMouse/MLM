@@ -266,9 +266,14 @@ impl Category {
             Category::ContemporaryFiction => "Contemporary Fiction",
             Category::DramaPlays => "Drama/Plays",
             Category::Unknown(61) => "Occult / Metaphysical Practices",
-            Category::Unknown(62) => "Unknown Category (id: 62)",
+            Category::Unknown(62) => "Slice of Life",
             Category::Unknown(63) => "Unknown Category (id: 63)",
             Category::Unknown(64) => "Unknown Category (id: 64)",
+            Category::Unknown(65) => "Unknown Category (id: 65)",
+            Category::Unknown(66) => "Unknown Category (id: 66)",
+            Category::Unknown(67) => "Unknown Category (id: 67)",
+            Category::Unknown(68) => "Unknown Category (id: 68)",
+            Category::Unknown(69) => "Unknown Category (id: 69)",
             Category::Unknown(_) => "Unknown Category",
         }
     }
