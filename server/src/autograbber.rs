@@ -88,7 +88,7 @@ pub async fn run_autograbber(
         || autograb_config.cost == Cost::MetadataOnly
         || autograb_config.cost == Cost::MetadataOnlyAdd
     {
-        let selected_torrents = search_and_select_torrents(
+        search_and_select_torrents(
             &config,
             &db,
             &autograb_config,
@@ -101,7 +101,6 @@ pub async fn run_autograbber(
         )
         .await
         .context("search_torrents")?;
-        mam.add_unsats(selected_torrents).await;
     }
 
     if !config.qbittorrent.is_empty() {
@@ -767,6 +766,7 @@ async fn grab_torrent(
         }
     }
 
+    mam.add_unsats(1).await;
     qbit.add_torrent(AddTorrent {
         torrents: AddTorrentType::Files(vec![TorrentFile {
             filename: format!("{}.torrent", torrent.mam_id),
@@ -788,26 +788,26 @@ async fn grab_torrent(
     let grabber = torrent.grabber.clone();
     {
         let (_guard, rw) = db.rw_async().await?;
-        // rw.insert(mlm_db::Torrent {
-        //     id: hash.clone(),
-        //     id_is_hash: true,
-        //     mam_id: torrent.meta.mam_id,
-        //     abs_id: None,
-        //     goodreads_id: torrent.goodreads_id,
-        //     library_path: None,
-        //     library_files: Default::default(),
-        //     linker: None,
-        //     category: torrent.category.clone(),
-        //     selected_audio_format: None,
-        //     selected_ebook_format: None,
-        //     title_search: torrent.title_search.clone(),
-        //     meta: torrent.meta.clone(),
-        //     created_at: Timestamp::now(),
-        //     replaced_with: None,
-        //     request_matadata_update: false,
-        //     library_mismatch: None,
-        //     client_status: None,
-        // })?;
+        rw.insert(mlm_db::Torrent {
+            id: hash.clone(),
+            id_is_hash: true,
+            mam_id: torrent.meta.mam_id,
+            abs_id: None,
+            goodreads_id: torrent.goodreads_id,
+            library_path: None,
+            library_files: Default::default(),
+            linker: None,
+            category: torrent.category.clone(),
+            selected_audio_format: None,
+            selected_ebook_format: None,
+            title_search: torrent.title_search.clone(),
+            meta: torrent.meta.clone(),
+            created_at: Timestamp::now(),
+            replaced_with: None,
+            request_matadata_update: false,
+            library_mismatch: None,
+            client_status: None,
+        })?;
         let mut torrent = torrent;
         torrent.hash = Some(hash.clone());
         torrent.started_at = Some(Timestamp::now());
