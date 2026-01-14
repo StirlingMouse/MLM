@@ -86,12 +86,14 @@ pub enum SearchKind {
     NoMeta,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SnatchlistType {
     Unsat,
+    InactUnsat,
     SeedUnsat,
     SeedSat,
+    InactSat,
     UploadsActive,
 }
 
@@ -99,8 +101,10 @@ impl fmt::Display for SnatchlistType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SnatchlistType::Unsat => write!(f, "unsat"),
+            SnatchlistType::InactUnsat => write!(f, "inactUnsat"),
             SnatchlistType::SeedUnsat => write!(f, "seedUnsat"),
             SnatchlistType::SeedSat => write!(f, "sSat"),
+            SnatchlistType::InactSat => write!(f, "inactSat"),
             SnatchlistType::UploadsActive => write!(f, "upAct"),
         }
     }
