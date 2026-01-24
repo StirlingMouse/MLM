@@ -31,7 +31,7 @@
 {% endif %}
 <div class="row">
   <div>
-    id: {{ torrent.mam_id }} {% if let Some(vip_status) = torrent.meta.vip_status %}{{ vip_status }}{% endif %}
+    {% if let Some(mam_id) = torrent.mam_id %}id: {{ mam_id }} {% endif %}{% if let Some(vip_status) = torrent.meta.vip_status %}{{ vip_status }}{% endif %}
     {% if let Some(book) = book %}
       <a href="{{ abs_url }}/audiobookshelf/item/{{ book.id }}" target=_blank class=btn>Open in ABS</a>
     {% endif %}
@@ -79,6 +79,9 @@
   {% if let Some(wanted_path) = wanted_path %}
     <div class=row style="justify-content:flex-start">
       Wanted Path: {{ wanted_path.to_string_lossy() }}
+      <form method=post>
+        <button name=action value=relink>relink</button>
+      </form>
     </div>
   {% else %}
     <div class=row style="justify-content:flex-start">
@@ -269,15 +272,15 @@
         </ul>
       </details>
       </ul>
-    {% when EventType::Updated { fields } %}
-      Updated Torrent<br />
+    {% when EventType::Updated { fields, source } %}
+      Updated Torrent from {{ source.0 }} {{ source.1 }}<br />
       <ul>
       {% for field in fields %}
         <li>{{ field.field }}: {{ field.from }} -> {{ field.to }}</li>
       {% endfor %}
       </ul>
-    {% when EventType::RemovedFromMam %}
-      Torrent was removed from MaM<br />
+    {% when EventType::RemovedFromTracker %}
+      Torrent was removed from Tracker<br />
     {% endmatch %}
     </div>
   {% endfor %}

@@ -36,7 +36,7 @@ pub async fn event_page(
                     EventType::Linked { .. } => value == "linker",
                     EventType::Cleaned { .. } => value == "cleaner",
                     EventType::Updated { .. } => value == "updated",
-                    EventType::RemovedFromMam { .. } => value == "removed",
+                    EventType::RemovedFromTracker { .. } => value == "removed",
                 },
                 EventPageFilter::Grabber => match t.event {
                     EventType::Grabbed { ref grabber, .. } => {

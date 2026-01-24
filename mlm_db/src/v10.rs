@@ -1,4 +1,4 @@
-use super::{v01, v03, v04, v06, v08, v09, v11};
+use super::{v01, v03, v04, v06, v08, v09, v11, v18};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -377,6 +377,16 @@ impl From<v11::EventType> for EventType {
                 fields: fields.into_iter().map(Into::into).collect(),
             },
             v11::EventType::RemovedFromMam => Self::RemovedFromMam,
+        }
+    }
+}
+
+impl From<v18::MetadataSource> for MetadataSource {
+    fn from(t: v18::MetadataSource) -> Self {
+        match t {
+            v18::MetadataSource::Mam => Self::Mam,
+            v18::MetadataSource::Manual => Self::Manual,
+            _ => Self::Manual,
         }
     }
 }
