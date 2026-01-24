@@ -10,13 +10,13 @@ use axum::{
     response::{Html, Redirect},
 };
 use axum_extra::extract::Form;
-use mlm_db::{Language, Torrent, TorrentKey};
+use mlm_db::{Language, Torrent, TorrentKey, ids};
 use serde::{Deserialize, Serialize};
 
 use crate::stats::Context;
 use crate::web::{Page, tables};
 use crate::{
-    linker::{refresh_metadata, refresh_metadata_relink},
+    linker::{refresh_mam_metadata, refresh_metadata_relink},
     web::{
         AppError,
         tables::{Flex, HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable},
@@ -141,7 +141,7 @@ pub async fn replaced_torrents_page_post(
         "refresh" => {
             let mam = context.mam()?;
             for torrent in form.torrents {
-                refresh_metadata(&config, &context.db, &mam, torrent).await?;
+                refresh_mam_metadata(&config, &context.db, &mam, torrent).await?;
             }
         }
         "refresh-relink" => {

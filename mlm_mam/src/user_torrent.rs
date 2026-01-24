@@ -1,8 +1,10 @@
+use std::collections::BTreeMap;
+
 use anyhow::Result;
 use itertools::Itertools as _;
 use mlm_db::{
     Category, FlagBits, MediaType, MetadataSource, OldCategory, Series, SeriesEntries, Timestamp,
-    TorrentMeta, VipStatus,
+    TorrentMeta, VipStatus, ids,
 };
 use mlm_parse::clean_value;
 use serde::{Deserialize, Serialize};
@@ -163,7 +165,11 @@ impl UserDetailsTorrent {
         let mut categories = self
             .categories
             .iter()
-            .map(|c| Category::from_id(c.id as u8).ok_or_else(|| MetaError::UnknownCat(c.id as u8)))
+            .map(|c| {
+                Category::from_id(c.id as u8)
+                    .ok_or_else(|| MetaError::UnknownCat(c.id as u8))
+                    .map(|cat| cat.to_string())
+            })
             .collect::<Result<Vec<_>, _>>()?;
         categories.sort();
 
@@ -186,14 +192,18 @@ impl UserDetailsTorrent {
             VipStatus::Permanent
         };
 
+        let mut ids = BTreeMap::new();
+        ids.insert(ids::MAM.to_string(), self.id.to_string());
+
         Ok(clean_meta(
             TorrentMeta {
-                mam_id: self.id,
+                ids,
                 vip_status: Some(vip_status),
                 media_type,
                 // TODO: Currently main_cat isn't returned
                 main_cat: None,
                 categories,
+                tags: vec![],
                 cat: Some(cat),
                 // TODO: Currently language isn't returned
                 language: None,
@@ -204,6 +214,8 @@ impl UserDetailsTorrent {
                 size,
                 title: clean_value(&self.title)?,
                 edition: None,
+                // TODO: Currently num_files isn't returned
+                description: String::new(),
                 authors,
                 narrators,
                 series,

@@ -103,7 +103,7 @@ pub async fn link_torrents_to_library(
                 {
                     {
                         let (_guard, rw) = db.rw_async().await?;
-                        t.client_status = Some(ClientStatus::RemovedFromMam);
+                        t.client_status = Some(ClientStatus::RemovedFromTracker);
                         rw.upsert(t.clone())?;
                         rw.commit()?;
                     }
@@ -111,8 +111,8 @@ pub async fn link_torrents_to_library(
                         &db,
                         Event::new(
                             Some(torrent.hash.clone()),
-                            Some(t.mam_id),
-                            EventType::RemovedFromMam,
+                            None,
+                            EventType::RemovedFromTracker,
                         ),
                     )
                     .await;
@@ -255,7 +255,7 @@ async fn match_torrent(
         && let Some(old_torrent) = db
             .r_transaction()?
             .get()
-            .secondary::<Torrent>(TorrentKey::mam_id, mam_torrent.id)?
+            .secondary::<Torrent>(TorrentKey::mam_id, Some(mam_torrent.id))?
     {
         if old_torrent.id != hash {
             let (_guard, rw) = db.rw_async().await?;
@@ -307,7 +307,6 @@ async fn match_torrent(
         selected_audio_format,
         selected_ebook_format,
         library,
-        mam_torrent,
         existing_torrent.as_ref(),
         &meta,
     )
@@ -317,7 +316,7 @@ async fn match_torrent(
 }
 
 #[instrument(skip_all)]
-pub async fn refresh_metadata(
+pub async fn refresh_mam_metadata(
     config: &Config,
     db: &Database<'_>,
     mam: &MaM<'_>,
@@ -326,9 +325,12 @@ pub async fn refresh_metadata(
     let Some(mut torrent): Option<Torrent> = db.r_transaction()?.get().primary(id)? else {
         bail!("Could not find torrent id");
     };
-    debug!("refreshing metadata for torrent {}", torrent.meta.mam_id);
+    let Some(mam_id) = torrent.meta.mam_id() else {
+        bail!("Could not find mam id");
+    };
+    debug!("refreshing metadata for torrent {}", mam_id);
     let Some(mam_torrent) = mam
-        .get_torrent_info_by_id(torrent.mam_id)
+        .get_torrent_info_by_id(mam_id)
         .await
         .context("get_mam_info")?
     else {
@@ -351,6 +353,91 @@ pub async fn refresh_metadata(
         torrent.meta = meta;
     }
     Ok((torrent, mam_torrent))
+}
+
+#[instrument(skip_all)]
+pub async fn relink(config: &Config, db: &Database<'_>, hash: String) -> Result<()> {
+    let mut torrent = None;
+    for qbit_conf in &config.qbittorrent {
+        let qbit = match qbit::Api::new_login_username_password(
+            &qbit_conf.url,
+            &qbit_conf.username,
+            &qbit_conf.password,
+        )
+        .await
+        {
+            Ok(qbit) => qbit,
+            Err(err) => {
+                error!("Error logging in to qbit {}: {err}", qbit_conf.url);
+                continue;
+            }
+        };
+        let mut torrents = match qbit
+            .torrents(Some(TorrentListParams {
+                hashes: Some(vec![hash.clone()]),
+                ..TorrentListParams::default()
+            }))
+            .await
+        {
+            Ok(torrents) => torrents,
+            Err(err) => {
+                error!("Error getting torrents from qbit {}: {err}", qbit_conf.url);
+                continue;
+            }
+        };
+        let Some(t) = torrents.pop() else {
+            continue;
+        };
+        torrent.replace((qbit_conf, qbit, t));
+        break;
+    }
+    let Some((qbit_conf, qbit, qbit_torrent)) = torrent else {
+        bail!("Could not find torrent in qbit");
+    };
+    let Some(library) = find_library(config, &qbit_torrent) else {
+        bail!("Could not find matching library for torrent");
+    };
+    let files = qbit.files(&hash, None).await?;
+    let selected_audio_format = select_format(
+        &library.tag_filters().audio_types,
+        &config.audio_types,
+        &files,
+    );
+    let selected_ebook_format = select_format(
+        &library.tag_filters().ebook_types,
+        &config.ebook_types,
+        &files,
+    );
+
+    if selected_audio_format.is_none() && selected_ebook_format.is_none() {
+        bail!("Could not find any wanted formats in torrent");
+    }
+    let Some(torrent) = db.r_transaction()?.get().primary::<Torrent>(hash.clone())? else {
+        bail!("Could not find torrent");
+    };
+    let library_path_changed = torrent.library_path
+        != library_dir(
+            config.exclude_narrator_in_library_dir,
+            library,
+            &torrent.meta,
+        );
+    remove_library_files(config, &torrent, library_path_changed).await?;
+    link_torrent(
+        config,
+        qbit_conf,
+        db,
+        &hash,
+        &qbit_torrent,
+        files,
+        selected_audio_format,
+        selected_ebook_format,
+        library,
+        Some(&torrent),
+        &torrent.meta,
+    )
+    .await
+    .context("link_torrent")
+    .map_err(|err| anyhow::Error::new(TorrentMetaError(torrent.meta, err)))
 }
 
 #[instrument(skip_all)]
@@ -415,7 +502,7 @@ pub async fn refresh_metadata_relink(
     if selected_audio_format.is_none() && selected_ebook_format.is_none() {
         bail!("Could not find any wanted formats in torrent");
     }
-    let (torrent, mam_torrent) = refresh_metadata(config, db, mam, hash.clone()).await?;
+    let (torrent, _mam_torrent) = refresh_mam_metadata(config, db, mam, hash.clone()).await?;
     let library_path_changed = torrent.library_path
         != library_dir(
             config.exclude_narrator_in_library_dir,
@@ -433,7 +520,6 @@ pub async fn refresh_metadata_relink(
         selected_audio_format,
         selected_ebook_format,
         library,
-        mam_torrent,
         Some(&torrent),
         &torrent.meta,
     )
@@ -454,7 +540,7 @@ async fn link_torrent(
     selected_audio_format: Option<String>,
     selected_ebook_format: Option<String>,
     library: &Library,
-    mam_torrent: MaMTorrent,
+    // mam_torrent: MaMTorrent,
     existing_torrent: Option<&Torrent>,
     meta: &TorrentMeta,
 ) -> Result<()> {
@@ -468,7 +554,7 @@ async fn link_torrent(
         if config.exclude_narrator_in_library_dir && !meta.narrators.is_empty() && dir.exists() {
             dir = library_dir(false, library, meta).unwrap();
         }
-        let metadata = abs::create_metadata(&mam_torrent, meta);
+        let metadata = abs::create_metadata(meta);
 
         create_dir_all(&dir).await?;
         for file in files {
@@ -540,9 +626,9 @@ async fn link_torrent(
         rw.upsert(Torrent {
             id: hash.to_owned(),
             id_is_hash: true,
-            mam_id: meta.mam_id,
-            abs_id: existing_torrent.and_then(|t| t.abs_id.clone()),
-            goodreads_id: existing_torrent.and_then(|t| t.goodreads_id),
+            mam_id: meta.mam_id(),
+            // abs_id: existing_torrent.and_then(|t| t.abs_id.clone()),
+            // goodreads_id: existing_torrent.and_then(|t| t.goodreads_id),
             library_path: library_path.clone(),
             library_files,
             linker: library.tag_filters().name.clone(),
@@ -559,7 +645,6 @@ async fn link_torrent(
                 .map(|t| t.created_at)
                 .unwrap_or_else(Timestamp::now),
             replaced_with: existing_torrent.and_then(|t| t.replaced_with.clone()),
-            request_matadata_update: false,
             library_mismatch: None,
             client_status: existing_torrent.and_then(|t| t.client_status.clone()),
         })?;
@@ -571,7 +656,7 @@ async fn link_torrent(
             db,
             Event::new(
                 Some(hash.to_owned()),
-                Some(meta.mam_id),
+                meta.mam_id(),
                 EventType::Linked {
                     linker: library.tag_filters().name.clone(),
                     library_path,

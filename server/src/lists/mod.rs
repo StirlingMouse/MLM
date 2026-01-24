@@ -168,12 +168,13 @@ fn set_existing(field: &mut Option<ListItemTorrent>, torrent: &Torrent) -> bool 
         if field.status == TorrentStatus::Selected {
             return false;
         }
-        if field.status == TorrentStatus::Existing && field.mam_id == torrent.meta.mam_id {
+        if field.status == TorrentStatus::Existing && field.mam_id == torrent.mam_id {
             return false;
         }
     }
     field.replace(ListItemTorrent {
-        mam_id: torrent.meta.mam_id,
+        torrent_id: Some(torrent.id.clone()),
+        mam_id: torrent.mam_id,
         status: TorrentStatus::Existing,
         at: torrent.created_at,
     });
@@ -250,8 +251,6 @@ async fn search_grab(
                     max_snatched: grab.filter.max_snatched,
                     ..Default::default()
                 },
-
-                ..Default::default()
             })
             .await
             .context("search")?;

@@ -16,7 +16,7 @@ use axum::{
 };
 use itertools::Itertools;
 use mlm_db::{
-    AudiobookCategory, Category, EbookCategory, Flags, SelectedTorrent, Series, Timestamp, Torrent,
+    AudiobookCategory, EbookCategory, Flags, SelectedTorrent, Series, Timestamp, Torrent,
     TorrentMeta,
 };
 use mlm_mam::{api::MaM, meta::MetaError, search::MaMTorrent, serde::DATE_FORMAT};
@@ -214,14 +214,6 @@ pub trait Page {
         }
     }
 
-    fn cats<'a, T: Key>(&'a self, field: T, cats: &'a Vec<Category>) -> CatsTmpl<'a, T> {
-        CatsTmpl {
-            field,
-            cats,
-            path: self.item_path(),
-        }
-    }
-
     fn series<'a, T: Key>(&'a self, field: T, series: &'a Vec<Series>) -> SeriesTmpl<'a, T> {
         SeriesTmpl {
             field,
@@ -310,32 +302,6 @@ impl<'a, T: Key> SeriesTmpl<'a, T> {
             field,
             label,
             value: None,
-            path: self.path,
-        }
-    }
-}
-
-/// ```askama
-/// {% for c in cats %}
-/// {{ item(*field, **c) | safe }}{% if !loop.last %}, {% endif %}
-/// {% endfor %}
-/// ```
-#[derive(Template)]
-#[template(ext = "html", in_doc = true)]
-pub struct CatsTmpl<'a, T: Key> {
-    field: T,
-    cats: &'a Vec<Category>,
-    path: &'a str,
-}
-
-impl<'a, T: Key> HtmlSafe for CatsTmpl<'a, T> {}
-
-impl<'a, T: Key> CatsTmpl<'a, T> {
-    fn item(&'a self, field: T, cat: Category) -> ItemFilter<'a, T> {
-        ItemFilter {
-            field,
-            label: cat.as_str(),
-            value: Some(cat.as_id().to_string()),
             path: self.path,
         }
     }

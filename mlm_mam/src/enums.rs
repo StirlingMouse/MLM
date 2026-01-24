@@ -1,4 +1,4 @@
-use std::{fmt, marker::PhantomData};
+use std::{fmt, marker::PhantomData, str::FromStr};
 
 use mlm_db::{AudiobookCategory, EbookCategory, MusicologyCategory, RadioCategory};
 use serde::{
@@ -310,30 +310,32 @@ pub enum UserClass {
     Mouse,
 }
 
-impl UserClass {
-    pub fn from_str(class: &str) -> Option<UserClass> {
+impl FromStr for UserClass {
+    type Err = String;
+
+    fn from_str(class: &str) -> Result<UserClass, Self::Err> {
         match class {
-            "Dev" => Some(UserClass::Dev),
-            "SysOp" => Some(UserClass::SysOp),
-            "SR Administrator" => Some(UserClass::SrAdministrator),
-            "Administrator" => Some(UserClass::Administrator),
-            "Uploader Coordinator" => Some(UserClass::UploaderCoordinator),
-            "SR Moderator" => Some(UserClass::SrModerator),
-            "Moderator" => Some(UserClass::Moderator),
-            "Torrent Mod" => Some(UserClass::TorrentMod),
-            "Forum Mod" => Some(UserClass::ForumMod),
-            "Support Staff" => Some(UserClass::SupportStaff),
-            "Entry Level Staff" => Some(UserClass::EntryLevelStaff),
-            "Uploader" => Some(UserClass::Uploader),
-            "Mouseketeer" => Some(UserClass::Mouseketeer),
-            "Supporter" => Some(UserClass::Supporter),
-            "Elite" => Some(UserClass::Elite),
-            "Elite VIP" => Some(UserClass::EliteVip),
-            "VIP" => Some(UserClass::Vip),
-            "Power User" => Some(UserClass::PowerUser),
-            "User" => Some(UserClass::User),
-            "Mous" => Some(UserClass::Mouse),
-            _ => None,
+            "Dev" => Ok(UserClass::Dev),
+            "SysOp" => Ok(UserClass::SysOp),
+            "SR Administrator" => Ok(UserClass::SrAdministrator),
+            "Administrator" => Ok(UserClass::Administrator),
+            "Uploader Coordinator" => Ok(UserClass::UploaderCoordinator),
+            "SR Moderator" => Ok(UserClass::SrModerator),
+            "Moderator" => Ok(UserClass::Moderator),
+            "Torrent Mod" => Ok(UserClass::TorrentMod),
+            "Forum Mod" => Ok(UserClass::ForumMod),
+            "Support Staff" => Ok(UserClass::SupportStaff),
+            "Entry Level Staff" => Ok(UserClass::EntryLevelStaff),
+            "Uploader" => Ok(UserClass::Uploader),
+            "Mouseketeer" => Ok(UserClass::Mouseketeer),
+            "Supporter" => Ok(UserClass::Supporter),
+            "Elite" => Ok(UserClass::Elite),
+            "Elite VIP" => Ok(UserClass::EliteVip),
+            "VIP" => Ok(UserClass::Vip),
+            "Power User" => Ok(UserClass::PowerUser),
+            "User" => Ok(UserClass::User),
+            "Mouse" => Ok(UserClass::Mouse),
+            value => Err(format!("unknown user class {value}")),
         }
     }
 }
@@ -342,11 +344,7 @@ impl TryFrom<String> for UserClass {
     type Error = String;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let v = Self::from_str(&value);
-        match v {
-            Some(v) => Ok(v),
-            None => Err(format!("invalid category {value}")),
-        }
+        Self::from_str(&value)
     }
 }
 

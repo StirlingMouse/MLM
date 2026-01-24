@@ -2,7 +2,7 @@ use std::{fs, io::ErrorKind, mem, ops::Deref, sync::Arc};
 
 use anyhow::Result;
 use mlm_db::{
-    self, DatabaseExt as _, ErroredTorrentId, Event, EventType, Timestamp, Torrent, TorrentKey,
+    self, DatabaseExt as _, ErroredTorrentId, Event, EventType, Timestamp, Torrent, TorrentKey, ids,
 };
 use native_db::Database;
 use tracing::{debug, info, instrument, trace, warn};
@@ -88,7 +88,7 @@ async fn process_batch(config: &Config, db: &Database<'_>, batch: Vec<Torrent>) 
     for (mut remove, _) in batch {
         info!(
             "Replacing library torrent \"{}\" {} with {}",
-            remove.meta.title, remove.meta.mam_id, keep.meta.mam_id
+            remove.meta.title, remove.id, keep.id
         );
         remove.replaced_with = Some((keep.id.clone(), Timestamp::now()));
         let result = clean_torrent(
@@ -148,11 +148,11 @@ pub async fn clean_torrent(
     remove_library_files(config, &remove, delete_in_abs).await?;
 
     let id = remove.id.clone();
-    let mam_id = remove.meta.mam_id;
+    let mam_id = remove.meta.mam_id();
     let library_path = remove.library_path.take();
     let mut library_files = remove.library_files.clone();
     remove.library_mismatch = None;
-    remove.abs_id = None;
+    remove.meta.ids.remove(ids::ABS);
     library_files.sort();
     {
         let (_guard, rw) = db.rw_async().await?;
@@ -165,7 +165,7 @@ pub async fn clean_torrent(
             db,
             Event::new(
                 Some(id),
-                Some(mam_id),
+                mam_id,
                 EventType::Cleaned {
                     library_path,
                     files: library_files,
@@ -185,7 +185,8 @@ pub async fn remove_library_files(
     delete_in_abs: bool,
 ) -> Result<()> {
     if delete_in_abs
-        && let (Some(abs_id), Some(abs_config)) = (&remove.abs_id, &config.audiobookshelf)
+        && let (Some(abs_id), Some(abs_config)) =
+            (&remove.meta.ids.get(ids::ABS), &config.audiobookshelf)
     {
         let abs = Abs::new(abs_config)?;
         if let Err(err) = abs.delete_book(abs_id).await {
@@ -194,7 +195,7 @@ pub async fn remove_library_files(
     }
 
     if let Some(library_path) = &remove.library_path {
-        debug!("Removing library files for torrent {}", remove.meta.mam_id);
+        debug!("Removing library files for torrent {}", remove.id);
         for file in remove.library_files.iter() {
             let path = library_path.join(file);
             fs::remove_file(path).or_else(|err| {

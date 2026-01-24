@@ -36,8 +36,10 @@
   <div>
   {% match error.meta %}
     {% when Some(meta) %}
-      <a href="/torrents/{{ meta.mam_id }}" target=_blank>open</a>
-      <a href="https://www.myanonamouse.net/t/{{ meta.mam_id }}" target=_blank>MaM</a>
+      {% if let Some(mam_id) = meta.mam_id() %}
+        <a href="/torrents/{{ mam_id }}" target=_blank>open</a>
+        <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>MaM</a>
+      {% endif %}
     {% when None %}
   {% endmatch %}
   </div>

@@ -134,7 +134,7 @@
     {% endif %}
   </div>
   {% if show.categories %}
-  <div>{{ cats(TorrentsPageFilter::Categories, torrent.meta.categories) }}</div>
+  <div>{{ items(TorrentsPageFilter::Categories, torrent.meta.categories) }}</div>
   {% endif %}
   {% if show.flags %}
   <div>{{ self::flag_icons(torrent.meta) }}</div>
@@ -142,12 +142,12 @@
   <div>
     {{ item(TorrentsPageFilter::Title, torrent.meta.title) }}
     {% match torrent.client_status %}
-    {% when Some(ClientStatus::RemovedFromMam) %}
-      <span class=warn title="Torrent is removed from MaM but still seeding">
-        {{ item_v(TorrentsPageFilter::ClientStatus, "⚠", "removed_from_mam") }}
+    {% when Some(ClientStatus::RemovedFromTracker) %}
+      <span class=warn title="Torrent is removed from tracker but still seeding">
+        {{ item_v(TorrentsPageFilter::ClientStatus, "⚠", "removed_from_tracker") }}
       </span>
     {% when Some(ClientStatus::NotInClient) %}
-      <span class=warn title="Torrent is not seeding">
+      <span title="Torrent is not seeding">
         {{ item_v(TorrentsPageFilter::ClientStatus, "ℹ", "not_in_client") }}
       </span>
     {% when None %}
@@ -227,8 +227,8 @@
   {% endif %}
   <div>
     <a href="/torrents/{{torrent.id}}">open</a>
-    <a href="https://www.myanonamouse.net/t/{{ torrent.meta.mam_id }}" target=_blank>MaM</a>
-    {% if let (Some(abs_url), Some(abs_id)) = (abs_url.as_ref(), torrent.abs_id.as_ref()) %}
+    {% if let Some(mam_id) = torrent.mam_id %}<a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>MaM</a>{% endif %}
+    {% if let (Some(abs_url), Some(abs_id)) = (abs_url.as_ref(), torrent.meta.ids.get(ids::ABS)) %}
       <a href="{{ abs_url }}/audiobookshelf/item/{{ abs_id }}" target=_blank>ABS</a>
     {% endif %}
   </div>

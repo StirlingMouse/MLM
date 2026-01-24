@@ -33,7 +33,9 @@ use crate::{
     audiobookshelf::{Abs, LibraryItemMinified},
     cleaner::clean_torrent,
     config::Config,
-    linker::{find_library, library_dir, map_path, refresh_metadata, refresh_metadata_relink},
+    linker::{
+        find_library, library_dir, map_path, refresh_mam_metadata, refresh_metadata_relink, relink,
+    },
     qbittorrent::{self, ensure_category_exists},
     stats::Context,
     web::{
@@ -177,7 +179,11 @@ async fn torrent_page_id(
     events.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
     let mam = context.mam()?;
-    let mam_torrent = mam.get_torrent_info_by_id(torrent.mam_id).await?;
+    let mam_torrent = if let Some(mam_id) = torrent.mam_id {
+        mam.get_torrent_info_by_id(mam_id).await?
+    } else {
+        None
+    };
     let mam_meta = mam_torrent.as_ref().map(|t| t.as_meta()).transpose()?;
 
     if let Some(mam_meta) = &mam_meta
@@ -326,7 +332,10 @@ pub async fn torrent_page_post_id(
         }
         "refresh" => {
             let mam = context.mam()?;
-            refresh_metadata(&config, &context.db, &mam, id).await?;
+            refresh_mam_metadata(&config, &context.db, &mam, id).await?;
+        }
+        "relink" => {
+            relink(&config, &context.db, id).await?;
         }
         "refresh-relink" => {
             let mam = context.mam()?;
@@ -362,7 +371,8 @@ pub async fn torrent_page_post_id(
             rw.commit()?;
         }
         "qbit" => {
-            let Some((torrent, qbit, qbit_conf)) = qbittorrent::get_torrent(&config, &id).await? else {
+            let Some((torrent, qbit, qbit_conf)) = qbittorrent::get_torrent(&config, &id).await?
+            else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
 
@@ -562,12 +572,12 @@ async fn other_torrents(
     let torrents = result
         .data
         .into_iter()
-        .filter(|t| t.id != meta.mam_id)
+        .filter(|t| Some(t.id) != meta.mam_id())
         .map(|mam_torrent| {
             let meta = mam_torrent.as_meta()?;
             let torrent = r
                 .get()
-                .secondary::<Torrent>(TorrentKey::mam_id, meta.mam_id)?;
+                .secondary::<Torrent>(TorrentKey::mam_id, meta.mam_id())?;
             let selected_torrent = r.get().primary(mam_torrent.id)?;
 
             Ok((mam_torrent, meta, torrent, selected_torrent))

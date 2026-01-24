@@ -85,15 +85,15 @@ impl TorrentFilter {
         if self.uploaded_after.is_some() || self.uploaded_before.is_some() {
             match UtcDateTime::parse(&torrent.added, &DATE_TIME_FORMAT) {
                 Ok(added) => {
-                    if let Some(uploaded_after) = self.uploaded_after {
-                        if added.date() < uploaded_after {
-                            return false;
-                        }
+                    if let Some(uploaded_after) = self.uploaded_after
+                        && added.date() < uploaded_after
+                    {
+                        return false;
                     }
-                    if let Some(uploaded_before) = self.uploaded_before {
-                        if added.date() > uploaded_before {
-                            return false;
-                        }
+                    if let Some(uploaded_before) = self.uploaded_before
+                        && added.date() > uploaded_before
+                    {
+                        return false;
                     }
                 }
                 Err(_) => {
@@ -106,35 +106,35 @@ impl TorrentFilter {
             }
         }
 
-        if let Some(min_seeders) = self.min_seeders {
-            if torrent.seeders < min_seeders {
-                return false;
-            }
+        if let Some(min_seeders) = self.min_seeders
+            && torrent.seeders < min_seeders
+        {
+            return false;
         }
-        if let Some(max_seeders) = self.max_seeders {
-            if torrent.seeders > max_seeders {
-                return false;
-            }
+        if let Some(max_seeders) = self.max_seeders
+            && torrent.seeders > max_seeders
+        {
+            return false;
         }
-        if let Some(min_leechers) = self.min_leechers {
-            if torrent.leechers < min_leechers {
-                return false;
-            }
+        if let Some(min_leechers) = self.min_leechers
+            && torrent.leechers < min_leechers
+        {
+            return false;
         }
-        if let Some(max_leechers) = self.max_leechers {
-            if torrent.leechers > max_leechers {
-                return false;
-            }
+        if let Some(max_leechers) = self.max_leechers
+            && torrent.leechers > max_leechers
+        {
+            return false;
         }
-        if let Some(min_snatched) = self.min_snatched {
-            if torrent.times_completed < min_snatched {
-                return false;
-            }
+        if let Some(min_snatched) = self.min_snatched
+            && torrent.times_completed < min_snatched
+        {
+            return false;
         }
-        if let Some(max_snatched) = self.max_snatched {
-            if torrent.times_completed > max_snatched {
-                return false;
-            }
+        if let Some(max_snatched) = self.max_snatched
+            && torrent.times_completed > max_snatched
+        {
+            return false;
         }
 
         true
@@ -174,35 +174,35 @@ impl TorrentFilter {
             return false;
         }
 
-        if let Some(min_seeders) = self.min_seeders {
-            if torrent.seeders < min_seeders {
-                return false;
-            }
+        if let Some(min_seeders) = self.min_seeders
+            && torrent.seeders < min_seeders
+        {
+            return false;
         }
-        if let Some(max_seeders) = self.max_seeders {
-            if torrent.seeders > max_seeders {
-                return false;
-            }
+        if let Some(max_seeders) = self.max_seeders
+            && torrent.seeders > max_seeders
+        {
+            return false;
         }
-        if let Some(min_leechers) = self.min_leechers {
-            if torrent.leechers < min_leechers {
-                return false;
-            }
+        if let Some(min_leechers) = self.min_leechers
+            && torrent.leechers < min_leechers
+        {
+            return false;
         }
-        if let Some(max_leechers) = self.max_leechers {
-            if torrent.leechers > max_leechers {
-                return false;
-            }
+        if let Some(max_leechers) = self.max_leechers
+            && torrent.leechers > max_leechers
+        {
+            return false;
         }
-        if let Some(min_snatched) = self.min_snatched {
-            if torrent.times_completed < min_snatched {
-                return false;
-            }
+        if let Some(min_snatched) = self.min_snatched
+            && torrent.times_completed < min_snatched
+        {
+            return false;
         }
-        if let Some(max_snatched) = self.max_snatched {
-            if torrent.times_completed > max_snatched {
-                return false;
-            }
+        if let Some(max_snatched) = self.max_snatched
+            && torrent.times_completed > max_snatched
+        {
+            return false;
         }
 
         true
@@ -871,9 +871,7 @@ mod tests {
 
                 id: "".to_string(),
                 id_is_hash: false,
-                mam_id: 0,
-                abs_id: None,
-                goodreads_id: None,
+                mam_id: None,
                 library_path: None,
                 library_files: vec![],
                 linker: None,
@@ -883,7 +881,6 @@ mod tests {
                 title_search: "".to_string(),
                 created_at: Timestamp::now(),
                 replaced_with: None,
-                request_matadata_update: false,
                 library_mismatch: None,
                 client_status: None,
             }
@@ -891,11 +888,12 @@ mod tests {
 
         fn default_meta() -> TorrentMeta {
             TorrentMeta {
-                mam_id: 0,
+                ids: Default::default(),
                 vip_status: None,
                 media_type: MediaType::Audiobook,
                 main_cat: Some(MainCat::Fiction),
                 categories: vec![],
+                tags: vec![],
                 cat: None,
                 language: None,
                 flags: None,
@@ -904,6 +902,7 @@ mod tests {
                 size: Size::from_bytes(0),
                 title: "".to_string(),
                 edition: None,
+                description: "".to_string(),
                 authors: vec![],
                 narrators: vec![],
                 series: vec![],

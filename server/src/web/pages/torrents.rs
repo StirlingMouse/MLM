@@ -11,13 +11,14 @@ use axum::{
     response::{Html, Redirect},
 };
 use axum_extra::extract::Form;
+use mlm_db::ids;
 use mlm_db::{Language, LibraryMismatch, Torrent, TorrentKey};
 use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
 
 use crate::{
     cleaner::clean_torrent,
-    linker::{refresh_metadata, refresh_metadata_relink},
+    linker::{refresh_mam_metadata, refresh_metadata_relink},
     stats::Context,
     web::{
         AppError,
@@ -27,8 +28,8 @@ use crate::{
     web::{Page, flag_icons, tables},
 };
 use mlm_db::{
-    Category, ClientStatus, DatabaseExt as _, Flags, MediaType, MetadataSource, OldCategory,
-    Series, SeriesEntry,
+    ClientStatus, DatabaseExt as _, Flags, MediaType, MetadataSource, OldCategory, Series,
+    SeriesEntry,
 };
 
 pub async fn torrents_page(
@@ -98,9 +99,7 @@ pub async fn torrents_page(
                     } else {
                         value
                             .split(",")
-                            .filter_map(|id| id.parse().ok())
-                            .filter_map(Category::from_id)
-                            .all(|cat| t.meta.categories.contains(&cat))
+                            .all(|cat| t.meta.categories.iter().any(|c| c.as_str() == cat.trim()))
                     }
                 }
                 TorrentsPageFilter::Flags => {
@@ -184,10 +183,10 @@ pub async fn torrents_page(
                 }
                 TorrentsPageFilter::ClientStatus => match t.client_status {
                     Some(ClientStatus::NotInClient) => value == "not_in_client",
-                    Some(ClientStatus::RemovedFromMam) => value == "removed_from_mam",
+                    Some(ClientStatus::RemovedFromTracker) => value == "removed_from_tracker",
                     None => false,
                 },
-                TorrentsPageFilter::Abs => t.abs_id.is_some() == (value == "true"),
+                TorrentsPageFilter::Abs => t.meta.ids.contains_key(ids::ABS) == (value == "true"),
                 TorrentsPageFilter::Source => match value.as_str() {
                     "mam" => t.meta.source == MetadataSource::Mam,
                     "manual" => t.meta.source == MetadataSource::Manual,
@@ -641,7 +640,7 @@ pub async fn torrents_page_post(
         "refresh" => {
             let mam = context.mam()?;
             for torrent in form.torrents {
-                refresh_metadata(&config, &context.db, &mam, torrent).await?;
+                refresh_mam_metadata(&config, &context.db, &mam, torrent).await?;
             }
         }
         "refresh-relink" => {

@@ -106,15 +106,15 @@
       {% endfor %}
       </ul>
     </details>
-  {% when EventType::Updated { fields } %}
-    Updated {{ torrent_media_type(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }}<br />
+  {% when EventType::Updated { fields, source } %}
+    Updated {{ torrent_media_type(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }} from {{ source.0 }} {{ source.1 }}<br />
     <ul>
     {% for field in fields %}
       <li>{{ field.field }}: {{ field.from }} → {{ field.to }}</li>
     {% endfor %}
     </ul>
-  {% when EventType::RemovedFromMam %}
-    {{ torrent_media_type(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }} was removed from MaM<br />
+  {% when EventType::RemovedFromTracker %}
+    {{ torrent_media_type(&torrent) }} Torrent {{ torrent_title(&torrent) | safe }} was removed from Tracker<br />
   {% endmatch %}
   </div>
 {% endfor %}

@@ -67,10 +67,12 @@ pub async fn config_page_post(
                         }
                     }
                     Err(err) => {
+                        let Some(mam_id) = torrent.mam_id else {
+                            continue;
+                        };
                         info!("need to ask mam due to: {err}");
                         let mam = context.mam()?;
-                        let Some(mam_torrent) = mam.get_torrent_info_by_id(torrent.mam_id).await?
-                        else {
+                        let Some(mam_torrent) = mam.get_torrent_info_by_id(mam_id).await? else {
                             warn!("could not get torrent from mam");
                             continue;
                         };

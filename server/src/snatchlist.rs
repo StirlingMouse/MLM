@@ -149,7 +149,7 @@ async fn update_torrents<T: Iterator<Item = UserDetailsTorrent>>(
         if let Some((_, rw)) = &rw_opt {
             let old_library = rw
                 .get()
-                .secondary::<Torrent>(TorrentKey::mam_id, meta.mam_id)?;
+                .secondary::<Torrent>(TorrentKey::mam_id, meta.mam_id())?;
             if let Some(old) = old_library {
                 if old.meta != meta {
                     update_torrent_meta(
@@ -167,7 +167,7 @@ async fn update_torrents<T: Iterator<Item = UserDetailsTorrent>>(
             }
         }
         if cost == Cost::MetadataOnlyAdd {
-            let mam_id = meta.mam_id;
+            let mam_id = torrent.id;
             add_metadata_only_torrent(rw_opt.unwrap(), torrent, meta)
                 .await
                 .or_else(|err| {
@@ -206,9 +206,7 @@ async fn add_metadata_only_torrent(
         rw.insert(Torrent {
             id,
             id_is_hash: false,
-            mam_id,
-            abs_id: None,
-            goodreads_id: None,
+            mam_id: Some(mam_id),
             library_path: None,
             library_files: Default::default(),
             linker: if torrent.uploader_name.is_empty() {
@@ -223,7 +221,6 @@ async fn add_metadata_only_torrent(
             meta,
             created_at: Timestamp::now(),
             replaced_with: None,
-            request_matadata_update: false,
             library_mismatch: None,
             client_status: None,
         })?;
@@ -242,9 +239,12 @@ async fn update_torrent_meta(
     linker_is_owner: bool,
 ) -> Result<()> {
     // These are missing in user details torrent response, so keep the old values
+    meta.ids = torrent.meta.ids.clone();
     meta.media_type = torrent.meta.media_type;
     meta.main_cat = torrent.meta.main_cat;
     meta.language = torrent.meta.language;
+    meta.tags = torrent.meta.tags.clone();
+    meta.description = torrent.meta.description.clone();
     meta.num_files = torrent.meta.num_files;
     meta.uploaded_at = torrent.meta.uploaded_at;
 
@@ -283,7 +283,7 @@ async fn update_torrent_meta(
     }
 
     let id = torrent.id.clone();
-    let mam_id = meta.mam_id;
+    let mam_id = mam_torrent.id;
     let diff = torrent.meta.diff(&meta);
     debug!(
         "Updating meta for torrent {}, diff:\n{}",
@@ -301,7 +301,14 @@ async fn update_torrent_meta(
     if !diff.is_empty() {
         write_event(
             db,
-            Event::new(Some(id), Some(mam_id), EventType::Updated { fields: diff }),
+            Event::new(
+                Some(id),
+                Some(mam_id),
+                EventType::Updated {
+                    fields: diff,
+                    source: (MetadataSource::Mam, String::new()),
+                },
+            ),
         )
         .await;
     }

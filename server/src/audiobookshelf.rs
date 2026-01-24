@@ -2,8 +2,7 @@ use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 
 use anyhow::Result;
 use axum::http::HeaderMap;
-use mlm_db::{DatabaseExt as _, Flags, Torrent, TorrentMeta, impls::format_serie};
-use mlm_mam::search::MaMTorrent;
+use mlm_db::{DatabaseExt as _, Flags, Torrent, TorrentMeta, ids, impls::format_serie};
 use native_db::Database;
 use reqwest::{Url, header::AUTHORIZATION};
 use serde::{Deserialize, Serialize};
@@ -486,23 +485,20 @@ pub async fn match_torrents_to_abs(
     let torrents = db.r_transaction()?.scan().primary::<Torrent>()?;
     let torrents = torrents.all()?.filter(|t| {
         t.as_ref()
-            .is_ok_and(|t| t.abs_id.is_none() && t.library_path.is_some())
+            .is_ok_and(|t| !t.meta.ids.contains_key(ids::ABS) && t.library_path.is_some())
     });
 
     for torrent in torrents {
         let mut torrent = torrent?;
         let Some(book) = abs.get_book(&torrent).await? else {
             trace!(
-                "Could not find ABS entry for torrent {} {}",
-                torrent.meta.mam_id, torrent.meta.title
+                "Could not find ABS entry for torrent {}",
+                torrent.meta.title
             );
             continue;
         };
-        debug!(
-            "Matched ABS entry with torrent {} {}",
-            torrent.meta.mam_id, torrent.meta.title
-        );
-        torrent.abs_id = Some(book.id);
+        debug!("Matched ABS entry with torrent {}", torrent.meta.title);
+        torrent.meta.ids.insert(ids::ABS.to_string(), book.id);
         let (_guard, rw) = db.rw_async().await?;
         rw.upsert(torrent)?;
         rw.commit()?;
@@ -605,15 +601,8 @@ impl Abs {
         Ok(None)
     }
 
-    pub async fn update_book(
-        &self,
-        id: &str,
-        mam_torrent: &MaMTorrent,
-        meta: &TorrentMeta,
-    ) -> Result<()> {
+    pub async fn update_book(&self, id: &str, meta: &TorrentMeta) -> Result<()> {
         let (title, subtitle) = parse_titles(meta);
-        let (isbn, asin) = parse_isbn(mam_torrent);
-
         self.client
             .patch(format!("{}/api/items/{id}/media", self.base_url))
             .header("Content-Type", "application/json")
@@ -639,9 +628,9 @@ impl Abs {
                         })
                         .collect(),
                     narrators: meta.narrators.iter().map(|name| name.as_str()).collect(),
-                    description: mam_torrent.description.as_deref(),
-                    isbn,
-                    asin,
+                    description: Some(&meta.description),
+                    isbn: meta.ids.get(ids::ISBN).map(|s| s.as_str()),
+                    asin: meta.ids.get(ids::ASIN).map(|s| s.as_str()),
                     genres: meta
                         .cat
                         .as_ref()
@@ -676,9 +665,8 @@ impl Abs {
     }
 }
 
-pub fn create_metadata(mam_torrent: &MaMTorrent, meta: &TorrentMeta) -> serde_json::Value {
+pub fn create_metadata(meta: &TorrentMeta) -> serde_json::Value {
     let (title, subtitle) = parse_titles(meta);
-    let (isbn, asin) = parse_isbn(mam_torrent);
     let flags = Flags::from_bitfield(meta.flags.map_or(0, |f| f.0));
 
     let metadata = json!({
@@ -687,9 +675,9 @@ pub fn create_metadata(mam_torrent: &MaMTorrent, meta: &TorrentMeta) -> serde_js
         "series": &meta.series.iter().map(format_serie).collect::<Vec<_>>(),
         "title": title,
         "subtitle": subtitle,
-        "description": mam_torrent.description,
-        "isbn": isbn,
-        "asin": asin,
+        "description": meta.description,
+        "isbn": meta.ids.get(ids::ISBN),
+        "asin": meta.ids.get(ids::ASIN),
         "tags": if flags.lgbt == Some(true) { Some(vec!["LGBT"]) } else { None },
         "genres": meta
             .cat
@@ -716,16 +704,4 @@ fn parse_titles(meta: &TorrentMeta) -> (&str, Option<&str>) {
     }
 
     (title, subtitle)
-}
-
-fn parse_isbn(mam_torrent: &MaMTorrent) -> (Option<&str>, Option<&str>) {
-    let isbn_raw: &str = mam_torrent.isbn.as_deref().unwrap_or("");
-    let isbn = if isbn_raw.is_empty() || isbn_raw.starts_with("ASIN:") {
-        None
-    } else {
-        Some(isbn_raw.trim())
-    };
-    let asin = isbn_raw.strip_prefix("ASIN:").map(|s| s.trim());
-
-    (isbn, asin)
 }
