@@ -1,4 +1,6 @@
-use super::{v03, v04, v08, v09, v10, v11, v12, v13, v15, v16};
+use crate::ids;
+
+use super::{v03, v04, v08, v09, v10, v11, v12, v13, v15, v16, v18};
 use mlm_parse::{normalize_title, parse_edition};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
@@ -345,6 +347,202 @@ impl From<v12::TorrentMetaField> for TorrentMetaField {
             v12::TorrentMetaField::Narrators => TorrentMetaField::Narrators,
             v12::TorrentMetaField::Series => TorrentMetaField::Series,
             v12::TorrentMetaField::Source => TorrentMetaField::Source,
+        }
+    }
+}
+
+impl From<v18::Torrent> for Torrent {
+    fn from(t: v18::Torrent) -> Self {
+        let abs_id = t.meta.ids.get(ids::ABS).map(|id| id.to_string());
+        let goodreads_id = t
+            .meta
+            .ids
+            .get(ids::GOODREADS)
+            .and_then(|id| id.parse().ok());
+        let meta: TorrentMeta = t.meta.into();
+
+        Self {
+            id: t.id,
+            id_is_hash: t.id_is_hash,
+            mam_id: t.mam_id.unwrap_or_default(),
+            abs_id,
+            goodreads_id,
+            library_path: t.library_path,
+            library_files: t.library_files,
+            linker: t.linker,
+            category: t.category,
+            selected_audio_format: t.selected_audio_format,
+            selected_ebook_format: t.selected_ebook_format,
+            title_search: normalize_title(&meta.title),
+            meta,
+            created_at: t.created_at,
+            replaced_with: t.replaced_with,
+            library_mismatch: t.library_mismatch,
+            client_status: t.client_status.map(Into::into),
+            request_matadata_update: false,
+        }
+    }
+}
+
+impl From<v18::SelectedTorrent> for SelectedTorrent {
+    fn from(t: v18::SelectedTorrent) -> Self {
+        let goodreads_id = t
+            .meta
+            .ids
+            .get(ids::GOODREADS)
+            .and_then(|id| id.parse().ok());
+        let meta: TorrentMeta = t.meta.into();
+
+        Self {
+            mam_id: t.mam_id,
+            goodreads_id,
+            hash: t.hash,
+            dl_link: t.dl_link,
+            unsat_buffer: t.unsat_buffer,
+            wedge_buffer: None,
+            cost: t.cost,
+            category: t.category,
+            tags: t.tags,
+            title_search: normalize_title(&meta.title),
+            meta,
+            grabber: t.grabber,
+            created_at: t.created_at,
+            started_at: t.started_at,
+            removed_at: t.removed_at,
+        }
+    }
+}
+
+impl From<v18::DuplicateTorrent> for DuplicateTorrent {
+    fn from(t: v18::DuplicateTorrent) -> Self {
+        let meta: TorrentMeta = t.meta.into();
+        Self {
+            mam_id: t.mam_id,
+            dl_link: t.dl_link,
+            title_search: normalize_title(&meta.title),
+            meta,
+            created_at: t.created_at,
+            duplicate_of: t.duplicate_of,
+        }
+    }
+}
+
+impl From<v18::ErroredTorrent> for ErroredTorrent {
+    fn from(t: v18::ErroredTorrent) -> Self {
+        Self {
+            id: t.id,
+            title: t.title,
+            error: t.error,
+            meta: t.meta.map(|t| t.into()),
+            created_at: t.created_at,
+        }
+    }
+}
+
+impl From<v18::TorrentMeta> for TorrentMeta {
+    fn from(t: v18::TorrentMeta) -> Self {
+        let mam_id = t.ids.get(ids::MAM).and_then(|id| id.parse().ok()).unwrap();
+
+        Self {
+            mam_id,
+            vip_status: t.vip_status,
+            cat: t.cat,
+            media_type: t.media_type,
+            main_cat: t.main_cat,
+            // categories: t.categories.iter().filter_map(Category::).collect(),
+            categories: vec![],
+            language: t.language,
+            flags: t.flags,
+            filetypes: t.filetypes,
+            num_files: 0,
+            size: t.size,
+            title: t.title,
+            edition: t.edition,
+            authors: t.authors,
+            narrators: t.narrators,
+            series: t.series,
+            source: t.source.into(),
+            uploaded_at: t.uploaded_at,
+        }
+    }
+}
+
+impl From<v18::Event> for Event {
+    fn from(t: v18::Event) -> Self {
+        Self {
+            id: t.id,
+            torrent_id: t.torrent_id,
+            mam_id: t.mam_id,
+            created_at: t.created_at,
+            event: t.event.into(),
+        }
+    }
+}
+
+impl From<v18::EventType> for EventType {
+    fn from(t: v18::EventType) -> Self {
+        match t {
+            v18::EventType::Grabbed {
+                grabber,
+                cost,
+                wedged,
+            } => Self::Grabbed {
+                grabber,
+                cost,
+                wedged,
+            },
+            v18::EventType::Linked {
+                linker,
+                library_path,
+            } => Self::Linked {
+                linker,
+                library_path,
+            },
+            v18::EventType::Cleaned {
+                library_path,
+                files,
+            } => Self::Cleaned {
+                library_path,
+                files,
+            },
+            v18::EventType::Updated { fields, .. } => Self::Updated {
+                fields: fields.into_iter().map(Into::into).collect(),
+            },
+            v18::EventType::RemovedFromTracker => Self::RemovedFromMam,
+        }
+    }
+}
+
+impl From<v18::TorrentMetaDiff> for TorrentMetaDiff {
+    fn from(value: v18::TorrentMetaDiff) -> Self {
+        Self {
+            field: value.field.into(),
+            from: value.from,
+            to: value.to,
+        }
+    }
+}
+
+impl From<v18::TorrentMetaField> for TorrentMetaField {
+    fn from(value: v18::TorrentMetaField) -> Self {
+        match value {
+            v18::TorrentMetaField::Ids => TorrentMetaField::MamId,
+            v18::TorrentMetaField::Vip => TorrentMetaField::Vip,
+            v18::TorrentMetaField::MediaType => TorrentMetaField::MediaType,
+            v18::TorrentMetaField::MainCat => TorrentMetaField::MainCat,
+            v18::TorrentMetaField::Categories => TorrentMetaField::Categories,
+            v18::TorrentMetaField::Cat => TorrentMetaField::Cat,
+            v18::TorrentMetaField::Language => TorrentMetaField::Language,
+            v18::TorrentMetaField::Flags => TorrentMetaField::Flags,
+            v18::TorrentMetaField::Filetypes => TorrentMetaField::Filetypes,
+            v18::TorrentMetaField::Size => TorrentMetaField::Size,
+            v18::TorrentMetaField::Title => TorrentMetaField::Title,
+            v18::TorrentMetaField::Authors => TorrentMetaField::Authors,
+            v18::TorrentMetaField::Narrators => TorrentMetaField::Narrators,
+            v18::TorrentMetaField::Series => TorrentMetaField::Series,
+            v18::TorrentMetaField::Source => TorrentMetaField::Source,
+            v18::TorrentMetaField::Edition => TorrentMetaField::Edition,
+            v18::TorrentMetaField::Tags => unimplemented!(),
         }
     }
 }

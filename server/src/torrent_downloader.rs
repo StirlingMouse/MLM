@@ -52,8 +52,9 @@ pub async fn grab_selected_torrents(
         .map(|t| t.meta.size.bytes() as f64)
         .sum();
 
-    let mut remaining_buffer = (user_info.uploaded_bytes - user_info.downloaded_bytes - downloading_size)
-        / config.min_ratio;
+    let mut remaining_buffer =
+        (user_info.uploaded_bytes - user_info.downloaded_bytes - downloading_size)
+            / config.min_ratio;
     debug!(
         "downloader, unsats: {:#?}; max_torrents: {max_torrents}; buffer: {}",
         user_info.unsat,
@@ -135,9 +136,7 @@ async fn grab_torrent(
                 rw.upsert(mlm_db::Torrent {
                     id: hash.clone(),
                     id_is_hash: true,
-                    mam_id: torrent.meta.mam_id,
-                    abs_id: None,
-                    goodreads_id: torrent.goodreads_id,
+                    mam_id: torrent.meta.mam_id(),
                     library_path: None,
                     library_files: Default::default(),
                     linker: None,
@@ -148,7 +147,6 @@ async fn grab_torrent(
                     meta: torrent.meta.clone(),
                     created_at: Timestamp::now(),
                     replaced_with: None,
-                    request_matadata_update: false,
                     library_mismatch: None,
                     client_status: None,
                 })?;
@@ -203,8 +201,8 @@ async fn grab_torrent(
                 match err.downcast::<WedgeBuyError>() {
                     Ok(
                         WedgeBuyError::IsVip
-                            | WedgeBuyError::IsGlobalFreeleech
-                            | WedgeBuyError::IsPersonalFreeleech,
+                        | WedgeBuyError::IsGlobalFreeleech
+                        | WedgeBuyError::IsPersonalFreeleech,
                     ) => {}
                     _ => {
                         if torrent.cost == TorrentCost::UseWedge {
@@ -219,7 +217,10 @@ async fn grab_torrent(
             return Err(anyhow!("Could not get torrent from MaM"));
         };
         if !torrent_info.is_free() {
-            return Err(anyhow!("Torrent is no longer free, expected: {:?}", torrent.cost));
+            return Err(anyhow!(
+                "Torrent is no longer free, expected: {:?}",
+                torrent.cost
+            ));
         }
     }
 
@@ -252,9 +253,7 @@ async fn grab_torrent(
         rw.upsert(mlm_db::Torrent {
             id: hash.clone(),
             id_is_hash: true,
-            mam_id: torrent.meta.mam_id,
-            abs_id: None,
-            goodreads_id: torrent.goodreads_id,
+            mam_id: torrent.meta.mam_id(),
             library_path: None,
             library_files: Default::default(),
             linker: None,
@@ -265,7 +264,6 @@ async fn grab_torrent(
             meta: torrent.meta.clone(),
             created_at: Timestamp::now(),
             replaced_with: None,
-            request_matadata_update: false,
             library_mismatch: None,
             client_status: None,
         })?;

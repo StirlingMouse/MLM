@@ -1,6 +1,7 @@
 pub mod categories;
 pub mod flags;
 pub mod language;
+pub mod lists;
 pub mod meta;
 pub mod old_categories;
 pub mod series;
