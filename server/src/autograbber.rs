@@ -11,7 +11,7 @@ use itertools::Itertools as _;
 use lava_torrent::torrent::v1::Torrent;
 use mlm_db::{
     ClientStatus, DatabaseExt as _, DuplicateTorrent, Event, EventType, MetadataSource,
-    SelectedTorrent, Timestamp, TorrentCost, TorrentKey, TorrentMeta, VipStatus,
+    SelectedTorrent, Timestamp, TorrentCost, TorrentKey, TorrentMeta, VipStatus, ids,
 };
 use mlm_mam::{
     api::MaM,
@@ -250,8 +250,6 @@ pub async fn search_torrents(
                     sort_type: sort_type.to_string(),
                     ..Default::default()
                 },
-
-                ..Default::default()
             })
             .await
             .context("search")?;
@@ -316,15 +314,16 @@ pub async fn mark_removed_torrents(
                     .get()
                     .secondary::<mlm_db::Torrent>(TorrentKey::mam_id, id)?;
                 if let Some(mut torrent) = torrent
-                    && torrent.client_status != Some(ClientStatus::RemovedFromMam)
+                    && torrent.client_status != Some(ClientStatus::RemovedFromTracker)
                 {
                     if mam.get_torrent_info_by_id(id).await?.is_none() {
-                        torrent.client_status = Some(ClientStatus::RemovedFromMam);
+                        torrent.client_status = Some(ClientStatus::RemovedFromTracker);
                         let tid = Some(torrent.id.clone());
                         rw.upsert(torrent)?;
                         rw.commit()?;
                         drop(guard);
-                        write_event(db, Event::new(tid, Some(id), EventType::RemovedFromMam)).await;
+                        write_event(db, Event::new(tid, Some(id), EventType::RemovedFromTracker))
+                            .await;
                     }
                     sleep(Duration::from_millis(400)).await;
                 }
@@ -357,7 +356,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             continue;
         }
 
-        let meta = match torrent.as_meta() {
+        let mut meta = match torrent.as_meta() {
             Ok(it) => it,
             Err(err) => match err {
                 MetaError::UnknownMediaType(_) => {
@@ -367,6 +366,10 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 _ => return Err(err.into()),
             },
         };
+        if let Some(goodreads_id) = goodreads_id {
+            meta.ids
+                .insert(ids::GOODREADS.to_string(), goodreads_id.to_string());
+        }
         let rw_opt = if dry_run {
             None
         } else {
@@ -399,7 +402,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
         if let Some((_, rw)) = &rw_opt {
             let old_library = rw
                 .get()
-                .secondary::<mlm_db::Torrent>(TorrentKey::mam_id, meta.mam_id)?;
+                .secondary::<mlm_db::Torrent>(TorrentKey::mam_id, meta.mam_id())?;
             if let Some(old) = old_library {
                 if old.meta != meta
                     || (cost == Cost::MetadataOnlyAdd
@@ -423,7 +426,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             }
         }
         if cost == Cost::MetadataOnlyAdd {
-            let mam_id = meta.mam_id;
+            let mam_id = torrent.id;
             add_metadata_only_torrent(rw_opt.unwrap(), torrent, meta)
                 .await
                 .or_else(|err| {
@@ -448,7 +451,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
         if preference.is_none() {
             debug!(
                 "Could not find any wanted formats in torrent {}, formats: {:?}, wanted: {:?}",
-                meta.mam_id, meta.filetypes, preferred_types
+                torrent.id, meta.filetypes, preferred_types
             );
             continue 'torrent;
         }
@@ -460,7 +463,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                     .collect::<Result<Vec<_>, native_db::db_type::Error>>()
             }?;
             for old in old_selected {
-                if old.mam_id == meta.mam_id {
+                if old.mam_id == torrent.id {
                     if old.meta != meta {
                         update_selected_torrent_meta(db, rw_opt.unwrap(), mam, old, meta).await?;
                     }
@@ -476,15 +479,20 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         .iter()
                         .position(|t| old.meta.filetypes.contains(t));
                     if old_preference <= preference {
-                        if let Err(err) =
-                            add_duplicate_torrent(rw, None, torrent.dl.clone(), title_search, meta)
-                        {
+                        if let Err(err) = add_duplicate_torrent(
+                            rw,
+                            None,
+                            torrent.dl.clone(),
+                            title_search,
+                            torrent.id,
+                            meta,
+                        ) {
                             error!("Error writing duplicate torrent: {err}");
                         }
                         rw_opt.unwrap().1.commit()?;
                         trace!(
                             "Skipping torrent {} as we have {} selected",
-                            torrent.id, old.meta.mam_id
+                            torrent.id, old.mam_id
                         );
                         continue 'torrent;
                     } else {
@@ -493,6 +501,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                             None,
                             torrent.dl.clone(),
                             title_search.clone(),
+                            torrent.id,
                             old.meta.clone(),
                         ) {
                             error!("Error writing duplicate torrent: {err}");
@@ -514,7 +523,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                     .collect::<Result<Vec<_>, native_db::db_type::Error>>()
             }?;
             for old in old_library {
-                if old.meta.mam_id == meta.mam_id {
+                if old.mam_id == Some(torrent.id) {
                     if old.meta != meta {
                         update_torrent_meta(
                             config,
@@ -540,20 +549,21 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         .iter()
                         .position(|t| old.meta.filetypes.contains(t));
                     if old_preference <= preference {
+                        trace!(
+                            "Skipping torrent {} as we have {} in libary",
+                            torrent.id, &old.id
+                        );
                         if let Err(err) = add_duplicate_torrent(
                             rw,
                             Some(old.id),
                             torrent.dl.clone(),
                             title_search,
+                            torrent.id,
                             meta,
                         ) {
                             error!("Error writing duplicate torrent: {err}");
                         }
                         rw_opt.unwrap().1.commit()?;
-                        trace!(
-                            "Skipping torrent {} as we have {} in libary",
-                            torrent.id, old.meta.mam_id
-                        );
                         continue 'torrent;
                     } else {
                         info!(
@@ -594,7 +604,6 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             selected_torrents += 1;
             rw.insert(mlm_db::SelectedTorrent {
                 mam_id: torrent.id,
-                goodreads_id,
                 hash: None,
                 dl_link: torrent
                     .dl
@@ -636,9 +645,7 @@ pub async fn add_metadata_only_torrent(
         rw.insert(mlm_db::Torrent {
             id,
             id_is_hash: false,
-            mam_id,
-            abs_id: None,
-            goodreads_id: None,
+            mam_id: Some(mam_id),
             library_path: None,
             library_files: Default::default(),
             linker: if torrent.owner_name.is_empty() {
@@ -653,7 +660,6 @@ pub async fn add_metadata_only_torrent(
             meta,
             created_at: Timestamp::now(),
             replaced_with: None,
-            request_matadata_update: false,
             library_mismatch: None,
             client_status: None,
         })?;
@@ -670,10 +676,16 @@ pub async fn update_torrent_meta(
     (guard, rw): (MutexGuard<'_, ()>, RwTransaction<'_>),
     mam_torrent: &MaMTorrent,
     mut torrent: mlm_db::Torrent,
-    meta: TorrentMeta,
+    mut meta: TorrentMeta,
     allow_non_mam: bool,
     linker_is_owner: bool,
 ) -> Result<()> {
+    meta.ids.extend(torrent.meta.ids.clone());
+    meta.tags = torrent.meta.tags.clone();
+    if meta.description.is_empty() {
+        meta.description = torrent.meta.description.clone();
+    }
+
     if !allow_non_mam && torrent.meta.source != MetadataSource::Mam {
         // Update VIP status and uploaded_at still
         if torrent.meta.vip_status != meta.vip_status
@@ -722,7 +734,7 @@ pub async fn update_torrent_meta(
     }
 
     let id = torrent.id.clone();
-    let mam_id = meta.mam_id;
+    let mam_id = mam_torrent.id;
     let diff = torrent.meta.diff(&meta);
     debug!(
         "Updating meta for torrent {}, diff:\n{}",
@@ -738,7 +750,7 @@ pub async fn update_torrent_meta(
     drop(guard);
 
     if let Some(library_path) = &torrent.library_path
-        && let serde_json::Value::Object(new) = abs::create_metadata(mam_torrent, &meta)
+        && let serde_json::Value::Object(new) = abs::create_metadata(&meta)
     {
         let metadata_path = library_path.join("metadata.json");
         if metadata_path.exists() {
@@ -752,13 +764,15 @@ pub async fn update_torrent_meta(
             let mut writer = BufWriter::new(file);
             serde_json::to_writer(&mut writer, &serde_json::Value::Object(existing))?;
             writer.flush()?;
-            debug!("updated ABS metadata file {}", torrent.meta.mam_id);
+            debug!("updated ABS metadata file {}", mam_torrent.id);
         }
-        if let (Some(abs_id), Some(abs_config)) = (&torrent.abs_id, &config.audiobookshelf) {
+        if let (Some(abs_id), Some(abs_config)) =
+            (&torrent.meta.ids.get(ids::ABS), &config.audiobookshelf)
+        {
             let abs = Abs::new(abs_config)?;
-            match abs.update_book(abs_id, mam_torrent, &meta).await {
-                Ok(_) => debug!("updated ABS via API {}", torrent.meta.mam_id),
-                Err(err) => warn!("Failed updating book {} in abs: {err}", torrent.meta.mam_id),
+            match abs.update_book(abs_id, &meta).await {
+                Ok(_) => debug!("updated ABS via API {}", mam_torrent.id),
+                Err(err) => warn!("Failed updating book {} in abs: {err}", mam_torrent.id),
             }
         }
     }
@@ -766,7 +780,14 @@ pub async fn update_torrent_meta(
     if !diff.is_empty() {
         write_event(
             db,
-            Event::new(Some(id), Some(mam_id), EventType::Updated { fields: diff }),
+            Event::new(
+                Some(id),
+                Some(mam_id),
+                EventType::Updated {
+                    fields: diff,
+                    source: (MetadataSource::Mam, String::new()),
+                },
+            ),
         )
         .await;
     }
@@ -780,7 +801,7 @@ async fn update_selected_torrent_meta(
     torrent: SelectedTorrent,
     meta: TorrentMeta,
 ) -> Result<()> {
-    let mam_id = meta.mam_id;
+    let mam_id = torrent.mam_id;
     let diff = torrent.meta.diff(&meta);
     debug!(
         "Updating meta for selected torrent {}, diff:\n{}",
@@ -797,7 +818,14 @@ async fn update_selected_torrent_meta(
     drop(guard);
     write_event(
         db,
-        Event::new(hash, Some(mam_id), EventType::Updated { fields: diff }),
+        Event::new(
+            hash,
+            Some(mam_id),
+            EventType::Updated {
+                fields: diff,
+                source: (MetadataSource::Mam, String::new()),
+            },
+        ),
     )
     .await;
     Ok(())
@@ -815,10 +843,11 @@ fn add_duplicate_torrent(
     duplicate_of: Option<String>,
     dl_link: Option<String>,
     title_search: String,
+    mam_id: u64,
     meta: TorrentMeta,
 ) -> Result<()> {
     rw.upsert(DuplicateTorrent {
-        mam_id: meta.mam_id,
+        mam_id,
         dl_link,
         title_search,
         meta,
