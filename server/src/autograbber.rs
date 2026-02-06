@@ -192,7 +192,7 @@ pub async fn search_torrents(
             Type::New => "dateDesc",
             _ => "",
         });
-    let (flags_is_hide, flags) = torrent_search.filter.flags.as_search_bitfield();
+    let (flags_is_hide, flags) = torrent_search.filter.edition.flags.as_search_bitfield();
     let max_pages = torrent_search
         .max_pages
         .unwrap_or(match torrent_search.kind {
@@ -212,10 +212,11 @@ pub async fn search_torrents(
                     kind,
                     text: torrent_search.query.clone().unwrap_or_default(),
                     srch_in: torrent_search.search_in.clone(),
-                    main_cat: torrent_search.filter.categories.get_main_cats(),
-                    cat: torrent_search.filter.categories.get_cats(),
+                    main_cat: torrent_search.filter.edition.categories.get_main_cats(),
+                    cat: torrent_search.filter.edition.categories.get_cats(),
                     browse_lang: torrent_search
                         .filter
+                        .edition
                         .languages
                         .iter()
                         .map(|l| l.to_id())
@@ -234,13 +235,14 @@ pub async fn search_torrents(
                         .filter
                         .uploaded_before
                         .map_or_else(|| Ok(String::new()), |d| d.format(&DATE_FORMAT))?,
-                    min_size: torrent_search.filter.min_size.bytes(),
-                    max_size: torrent_search.filter.max_size.bytes(),
+                    min_size: torrent_search.filter.edition.min_size.bytes(),
+                    max_size: torrent_search.filter.edition.max_size.bytes(),
                     unit: torrent_search
                         .filter
+                        .edition
                         .min_size
                         .unit()
-                        .max(torrent_search.filter.max_size.unit()),
+                        .max(torrent_search.filter.edition.max_size.unit()),
                     min_seeders: torrent_search.filter.min_seeders,
                     max_seeders: torrent_search.filter.max_seeders,
                     min_leechers: torrent_search.filter.min_leechers,
