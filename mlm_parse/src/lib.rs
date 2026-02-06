@@ -16,6 +16,12 @@ pub fn normalize_title(value: &str) -> String {
 
 pub fn clean_name(name: &mut String) -> Result<()> {
     *name = clean_value(name)?;
+    let n = NAME_CLEANUP.replace_all(name, " ");
+    *name = NAME_INITIALS
+        .replace_all(&n, |captures: &Captures| {
+            format!("{} {}", &captures[1], &captures[2])
+        })
+        .to_string();
 
     let mut to_lowercase = vec![];
     let mut to_uppercase = vec![];
@@ -60,18 +66,22 @@ pub fn clean_name(name: &mut String) -> Result<()> {
 }
 
 static EDITION_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)^(.*?)(?:(?:(?:\s*[-–.:;|,]\s*)((\w+?)\s+(?:[a-z]+\s+)*(?:Edition|ed\.))|(?:\s*[-–.:;|,]\s*)?(?:\s*[(\[]\s*)((\w*?)\s+(?:[a-z]+\s+)*(?:Edition|ed\.))(?:\s*[)\]]\s*))(?:\s*[-:;,]\s*)?(.*?)|\s+((\d+\w*?)\s+(?:Edition|ed\.)))$").unwrap()
+    Regex::new(r"(?i)^(.*?)(?:(?:(?:\s*[-–.:;|,]\s*)((\w+?)\s+(?:[a-z]+\s+)*(?:Edition|ed\.|utgåva))|(?:\s*[-–.:;|,]\s*)?(?:\s*[(\[]\s*)((\w*?)\s+(?:[a-z]+\s+)*(?:Edition|ed\.|utgåva))(?:\s*[)\]]\s*))(?:\s*[-:;,]\s*)?(.*?)|\s+((\d+\w*?)\s+(?:Edition|ed\.|utgåva)))$").unwrap()
 });
 
 static EDITION_START_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)((\d+(?:st|nd|rd|th)|first|second|third|fifth|sixth|seventh|eight|ninth|tenth|new|revised|updated)\s+(?:[a-z']+\s+)*(?:Edition|ed\.)|(\w+?)\s+(?:Edition|ed\.))").unwrap()
+    Regex::new(r"(?i)((\d+(?:st|nd|rd|th)|first|second|third|fifth|sixth|seventh|eight|ninth|tenth|new|revised|updated)\s+(?:[a-z']+\s+)*(?:Edition|ed\.|utgåva)|(\w+?)\s+(?:Edition|ed\.|utgåva))").unwrap()
 });
 
 pub static TITLE_CLEANUP: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r"(?i)(?:: A (?:Novel|Memoir)$)|(?:: An? (?:\w+ )(?:Fantasy Adventure)$)|(?:: An? (?:\w+ ){1,3}(?:Romance)$)|(?:\s*-\s*\d+(?:\.| - )epub$)|(?:\s*[\(\[]\.?(?:digital|light novel|epub|pdf|cbz|cbr|mp3|m4b|tpb|fixed|unabridged)[\)\]])*",
+        r"(?i)(?:: A (?:Novel|Memoir)$)|(?:: An? (?:\w+ )(?:(?:Fantasy|LitRPG(?:/Gamelit)?) Adventure)$)|(?:: (?:An?|Stand-?alone) (?:[\w!'/]+ ){1,4}(?:Romance|LitRPG|Novella|Anthology)$)|(?:: light novel)|(?:\s*-\s*\d+(?:\.| - )epub$)|(?:\s*[\(\[]\.?(?:digital|light novel|epub|pdf|cbz|cbr|mp3|m4b|tpb|fixed|unabridged|Dramatized Adaptation|full cast)[\)\]])*",
     )
     .unwrap()
+});
+
+pub static TITLE_SERIES: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)(?: \((.+), (?:Book|Vol\.) (\d+(?:\.\d+)?|[IXV]+|one|two|three|four|five|six|seven|eight|nine|ten)\)|: (.+), (?:Book|Vol\.) (\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten)|: ([\w\s]+) (\d+)|: Book (\d+(?:\.\d+)?|[IXV]+|one|two|three|four|five|six|seven|eight|nine|ten) (?:of|in) the ([\w\s!']+)|: An? ([\w\s]+) (?:Standalone|Novel)(?:, (?:Book |Vol\. )?(\d+(?:\.\d+)?|[IXV]+|one|two|three|four|five|six|seven|eight|nine|ten))?|: ([\w\s!']+) (?:collection))$").unwrap()
 });
 
 static SEARCH_TITLE_CLEANUP: Lazy<Regex> =
@@ -80,8 +90,16 @@ static SEARCH_TITLE_CLEANUP: Lazy<Regex> =
 static SEARCH_TITLE_VOLUME: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)(?:volume|vol\.)").unwrap());
 
-pub static SERIES_CLEANUP: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)(?:\s*\((?:digital|light novel)\))*").unwrap());
+pub static NAME_CLEANUP: Lazy<Regex> = Lazy::new(|| Regex::new(r"\.\s*").unwrap());
+pub static NAME_INITIALS: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b([A-Z])([A-Z])\b").unwrap());
+pub static NAME_ROLES: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i) - (?:translator|foreword|introduction|afterword)").unwrap());
+
+pub static SERIES_NAME_CLEANUP: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)^(?:the|a)\s+(.+)\s+(?:series|novel)$").unwrap());
+pub static SERIES_CLEANUP: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)(?:\s*\((?:digital|light novel)\))+|\s+series$|^A LitRPG Adventure: ").unwrap()
+});
 
 pub fn parse_edition(title: &str, tags: &str) -> (String, Option<(String, u64)>) {
     if let Some(captures) = EDITION_REGEX.captures(title)
@@ -109,6 +127,44 @@ pub fn parse_edition(title: &str, tags: &str) -> (String, Option<(String, u64)>)
     }
 
     (title.to_string(), None)
+}
+
+pub fn parse_series_from_title(title: &str) -> Option<(&str, Option<f32>)> {
+    if let Some(captures) = TITLE_SERIES.captures(title) {
+        let series_title = captures
+            .get(1)
+            .or(captures.get(3))
+            .or(captures.get(5))
+            .or(captures.get(8))
+            .or(captures.get(9))
+            .or(captures.get(11))?;
+        let series_number = captures
+            .get(2)
+            .or(captures.get(4))
+            .or(captures.get(6))
+            .or(captures.get(7))
+            .or(captures.get(11))?;
+        let series_number = match series_number.as_str().to_lowercase().as_str() {
+            "one" | "i" => 1.0,
+            "two" | "ii" => 2.0,
+            "three" | "iii" => 3.0,
+            "four" | "iv" => 4.0,
+            "five" | "v" => 5.0,
+            "six" | "vi" => 6.0,
+            "seven" | "vii" => 7.0,
+            "eight" | "viii" => 8.0,
+            "nine" | "ix" => 9.0,
+            "ten" | "x" => 10.0,
+            n => n.parse().unwrap_or(-1.0),
+        };
+        let series_number = if series_number >= 0.0 {
+            Some(series_number)
+        } else {
+            None
+        };
+        return Some((series_title.as_str(), series_number));
+    }
+    None
 }
 
 fn parse_normal_edition_match(captures: &Captures) -> Option<(String, u64)> {
