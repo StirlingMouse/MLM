@@ -21,7 +21,7 @@ use std::{
     collections::BTreeMap,
     env,
     fs::{self, create_dir_all},
-    io,
+    io, mem,
     path::PathBuf,
     process,
     sync::Arc,
@@ -57,7 +57,7 @@ use web::start_webserver;
 
 use crate::{
     config::Config,
-    linker::link_torrents_to_library,
+    linker::{folder::link_folders_to_library, torrent::link_torrents_to_library},
     lists::{get_lists, run_list_import},
     snatchlist::run_snatchlist_search,
     stats::Context,
@@ -188,7 +188,26 @@ async fn app_main() -> Result<()> {
         .unwrap();
         return Ok(());
     }
-    let config = config?;
+    let mut config = config?;
+    for autograb in &mut config.autograbs {
+        autograb.filter.edition = mem::take(&mut autograb.edition);
+    }
+    for snatchlist in &mut config.snatchlist {
+        snatchlist.filter.edition = mem::take(&mut snatchlist.edition);
+    }
+    for list in &mut config.goodreads_lists {
+        for grab in &mut list.grab {
+            grab.filter.edition = mem::take(&mut grab.edition);
+        }
+    }
+    for list in &mut config.notion_lists {
+        for grab in &mut list.grab {
+            grab.filter.edition = mem::take(&mut grab.edition);
+        }
+    }
+    for tag in &mut config.tags {
+        tag.filter.edition = mem::take(&mut tag.edition);
+    }
     let config = Arc::new(config);
 
     let db = native_db::Builder::new().create(&mlm_db::MODELS, database_file)?;
@@ -210,7 +229,8 @@ async fn app_main() -> Result<()> {
 
     let (mut search_tx, mut search_rx) = (BTreeMap::new(), BTreeMap::new());
     let (mut import_tx, mut import_rx) = (BTreeMap::new(), BTreeMap::new());
-    let (linker_tx, linker_rx) = watch::channel(());
+    let (torrent_linker_tx, torrent_linker_rx) = watch::channel(());
+    let (folder_linker_tx, folder_linker_rx) = watch::channel(());
     let (downloader_tx, mut downloader_rx) = watch::channel(());
     let (audiobookshelf_tx, mut audiobookshelf_rx) = watch::channel(());
 
@@ -497,7 +517,7 @@ async fn app_main() -> Result<()> {
                 let db = db.clone();
                 let mam = mam.clone();
                 let stats = stats.clone();
-                let mut linker_rx = linker_rx.clone();
+                let mut linker_rx = torrent_linker_rx.clone();
                 tokio::spawn(async move {
                     loop {
                         select! {
@@ -507,8 +527,8 @@ async fn app_main() -> Result<()> {
                                     error!("Error listening on link_rx: {err:?}");
                                     stats
                                         .update(|stats| {
-                                            stats.linker_run_at = Some(OffsetDateTime::now_utc());
-                                            stats.linker_result = Some(Err(err.into()));
+                                            stats.torrent_linker_run_at = Some(OffsetDateTime::now_utc());
+                                            stats.torrent_linker_result = Some(Err(err.into()));
                                         }).await;
                                 }
                             },
@@ -516,8 +536,8 @@ async fn app_main() -> Result<()> {
                         {
                             stats
                                 .update(|stats| {
-                                    stats.linker_run_at = Some(OffsetDateTime::now_utc());
-                                    stats.linker_result = None;
+                                    stats.torrent_linker_run_at = Some(OffsetDateTime::now_utc());
+                                    stats.torrent_linker_result = None;
                                 })
                                 .await;
                         }
@@ -533,8 +553,9 @@ async fn app_main() -> Result<()> {
                                 error!("Error logging in to qbit {}: {err}", qbit_conf.url);
                                 stats
                                     .update(|stats| {
-                                        stats.linker_run_at = Some(OffsetDateTime::now_utc());
-                                        stats.linker_result =
+                                        stats.torrent_linker_run_at =
+                                            Some(OffsetDateTime::now_utc());
+                                        stats.torrent_linker_result =
                                             Some(Err(anyhow::Error::msg(format!(
                                                 "Error logging in to qbit {}: {err}",
                                                 qbit_conf.url,
@@ -558,7 +579,7 @@ async fn app_main() -> Result<()> {
                         {
                             stats
                                 .update(|stats| {
-                                    stats.linker_result = Some(result);
+                                    stats.torrent_linker_result = Some(result);
                                     stats.cleaner_run_at = Some(OffsetDateTime::now_utc());
                                     stats.cleaner_result = None;
                                 })
@@ -581,6 +602,65 @@ async fn app_main() -> Result<()> {
                 });
             }
         }
+    }
+    {
+        let config = config.clone();
+        let db = db.clone();
+        let stats = stats.clone();
+        let mut linker_rx = folder_linker_rx.clone();
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    () = sleep(Duration::from_secs(60 * config.link_interval)) => {},
+                    result = linker_rx.changed() => {
+                        if let Err(err) = result {
+                            error!("Error listening on link_rx: {err:?}");
+                            stats
+                                .update(|stats| {
+                                    stats.folder_linker_run_at = Some(OffsetDateTime::now_utc());
+                                    stats.folder_linker_result = Some(Err(err.into()));
+                                }).await;
+                        }
+                    },
+                }
+                {
+                    stats
+                        .update(|stats| {
+                            stats.folder_linker_run_at = Some(OffsetDateTime::now_utc());
+                            stats.folder_linker_result = None;
+                        })
+                        .await;
+                }
+                let result = link_folders_to_library(config.clone(), db.clone())
+                    .await
+                    .context("link_torrents_to_library");
+                if let Err(err) = &result {
+                    error!("Error running linker: {err:?}");
+                }
+                {
+                    stats
+                        .update(|stats| {
+                            stats.folder_linker_result = Some(result);
+                            stats.cleaner_run_at = Some(OffsetDateTime::now_utc());
+                            stats.cleaner_result = None;
+                        })
+                        .await;
+                }
+                let result = run_library_cleaner(config.clone(), db.clone())
+                    .await
+                    .context("library_cleaner");
+                if let Err(err) = &result {
+                    error!("Error running library_cleaner: {err:?}");
+                }
+                {
+                    stats
+                        .update(|stats| {
+                            stats.cleaner_result = Some(result);
+                        })
+                        .await;
+                }
+            }
+        });
     }
 
     if let Some(config) = &config.audiobookshelf {
@@ -630,7 +710,8 @@ async fn app_main() -> Result<()> {
     let triggers = Triggers {
         search_tx,
         import_tx,
-        linker_tx,
+        torrent_linker_tx,
+        folder_linker_tx,
         downloader_tx,
         audiobookshelf_tx,
     };

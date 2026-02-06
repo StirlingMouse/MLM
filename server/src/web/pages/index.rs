@@ -57,9 +57,14 @@ pub async fn index_page(
             .iter()
             .map(|(i, r)| (*i, r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))))
             .collect(),
-        linker_run_at: stats.linker_run_at.map(Into::into),
-        linker_result: stats
-            .linker_result
+        torrent_linker_run_at: stats.torrent_linker_run_at.map(Into::into),
+        torrent_linker_result: stats
+            .torrent_linker_result
+            .as_ref()
+            .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+        folder_linker_run_at: stats.folder_linker_run_at.map(Into::into),
+        folder_linker_result: stats
+            .folder_linker_result
             .as_ref()
             .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
         cleaner_run_at: stats.cleaner_run_at.map(Into::into),
@@ -95,8 +100,11 @@ pub async fn index_page_post(
     Form(form): Form<IndexPageForm>,
 ) -> Result<Redirect, AppError> {
     match form.action.as_str() {
-        "run_linker" => {
-            context.triggers.linker_tx.send(())?;
+        "run_torrent_linker" => {
+            context.triggers.torrent_linker_tx.send(())?;
+        }
+        "run_folder_linker" => {
+            context.triggers.folder_linker_tx.send(())?;
         }
         "run_search" => {
             if let Some(tx) = context.triggers.search_tx.get(
@@ -146,8 +154,10 @@ struct IndexPageTemplate {
     autograbber_result: BTreeMap<usize, Result<(), String>>,
     import_run_at: BTreeMap<usize, Timestamp>,
     import_result: BTreeMap<usize, Result<(), String>>,
-    linker_run_at: Option<Timestamp>,
-    linker_result: Option<Result<(), String>>,
+    torrent_linker_run_at: Option<Timestamp>,
+    torrent_linker_result: Option<Result<(), String>>,
+    folder_linker_run_at: Option<Timestamp>,
+    folder_linker_result: Option<Result<(), String>>,
     cleaner_run_at: Option<Timestamp>,
     cleaner_result: Option<Result<(), String>>,
     downloader_run_at: Option<Timestamp>,

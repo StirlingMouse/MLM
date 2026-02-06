@@ -27,7 +27,7 @@ pub async fn run_snatchlist_search(
     index: usize,
     snatchlist_config: Arc<SnatchlistSearch>,
 ) -> Result<()> {
-    if !snatchlist_config.filter.languages.is_empty() {
+    if !snatchlist_config.filter.edition.languages.is_empty() {
         bail!("Language filtering is not supported in snatchlist searches");
     }
     if snatchlist_config.filter.uploaded_after.is_some()

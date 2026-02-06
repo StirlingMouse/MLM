@@ -106,6 +106,8 @@ pub struct TorrentSearch {
     pub max_pages: Option<u8>,
     #[serde(flatten)]
     pub filter: TorrentFilter,
+    #[serde(flatten)]
+    pub edition: EditionFilter,
 
     pub search_interval: Option<u64>,
     pub unsat_buffer: Option<u64>,
@@ -147,6 +149,8 @@ pub struct SnatchlistSearch {
     pub max_pages: Option<u8>,
     #[serde(flatten)]
     pub filter: TorrentFilter,
+    #[serde(flatten)]
+    pub edition: EditionFilter,
 
     pub search_interval: Option<u64>,
     #[serde(default)]
@@ -193,6 +197,8 @@ pub struct Grab {
     pub cost: Cost,
     #[serde(flatten)]
     pub filter: TorrentFilter,
+    #[serde(flatten)]
+    pub edition: EditionFilter,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -200,6 +206,8 @@ pub struct Grab {
 pub struct TagFilter {
     #[serde(flatten)]
     pub filter: TorrentFilter,
+    #[serde(flatten)]
+    pub edition: EditionFilter,
     #[serde(default)]
     pub category: Option<String>,
     #[serde(default)]
@@ -212,6 +220,30 @@ pub struct TorrentFilter {
     #[serde(default)]
     pub name: Option<String>,
 
+    #[serde(default)]
+    pub exclude_uploader: Vec<String>,
+
+    #[serde(default)]
+    #[serde(deserialize_with = "parse_opt_date")]
+    pub uploaded_after: Option<Date>,
+    #[serde(default)]
+    #[serde(deserialize_with = "parse_opt_date")]
+    pub uploaded_before: Option<Date>,
+    pub min_seeders: Option<u64>,
+    pub max_seeders: Option<u64>,
+    pub min_leechers: Option<u64>,
+    pub max_leechers: Option<u64>,
+    pub min_snatched: Option<u64>,
+    pub max_snatched: Option<u64>,
+
+    // TODO: READ from parent
+    #[serde(skip)]
+    pub edition: EditionFilter,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EditionFilter {
     #[serde(default)]
     #[serde(deserialize_with = "parse_vec")]
     pub media_type: Vec<MediaType>,
@@ -228,21 +260,6 @@ pub struct TorrentFilter {
     #[serde(default)]
     #[serde(deserialize_with = "parse")]
     pub max_size: Size,
-    #[serde(default)]
-    pub exclude_uploader: Vec<String>,
-
-    #[serde(default)]
-    #[serde(deserialize_with = "parse_opt_date")]
-    pub uploaded_after: Option<Date>,
-    #[serde(default)]
-    #[serde(deserialize_with = "parse_opt_date")]
-    pub uploaded_before: Option<Date>,
-    pub min_seeders: Option<u64>,
-    pub max_seeders: Option<u64>,
-    pub min_leechers: Option<u64>,
-    pub max_leechers: Option<u64>,
-    pub min_snatched: Option<u64>,
-    pub max_snatched: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -282,16 +299,29 @@ pub struct QbitUpdate {
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
+#[allow(clippy::enum_variant_names)]
 pub enum Library {
-    ByDir(LibraryByDir),
+    ByRipDir(LibraryByRipDir),
+    ByDownloadDir(LibraryByDownloadDir),
     ByCategory(LibraryByCategory),
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct LibraryByDir {
+pub struct LibraryByRipDir {
+    pub rip_dir: PathBuf,
+    #[serde(flatten)]
+    pub options: LibraryOptions,
+    #[serde(flatten)]
+    pub filter: EditionFilter,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LibraryByDownloadDir {
     pub download_dir: PathBuf,
-    pub library_dir: PathBuf,
+    #[serde(flatten)]
+    pub options: LibraryOptions,
     #[serde(flatten)]
     pub tag_filters: LibraryTagFilters,
 }
@@ -300,7 +330,8 @@ pub struct LibraryByDir {
 #[serde(deny_unknown_fields)]
 pub struct LibraryByCategory {
     pub category: String,
-    pub library_dir: PathBuf,
+    #[serde(flatten)]
+    pub options: LibraryOptions,
     #[serde(flatten)]
     pub tag_filters: LibraryTagFilters,
 }
@@ -309,14 +340,21 @@ pub struct LibraryByCategory {
 #[serde(deny_unknown_fields)]
 pub struct LibraryTagFilters {
     #[serde(default)]
+    pub allow_tags: Vec<String>,
+    #[serde(default)]
+    pub deny_tags: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LibraryOptions {
+    #[serde(default)]
     pub name: Option<String>,
+    pub library_dir: PathBuf,
 
     #[serde(default)]
     pub method: LibraryLinkMethod,
     #[serde(default)]
-    pub allow_tags: Vec<String>,
-    #[serde(default)]
-    pub deny_tags: Vec<String>,
     pub audio_types: Option<Vec<String>>,
     pub ebook_types: Option<Vec<String>>,
 }

@@ -182,6 +182,7 @@ impl TorrentSearch {
             }
             for cat in self
                 .filter
+                .edition
                 .categories
                 .audio
                 .clone()
@@ -193,6 +194,7 @@ impl TorrentSearch {
             }
             for cat in self
                 .filter
+                .edition
                 .categories
                 .ebook
                 .clone()
@@ -202,11 +204,11 @@ impl TorrentSearch {
             {
                 query.append_pair("tor[cat][]", &cat.to_string());
             }
-            for lang in &self.filter.languages {
+            for lang in &self.filter.edition.languages {
                 query.append_pair("tor[browse_lang][]", &lang.to_id().to_string());
             }
 
-            let (flags_is_hide, flags) = self.filter.flags.as_search_bitfield();
+            let (flags_is_hide, flags) = self.filter.edition.flags.as_search_bitfield();
             if !flags.is_empty() {
                 query.append_pair(
                     "tor[browseFlagsHideVsShow]",
@@ -217,14 +219,21 @@ impl TorrentSearch {
                 query.append_pair("tor[browseFlags][]", &flag.to_string());
             }
 
-            if self.filter.min_size.bytes() > 0 || self.filter.max_size.bytes() > 0 {
+            if self.filter.edition.min_size.bytes() > 0 || self.filter.edition.max_size.bytes() > 0
+            {
                 query.append_pair("tor[unit]", "1");
             }
-            if self.filter.min_size.bytes() > 0 {
-                query.append_pair("tor[minSize]", &self.filter.min_size.bytes().to_string());
+            if self.filter.edition.min_size.bytes() > 0 {
+                query.append_pair(
+                    "tor[minSize]",
+                    &self.filter.edition.min_size.bytes().to_string(),
+                );
             }
-            if self.filter.max_size.bytes() > 0 {
-                query.append_pair("tor[maxSize]", &self.filter.max_size.bytes().to_string());
+            if self.filter.edition.max_size.bytes() > 0 {
+                query.append_pair(
+                    "tor[maxSize]",
+                    &self.filter.edition.max_size.bytes().to_string(),
+                );
             }
 
             if let Some(uploaded_after) = self.filter.uploaded_after {

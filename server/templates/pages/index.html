@@ -60,11 +60,20 @@ no qbittorrent instances configured, all features are disabled
 
 <div class="infoboxes">
 <form method=post class="infobox" inline>
-  <h2>Linker</h2>
-  <p>Last run: {% match linker_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
-  <button name=action value=run_linker>run now</button>
-  {% if linker_run_at.is_some() %}
-  <p>Result: {% match linker_result %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
+  <h2>Torrent Linker</h2>
+  <p>Last run: {% match torrent_linker_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
+  <button name=action value=run_torrent_linker>run now</button>
+  {% if torrent_linker_run_at.is_some() %}
+  <p>Result: {% match torrent_linker_result %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
+  {% endif %}
+</form>
+
+<form method=post class="infobox" inline>
+  <h2>Folder Linker</h2>
+  <p>Last run: {% match folder_linker_run_at %}{% when Some(run_at) %}{{ self::time(run_at) }}{% when None %}never{% endmatch %}
+  <button name=action value=run_folder_linker>run now</button>
+  {% if folder_linker_run_at.is_some() %}
+  <p>Result: {% match folder_linker_result %}{% when Some(Ok(())) %}success{% when Some(Err(err)) %}{{ err }}{% when None %}running{% endmatch %}
   {% endif %}
 </form>
 
