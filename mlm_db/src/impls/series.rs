@@ -20,6 +20,24 @@ impl TryFrom<(String, String)> for Series {
     }
 }
 
+impl std::fmt::Display for Series {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)?;
+        if !self.entries.0.is_empty() {
+            write!(f, " #")?;
+            let mut is_first = true;
+            for entry in &self.entries.0 {
+                write!(f, "{}", entry)?;
+                if !is_first {
+                    write!(f, ", ")?;
+                }
+                is_first = false;
+            }
+        }
+        Ok(())
+    }
+}
+
 impl SeriesEntries {
     pub fn contains(&self, num: f32) -> bool {
         self.0.iter().any(|s| s.contains(num))

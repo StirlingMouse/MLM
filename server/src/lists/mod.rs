@@ -188,7 +188,7 @@ async fn search_grab(
     db_item: &ListItem,
     grab: &Grab,
 ) -> Result<Vec<(MaMTorrent, TorrentMeta, usize, Grab)>> {
-    let (flags_is_hide, flags) = grab.filter.flags.as_search_bitfield();
+    let (flags_is_hide, flags) = grab.filter.edition.flags.as_search_bitfield();
 
     let title_query = db_item.title.replace("*", "\"*\"");
     let title_query = BAD_CHARATERS.replace_all(&title_query, " ");
@@ -202,7 +202,7 @@ async fn search_grab(
         db_item.authors.iter().map(|a| format!("\"{a}\"")).join("|")
     );
 
-    let mut categories = grab.filter.categories.clone();
+    let mut categories = grab.filter.edition.categories.clone();
     if db_item.audio_torrent.is_some() {
         categories.audio = Some(vec![])
     }
@@ -225,7 +225,13 @@ async fn search_grab(
                     srch_in: vec![SearchIn::Title, SearchIn::Author],
                     main_cat: categories.get_main_cats(),
                     cat: categories.get_cats(),
-                    browse_lang: grab.filter.languages.iter().map(|l| l.to_id()).collect(),
+                    browse_lang: grab
+                        .filter
+                        .edition
+                        .languages
+                        .iter()
+                        .map(|l| l.to_id())
+                        .collect(),
                     browse_flags_hide_vs_show: if flags.is_empty() {
                         None
                     } else {
@@ -240,9 +246,14 @@ async fn search_grab(
                         .filter
                         .uploaded_before
                         .map_or_else(|| Ok(String::new()), |d| d.format(&DATE_FORMAT))?,
-                    min_size: grab.filter.min_size.bytes(),
-                    max_size: grab.filter.max_size.bytes(),
-                    unit: grab.filter.min_size.unit().max(grab.filter.max_size.unit()),
+                    min_size: grab.filter.edition.min_size.bytes(),
+                    max_size: grab.filter.edition.max_size.bytes(),
+                    unit: grab
+                        .filter
+                        .edition
+                        .min_size
+                        .unit()
+                        .max(grab.filter.edition.max_size.unit()),
                     min_seeders: grab.filter.min_seeders,
                     max_seeders: grab.filter.max_seeders,
                     min_leechers: grab.filter.min_leechers,

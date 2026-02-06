@@ -1,22 +1,19 @@
-#[cfg(target_family = "unix")]
-use std::os::unix::fs::MetadataExt as _;
 #[cfg(target_family = "windows")]
 use std::os::windows::fs::MetadataExt as _;
 use std::{
-    collections::BTreeMap,
-    fs::{self, File, Metadata},
-    io::{BufWriter, ErrorKind, Write},
+    fs::File,
+    io::{BufWriter, Write},
+    mem,
     ops::Deref,
-    path::{Component, Path, PathBuf},
+    path::{Component, PathBuf},
     sync::Arc,
 };
 
 use anyhow::{Context, Result, bail};
-use file_id::get_file_id;
 use log::error;
 use mlm_db::{
     ClientStatus, DatabaseExt as _, ErroredTorrentId, Event, EventType, LibraryMismatch,
-    SelectedTorrent, SelectedTorrentKey, Size, Timestamp, Torrent, TorrentKey, TorrentMeta,
+    SelectedTorrent, SelectedTorrentKey, Timestamp, Torrent, TorrentKey, TorrentMeta,
 };
 use mlm_mam::{api::MaM, meta::MetaError, search::MaMTorrent};
 use mlm_parse::normalize_title;
@@ -28,13 +25,17 @@ use qbit::{
 };
 use regex::Regex;
 use tokio::fs::create_dir_all;
-use tracing::{Level, debug, instrument, span, trace, warn};
+use tracing::{Level, debug, instrument, span, trace};
 
 use crate::{
     audiobookshelf::{self as abs},
     autograbber::update_torrent_meta,
     cleaner::remove_library_files,
     config::{Config, Library, LibraryLinkMethod, QbitConfig},
+    linker::{
+        common::{copy, hard_link, select_format, symlink},
+        library_dir, map_path,
+    },
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     qbittorrent::ensure_category_exists,
 };
@@ -78,7 +79,7 @@ pub async fn link_torrents_to_library(
             }
         }
         if let Some(t) = &mut existing_torrent {
-            let library_name = library.and_then(|l| l.tag_filters().name.as_ref());
+            let library_name = library.and_then(|l| l.options().name.as_ref());
             if t.linker.as_ref() != library_name {
                 let (_guard, rw) = db.rw_async().await?;
                 t.linker = library_name.map(ToOwned::to_owned);
@@ -129,14 +130,14 @@ pub async fn link_torrents_to_library(
                     }
                     continue;
                 };
-                if !library_path.starts_with(library.library_dir()) {
+                if !library_path.starts_with(&library.options().library_dir) {
                     let wanted = Some(LibraryMismatch::NewLibraryDir(
-                        library.library_dir().clone(),
+                        library.options().library_dir.clone(),
                     ));
                     if t.library_mismatch != wanted {
                         debug!(
                             "library differs: {library_path:?} != {:?}",
-                            library.library_dir()
+                            library.options().library_dir
                         );
                         t.library_mismatch = wanted;
                         let (_guard, rw) = db.rw_async().await?;
@@ -192,7 +193,7 @@ pub async fn link_torrents_to_library(
             continue;
         };
 
-        if library.method() == LibraryLinkMethod::NoLink && existing_torrent.is_some() {
+        if library.options().method == LibraryLinkMethod::NoLink && existing_torrent.is_some() {
             continue;
         }
 
@@ -230,20 +231,13 @@ async fn match_torrent(
     hash: &str,
     torrent: &QbitTorrent,
     library: &Library,
-    existing_torrent: Option<Torrent>,
+    mut existing_torrent: Option<Torrent>,
 ) -> Result<()> {
-    let mut existing_torrent = existing_torrent;
     let files = qbit.1.files(hash, None).await?;
-    let selected_audio_format = select_format(
-        &library.tag_filters().audio_types,
-        &config.audio_types,
-        &files,
-    );
-    let selected_ebook_format = select_format(
-        &library.tag_filters().ebook_types,
-        &config.ebook_types,
-        &files,
-    );
+    let selected_audio_format =
+        select_format(&library.options().audio_types, &config.audio_types, &files);
+    let selected_ebook_format =
+        select_format(&library.options().ebook_types, &config.ebook_types, &files);
 
     if selected_audio_format.is_none() && selected_ebook_format.is_none() {
         bail!("Could not find any wanted formats in torrent");
@@ -264,7 +258,7 @@ async fn match_torrent(
         }
         existing_torrent = Some(old_torrent);
     }
-    let meta = match mam_torrent.as_meta() {
+    let mut meta = match mam_torrent.as_meta() {
         Ok(meta) => meta,
         Err(err) => {
             if let MetaError::UnknownMediaType(_) = err {
@@ -296,6 +290,10 @@ async fn match_torrent(
             return Err(err).context("as_meta");
         }
     };
+    if let Some(existing_torrent) = &mut existing_torrent {
+        existing_torrent.meta.ids.append(&mut meta.ids);
+        mem::swap(&mut meta.ids, &mut existing_torrent.meta.ids);
+    }
 
     link_torrent(
         &config,
@@ -336,7 +334,10 @@ pub async fn refresh_mam_metadata(
     else {
         bail!("Could not find torrent \"{}\" on mam", torrent.meta.title);
     };
-    let meta = mam_torrent.as_meta().context("as_meta")?;
+    let mut meta = mam_torrent.as_meta().context("as_meta")?;
+    let mut ids = torrent.meta.ids.clone();
+    ids.append(&mut meta.ids);
+    meta.ids = ids;
 
     if torrent.meta != meta {
         update_torrent_meta(
@@ -398,16 +399,10 @@ pub async fn relink(config: &Config, db: &Database<'_>, hash: String) -> Result<
         bail!("Could not find matching library for torrent");
     };
     let files = qbit.files(&hash, None).await?;
-    let selected_audio_format = select_format(
-        &library.tag_filters().audio_types,
-        &config.audio_types,
-        &files,
-    );
-    let selected_ebook_format = select_format(
-        &library.tag_filters().ebook_types,
-        &config.ebook_types,
-        &files,
-    );
+    let selected_audio_format =
+        select_format(&library.options().audio_types, &config.audio_types, &files);
+    let selected_ebook_format =
+        select_format(&library.options().ebook_types, &config.ebook_types, &files);
 
     if selected_audio_format.is_none() && selected_ebook_format.is_none() {
         bail!("Could not find any wanted formats in torrent");
@@ -488,16 +483,10 @@ pub async fn refresh_metadata_relink(
         bail!("Could not find matching library for torrent");
     };
     let files = qbit.files(&hash, None).await?;
-    let selected_audio_format = select_format(
-        &library.tag_filters().audio_types,
-        &config.audio_types,
-        &files,
-    );
-    let selected_ebook_format = select_format(
-        &library.tag_filters().ebook_types,
-        &config.ebook_types,
-        &files,
-    );
+    let selected_audio_format =
+        select_format(&library.options().audio_types, &config.audio_types, &files);
+    let selected_ebook_format =
+        select_format(&library.options().ebook_types, &config.ebook_types, &files);
 
     if selected_audio_format.is_none() && selected_ebook_format.is_none() {
         bail!("Could not find any wanted formats in torrent");
@@ -540,13 +529,12 @@ async fn link_torrent(
     selected_audio_format: Option<String>,
     selected_ebook_format: Option<String>,
     library: &Library,
-    // mam_torrent: MaMTorrent,
     existing_torrent: Option<&Torrent>,
     meta: &TorrentMeta,
 ) -> Result<()> {
     let mut library_files = vec![];
 
-    let library_path = if library.tag_filters().method != LibraryLinkMethod::NoLink {
+    let library_path = if library.options().method != LibraryLinkMethod::NoLink {
         let Some(mut dir) = library_dir(config.exclude_narrator_in_library_dir, library, meta)
         else {
             bail!("Torrent has no author");
@@ -593,7 +581,7 @@ async fn link_torrent(
             library_files.push(file_path.clone());
             let download_path =
                 map_path(&qbit_config.path_mapping, &torrent.save_path).join(&file.name);
-            match library.method() {
+            match library.options().method {
                 LibraryLinkMethod::Hardlink => {
                     hard_link(&download_path, &library_path, &file_path)?
                 }
@@ -631,7 +619,7 @@ async fn link_torrent(
             // goodreads_id: existing_torrent.and_then(|t| t.goodreads_id),
             library_path: library_path.clone(),
             library_files,
-            linker: library.tag_filters().name.clone(),
+            linker: library.options().name.clone(),
             category: if torrent.category.is_empty() {
                 None
             } else {
@@ -658,7 +646,7 @@ async fn link_torrent(
                 Some(hash.to_owned()),
                 meta.mam_id(),
                 EventType::Linked {
-                    linker: library.tag_filters().name.clone(),
+                    linker: library.options().name.clone(),
                     library_path,
                 },
             ),
@@ -669,27 +657,17 @@ async fn link_torrent(
     Ok(())
 }
 
-pub fn map_path(path_mapping: &BTreeMap<PathBuf, PathBuf>, save_path: &str) -> PathBuf {
-    let mut path = PathBuf::from(save_path);
-    for (from, to) in path_mapping.iter().rev() {
-        if path.starts_with(from) {
-            let mut components = path.components();
-            for _ in from {
-                components.next();
-            }
-            path = to.join(components.as_path());
-            break;
-        }
-    }
-    path
-}
+// map_path provided by crate::linker::common::map_path
 
 pub fn find_library<'a>(config: &'a Config, torrent: &QbitTorrent) -> Option<&'a Library> {
     config
         .libraries
         .iter()
         .filter(|l| match l {
-            Library::ByDir(l) => PathBuf::from(&torrent.save_path).starts_with(&l.download_dir),
+            Library::ByRipDir(_) => false,
+            Library::ByDownloadDir(l) => {
+                PathBuf::from(&torrent.save_path).starts_with(&l.download_dir)
+            }
             Library::ByCategory(l) => torrent.category == l.category,
         })
         .find(|l| {
@@ -711,166 +689,183 @@ pub fn find_library<'a>(config: &'a Config, torrent: &QbitTorrent) -> Option<&'a
         })
 }
 
-pub fn library_dir(
-    exclude_narrator_in_library_dir: bool,
-    library: &Library,
-    meta: &TorrentMeta,
-) -> Option<PathBuf> {
-    let author = meta.authors.first()?;
-    let mut dir = match meta
-        .series
-        .iter()
-        .find(|s| !s.entries.0.is_empty())
-        .or(meta.series.first())
-    {
-        Some(series) => PathBuf::from(sanitize_filename::sanitize(author).to_string())
-            .join(sanitize_filename::sanitize(&series.name).to_string())
-            .join(
-                sanitize_filename::sanitize(if series.entries.0.is_empty() {
-                    meta.title.clone()
-                } else {
-                    format!("{} #{} - {}", series.name, series.entries, meta.title)
-                })
-                .to_string(),
-            ),
-        None => PathBuf::from(sanitize_filename::sanitize(author).to_string())
-            .join(sanitize_filename::sanitize(&meta.title).to_string()),
-    };
-    if let Some((edition, _)) = &meta.edition {
-        dir.set_file_name(
-            sanitize_filename::sanitize(format!(
-                "{}, {}",
-                dir.file_name().unwrap().to_string_lossy(),
-                edition
-            ))
-            .to_string(),
-        );
-    }
-    if let Some(narrator) = meta.narrators.first()
-        && !exclude_narrator_in_library_dir
-    {
-        dir.set_file_name(
-            sanitize_filename::sanitize(format!(
-                "{} {{{}}}",
-                dir.file_name().unwrap().to_string_lossy(),
-                narrator
-            ))
-            .to_string(),
-        );
-    }
-    let dir = library.library_dir().join(dir);
-    Some(dir)
-}
+// library_dir provided by crate::linker::common::library_dir
 
-fn select_format(
-    overridden_wanted_formats: &Option<Vec<String>>,
-    wanted_formats: &[String],
-    files: &[TorrentContent],
-) -> Option<String> {
-    overridden_wanted_formats
-        .as_deref()
-        .unwrap_or(wanted_formats)
-        .iter()
-        .map(|ext| {
-            let ext = ext.to_lowercase();
-            if ext.starts_with(".") {
-                ext.clone()
-            } else {
-                format!(".{ext}")
-            }
-        })
-        .find(|ext| files.iter().any(|f| f.name.to_lowercase().ends_with(ext)))
-}
+// select_format provided by crate::linker::common::select_format_from_contents as `select_format`
 
-#[instrument(skip_all)]
-fn hard_link(download_path: &Path, library_path: &Path, file_path: &Path) -> Result<()> {
-    debug!("linking: {:?} -> {:?}", download_path, library_path);
-    fs::hard_link(download_path, library_path).or_else(|err| {
-            if err.kind() == ErrorKind::AlreadyExists {
-                trace!("AlreadyExists: {}", err);
-                let download_id = get_file_id(download_path);
-                trace!("got 1: {download_id:?}");
-                let library_id = get_file_id(library_path);
-                trace!("got 2: {library_id:?}");
-                if let (Ok(download_id), Ok(library_id)) = (download_id, library_id) {
-                    trace!("got both");
-                    if download_id == library_id {
-                        trace!("both match");
-                        return Ok(());
-                    } else {
-                        trace!("no match");
-                        bail!(
-                            "File \"{:?}\" already exists, torrent file size: {}, library file size: {}",
-                            file_path,
-                            fs::metadata(download_path).map_or("?".to_string(), |s| Size::from_bytes(file_size(&s)).to_string()),
-                            fs::metadata(library_path).map_or("?".to_string(), |s| Size::from_bytes(file_size(&s)).to_string())
-                        );
-                    }
-                }
-            }
-            Err(err.into())
-        })?;
-    Ok(())
-}
+// hard_link, copy, symlink and file_size provided by crate::linker_common
 
-#[instrument(skip_all)]
-fn copy(download_path: &Path, library_path: &Path) -> Result<()> {
-    debug!("copying: {:?} -> {:?}", download_path, library_path);
-    fs::copy(download_path, library_path)?;
-    Ok(())
-}
-
-#[instrument(skip_all)]
-fn symlink(download_path: &Path, library_path: &Path) -> Result<()> {
-    debug!("symlinking: {:?} -> {:?}", download_path, library_path);
-    #[cfg(target_family = "unix")]
-    std::os::unix::fs::symlink(download_path, library_path)?;
-    #[cfg(target_family = "windows")]
-    bail!("symlink is not supported on Windows");
-    #[allow(unreachable_code)]
-    Ok(())
-}
-
-pub fn file_size(m: &Metadata) -> u64 {
-    #[cfg(target_family = "unix")]
-    return m.size();
-    #[cfg(target_family = "windows")]
-    return m.file_size();
-}
+// tests moved to linker_common
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+
+    use crate::config::{
+        Config, Library, LibraryByCategory, LibraryByDownloadDir, LibraryLinkMethod,
+        LibraryOptions, LibraryTagFilters,
+    };
 
     #[test]
-    fn test_map_path() {
-        let mut mappings = BTreeMap::new();
-        mappings.insert(PathBuf::from("/downloads"), PathBuf::from("/books"));
-        mappings.insert(
-            PathBuf::from("/downloads/audiobooks"),
-            PathBuf::from("/audiobooks"),
-        );
-        mappings.insert(PathBuf::from("/audiobooks"), PathBuf::from("/audiobooks"));
+    fn test_find_library_by_download_dir() {
+        let cfg = Config {
+            mam_id: "m".to_string(),
+            web_host: "".to_string(),
+            web_port: 0,
+            min_ratio: 0.0,
+            unsat_buffer: 0,
+            wedge_buffer: 0,
+            add_torrents_stopped: false,
+            exclude_narrator_in_library_dir: false,
+            search_interval: 0,
+            link_interval: 0,
+            import_interval: 0,
+            ignore_torrents: vec![],
+            audio_types: vec![],
+            ebook_types: vec![],
+            music_types: vec![],
+            radio_types: vec![],
+            search: crate::config::SearchConfig::default(),
+            audiobookshelf: None,
+            autograbs: vec![],
+            snatchlist: vec![],
+            goodreads_lists: vec![],
+            notion_lists: vec![],
+            tags: vec![],
+            qbittorrent: vec![],
+            libraries: vec![Library::ByDownloadDir(LibraryByDownloadDir {
+                download_dir: PathBuf::from("/downloads"),
+                options: LibraryOptions {
+                    name: None,
+                    library_dir: PathBuf::from("/library"),
+                    method: LibraryLinkMethod::Hardlink,
+                    audio_types: None,
+                    ebook_types: None,
+                },
+                tag_filters: LibraryTagFilters {
+                    allow_tags: vec![],
+                    deny_tags: vec![],
+                },
+            })],
+        };
 
-        assert_eq!(
-            map_path(&mappings, "/downloads/torrent"),
-            PathBuf::from("/books/torrent")
-        );
-        assert_eq!(
-            map_path(&mappings, "/downloads/audiobooks/torrent"),
-            PathBuf::from("/audiobooks/torrent")
-        );
-        assert_eq!(
-            map_path(&mappings, "/downloads/audiobooks/torrent/deep"),
-            PathBuf::from("/audiobooks/torrent/deep")
-        );
-        assert_eq!(
-            map_path(&mappings, "/audiobooks/torrent"),
-            PathBuf::from("/audiobooks/torrent")
-        );
-        assert_eq!(
-            map_path(&mappings, "/ebooks/torrent"),
-            PathBuf::from("/ebooks/torrent")
-        );
+        let qbit_torrent = qbit::models::Torrent {
+            save_path: "/downloads/some/path".to_string(),
+            category: "".to_string(),
+            ..Default::default()
+        };
+        let lib = find_library(&cfg, &qbit_torrent);
+        assert!(lib.is_some());
+        match lib.unwrap() {
+            Library::ByDownloadDir(_) => {}
+            _ => panic!("Expected ByDownloadDir"),
+        }
+    }
+
+    #[test]
+    fn test_find_library_by_category() {
+        let cfg = Config {
+            mam_id: "m".to_string(),
+            web_host: "".to_string(),
+            web_port: 0,
+            min_ratio: 0.0,
+            unsat_buffer: 0,
+            wedge_buffer: 0,
+            add_torrents_stopped: false,
+            exclude_narrator_in_library_dir: false,
+            search_interval: 0,
+            link_interval: 0,
+            import_interval: 0,
+            ignore_torrents: vec![],
+            audio_types: vec![],
+            ebook_types: vec![],
+            music_types: vec![],
+            radio_types: vec![],
+            search: crate::config::SearchConfig::default(),
+            audiobookshelf: None,
+            autograbs: vec![],
+            snatchlist: vec![],
+            goodreads_lists: vec![],
+            notion_lists: vec![],
+            tags: vec![],
+            qbittorrent: vec![],
+            libraries: vec![Library::ByCategory(LibraryByCategory {
+                category: "audiobooks".to_string(),
+                options: LibraryOptions {
+                    name: None,
+                    library_dir: PathBuf::from("/lib2"),
+                    method: LibraryLinkMethod::Hardlink,
+                    audio_types: None,
+                    ebook_types: None,
+                },
+                tag_filters: LibraryTagFilters {
+                    allow_tags: vec![],
+                    deny_tags: vec![],
+                },
+            })],
+        };
+
+        let qbit_torrent = qbit::models::Torrent {
+            save_path: "/other".to_string(),
+            category: "audiobooks".to_string(),
+            ..Default::default()
+        };
+        let lib = find_library(&cfg, &qbit_torrent);
+        assert!(lib.is_some());
+        match lib.unwrap() {
+            Library::ByCategory(l) => assert_eq!(l.category, "audiobooks"),
+            _ => panic!("Expected ByCategory"),
+        }
+    }
+
+    #[test]
+    fn test_find_library_skips_rip_dir() {
+        let cfg = Config {
+            mam_id: "m".to_string(),
+            web_host: "".to_string(),
+            web_port: 0,
+            min_ratio: 0.0,
+            unsat_buffer: 0,
+            wedge_buffer: 0,
+            add_torrents_stopped: false,
+            exclude_narrator_in_library_dir: false,
+            search_interval: 0,
+            link_interval: 0,
+            import_interval: 0,
+            ignore_torrents: vec![],
+            audio_types: vec![],
+            ebook_types: vec![],
+            music_types: vec![],
+            radio_types: vec![],
+            search: crate::config::SearchConfig::default(),
+            audiobookshelf: None,
+            autograbs: vec![],
+            snatchlist: vec![],
+            goodreads_lists: vec![],
+            notion_lists: vec![],
+            tags: vec![],
+            qbittorrent: vec![],
+            libraries: vec![Library::ByRipDir(crate::config::LibraryByRipDir {
+                rip_dir: PathBuf::from("/rip"),
+                options: LibraryOptions {
+                    name: None,
+                    library_dir: PathBuf::from("/lib"),
+                    method: LibraryLinkMethod::Hardlink,
+                    audio_types: None,
+                    ebook_types: None,
+                },
+                filter: crate::config::EditionFilter::default(),
+            })],
+        };
+
+        let qbit_torrent = qbit::models::Torrent {
+            save_path: "/rip/some".to_string(),
+            category: "".to_string(),
+            ..Default::default()
+        };
+        let lib = find_library(&cfg, &qbit_torrent);
+        // ByRipDir is explicitly skipped by find_library so should return None
+        assert!(lib.is_none());
     }
 }
