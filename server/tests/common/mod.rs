@@ -28,10 +28,12 @@ impl TestDb {
     }
 }
 
+#[allow(dead_code)]
 pub struct MockTorrentBuilder {
     torrent: Torrent,
 }
 
+#[allow(dead_code)]
 impl MockTorrentBuilder {
     pub fn new(id: &str, title: &str) -> Self {
         Self {
@@ -131,6 +133,7 @@ impl MockFs {
         })
     }
 
+    #[allow(dead_code)]
     pub fn create_libation_folder(
         &self,
         asin: &str,
