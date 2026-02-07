@@ -375,25 +375,21 @@ impl GoodreadsList {
     }
 
     pub fn allow_audio(&self) -> bool {
-        self.grab.iter().any(|g| {
-            g.filter
-                .edition
-                .categories
-                .audio
-                .as_ref()
-                .is_none_or(|c| !c.is_empty())
-        })
+        self.grab
+            .iter()
+            .any(|g| match g.edition.categories.audio.as_ref() {
+                None => true,
+                Some(c) => !c.is_empty(),
+            })
     }
 
     pub fn allow_ebook(&self) -> bool {
-        self.grab.iter().any(|g| {
-            g.filter
-                .edition
-                .categories
-                .ebook
-                .as_ref()
-                .is_none_or(|c| !c.is_empty())
-        })
+        self.grab
+            .iter()
+            .any(|g| match g.edition.categories.ebook.as_ref() {
+                None => true,
+                Some(c) => !c.is_empty(),
+            })
     }
 }
 
