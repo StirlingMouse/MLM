@@ -1641,6 +1641,7 @@ dependencies = [
  "native_db",
  "native_model",
  "once_cell",
+ "openssl",
  "reqwest",
  "reqwest_cookie_store",
  "serde",
