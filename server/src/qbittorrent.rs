@@ -5,12 +5,99 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use qbit::{
-    models::Torrent,
+    models::{Torrent, TorrentContent},
     parameters::{AddTorrent, TorrentListParams},
 };
 use tokio::sync::RwLock;
 
 use crate::config::{Config, QbitConfig};
+
+#[allow(async_fn_in_trait)]
+pub trait QbitApi: Send + Sync {
+    async fn torrents(&self, params: Option<TorrentListParams>) -> Result<Vec<Torrent>>;
+    async fn trackers(&self, hash: &str) -> Result<Vec<qbit::models::Tracker>>;
+    async fn files(&self, hash: &str, params: Option<Vec<i64>>) -> Result<Vec<TorrentContent>>;
+    async fn set_category(&self, hashes: Option<Vec<&str>>, category: &str) -> Result<()>;
+    async fn add_tags(&self, hashes: Option<Vec<&str>>, tags: Vec<&str>) -> Result<()>;
+    async fn create_category(&self, category: &str, save_path: &str) -> Result<()>;
+    async fn categories(&self) -> Result<HashMap<String, qbit::models::Category>>;
+}
+
+impl QbitApi for qbit::Api {
+    async fn torrents(&self, params: Option<TorrentListParams>) -> Result<Vec<Torrent>> {
+        self.torrents(params).await.map_err(Into::into)
+    }
+    async fn trackers(&self, hash: &str) -> Result<Vec<qbit::models::Tracker>> {
+        self.trackers(hash).await.map_err(Into::into)
+    }
+    async fn files(&self, hash: &str, params: Option<Vec<i64>>) -> Result<Vec<TorrentContent>> {
+        self.files(hash, params).await.map_err(Into::into)
+    }
+    async fn set_category(&self, hashes: Option<Vec<&str>>, category: &str) -> Result<()> {
+        self.set_category(hashes, category)
+            .await
+            .map_err(Into::into)
+    }
+    async fn add_tags(&self, hashes: Option<Vec<&str>>, tags: Vec<&str>) -> Result<()> {
+        self.add_tags(hashes, tags).await.map_err(Into::into)
+    }
+    async fn create_category(&self, category: &str, save_path: &str) -> Result<()> {
+        self.create_category(category, save_path)
+            .await
+            .map_err(Into::into)
+    }
+    async fn categories(&self) -> Result<HashMap<String, qbit::models::Category>> {
+        self.categories().await.map_err(Into::into)
+    }
+}
+
+impl<T: QbitApi + ?Sized> QbitApi for &T {
+    async fn torrents(&self, params: Option<TorrentListParams>) -> Result<Vec<Torrent>> {
+        (**self).torrents(params).await
+    }
+    async fn trackers(&self, hash: &str) -> Result<Vec<qbit::models::Tracker>> {
+        (**self).trackers(hash).await
+    }
+    async fn files(&self, hash: &str, params: Option<Vec<i64>>) -> Result<Vec<TorrentContent>> {
+        (**self).files(hash, params).await
+    }
+    async fn set_category(&self, hashes: Option<Vec<&str>>, category: &str) -> Result<()> {
+        (**self).set_category(hashes, category).await
+    }
+    async fn add_tags(&self, hashes: Option<Vec<&str>>, tags: Vec<&str>) -> Result<()> {
+        (**self).add_tags(hashes, tags).await
+    }
+    async fn create_category(&self, category: &str, save_path: &str) -> Result<()> {
+        (**self).create_category(category, save_path).await
+    }
+    async fn categories(&self) -> Result<HashMap<String, qbit::models::Category>> {
+        (**self).categories().await
+    }
+}
+
+impl<T: QbitApi + ?Sized> QbitApi for Arc<T> {
+    async fn torrents(&self, params: Option<TorrentListParams>) -> Result<Vec<Torrent>> {
+        (**self).torrents(params).await
+    }
+    async fn trackers(&self, hash: &str) -> Result<Vec<qbit::models::Tracker>> {
+        (**self).trackers(hash).await
+    }
+    async fn files(&self, hash: &str, params: Option<Vec<i64>>) -> Result<Vec<TorrentContent>> {
+        (**self).files(hash, params).await
+    }
+    async fn set_category(&self, hashes: Option<Vec<&str>>, category: &str) -> Result<()> {
+        (**self).set_category(hashes, category).await
+    }
+    async fn add_tags(&self, hashes: Option<Vec<&str>>, tags: Vec<&str>) -> Result<()> {
+        (**self).add_tags(hashes, tags).await
+    }
+    async fn create_category(&self, category: &str, save_path: &str) -> Result<()> {
+        (**self).create_category(category, save_path).await
+    }
+    async fn categories(&self) -> Result<HashMap<String, qbit::models::Category>> {
+        (**self).categories().await
+    }
+}
 
 const CATEGORY_CACHE_TTL_SECS: u64 = 60;
 
@@ -26,7 +113,12 @@ impl CategoryCache {
         }
     }
 
-    async fn get_or_fetch(&self, qbit: &qbit::Api, url: &str) -> Result<HashMap<String, ()>> {
+    async fn get_or_fetch<Q: QbitApi + ?Sized>(
+        &self,
+        qbit: &Q,
+        url: &str,
+    ) -> Result<HashMap<String, ()>> {
+
         let now = Instant::now();
         let cache = self.cache.read().await;
 
@@ -58,8 +150,8 @@ impl Default for CategoryCache {
 
 static CATEGORY_CACHE: Lazy<CategoryCache> = Lazy::new(CategoryCache::new);
 
-pub async fn ensure_category_exists(
-    qbit: &qbit::Api,
+pub async fn ensure_category_exists<Q: QbitApi + ?Sized>(
+    qbit: &Q,
     url: &str,
     category: &str,
 ) -> Result<()> {

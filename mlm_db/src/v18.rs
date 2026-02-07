@@ -2,8 +2,8 @@ use crate::ids;
 
 use super::{v01, v03, v04, v05, v08, v09, v10, v11, v12, v13, v16, v17};
 use mlm_parse::{normalize_title, parse_edition};
-use native_db::{ToKey, native_db};
-use native_model::{Model, native_model};
+use native_db::{native_db, ToKey};
+use native_model::{native_model, Model};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
@@ -88,7 +88,7 @@ pub struct ErroredTorrent {
     pub created_at: v03::Timestamp,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct TorrentMeta {
     pub ids: BTreeMap<String, String>,
     pub vip_status: Option<v11::VipStatus>,
@@ -112,15 +112,16 @@ pub struct TorrentMeta {
     pub uploaded_at: v03::Timestamp,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub enum MetadataSource {
+    #[default]
     Mam,
     Manual,
     File,
     Match,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[native_model(id = 6, version = 18, from = v17::Event)]
 #[native_db(export_keys = true)]
 pub struct Event {
@@ -135,7 +136,7 @@ pub struct Event {
     pub event: EventType,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum EventType {
     Grabbed {
         grabber: Option<String>,
@@ -157,14 +158,14 @@ pub enum EventType {
     RemovedFromTracker,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct TorrentMetaDiff {
     pub field: TorrentMetaField,
     pub from: String,
     pub to: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum TorrentMetaField {
     Ids,
     Vip,

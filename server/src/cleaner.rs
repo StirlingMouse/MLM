@@ -171,7 +171,7 @@ pub async fn remove_library_files(
                 }
             })?;
             if let Some(sub_dir) = file.parent() {
-                fs::remove_dir(sub_dir).ok();
+                fs::remove_dir(library_path.join(sub_dir)).ok();
             }
         }
         let mut remove_files = true;
