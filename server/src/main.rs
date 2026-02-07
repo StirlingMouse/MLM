@@ -1,22 +1,5 @@
 #![windows_subsystem = "windows"]
 
-mod audiobookshelf;
-mod autograbber;
-mod cleaner;
-mod config;
-mod config_impl;
-mod exporter;
-mod linker;
-mod lists;
-mod logging;
-mod qbittorrent;
-mod snatchlist;
-mod stats;
-mod torrent_downloader;
-mod web;
-#[cfg(target_family = "windows")]
-mod windows;
-
 use std::{
     collections::BTreeMap,
     env,
@@ -29,39 +12,40 @@ use std::{
 };
 
 use anyhow::{Context as _, Result};
-use audiobookshelf::match_torrents_to_abs;
-use autograbber::run_autograbber;
-use cleaner::run_library_cleaner;
 use dirs::{config_dir, data_local_dir};
-use exporter::export_db;
 use figment::{
     Figment,
     providers::{Env, Format, Toml},
 };
 use mlm_mam::api::MaM;
-use stats::{Stats, Triggers};
 use time::OffsetDateTime;
 use tokio::{
     select,
     sync::{Mutex, watch},
     time::sleep,
 };
-use torrent_downloader::grab_selected_torrents;
 use tracing::error;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{
     EnvFilter, Layer as _, fmt::time::LocalTime, layer::SubscriberExt as _,
     util::SubscriberInitExt as _,
 };
-use web::start_webserver;
 
-use crate::{
+use mlm::{
+    audiobookshelf::match_torrents_to_abs,
+    autograbber::run_autograbber,
+    cleaner::run_library_cleaner,
     config::Config,
     linker::{folder::link_folders_to_library, torrent::link_torrents_to_library},
     lists::{get_lists, run_list_import},
     snatchlist::run_snatchlist_search,
-    stats::Context,
+    stats::{Context, Stats, Triggers},
+    torrent_downloader::grab_selected_torrents,
+    web::start_webserver,
 };
+
+#[cfg(target_family = "windows")]
+use mlm::windows;
 
 #[tokio::main]
 async fn main() {
@@ -218,8 +202,6 @@ async fn app_main() -> Result<()> {
         return Ok(());
     }
 
-    // export_db(&db)?;
-    // return Ok(());
     let db = Arc::new(db);
 
     #[cfg(target_family = "windows")]
