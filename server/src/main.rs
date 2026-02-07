@@ -551,7 +551,7 @@ async fn app_main() -> Result<()> {
                             config.clone(),
                             db.clone(),
                             (&qbit_conf, &qbit),
-                            mam.clone(),
+                            &mam,
                         )
                         .await
                         .context("link_torrents_to_library");

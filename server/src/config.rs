@@ -1,8 +1,8 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use mlm_db::{
-    Flags, Language, MediaType, OldDbMainCat, Size,
     impls::{parse, parse_opt, parse_vec},
+    Flags, Language, MediaType, OldDbMainCat, Size,
 };
 use mlm_mam::{
     enums::{Categories, SearchIn, SnatchlistType},
@@ -11,7 +11,7 @@ use mlm_mam::{
 use serde::{Deserialize, Serialize};
 use time::Date;
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub mam_id: String,
@@ -275,7 +275,7 @@ pub enum Cost {
     MetadataOnlyAdd,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct QbitConfig {
     pub url: String,
@@ -289,7 +289,7 @@ pub struct QbitConfig {
     pub path_mapping: BTreeMap<PathBuf, PathBuf>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct QbitUpdate {
     pub category: Option<String>,
@@ -297,7 +297,7 @@ pub struct QbitUpdate {
     pub tags: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(untagged)]
 #[allow(clippy::enum_variant_names)]
 pub enum Library {
@@ -306,7 +306,7 @@ pub enum Library {
     ByCategory(LibraryByCategory),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LibraryByRipDir {
     pub rip_dir: PathBuf,
@@ -316,7 +316,7 @@ pub struct LibraryByRipDir {
     pub filter: EditionFilter,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LibraryByDownloadDir {
     pub download_dir: PathBuf,
@@ -326,7 +326,7 @@ pub struct LibraryByDownloadDir {
     pub tag_filters: LibraryTagFilters,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LibraryByCategory {
     pub category: String,
@@ -336,7 +336,7 @@ pub struct LibraryByCategory {
     pub tag_filters: LibraryTagFilters,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct LibraryTagFilters {
     #[serde(default)]
@@ -345,7 +345,7 @@ pub struct LibraryTagFilters {
     pub deny_tags: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LibraryOptions {
     #[serde(default)]

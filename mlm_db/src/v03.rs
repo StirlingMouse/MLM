@@ -1,6 +1,6 @@
 use super::{v01, v02, v04, v05, v06};
-use native_db::{Key, ToKey, native_db};
-use native_model::{Model, native_model};
+use native_db::{native_db, Key, ToKey};
+use native_model::{native_model, Model};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use time::{OffsetDateTime, UtcDateTime};
@@ -140,8 +140,9 @@ pub struct TorrentMeta {
     pub series: Vec<(String, String)>,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Language {
+    #[default]
     English,
     Afrikaans,
     Arabic,
@@ -224,6 +225,12 @@ pub struct Timestamp(pub UtcDateTime);
 impl Timestamp {
     pub fn now() -> Self {
         Self(UtcDateTime::now())
+    }
+}
+
+impl Default for Timestamp {
+    fn default() -> Self {
+        Self::now()
     }
 }
 
