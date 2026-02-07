@@ -255,6 +255,9 @@ impl EditionFilter {
     }
 
     pub(crate) fn matches_meta(&self, meta: &TorrentMeta) -> Result<bool, anyhow::Error> {
+        if !self.media_type.is_empty() && !self.media_type.contains(&meta.media_type) {
+            return Ok(false);
+        }
         if let Some(language) = &meta.language {
             if !self.languages.is_empty() && !self.languages.contains(language) {
                 return Ok(false);
