@@ -22,7 +22,9 @@ use tracing::{Level, instrument, span, trace, warn};
 
 use crate::audiobookshelf as abs;
 use crate::config::{Config, Library, LibraryLinkMethod};
-use crate::linker::common::{copy, file_size, hard_link, library_dir, select_format, symlink};
+use crate::linker::{
+    copy, file_size, find_matches, hard_link, library_dir, rank_torrents, select_format, symlink,
+};
 use crate::logging::{update_errored_torrent, write_event};
 
 #[instrument(skip_all)]
@@ -176,6 +178,35 @@ async fn link_libation_folder(
     };
     let meta = clean_meta(meta, "")?;
 
+    let mut torrent = Torrent {
+        id: libation_meta.asin.clone(),
+        id_is_hash: false,
+        mam_id: meta.mam_id(),
+        library_path: None,
+        library_files: vec![],
+        linker: library.options().name.clone(),
+        category: None,
+        selected_audio_format: None,
+        selected_ebook_format: None,
+        title_search: normalize_title(&meta.title),
+        meta: meta.clone(),
+        created_at: Timestamp::now(),
+        replaced_with: None,
+        library_mismatch: None,
+        client_status: None,
+    };
+
+    let matches = find_matches(db, &torrent)?;
+    if !matches.is_empty() {
+        let mut batch = matches;
+        batch.push(torrent.clone());
+        let ranked = rank_torrents(config, batch);
+        if ranked[0].id != torrent.id {
+            trace!("Skipping folder as it is a duplicate of a better torrent already in library");
+            return Ok(());
+        }
+    }
+
     if let Some(filter) = library.edition_filter()
         && !filter.matches_meta(&meta).is_ok_and(|matches| matches)
     {
@@ -241,26 +272,11 @@ async fn link_libation_folder(
 
     {
         let (_guard, rw) = db.rw_async().await?;
-        rw.upsert(Torrent {
-            id: libation_meta.asin.clone(),
-            id_is_hash: false,
-            mam_id: meta.mam_id(),
-            library_path: library_path.clone(),
-            library_files,
-            linker: library.options().name.clone(),
-            category: None,
-            selected_audio_format,
-            selected_ebook_format,
-            title_search: normalize_title(&meta.title),
-            meta: meta.clone(),
-            // created_at: existing_torrent
-            //     .map(|t| t.created_at)
-            //     .unwrap_or_else(Timestamp::now),
-            created_at: Timestamp::now(),
-            replaced_with: None,
-            library_mismatch: None,
-            client_status: None,
-        })?;
+        torrent.library_path = library_path.clone();
+        torrent.library_files = library_files;
+        torrent.selected_audio_format = selected_audio_format;
+        torrent.selected_ebook_format = selected_ebook_format;
+        rw.upsert(torrent)?;
         rw.commit()?;
     }
 
