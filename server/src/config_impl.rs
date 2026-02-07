@@ -340,9 +340,15 @@ impl EditionFilter {
             );
         }
 
-        // TODO: Match size
-        ensure!(self.min_size.bytes() == 0, "has min_size");
-        ensure!(self.max_size.bytes() == 0, "has max_size");
+        if self.min_size.bytes() > 0 || self.max_size.bytes() > 0 {
+            ensure!(meta.size.bytes() != 0, "has size filter and no stored size");
+            if self.min_size.bytes() > 0 && meta.size < self.min_size {
+                return Ok(false);
+            }
+            if self.max_size.bytes() > 0 && meta.size > self.max_size {
+                return Ok(false);
+            }
+        }
 
         Ok(true)
     }
@@ -1238,7 +1244,6 @@ mod tests {
             );
         }
 
-        // --- Disallowed Filter Checks (Ensure) ---
         #[test]
         fn test_disallowed_min_size_err() {
             let filter = TorrentFilter {
@@ -1255,8 +1260,39 @@ mod tests {
                     .matches_lib(&torrent)
                     .unwrap_err()
                     .to_string()
-                    .contains("has min_size")
+                    .contains("has size filter and no stored size")
             );
+        }
+
+        #[test]
+        fn test_match_size_ok_true_when_meta_has_size() {
+            let mut meta = default_meta();
+            meta.size = Size::from_bytes(2_000_000_000);
+            let torrent = create_torrent_with_meta(meta);
+            let filter = TorrentFilter {
+                edition: EditionFilter {
+                    min_size: Size::from_bytes(1_000_000_000),
+                    max_size: Size::from_bytes(3_000_000_000),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            assert!(filter.matches_lib(&torrent).unwrap());
+        }
+
+        #[test]
+        fn test_match_size_ok_false_when_meta_out_of_range() {
+            let mut meta = default_meta();
+            meta.size = Size::from_bytes(500_000_000);
+            let torrent = create_torrent_with_meta(meta);
+            let filter = TorrentFilter {
+                edition: EditionFilter {
+                    min_size: Size::from_bytes(1_000_000_000),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            assert!(!filter.matches_lib(&torrent).unwrap());
         }
 
         #[test]
