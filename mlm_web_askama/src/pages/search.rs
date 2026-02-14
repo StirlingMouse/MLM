@@ -14,10 +14,8 @@ use mlm_parse::normalize_title;
 use serde::Deserialize;
 use tracing::info;
 
-use crate::{
-    stats::Context,
-    web::{AppError, MaMTorrentsTemplate, Page},
-};
+use mlm_core::stats::Context;
+use crate::{AppError, MaMTorrentsTemplate, Page};
 
 pub async fn search_page(
     State(context): State<Context>,

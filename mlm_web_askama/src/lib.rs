@@ -47,18 +47,18 @@ use tower::ServiceBuilder;
 #[allow(unused)]
 use tower_http::services::{ServeDir, ServeFile};
 
-use crate::{
+use mlm_core::{
     config::{SearchConfig, TorrentFilter},
     stats::Context,
-    web::{
-        api::{
-            search::{search_api, search_api_post},
-            torrent::torrent_api,
-        },
-        pages::{
-            index::stats_updates,
-            search::{search_page, search_page_post},
-        },
+};
+use crate::{
+    api::{
+        search::{search_api, search_api_post},
+        torrent::torrent_api,
+    },
+    pages::{
+        index::stats_updates,
+        search::{search_page, search_page_post},
     },
 };
 
@@ -274,7 +274,33 @@ pub static TIME_FORMAT: Lazy<OwnedFormatItem> = Lazy::new(|| {
     format_description::parse_owned::<2>("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap()
 });
 
-fn time(time: &Timestamp) -> String {
+trait TimeValue {
+    fn as_timestamp(&self) -> Option<&Timestamp>;
+}
+
+impl<T: TimeValue + ?Sized> TimeValue for &T {
+    fn as_timestamp(&self) -> Option<&Timestamp> {
+        (*self).as_timestamp()
+    }
+}
+
+impl TimeValue for Timestamp {
+    fn as_timestamp(&self) -> Option<&Timestamp> {
+        Some(self)
+    }
+}
+
+impl TimeValue for Option<Timestamp> {
+    fn as_timestamp(&self) -> Option<&Timestamp> {
+        self.as_ref()
+    }
+}
+
+fn time<T: TimeValue>(time: &T) -> String {
+    let Some(time) = time.as_timestamp() else {
+        return String::new();
+    };
+
     time.0
         .to_offset(UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC))
         .replace_nanosecond(0)

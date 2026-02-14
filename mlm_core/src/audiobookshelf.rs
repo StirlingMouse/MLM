@@ -675,7 +675,7 @@ pub fn create_metadata(meta: &TorrentMeta) -> serde_json::Value {
         "series": &meta.series.iter().map(format_serie).collect::<Vec<_>>(),
         "title": title,
         "subtitle": subtitle,
-        "description": meta.description,
+        "description": clean_html(&meta.description),
         "isbn": meta.ids.get(ids::ISBN),
         "asin": meta.ids.get(ids::ASIN),
         "tags": if flags.lgbt == Some(true) { Some(vec!["LGBT"]) } else { None },

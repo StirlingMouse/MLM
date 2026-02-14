@@ -649,6 +649,7 @@ where
 }
 
 #[instrument(skip_all)]
+#[allow(clippy::too_many_arguments)]
 pub async fn refresh_metadata_relink_internal<Q, M>(
     config: &Config,
     qbit_config: &QbitConfig,
@@ -846,7 +847,7 @@ pub fn find_library<'a>(config: &'a Config, torrent: &QbitTorrent) -> Option<&'a
             if filters
                 .deny_tags
                 .iter()
-                .any(|tag| torrent.tags.split(", ").any(|t| t == tag.as_str()))
+                .any(|tag| torrent.tags.split(",").any(|t| t.trim() == tag.as_str()))
             {
                 return false;
             }
@@ -856,7 +857,7 @@ pub fn find_library<'a>(config: &'a Config, torrent: &QbitTorrent) -> Option<&'a
             filters
                 .allow_tags
                 .iter()
-                .any(|tag| torrent.tags.split(", ").any(|t| t == tag.as_str()))
+                .any(|tag| torrent.tags.split(",").any(|t| t.trim() == tag.as_str()))
         })
 }
 
@@ -1099,7 +1100,7 @@ mod tests {
                 narrators: vec![],
                 series: vec![],
                 source: mlm_db::MetadataSource::Mam,
-                uploaded_at: mlm_db::Timestamp::now(),
+                uploaded_at: Some(mlm_db::Timestamp::now()),
             },
             created_at: mlm_db::Timestamp::now(),
             replaced_with: None,
@@ -1387,7 +1388,7 @@ mod tests {
                 narrators: vec![],
                 series: vec![],
                 source: mlm_db::MetadataSource::Mam,
-                uploaded_at: mlm_db::Timestamp::now(),
+                uploaded_at: Some(mlm_db::Timestamp::now()),
             },
             created_at: mlm_db::Timestamp::now(),
             replaced_with: None,

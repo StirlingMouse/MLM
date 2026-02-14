@@ -83,7 +83,7 @@ mod tests {
             media_type: MediaType::Audiobook,
             main_cat: Some(MainCat::Fiction),
             source: MetadataSource::Mam,
-            uploaded_at: Timestamp::now(),
+            uploaded_at: Some(Timestamp::now()),
             authors: vec!["Author".to_string()],
             language: Some(Language::English),
             ids: BTreeMap::new(),

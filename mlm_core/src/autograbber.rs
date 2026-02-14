@@ -671,11 +671,22 @@ pub async fn add_metadata_only_torrent(
     Ok(())
 }
 
+pub enum PreparedTorrentMetaUpdate {
+    Unchanged,
+    Silent,
+    Pending(Box<PendingTorrentMetaUpdate>),
+}
+
+pub struct PendingTorrentMetaUpdate {
+    torrent: mlm_db::Torrent,
+    meta: TorrentMeta,
+    diff: Vec<mlm_db::TorrentMetaDiff>,
+    mam_id: Option<u64>,
+}
+
 #[allow(clippy::too_many_arguments)]
-pub async fn update_torrent_meta(
-    config: &Config,
-    db: &Database<'_>,
-    (guard, rw): (MutexGuard<'_, ()>, RwTransaction<'_>),
+pub fn queue_torrent_meta_update(
+    rw: &RwTransaction<'_>,
     mam_torrent: Option<&MaMTorrent>,
     mut torrent: mlm_db::Torrent,
     mut meta: TorrentMeta,
@@ -687,6 +698,9 @@ pub async fn update_torrent_meta(
     if meta.description.is_empty() {
         meta.description = torrent.meta.description.clone();
     }
+    if meta == torrent.meta {
+        return Ok(PreparedTorrentMetaUpdate::Unchanged);
+    }
 
     if !allow_non_mam && torrent.meta.source != MetadataSource::Mam {
         // Update VIP status and uploaded_at still
@@ -695,10 +709,9 @@ pub async fn update_torrent_meta(
         {
             torrent.meta.vip_status = meta.vip_status;
             torrent.meta.uploaded_at = meta.uploaded_at;
-            rw.upsert(torrent.clone())?;
-            rw.commit()?;
+            rw.upsert(torrent)?;
         }
-        return Ok(());
+        return Ok(PreparedTorrentMetaUpdate::Silent);
     }
 
     // Check expiring VIP
@@ -713,9 +726,8 @@ pub async fn update_torrent_meta(
         torrent.meta.vip_status = meta.vip_status.clone();
         // If expiring VIP was the only change, just silently update the database
         if torrent.meta == meta {
-            rw.upsert(torrent.clone())?;
-            rw.commit()?;
-            return Ok(());
+            rw.upsert(torrent)?;
+            return Ok(PreparedTorrentMetaUpdate::Silent);
         }
     }
 
@@ -725,9 +737,8 @@ pub async fn update_torrent_meta(
         torrent.meta.num_files = meta.num_files;
         // If uploaded_at or num_files was the only change, just silently update the database
         if torrent.meta == meta {
-            rw.upsert(torrent.clone())?;
-            rw.commit()?;
-            return Ok(());
+            rw.upsert(torrent)?;
+            return Ok(PreparedTorrentMetaUpdate::Silent);
         }
     }
 
@@ -750,8 +761,29 @@ pub async fn update_torrent_meta(
     torrent.meta = meta.clone();
     torrent.title_search = normalize_title(&meta.title);
     rw.upsert(torrent.clone())?;
-    rw.commit()?;
-    drop(guard);
+    Ok(PreparedTorrentMetaUpdate::Pending(Box::new(
+        PendingTorrentMetaUpdate {
+            torrent,
+            meta,
+            diff,
+            mam_id: mam_torrent.map(|m| m.id),
+        },
+    )))
+}
+
+pub async fn finalize_torrent_meta_update(
+    config: &Config,
+    db: &Database<'_>,
+    pending: PendingTorrentMetaUpdate,
+    events: &crate::stats::Events,
+) -> Result<()> {
+    let PendingTorrentMetaUpdate {
+        torrent,
+        meta,
+        diff,
+        mam_id,
+    } = pending;
+    let id = torrent.id.clone();
 
     if let Some(library_path) = &torrent.library_path
         && let serde_json::Value::Object(new) = abs::create_metadata(&meta)
@@ -782,7 +814,6 @@ pub async fn update_torrent_meta(
     }
 
     if !diff.is_empty() {
-        let mam_id = mam_torrent.map(|m| m.id);
         write_event(
             db,
             Event::new(
@@ -795,6 +826,38 @@ pub async fn update_torrent_meta(
             ),
         )
         .await;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn update_torrent_meta(
+    config: &Config,
+    db: &Database<'_>,
+    (guard, rw): (MutexGuard<'_, ()>, RwTransaction<'_>),
+    mam_torrent: Option<&MaMTorrent>,
+    torrent: mlm_db::Torrent,
+    meta: TorrentMeta,
+    allow_non_mam: bool,
+    linker_is_owner: bool,
+    events: &crate::stats::Events,
+) -> Result<()> {
+    let prepared = queue_torrent_meta_update(
+        &rw,
+        mam_torrent,
+        torrent,
+        meta,
+        allow_non_mam,
+        linker_is_owner,
+    )?;
+
+    if !matches!(prepared, PreparedTorrentMetaUpdate::Unchanged) {
+        rw.commit()?;
+    }
+    drop(guard);
+
+    if let PreparedTorrentMetaUpdate::Pending(pending) = prepared {
+        finalize_torrent_meta_update(config, db, *pending, events).await?;
     }
     Ok(())
 }

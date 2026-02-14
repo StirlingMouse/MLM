@@ -27,6 +27,7 @@ impl CategoryMapping {
         }
     }
 
+    #[cfg(test)]
     fn extend(&mut self, other: CategoryMapping) {
         for category in other.categories {
             self.push_category(category);

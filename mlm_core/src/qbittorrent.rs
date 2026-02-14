@@ -201,15 +201,13 @@ pub async fn get_torrent<'a, 'b>(
         else {
             continue;
         };
-        let Some(torrent) = qbit
+        let torrents = qbit
             .torrents(Some(TorrentListParams {
                 hashes: Some(vec![hash.to_string()]),
                 ..TorrentListParams::default()
             }))
-            .await?
-            .into_iter()
-            .next()
-        else {
+            .await?;
+        let Some(torrent) = torrents.into_iter().next() else {
             continue;
         };
         return Ok(Some((torrent, qbit, qbit_conf)));

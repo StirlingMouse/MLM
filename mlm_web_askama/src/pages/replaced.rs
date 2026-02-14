@@ -13,15 +13,13 @@ use axum_extra::extract::Form;
 use mlm_db::{Language, Torrent, TorrentKey, ids};
 use serde::{Deserialize, Serialize};
 
-use crate::stats::Context;
-use crate::web::{Page, tables};
-use crate::{
+use mlm_core::{
     linker::{refresh_mam_metadata, refresh_metadata_relink},
-    web::{
-        AppError,
-        tables::{Flex, HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable},
-        time,
-    },
+    stats::Context,
+};
+use crate::{
+    AppError, Page, time,
+    tables::{self, Flex, HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable},
 };
 use mlm_db::DatabaseExt as _;
 

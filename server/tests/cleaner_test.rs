@@ -1,7 +1,7 @@
 mod common;
 
 use common::{MockFs, MockTorrentBuilder, TestDb, mock_config};
-use mlm::cleaner::run_library_cleaner;
+use mlm_core::cleaner::run_library_cleaner;
 use mlm_db::{DatabaseExt, Torrent};
 use std::sync::Arc;
 
