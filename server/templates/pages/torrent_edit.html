@@ -29,6 +29,7 @@
   <label>
     <span>Language</span>
     <select name=language>
+      <option value="">-- None --</option>
     {% for language in Language::all() %}
       <option value="{{ language.to_id() }}" {% if torrent.meta.language == Some(*language) %}selected{% endif %}>{{ language.to_str() }}</option>
     {% endfor %}
@@ -37,6 +38,7 @@
   <label>
     <span>Category</span>
     <select name=category>
+      <option value="">-- None --</option>
     {% for cat in AudiobookCategory::all() %}
       <option value="{{ cat.to_id() }}" {% if torrent.meta.cat.as_ref().map(OldCategory::as_id) == Some(cat.to_id()) %}selected{% endif %}>Audiobook - {{ cat.to_str() }}</option>
     {% endfor %}

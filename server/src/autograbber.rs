@@ -415,7 +415,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         config,
                         db,
                         rw_opt.unwrap(),
-                        &torrent,
+                        Some(&torrent),
                         old,
                         meta,
                         false,
@@ -531,7 +531,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                             config,
                             db,
                             rw_opt.unwrap(),
-                            &torrent,
+                            Some(&torrent),
                             old,
                             meta,
                             false,
@@ -676,7 +676,7 @@ pub async fn update_torrent_meta(
     config: &Config,
     db: &Database<'_>,
     (guard, rw): (MutexGuard<'_, ()>, RwTransaction<'_>),
-    mam_torrent: &MaMTorrent,
+    mam_torrent: Option<&MaMTorrent>,
     mut torrent: mlm_db::Torrent,
     mut meta: TorrentMeta,
     allow_non_mam: bool,
@@ -731,16 +731,17 @@ pub async fn update_torrent_meta(
         }
     }
 
-    if linker_is_owner && torrent.linker.is_none() {
+    if linker_is_owner && torrent.linker.is_none()
+        && let Some(mam_torrent) = mam_torrent
+    {
         torrent.linker = Some(mam_torrent.owner_name.clone());
     }
 
     let id = torrent.id.clone();
-    let mam_id = mam_torrent.id;
     let diff = torrent.meta.diff(&meta);
     debug!(
         "Updating meta for torrent {}, diff:\n{}",
-        mam_id,
+        id,
         diff.iter()
             .map(|field| format!("  {}: {} → {}", field.field, field.from, field.to))
             .join("\n")
@@ -766,28 +767,29 @@ pub async fn update_torrent_meta(
             let mut writer = BufWriter::new(file);
             serde_json::to_writer(&mut writer, &serde_json::Value::Object(existing))?;
             writer.flush()?;
-            debug!("updated ABS metadata file {}", mam_torrent.id);
+            debug!("updated ABS metadata file {}", id);
         }
         if let (Some(abs_id), Some(abs_config)) =
             (&torrent.meta.ids.get(ids::ABS), &config.audiobookshelf)
         {
             let abs = Abs::new(abs_config)?;
             match abs.update_book(abs_id, &meta).await {
-                Ok(_) => debug!("updated ABS via API {}", mam_torrent.id),
-                Err(err) => warn!("Failed updating book {} in abs: {err}", mam_torrent.id),
+                Ok(_) => debug!("updated ABS via API {}", id),
+                Err(err) => warn!("Failed updating book {} in abs: {err}", id),
             }
         }
     }
 
     if !diff.is_empty() {
+        let mam_id = mam_torrent.map(|m| m.id);
         write_event(
             db,
             Event::new(
                 Some(id),
-                Some(mam_id),
+                mam_id,
                 EventType::Updated {
                     fields: diff,
-                    source: (MetadataSource::Mam, String::new()),
+                    source: (meta.source.clone(), String::new()),
                 },
             ),
         )
@@ -814,6 +816,7 @@ async fn update_selected_torrent_meta(
     );
     let hash = get_mam_torrent_hash(mam, &torrent.dl_link).await.ok();
     let mut torrent = torrent;
+    let source = meta.source.clone();
     torrent.meta = meta;
     rw.upsert(torrent)?;
     rw.commit()?;
@@ -825,7 +828,7 @@ async fn update_selected_torrent_meta(
             Some(mam_id),
             EventType::Updated {
                 fields: diff,
-                source: (MetadataSource::Mam, String::new()),
+                source: (source, String::new()),
             },
         ),
     )
