@@ -489,7 +489,7 @@ where
             config,
             db,
             db.rw_async().await?,
-            &mam_torrent,
+            Some(&mam_torrent),
             torrent.clone(),
             meta.clone(),
             true,
