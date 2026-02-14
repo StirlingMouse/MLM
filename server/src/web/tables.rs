@@ -254,6 +254,7 @@ pub trait HidableColumns: Sortable {
 
 pub trait Size {
     fn style(&self) -> String;
+    #[allow(dead_code)]
     fn px(&self) -> u64;
 }
 impl Size for u64 {
@@ -266,7 +267,7 @@ impl Size for u64 {
     }
 }
 
-pub struct Flex(pub u64, pub u64);
+pub struct Flex(pub u64, #[allow(dead_code)] pub u64);
 impl Size for Flex {
     fn style(&self) -> String {
         format!("{}fr", self.0)

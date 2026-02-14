@@ -2,12 +2,12 @@ mod common;
 
 use anyhow::Result;
 use common::{MockFs, TestDb, mock_config};
-use mlm_db::DatabaseExt as _;
 use mlm::config::{
     Library, LibraryByDownloadDir, LibraryLinkMethod, LibraryOptions, LibraryTagFilters, QbitConfig,
 };
 use mlm::linker::torrent::{MaMApi, link_torrents_to_library};
 use mlm::qbittorrent::QbitApi;
+use mlm_db::DatabaseExt as _;
 use mlm_mam::search::MaMTorrent;
 use qbit::models::{Torrent as QbitTorrent, TorrentContent, Tracker};
 use qbit::parameters::TorrentListParams;
@@ -56,28 +56,34 @@ impl MaMApi for MockMaM {
     }
 }
 
-fn mock_meta(title: &str, author: &str) -> mlm_db::TorrentMeta {
-    mlm_db::TorrentMeta {
-        ids: BTreeMap::new(),
-        vip_status: None,
-        cat: None,
-        media_type: mlm_db::MediaType::Audiobook,
-        main_cat: None,
-        categories: vec![],
-        tags: vec![],
-        language: None,
-        flags: None,
-        filetypes: vec![],
-        num_files: 0,
-        size: mlm_db::Size::from_bytes(0),
+#[allow(clippy::too_many_arguments)]
+/// Helper to build a MaMTorrent with sensible defaults for tests.
+fn make_mam_torrent(
+    id: u64,
+    title: &str,
+    mediatype: u8,
+    maincat: u8,
+    category: u64,
+    catname: &str,
+    language: u8,
+    lang_code: &str,
+    numfiles: u64,
+    filetype: &str,
+) -> MaMTorrent {
+    MaMTorrent {
+        id,
         title: title.to_string(),
-        edition: None,
-        description: "".to_string(),
-        authors: vec![author.to_string()],
-        narrators: vec![],
-        series: vec![],
-        source: mlm_db::MetadataSource::Mam,
-        uploaded_at: mlm_db::Timestamp::now(),
+        added: "2024-01-01 12:00:00".to_string(),
+        size: format!("{} B", 100),
+        mediatype,
+        maincat,
+        catname: catname.to_string(),
+        category,
+        language,
+        lang_code: lang_code.to_string(),
+        numfiles,
+        filetype: filetype.to_string(),
+        ..Default::default()
     }
 }
 
@@ -135,21 +141,18 @@ async fn test_link_torrent_audiobook() -> anyhow::Result<()> {
     };
 
     // Setup mock MaM
-    let mut mam_torrent = MaMTorrent {
-        id: 1,
-        title: "Test Title".to_string(),
-        added: "2024-01-01 12:00:00".to_string(),
-        size: "100 B".to_string(),
-        mediatype: 1, // Audiobook
-        maincat: 1,   // Fiction
-        catname: "General Fiction".to_string(),
-        category: 42, // General Fiction in AudiobookCategory
-        language: 1,  // English
-        lang_code: "en".to_string(),
-        numfiles: 1,
-        filetype: "m4b".to_string(),
-        ..Default::default()
-    };
+    let mut mam_torrent = make_mam_torrent(
+        1,
+        "Test Title",
+        1,
+        1,
+        42,
+        "General Fiction",
+        1,
+        "en",
+        1,
+        "m4b",
+    );
     mam_torrent.author_info.insert(1, "Test Author".to_string());
 
     let mock_mam = MockMaM {
@@ -379,18 +382,21 @@ async fn test_link_torrent_ebook() -> anyhow::Result<()> {
         files: HashMap::from([(torrent_hash.to_string(), vec![qbit_content])]),
     };
 
-    let mut mam_torrent = MaMTorrent {
-        id: 2,
-        title: "Ebook Title".to_string(),
-        added: "2024-01-02 12:00:00".to_string(),
-        size: "200 B".to_string(),
-        mediatype: 2, // Ebook
-        category: 46,
-        language: 1,
-        lang_code: "en".to_string(),
-        ..Default::default()
-    };
-    mam_torrent.author_info.insert(2, "Ebook Author".to_string());
+    let mut mam_torrent = make_mam_torrent(
+        2,
+        "Ebook Title",
+        2,
+        2,
+        64,
+        "General Fiction",
+        1,
+        "en",
+        1,
+        "epub",
+    );
+    mam_torrent
+        .author_info
+        .insert(2, "Ebook Author".to_string());
 
     let mock_mam = MockMaM {
         torrents: HashMap::from([(torrent_hash.to_string(), mam_torrent)]),
@@ -595,18 +601,11 @@ async fn test_refresh_metadata_relink() -> anyhow::Result<()> {
         )]),
     };
 
-    let mut mam_torrent = MaMTorrent {
-        id: 2,
-        title: "Title".to_string(),
-        added: "2024-01-01 12:00:00".to_string(),
-        size: "100 B".to_string(),
-        mediatype: 1, // Audiobook
-        category: 42,
-        language: 1,
-        lang_code: "en".to_string(),
-        ..Default::default()
-    };
-    mam_torrent.author_info.insert(2, "Refreshed Author".to_string());
+    let mut mam_torrent =
+        make_mam_torrent(2, "Title", 1, 1, 42, "General Fiction", 1, "en", 1, "m4b");
+    mam_torrent
+        .author_info
+        .insert(2, "Refreshed Author".to_string());
 
     let mock_mam = MockMaM {
         torrents: HashMap::from([(torrent_hash.to_string(), mam_torrent)]),

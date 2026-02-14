@@ -1,4 +1,3 @@
 [workspace]
 resolver = "3"
-members = ["server", "mlm_db", "mlm_parse", "mlm_mam"]
-
+members = ["server", "mlm_db", "mlm_parse", "mlm_mam", "mlm_meta"]

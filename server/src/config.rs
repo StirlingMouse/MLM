@@ -1,8 +1,8 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use mlm_db::{
-    impls::{parse, parse_opt, parse_vec},
     Flags, Language, MediaType, OldDbMainCat, Size,
+    impls::{parse, parse_opt, parse_vec},
 };
 use mlm_mam::{
     enums::{Categories, SearchIn, SnatchlistType},
@@ -10,6 +10,59 @@ use mlm_mam::{
 };
 use serde::{Deserialize, Serialize};
 use time::Date;
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "id", rename_all = "lowercase")]
+pub enum ProviderConfig {
+    Hardcover(HardcoverConfig),
+    RomanceIo(RomanceIoConfig),
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HardcoverConfig {
+    #[serde(default = "default_provider_enabled")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub timeout_secs: Option<u64>,
+    pub api_key: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RomanceIoConfig {
+    #[serde(default = "default_provider_enabled")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub timeout_secs: Option<u64>,
+}
+
+impl ProviderConfig {
+    pub fn id(&self) -> &str {
+        match self {
+            ProviderConfig::Hardcover(_) => "hardcover",
+            ProviderConfig::RomanceIo(_) => "romanceio",
+        }
+    }
+
+    pub fn enabled(&self) -> bool {
+        match self {
+            ProviderConfig::Hardcover(c) => c.enabled,
+            ProviderConfig::RomanceIo(c) => c.enabled,
+        }
+    }
+
+    pub fn timeout_secs(&self) -> Option<u64> {
+        match self {
+            ProviderConfig::Hardcover(c) => c.timeout_secs,
+            ProviderConfig::RomanceIo(c) => c.timeout_secs,
+        }
+    }
+}
+
+fn default_provider_enabled() -> bool {
+    true
+}
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -74,6 +127,8 @@ pub struct Config {
     #[serde(default)]
     #[serde(rename = "library")]
     pub libraries: Vec<Library>,
+    #[serde(default)]
+    pub metadata_providers: Vec<ProviderConfig>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -423,4 +478,44 @@ fn default_music_types() -> Vec<String> {
 
 fn default_radio_types() -> Vec<String> {
     ["mp3"].iter().map(ToString::to_string).collect()
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            mam_id: String::new(),
+            web_host: default_host(),
+            web_port: default_port(),
+            min_ratio: default_min_ratio(),
+            unsat_buffer: default_unsat_buffer(),
+            wedge_buffer: 0,
+            add_torrents_stopped: false,
+            exclude_narrator_in_library_dir: false,
+            search_interval: default_search_interval(),
+            link_interval: default_link_interval(),
+            import_interval: default_import_interval(),
+            ignore_torrents: vec![],
+
+            audio_types: default_audio_types(),
+            ebook_types: default_ebook_types(),
+            music_types: default_music_types(),
+            radio_types: default_radio_types(),
+
+            search: Default::default(),
+            audiobookshelf: None,
+
+            autograbs: vec![],
+            snatchlist: vec![],
+
+            goodreads_lists: vec![],
+            notion_lists: vec![],
+
+            tags: vec![],
+
+            qbittorrent: vec![],
+
+            libraries: vec![],
+            metadata_providers: vec![],
+        }
+    }
 }

@@ -1,8 +1,8 @@
 use anyhow::Result;
 use mlm::config::{Config, Library, LibraryByRipDir, LibraryLinkMethod, LibraryOptions};
 use mlm_db::{
-    migrate, Database, MainCat, MediaType, MetadataSource, Size, Timestamp, Torrent, TorrentMeta,
-    MODELS,
+    Database, MODELS, MainCat, MediaType, MetadataSource, Size, Timestamp, Torrent, TorrentMeta,
+    migrate,
 };
 use native_db::Builder;
 use std::path::PathBuf;
@@ -112,6 +112,7 @@ impl MockTorrentBuilder {
     }
 }
 
+#[allow(dead_code)]
 pub struct MockFs {
     #[allow(dead_code)]
     pub root: TempDir,
@@ -120,6 +121,7 @@ pub struct MockFs {
 }
 
 impl MockFs {
+    #[allow(dead_code)]
     pub fn new() -> Result<Self> {
         let root = tempfile::tempdir()?;
         let rip_dir = root.path().join("rip");
@@ -177,29 +179,6 @@ impl MockFs {
 pub fn mock_config(rip_dir: PathBuf, library_dir: PathBuf) -> Config {
     Config {
         mam_id: "test".to_string(),
-        web_host: "127.0.0.1".to_string(),
-        web_port: 3157,
-        min_ratio: 2.0,
-        unsat_buffer: 10,
-        wedge_buffer: 0,
-        add_torrents_stopped: false,
-        exclude_narrator_in_library_dir: false,
-        search_interval: 30,
-        link_interval: 10,
-        import_interval: 135,
-        ignore_torrents: vec![],
-        audio_types: vec!["m4b".to_string()],
-        ebook_types: vec!["epub".to_string()],
-        music_types: vec!["mp3".to_string()],
-        radio_types: vec!["mp3".to_string()],
-        search: Default::default(),
-        audiobookshelf: None,
-        autograbs: vec![],
-        snatchlist: vec![],
-        goodreads_lists: vec![],
-        notion_lists: vec![],
-        tags: vec![],
-        qbittorrent: vec![],
         libraries: vec![Library::ByRipDir(LibraryByRipDir {
             rip_dir,
             options: LibraryOptions {
@@ -211,5 +190,12 @@ pub fn mock_config(rip_dir: PathBuf, library_dir: PathBuf) -> Config {
             },
             filter: Default::default(),
         })],
+        metadata_providers: vec![mlm::config::ProviderConfig::RomanceIo(
+            mlm::config::RomanceIoConfig {
+                enabled: true,
+                timeout_secs: None,
+            },
+        )],
+        ..Default::default()
     }
 }

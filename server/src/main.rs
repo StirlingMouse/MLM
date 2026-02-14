@@ -38,6 +38,7 @@ use mlm::{
     config::Config,
     linker::{folder::link_folders_to_library, torrent::link_torrents_to_library},
     lists::{get_lists, run_list_import},
+    metadata::MetadataService,
     snatchlist::run_snatchlist_search,
     stats::{Context, Stats, Triggers},
     torrent_downloader::grab_selected_torrents,
@@ -208,6 +209,31 @@ async fn app_main() -> Result<()> {
     let _tray = windows::tray::start_tray_icon(log_dir, config_file.clone(), config.clone())?;
 
     let stats = Stats::new();
+
+    // Instantiate metadata service from config provider settings
+    let default_timeout = Duration::from_secs(5);
+    // Convert Config's ProviderConfig -> metadata::ProviderSetting
+    let provider_settings: Vec<mlm::metadata::ProviderSetting> = config
+        .metadata_providers
+        .iter()
+        .map(|p| match p {
+            mlm::config::ProviderConfig::Hardcover(c) => {
+                mlm::metadata::ProviderSetting::Hardcover {
+                    enabled: c.enabled,
+                    timeout_secs: c.timeout_secs,
+                    api_key: c.api_key.clone(),
+                }
+            }
+            mlm::config::ProviderConfig::RomanceIo(c) => {
+                mlm::metadata::ProviderSetting::RomanceIo {
+                    enabled: c.enabled,
+                    timeout_secs: c.timeout_secs,
+                }
+            }
+        })
+        .collect();
+    let metadata_service = MetadataService::from_settings(&provider_settings, default_timeout);
+    let metadata_service = Arc::new(metadata_service);
 
     let (mut search_tx, mut search_rx) = (BTreeMap::new(), BTreeMap::new());
     let (mut import_tx, mut import_rx) = (BTreeMap::new(), BTreeMap::new());
@@ -704,6 +730,7 @@ async fn app_main() -> Result<()> {
         db,
         mam: Arc::new(mam),
         stats,
+        metadata: metadata_service,
         triggers,
     };
 

@@ -271,6 +271,7 @@ where
         if torrent.progress < 1.0 {
             continue;
         }
+
         let library = find_library(&config, &torrent);
         let r = db.r_transaction()?;
         let mut existing_torrent: Option<Torrent> = r.get().primary(torrent.hash.clone())?;
@@ -340,6 +341,9 @@ where
         )
         .await
         .context("match_torrent");
+        if let Err(e) = &result {
+            debug!("match_torrent error for {}: {:#}", torrent.hash, e);
+        }
         update_errored_torrent(
             &db,
             ErroredTorrentId::Linker(torrent.hash.clone()),
@@ -713,6 +717,8 @@ async fn link_torrent(
 ) -> Result<()> {
     let mut library_files = vec![];
 
+    // Removed temporary debug prints that were used during investigation.
+
     let library_path = if library.options().method != LibraryLinkMethod::NoLink {
         let Some(mut dir) = library_dir(config.exclude_narrator_in_library_dir, library, meta)
         else {
@@ -876,43 +882,18 @@ mod tests {
     fn test_find_library_by_download_dir() {
         let cfg = Config {
             mam_id: "m".to_string(),
-            web_host: "".to_string(),
-            web_port: 0,
-            min_ratio: 0.0,
-            unsat_buffer: 0,
-            wedge_buffer: 0,
-            add_torrents_stopped: false,
-            exclude_narrator_in_library_dir: false,
-            search_interval: 0,
-            link_interval: 0,
-            import_interval: 0,
-            ignore_torrents: vec![],
-            audio_types: vec![],
-            ebook_types: vec![],
-            music_types: vec![],
-            radio_types: vec![],
-            search: crate::config::SearchConfig::default(),
-            audiobookshelf: None,
-            autograbs: vec![],
-            snatchlist: vec![],
-            goodreads_lists: vec![],
-            notion_lists: vec![],
-            tags: vec![],
-            qbittorrent: vec![],
             libraries: vec![Library::ByDownloadDir(LibraryByDownloadDir {
                 download_dir: PathBuf::from("/downloads"),
                 options: LibraryOptions {
                     name: None,
-                    library_dir: PathBuf::from("/library"),
+                    library_dir: PathBuf::from("/lib"),
                     method: LibraryLinkMethod::Hardlink,
                     audio_types: None,
                     ebook_types: None,
                 },
-                tag_filters: LibraryTagFilters {
-                    allow_tags: vec![],
-                    deny_tags: vec![],
-                },
+                tag_filters: LibraryTagFilters::default(),
             })],
+            ..Default::default()
         };
 
         let qbit_torrent = qbit::models::Torrent {
@@ -932,29 +913,6 @@ mod tests {
     fn test_find_library_by_category() {
         let cfg = Config {
             mam_id: "m".to_string(),
-            web_host: "".to_string(),
-            web_port: 0,
-            min_ratio: 0.0,
-            unsat_buffer: 0,
-            wedge_buffer: 0,
-            add_torrents_stopped: false,
-            exclude_narrator_in_library_dir: false,
-            search_interval: 0,
-            link_interval: 0,
-            import_interval: 0,
-            ignore_torrents: vec![],
-            audio_types: vec![],
-            ebook_types: vec![],
-            music_types: vec![],
-            radio_types: vec![],
-            search: crate::config::SearchConfig::default(),
-            audiobookshelf: None,
-            autograbs: vec![],
-            snatchlist: vec![],
-            goodreads_lists: vec![],
-            notion_lists: vec![],
-            tags: vec![],
-            qbittorrent: vec![],
             libraries: vec![Library::ByCategory(LibraryByCategory {
                 category: "audiobooks".to_string(),
                 options: LibraryOptions {
@@ -969,6 +927,7 @@ mod tests {
                     deny_tags: vec![],
                 },
             })],
+            ..Default::default()
         };
 
         let qbit_torrent = qbit::models::Torrent {
@@ -988,29 +947,6 @@ mod tests {
     fn test_find_library_skips_rip_dir() {
         let cfg = Config {
             mam_id: "m".to_string(),
-            web_host: "".to_string(),
-            web_port: 0,
-            min_ratio: 0.0,
-            unsat_buffer: 0,
-            wedge_buffer: 0,
-            add_torrents_stopped: false,
-            exclude_narrator_in_library_dir: false,
-            search_interval: 0,
-            link_interval: 0,
-            import_interval: 0,
-            ignore_torrents: vec![],
-            audio_types: vec![],
-            ebook_types: vec![],
-            music_types: vec![],
-            radio_types: vec![],
-            search: crate::config::SearchConfig::default(),
-            audiobookshelf: None,
-            autograbs: vec![],
-            snatchlist: vec![],
-            goodreads_lists: vec![],
-            notion_lists: vec![],
-            tags: vec![],
-            qbittorrent: vec![],
             libraries: vec![Library::ByRipDir(crate::config::LibraryByRipDir {
                 rip_dir: PathBuf::from("/rip"),
                 options: LibraryOptions {
@@ -1022,6 +958,7 @@ mod tests {
                 },
                 filter: crate::config::EditionFilter::default(),
             })],
+            ..Default::default()
         };
 
         let qbit_torrent = qbit::models::Torrent {
@@ -1175,30 +1112,7 @@ mod tests {
         };
         let cfg = Config {
             mam_id: "m".to_string(),
-            web_host: "".to_string(),
-            web_port: 0,
-            min_ratio: 0.0,
-            unsat_buffer: 0,
-            wedge_buffer: 0,
-            add_torrents_stopped: false,
-            exclude_narrator_in_library_dir: false,
-            search_interval: 0,
-            link_interval: 0,
-            import_interval: 0,
-            ignore_torrents: vec![],
-            audio_types: vec![],
-            ebook_types: vec![],
-            music_types: vec![],
-            radio_types: vec![],
-            search: crate::config::SearchConfig::default(),
-            audiobookshelf: None,
-            autograbs: vec![],
-            snatchlist: vec![],
-            goodreads_lists: vec![],
-            notion_lists: vec![],
-            tags: vec![],
-            qbittorrent: vec![],
-            libraries: vec![],
+            ..Default::default()
         };
 
         let update = check_torrent_updates(&mut torrent, &qbit_torrent, None, &cfg, &[]);
@@ -1485,30 +1399,7 @@ mod tests {
     fn mock_config() -> Config {
         Config {
             mam_id: "m".to_string(),
-            web_host: "".to_string(),
-            web_port: 0,
-            min_ratio: 0.0,
-            unsat_buffer: 0,
-            wedge_buffer: 0,
-            add_torrents_stopped: false,
-            exclude_narrator_in_library_dir: false,
-            search_interval: 0,
-            link_interval: 0,
-            import_interval: 0,
-            ignore_torrents: vec![],
-            audio_types: vec![],
-            ebook_types: vec![],
-            music_types: vec![],
-            radio_types: vec![],
-            search: crate::config::SearchConfig::default(),
-            audiobookshelf: None,
-            autograbs: vec![],
-            snatchlist: vec![],
-            goodreads_lists: vec![],
-            notion_lists: vec![],
-            tags: vec![],
-            qbittorrent: vec![],
-            libraries: vec![],
+            ..Default::default()
         }
     }
 

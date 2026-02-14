@@ -7,6 +7,7 @@ pub mod exporter;
 pub mod linker;
 pub mod lists;
 pub mod logging;
+pub mod metadata;
 pub mod qbittorrent;
 pub mod snatchlist;
 pub mod stats;

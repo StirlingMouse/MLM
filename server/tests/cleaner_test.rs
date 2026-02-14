@@ -1,15 +1,18 @@
 mod common;
 
-use common::{TestDb, MockFs, mock_config, MockTorrentBuilder};
+use common::{MockFs, MockTorrentBuilder, TestDb, mock_config};
 use mlm::cleaner::run_library_cleaner;
+use mlm_db::{DatabaseExt, Torrent};
 use std::sync::Arc;
-use mlm_db::{Torrent, DatabaseExt};
 
 #[tokio::test]
 async fn test_run_library_cleaner() -> anyhow::Result<()> {
     let test_db = TestDb::new()?;
     let mock_fs = MockFs::new()?;
-    let config = Arc::new(mock_config(mock_fs.rip_dir.clone(), mock_fs.library_dir.clone()));
+    let config = Arc::new(mock_config(
+        mock_fs.rip_dir.clone(),
+        mock_fs.library_dir.clone(),
+    ));
 
     // Create two versions of the same book
     let lib_path1 = mock_fs.library_dir.join("Author 1").join("Book 1 (v1)");
@@ -51,11 +54,20 @@ async fn test_run_library_cleaner() -> anyhow::Result<()> {
     // t1 should be replaced_with t2
     assert!(t1_after.replaced_with.is_some(), "t1 should be replaced");
     assert_eq!(t1_after.replaced_with.unwrap().0, "ID2");
-    assert!(t1_after.library_path.is_none(), "t1 library path should be cleared");
+    assert!(
+        t1_after.library_path.is_none(),
+        "t1 library path should be cleared"
+    );
 
     // t2 should still be there
-    assert!(t2_after.replaced_with.is_none(), "t2 should not be replaced");
-    assert!(t2_after.library_path.is_some(), "t2 library path should still be set");
+    assert!(
+        t2_after.replaced_with.is_none(),
+        "t2 should not be replaced"
+    );
+    assert!(
+        t2_after.library_path.is_some(),
+        "t2 library path should still be set"
+    );
 
     // Files for t1 should be deleted
     assert!(!lib_path1.exists(), "t1 files should be deleted");

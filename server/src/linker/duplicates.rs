@@ -67,11 +67,15 @@ pub fn rank_torrents(config: &Config, batch: Vec<Torrent>) -> Vec<Torrent> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mlm_db::{Language, MainCat, MediaType, MetadataSource, Size, Timestamp, TorrentMeta};
     use std::collections::BTreeMap;
-    use mlm_db::{MediaType, Size, TorrentMeta, Timestamp, MetadataSource, MainCat, Language};
-    use crate::config::SearchConfig;
 
-    fn create_test_torrent(id: &str, title: &str, filetypes: Vec<String>, size_bytes: u64) -> Torrent {
+    fn create_test_torrent(
+        id: &str,
+        title: &str,
+        filetypes: Vec<String>,
+        size_bytes: u64,
+    ) -> Torrent {
         let meta = TorrentMeta {
             title: title.to_string(),
             filetypes,
@@ -116,43 +120,20 @@ mod tests {
     fn create_test_config() -> Config {
         Config {
             mam_id: "test".to_string(),
-            web_host: "0.0.0.0".to_string(),
-            web_port: 3157,
-            min_ratio: 2.0,
-            unsat_buffer: 10,
-            wedge_buffer: 0,
-            add_torrents_stopped: false,
-            exclude_narrator_in_library_dir: false,
-            search_interval: 30,
-            link_interval: 10,
-            import_interval: 135,
-            ignore_torrents: vec![],
-            audio_types: vec!["m4b".to_string(), "mp3".to_string()],
-            ebook_types: vec!["epub".to_string(), "pdf".to_string()],
-            music_types: vec!["flac".to_string(), "mp3".to_string()],
-            radio_types: vec!["mp3".to_string()],
-            search: SearchConfig::default(),
-            audiobookshelf: None,
-            autograbs: vec![],
-            snatchlist: vec![],
-            goodreads_lists: vec![],
-            notion_lists: vec![],
-            tags: vec![],
-            qbittorrent: vec![],
-            libraries: vec![],
+            ..Default::default()
         }
     }
 
     #[test]
     fn test_rank_torrents_preference() {
         let config = create_test_config();
-        
+
         let t1 = create_test_torrent("1", "Title", vec!["mp3".to_string()], 100);
         let t2 = create_test_torrent("2", "Title", vec!["m4b".to_string()], 100);
-        
+
         let batch = vec![t1.clone(), t2.clone()];
         let ranked = rank_torrents(&config, batch);
-        
+
         assert_eq!(ranked[0].id, "2"); // m4b is preferred over mp3
         assert_eq!(ranked[1].id, "1");
     }
@@ -160,31 +141,32 @@ mod tests {
     #[test]
     fn test_rank_torrents_size_tie_break() {
         let config = create_test_config();
-        
+
         let t1 = create_test_torrent("1", "Title", vec!["m4b".to_string()], 100);
         let t2 = create_test_torrent("2", "Title", vec!["m4b".to_string()], 200);
-        
+
         let batch = vec![t1.clone(), t2.clone()];
         let ranked = rank_torrents(&config, batch);
-        
+
         assert_eq!(ranked[0].id, "2"); // Larger size wins tie
         assert_eq!(ranked[1].id, "1");
     }
 
     #[tokio::test]
     async fn test_find_matches() -> Result<()> {
-        let tmp_dir = std::env::temp_dir().join(format!("mlm_test_duplicates_{}", std::process::id()));
+        let tmp_dir =
+            std::env::temp_dir().join(format!("mlm_test_duplicates_{}", std::process::id()));
         let _ = fs::remove_dir_all(&tmp_dir);
         fs::create_dir_all(&tmp_dir)?;
         let db_path = tmp_dir.join("test.db");
-        
+
         let db = native_db::Builder::new().create(&mlm_db::MODELS, &db_path)?;
         mlm_db::migrate(&db)?;
-        
+
         let t1 = create_test_torrent("1", "My Book", vec!["m4b".to_string()], 100);
         let t2 = create_test_torrent("2", "My Book", vec!["mp3".to_string()], 150);
         let t3 = create_test_torrent("3", "Other Book", vec!["m4b".to_string()], 100);
-        
+
         {
             let rw = db.rw_transaction()?;
             rw.insert(t1.clone())?;
@@ -192,14 +174,13 @@ mod tests {
             rw.insert(t3.clone())?;
             rw.commit()?;
         }
-        
+
         let matches = find_matches(&db, &t1)?;
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].id, "2");
-        
+
         drop(db);
         let _ = fs::remove_dir_all(tmp_dir);
         Ok(())
     }
 }
-

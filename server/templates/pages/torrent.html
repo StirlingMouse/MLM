@@ -74,6 +74,15 @@
       <button name=action value=clean data-prompt="Are you sure you want to clean this torrent?">clean torrent</button>
     </form>
   </div>
+  <form method=post class="row" style="justify-content:flex-start">
+    {% for provider in metadata_providers %}
+      {% if provider == "hardcover" %}
+        <button name=action value="match-hardcover">Match meta (Hardcover)</button>
+      {% else if provider == "romanceio" %}
+        <button name=action value="match-romanceio">Match meta (Romance.io)</button>
+      {% endif %}
+    {% endfor %}
+  </form>
 {% endif %}
 {% if wanted_path != torrent.library_path %}
   {% if let Some(wanted_path) = wanted_path %}

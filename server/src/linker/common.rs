@@ -209,11 +209,22 @@ mod tests {
 
     #[test]
     fn test_select_format() {
-        struct F { name: String }
-        impl HasFileName for F {
-            fn name_lower(&self) -> String { self.name.to_lowercase() }
+        struct F {
+            name: String,
         }
-        let files = vec![F { name: "book.M4B".to_string() }, F { name: "cover.jpg".to_string() }];
+        impl HasFileName for F {
+            fn name_lower(&self) -> String {
+                self.name.to_lowercase()
+            }
+        }
+        let files = vec![
+            F {
+                name: "book.M4B".to_string(),
+            },
+            F {
+                name: "cover.jpg".to_string(),
+            },
+        ];
         let wanted = vec!["m4b".to_string(), "mp3".to_string()];
         let sel = select_format(&Some(vec!["m4b".to_string()]), &wanted, &files);
         assert_eq!(sel.unwrap(), ".m4b".to_string());
@@ -223,9 +234,17 @@ mod tests {
 
     #[test]
     fn test_select_format_leading_dot_in_override() {
-        struct F { name: String }
-        impl HasFileName for F { fn name_lower(&self) -> String { self.name.to_lowercase() } }
-        let files = vec![F { name: "track.FLAC".to_string() }];
+        struct F {
+            name: String,
+        }
+        impl HasFileName for F {
+            fn name_lower(&self) -> String {
+                self.name.to_lowercase()
+            }
+        }
+        let files = vec![F {
+            name: "track.FLAC".to_string(),
+        }];
         let wanted = vec!["mp3".to_string(), "flac".to_string()];
         // override contains leading dot
         let sel = select_format(&Some(vec![".flac".to_string()]), &wanted, &files);
@@ -234,9 +253,17 @@ mod tests {
 
     #[test]
     fn test_select_format_uppercase_extension() {
-        struct F { name: String }
-        impl HasFileName for F { fn name_lower(&self) -> String { self.name.to_lowercase() } }
-        let files = vec![F { name: "ALBUM.MP3".to_string() }];
+        struct F {
+            name: String,
+        }
+        impl HasFileName for F {
+            fn name_lower(&self) -> String {
+                self.name.to_lowercase()
+            }
+        }
+        let files = vec![F {
+            name: "ALBUM.MP3".to_string(),
+        }];
         let wanted = vec!["mp3".to_string()];
         let sel = select_format(&None, &wanted, &files);
         assert_eq!(sel.unwrap(), ".mp3".to_string());
@@ -244,9 +271,17 @@ mod tests {
 
     #[test]
     fn test_select_format_missing_extension_returns_none() {
-        struct F { name: String }
-        impl HasFileName for F { fn name_lower(&self) -> String { self.name.to_lowercase() } }
-        let files = vec![F { name: "README".to_string() }];
+        struct F {
+            name: String,
+        }
+        impl HasFileName for F {
+            fn name_lower(&self) -> String {
+                self.name.to_lowercase()
+            }
+        }
+        let files = vec![F {
+            name: "README".to_string(),
+        }];
         let wanted = vec!["m4b".to_string()];
         let sel = select_format(&None, &wanted, &files);
         assert!(sel.is_none());
@@ -254,9 +289,17 @@ mod tests {
 
     #[test]
     fn test_select_format_overridden_empty_vector() {
-        struct F { name: String }
-        impl HasFileName for F { fn name_lower(&self) -> String { self.name.to_lowercase() } }
-        let files = vec![F { name: "song.mp3".to_string() }];
+        struct F {
+            name: String,
+        }
+        impl HasFileName for F {
+            fn name_lower(&self) -> String {
+                self.name.to_lowercase()
+            }
+        }
+        let files = vec![F {
+            name: "song.mp3".to_string(),
+        }];
         let wanted = vec!["mp3".to_string()];
         // override provided but empty -> should produce no selection
         let sel = select_format(&Some(vec![]), &wanted, &files);
@@ -265,9 +308,17 @@ mod tests {
 
     #[test]
     fn test_select_format_wanted_empty_then_none() {
-        struct F { name: String }
-        impl HasFileName for F { fn name_lower(&self) -> String { self.name.to_lowercase() } }
-        let files = vec![F { name: "file.mp3".to_string() }];
+        struct F {
+            name: String,
+        }
+        impl HasFileName for F {
+            fn name_lower(&self) -> String {
+                self.name.to_lowercase()
+            }
+        }
+        let files = vec![F {
+            name: "file.mp3".to_string(),
+        }];
         let wanted: Vec<String> = vec![];
         let sel = select_format(&None, &wanted, &files);
         assert!(sel.is_none());

@@ -29,6 +29,7 @@ use serde::Deserialize;
 use time::UtcDateTime;
 use tokio_util::io::ReaderStream;
 
+use crate::metadata::mam_meta::match_meta;
 use crate::{
     audiobookshelf::{Abs, LibraryItemMinified},
     cleaner::clean_torrent,
@@ -45,6 +46,7 @@ use crate::{
         time,
     },
 };
+use mlm_db::MetadataSource;
 
 pub async fn torrent_file(
     State(context): State<Context>,
@@ -173,8 +175,8 @@ async fn torrent_page_id(
         .db
         .r_transaction()?
         .scan()
-        .secondary::<Event>(EventKey::mam_id)?;
-    let events = events.range(Some(torrent.mam_id)..=Some(torrent.mam_id))?;
+        .secondary::<Event>(EventKey::torrent_id)?;
+    let events = events.range(Some(torrent.id.clone())..=Some(torrent.id.clone()))?;
     let mut events = events.collect::<Result<Vec<_>, _>>()?;
     events.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
@@ -262,6 +264,7 @@ async fn torrent_page_id(
         wanted_path,
         qbit_files,
         other_torrents,
+        metadata_providers: context.metadata.enabled_providers(),
     };
     Ok::<_, AppError>(Html(template.to_string()))
 }
@@ -340,6 +343,47 @@ pub async fn torrent_page_post_id(
         "refresh-relink" => {
             let mam = context.mam()?;
             refresh_metadata_relink(&config, &context.db, &mam, id).await?;
+        }
+        "match-hardcover" | "match-romanceio" => {
+            // Build a query from existing torrent metadata
+            let Some(mut torrent) = context.db.r_transaction()?.get().primary::<Torrent>(id)?
+            else {
+                return Err(anyhow::Error::msg("Could not find torrent").into());
+            };
+
+            let provider_id = if form.action == "match-hardcover" {
+                "hardcover"
+            } else {
+                "romanceio"
+            };
+
+            match match_meta(&context, &torrent.meta, provider_id).await {
+                Ok((new_meta, pid, fields)) => {
+                    let ev = Event {
+                        id: mlm_db::Uuid::new(),
+                        torrent_id: Some(torrent.id.clone()),
+                        mam_id: torrent.mam_id,
+                        created_at: mlm_db::Timestamp::now(),
+                        event: EventType::Updated {
+                            fields: fields.clone(),
+                            source: (MetadataSource::Match, pid.clone()),
+                        },
+                    };
+
+                    let (_guard, rw) = context.db.rw_async().await?;
+                    // apply meta updates
+                    let mut meta = new_meta;
+                    meta.source = MetadataSource::Match;
+                    torrent.meta = meta;
+                    // update title_search to normalized title
+                    torrent.title_search = mlm_parse::normalize_title(&torrent.meta.title);
+
+                    rw.upsert(torrent)?;
+                    rw.insert(ev)?;
+                    rw.commit()?;
+                }
+                Err(e) => tracing::error!("metadata match failed: {e}"),
+            }
         }
         "remove" => {
             let (_guard, rw) = context.db.rw_async().await?;
@@ -456,6 +500,7 @@ struct TorrentPageTemplate {
     wanted_path: Option<PathBuf>,
     qbit_files: Vec<qbit::models::TorrentContent>,
     other_torrents: MaMTorrentsTemplate,
+    metadata_providers: Vec<String>,
 }
 
 impl TorrentPageTemplate {
