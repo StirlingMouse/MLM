@@ -1,9 +1,11 @@
 pub mod fake;
 pub mod hardcover;
+pub mod openlibrary;
 pub mod romanceio;
 
 pub use fake::FakeProvider;
 pub use hardcover::Hardcover;
+pub use openlibrary::OpenLibrary;
 pub use romanceio::RomanceIo;
 
 use crate::helpers::SearchQuery;
