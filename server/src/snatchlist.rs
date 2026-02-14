@@ -155,7 +155,7 @@ async fn update_torrents<T: Iterator<Item = UserDetailsTorrent>>(
                     update_torrent_meta(
                         db,
                         rw_opt.unwrap(),
-                        &torrent,
+                        Some(&torrent),
                         old,
                         meta,
                         cost == Cost::MetadataOnlyAdd,
@@ -233,7 +233,7 @@ async fn add_metadata_only_torrent(
 async fn update_torrent_meta(
     db: &Database<'_>,
     (guard, rw): (MutexGuard<'_, ()>, RwTransaction<'_>),
-    mam_torrent: &UserDetailsTorrent,
+    mam_torrent: Option<&UserDetailsTorrent>,
     mut torrent: Torrent,
     mut meta: TorrentMeta,
     linker_is_owner: bool,
@@ -277,17 +277,18 @@ async fn update_torrent_meta(
     }
 
     if linker_is_owner && torrent.linker.is_none() {
-        torrent.linker = Some(mam_torrent.uploader_name.clone());
+        if let Some(mam_torrent) = mam_torrent {
+            torrent.linker = Some(mam_torrent.uploader_name.clone());
+        }
     } else if meta == torrent.meta {
         return Ok(());
     }
 
     let id = torrent.id.clone();
-    let mam_id = mam_torrent.id;
     let diff = torrent.meta.diff(&meta);
     debug!(
         "Updating meta for torrent {}, diff:\n{}",
-        mam_id,
+        id,
         diff.iter()
             .map(|field| format!("  {}: {} → {}", field.field, field.from, field.to))
             .join("\n")
@@ -299,14 +300,15 @@ async fn update_torrent_meta(
     drop(guard);
 
     if !diff.is_empty() {
+        let mam_id = mam_torrent.map(|m| m.id);
         write_event(
             db,
             Event::new(
                 Some(id),
-                Some(mam_id),
+                mam_id,
                 EventType::Updated {
                     fields: diff,
-                    source: (MetadataSource::Mam, String::new()),
+                    source: (meta.source.clone(), String::new()),
                 },
             ),
         )

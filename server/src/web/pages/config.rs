@@ -82,7 +82,7 @@ pub async fn config_page_post(
                                 &config,
                                 &context.db,
                                 context.db.rw_async().await?,
-                                &mam_torrent,
+                                Some(&mam_torrent),
                                 torrent.clone(),
                                 new_meta,
                                 false,
