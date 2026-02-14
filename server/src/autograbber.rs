@@ -24,7 +24,7 @@ use mlm_mam::{
 };
 use mlm_parse::normalize_title;
 use native_db::{Database, db_type, transaction::RwTransaction};
-use qbit::parameters::{AddTorrent, AddTorrentType, TorrentFile};
+use qbit::parameters::{AddTorrent, AddTorrentType, TorrentFile, TorrentListParams, TorrentState};
 use tokio::{
     fs,
     sync::{MutexGuard, watch::Sender},
@@ -718,6 +718,74 @@ async fn grab_torrent(
     let torrent_file = Torrent::read_from_bytes(torrent_file_bytes.clone())?;
     let hash = torrent_file.info_hash();
 
+    if let Ok(Some(qbit_torrent)) = qbit
+        .torrents(Some(TorrentListParams {
+            hashes: Some(vec![hash.to_string()]),
+            ..TorrentListParams::default()
+        }))
+        .await
+        .map(|t| t.into_iter().next())
+    {
+        let is_completed = matches!(
+            qbit_torrent.state,
+            TorrentState::Uploading
+                | TorrentState::StoppedUploading
+                | TorrentState::QueuedUploading
+                | TorrentState::StalledUploading
+                | TorrentState::CheckingUploading
+                | TorrentState::ForcedUploading
+        );
+
+        let (_guard, rw) = db.rw_async().await?;
+
+        if is_completed {
+            if rw.get().primary::<mlm_db::Torrent>(hash.clone())?.is_none() {
+                rw.upsert(mlm_db::Torrent {
+                    id: hash.clone(),
+                    id_is_hash: true,
+                    mam_id: torrent.meta.mam_id,
+                    abs_id: None,
+                    goodreads_id: torrent.goodreads_id,
+                    library_path: None,
+                    library_files: Default::default(),
+                    linker: None,
+                    category: torrent.category.clone(),
+                    selected_audio_format: None,
+                    selected_ebook_format: None,
+                    title_search: torrent.title_search.clone(),
+                    meta: torrent.meta.clone(),
+                    created_at: Timestamp::now(),
+                    replaced_with: None,
+                    request_matadata_update: false,
+                    library_mismatch: None,
+                    client_status: None,
+                })?;
+            }
+            rw.remove(torrent)?;
+        } else {
+            let mut t = torrent;
+            t.started_at = Some(Timestamp::now());
+            rw.upsert(t)?;
+        }
+        rw.commit()?;
+
+        return Ok(());
+    }
+
+    let library_existing = {
+        let r = db.r_transaction()?;
+        r.get().primary::<mlm_db::Torrent>(hash.clone())?
+    };
+
+    if let Some(existing) = library_existing {
+        if existing.library_path.is_some() {
+            let (_guard, rw) = db.rw_async().await?;
+            rw.remove(torrent)?;
+            rw.commit()?;
+            return Ok(());
+        }
+    }
+
     let wedge_buffer = torrent.wedge_buffer.unwrap_or(config.wedge_buffer);
     let mut wedged = false;
     if torrent.cost == TorrentCost::UseWedge || torrent.cost == TorrentCost::TryWedge {
@@ -788,7 +856,7 @@ async fn grab_torrent(
     let grabber = torrent.grabber.clone();
     {
         let (_guard, rw) = db.rw_async().await?;
-        rw.insert(mlm_db::Torrent {
+        rw.upsert(mlm_db::Torrent {
             id: hash.clone(),
             id_is_hash: true,
             mam_id: torrent.meta.mam_id,
@@ -811,14 +879,7 @@ async fn grab_torrent(
         let mut torrent = torrent;
         torrent.hash = Some(hash.clone());
         torrent.started_at = Some(Timestamp::now());
-        rw.upsert(torrent).map(|_| ()).or_else(|err| {
-            if let db_type::Error::KeyNotFound { .. } = err {
-                warn!("Got missing key when updating selected torrent");
-                Ok(())
-            } else {
-                Err(err)
-            }
-        })?;
+        rw.upsert(torrent)?;
         rw.commit()?;
     }
 
