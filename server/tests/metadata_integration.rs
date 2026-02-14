@@ -8,8 +8,8 @@ use mlm_db::{Event, EventKey, EventType, TorrentMeta as MetadataQuery};
 
 use async_trait::async_trait;
 use common::{TestDb, mock_config};
-use mlm::metadata::MetadataService;
-use mlm::stats::Context;
+use mlm_core::metadata::MetadataService;
+use mlm_core::stats::Context;
 use url::Url;
 
 // Simple mock fetcher that resolves plan files from the repo for tests.
@@ -73,24 +73,24 @@ async fn test_metadata_fetch_and_persist_romanceio() -> Result<()> {
     let _default_timeout = StdDuration::from_secs(5);
     let providers = cfg.metadata_providers.clone();
     // convert provider config to server metadata provider settings
-    let provider_settings: Vec<mlm::metadata::ProviderSetting> = providers
+    let provider_settings: Vec<mlm_core::metadata::ProviderSetting> = providers
         .iter()
         .map(|p| match p {
-            mlm::config::ProviderConfig::Hardcover(c) => {
-                mlm::metadata::ProviderSetting::Hardcover {
+            mlm_core::config::ProviderConfig::Hardcover(c) => {
+                mlm_core::metadata::ProviderSetting::Hardcover {
                     enabled: c.enabled,
                     timeout_secs: c.timeout_secs,
                     api_key: c.api_key.clone(),
                 }
             }
-            mlm::config::ProviderConfig::RomanceIo(c) => {
-                mlm::metadata::ProviderSetting::RomanceIo {
+            mlm_core::config::ProviderConfig::RomanceIo(c) => {
+                mlm_core::metadata::ProviderSetting::RomanceIo {
                     enabled: c.enabled,
                     timeout_secs: c.timeout_secs,
                 }
             }
-            mlm::config::ProviderConfig::OpenLibrary(c) => {
-                mlm::metadata::ProviderSetting::OpenLibrary {
+            mlm_core::config::ProviderConfig::OpenLibrary(c) => {
+                mlm_core::metadata::ProviderSetting::OpenLibrary {
                     enabled: c.enabled,
                     timeout_secs: c.timeout_secs,
                 }
@@ -105,9 +105,9 @@ async fn test_metadata_fetch_and_persist_romanceio() -> Result<()> {
         config: Arc::new(tokio::sync::Mutex::new(Arc::new(cfg))),
         db: test_db.db.clone(),
         mam: Arc::new(Err(anyhow::anyhow!("no mam"))),
-        stats: mlm::stats::Stats::new(),
+        stats: mlm_core::stats::Stats::new(),
         metadata: metadata.clone(),
-        triggers: mlm::stats::Triggers {
+        triggers: mlm_core::stats::Triggers {
             search_tx: std::collections::BTreeMap::new(),
             import_tx: std::collections::BTreeMap::new(),
             torrent_linker_tx: tokio::sync::watch::channel(()).0,
@@ -125,7 +125,7 @@ async fn test_metadata_fetch_and_persist_romanceio() -> Result<()> {
     let mock_fetcher = std::sync::Arc::new(MockFetcher);
     // Rebuild a metadata service with a RomanceIo using the mock fetcher.
     let rom = mlm_meta::providers::RomanceIo::with_client(mock_fetcher.clone());
-    let svc = mlm::metadata::MetadataService::new(
+    let svc = mlm_core::metadata::MetadataService::new(
         vec![(std::sync::Arc::new(rom), std::time::Duration::from_secs(5))],
         std::time::Duration::from_secs(5),
     );

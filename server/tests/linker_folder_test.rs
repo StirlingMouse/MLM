@@ -1,7 +1,7 @@
 mod common;
 
 use common::{MockFs, TestDb, mock_config};
-use mlm::linker::folder::link_folders_to_library;
+use mlm_core::linker::folder::link_folders_to_library;
 use mlm_db::{DatabaseExt, Torrent};
 use std::sync::Arc;
 
@@ -78,7 +78,7 @@ async fn test_link_folders_to_library_filter_size_too_small() -> anyhow::Result<
     let mock_fs = MockFs::new()?;
     let mut config = mock_config(mock_fs.rip_dir.clone(), mock_fs.library_dir.clone());
 
-    if let mlm::config::Library::ByRipDir(ref mut l) = config.libraries[0] {
+    if let mlm_core::config::Library::ByRipDir(ref mut l) = config.libraries[0] {
         l.filter.min_size = mlm_db::Size::from_bytes(100); // Libation folder is 15 bytes
     }
     let config = Arc::new(config);
@@ -103,7 +103,7 @@ async fn test_link_folders_to_library_filter_media_type_mismatch() -> anyhow::Re
     let mock_fs = MockFs::new()?;
     let mut config = mock_config(mock_fs.rip_dir.clone(), mock_fs.library_dir.clone());
 
-    if let mlm::config::Library::ByRipDir(ref mut l) = config.libraries[0] {
+    if let mlm_core::config::Library::ByRipDir(ref mut l) = config.libraries[0] {
         l.filter.media_type = vec![mlm_db::MediaType::Ebook]; // Libation is Audiobook
     }
     let config = Arc::new(config);
@@ -128,7 +128,7 @@ async fn test_link_folders_to_library_filter_language_mismatch() -> anyhow::Resu
     let mock_fs = MockFs::new()?;
     let mut config = mock_config(mock_fs.rip_dir.clone(), mock_fs.library_dir.clone());
 
-    if let mlm::config::Library::ByRipDir(ref mut l) = config.libraries[0] {
+    if let mlm_core::config::Library::ByRipDir(ref mut l) = config.libraries[0] {
         l.filter.languages = vec![mlm_db::Language::German]; // Libation is English
     }
     let config = Arc::new(config);

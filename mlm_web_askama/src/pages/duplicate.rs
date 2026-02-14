@@ -12,14 +12,14 @@ use mlm_parse::normalize_title;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use crate::{
+use mlm_core::{
     cleaner::clean_torrent,
     stats::Context,
-    web::{
-        AppError, Page,
-        tables::{Key, SortOn, Sortable, table_styles_rows},
-        time,
-    },
+};
+use crate::{
+    AppError, Page,
+    tables::{Key, SortOn, Sortable, table_styles_rows},
+    time,
 };
 
 pub async fn duplicate_page(

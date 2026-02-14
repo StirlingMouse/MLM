@@ -13,7 +13,7 @@ use mlm_db::{DatabaseExt as _, ErroredTorrent, ErroredTorrentId, ErroredTorrentK
 use native_db::Database;
 use serde::{Deserialize, Serialize};
 
-use crate::web::{
+use crate::{
     AppError, Page,
     tables::{self, Flex, HidableColumns, Key, SortOn, Sortable},
     time,

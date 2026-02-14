@@ -1,7 +1,6 @@
 #![windows_subsystem = "windows"]
 
 use std::{
-    collections::BTreeMap,
     env,
     fs::{self, create_dir_all},
     io, mem,
@@ -11,19 +10,13 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context as _, Result};
+use anyhow::Result;
 use dirs::{config_dir, data_local_dir};
 use figment::{
     Figment,
     providers::{Env, Format, Toml},
 };
 use mlm_mam::api::MaM;
-use time::OffsetDateTime;
-use tokio::{
-    select,
-    sync::{Mutex, watch},
-    time::sleep,
-};
 use tracing::error;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{
@@ -31,19 +24,8 @@ use tracing_subscriber::{
     util::SubscriberInitExt as _,
 };
 
-use mlm::{
-    audiobookshelf::match_torrents_to_abs,
-    autograbber::run_autograbber,
-    cleaner::run_library_cleaner,
-    config::Config,
-    linker::{folder::link_folders_to_library, torrent::link_torrents_to_library},
-    lists::{get_lists, run_list_import},
-    metadata::MetadataService,
-    snatchlist::run_snatchlist_search,
-    stats::{Context, Stats, Triggers},
-    torrent_downloader::grab_selected_torrents,
-    web::start_webserver,
-};
+use mlm_core::{config::Config, metadata::MetadataService, stats::Stats};
+use mlm_web_askama::start_webserver;
 
 #[cfg(target_family = "windows")]
 use mlm::windows;
@@ -213,25 +195,25 @@ async fn app_main() -> Result<()> {
     // Instantiate metadata service from config provider settings
     let default_timeout = Duration::from_secs(5);
     // Convert Config's ProviderConfig -> metadata::ProviderSetting
-    let provider_settings: Vec<mlm::metadata::ProviderSetting> = config
+    let provider_settings: Vec<mlm_core::metadata::ProviderSetting> = config
         .metadata_providers
         .iter()
         .map(|p| match p {
-            mlm::config::ProviderConfig::Hardcover(c) => {
-                mlm::metadata::ProviderSetting::Hardcover {
+            mlm_core::config::ProviderConfig::Hardcover(c) => {
+                mlm_core::metadata::ProviderSetting::Hardcover {
                     enabled: c.enabled,
                     timeout_secs: c.timeout_secs,
                     api_key: c.api_key.clone(),
                 }
             }
-            mlm::config::ProviderConfig::RomanceIo(c) => {
-                mlm::metadata::ProviderSetting::RomanceIo {
+            mlm_core::config::ProviderConfig::RomanceIo(c) => {
+                mlm_core::metadata::ProviderSetting::RomanceIo {
                     enabled: c.enabled,
                     timeout_secs: c.timeout_secs,
                 }
             }
-            mlm::config::ProviderConfig::OpenLibrary(c) => {
-                mlm::metadata::ProviderSetting::OpenLibrary {
+            mlm_core::config::ProviderConfig::OpenLibrary(c) => {
+                mlm_core::metadata::ProviderSetting::OpenLibrary {
                     enabled: c.enabled,
                     timeout_secs: c.timeout_secs,
                 }
@@ -241,504 +223,16 @@ async fn app_main() -> Result<()> {
     let metadata_service = MetadataService::from_settings(&provider_settings, default_timeout);
     let metadata_service = Arc::new(metadata_service);
 
-    let (mut search_tx, mut search_rx) = (BTreeMap::new(), BTreeMap::new());
-    let (mut import_tx, mut import_rx) = (BTreeMap::new(), BTreeMap::new());
-    let (torrent_linker_tx, torrent_linker_rx) = watch::channel(());
-    let (folder_linker_tx, folder_linker_rx) = watch::channel(());
-    let (downloader_tx, mut downloader_rx) = watch::channel(());
-    let (audiobookshelf_tx, mut audiobookshelf_rx) = watch::channel(());
-
     let mam = if config.mam_id.is_empty() {
         Err(anyhow::Error::msg("No mam_id set"))
     } else {
         MaM::new(&config.mam_id, db.clone()).await.map(Arc::new)
     };
-    if let Ok(mam) = &mam {
-        {
-            let config = config.clone();
-            let db = db.clone();
-            let mam = mam.clone();
-            let stats = stats.clone();
-            tokio::spawn(async move {
-                if let Some(qbit_conf) = config.qbittorrent.first() {
-                    loop {
-                        let mut qbit: Option<qbit::Api> = None;
-                        if downloader_rx.changed().await.is_err() {
-                            break;
-                        }
-                        if qbit.is_none() {
-                            match qbit::Api::new_login_username_password(
-                                &qbit_conf.url,
-                                &qbit_conf.username,
-                                &qbit_conf.password,
-                            )
-                            .await
-                            {
-                                Ok(q) => qbit = Some(q),
-                                Err(err) => {
-                                    error!("Error logging in to qbit {}: {err}", qbit_conf.url);
-                                    stats
-                                        .update(|stats| {
-                                            stats.downloader_run_at =
-                                                Some(OffsetDateTime::now_utc());
-                                            stats.downloader_result = Some(Err(err.into()));
-                                        })
-                                        .await;
-                                }
-                            };
-                        }
-                        let Some(qbit) = &qbit else {
-                            continue;
-                        };
-                        {
-                            stats
-                                .update(|stats| {
-                                    stats.downloader_run_at = Some(OffsetDateTime::now_utc());
-                                    stats.downloader_result = None;
-                                })
-                                .await;
-                        }
-                        let result =
-                            grab_selected_torrents(&config, &db, qbit, &qbit_conf.url, &mam)
-                                .await
-                                .context("grab_selected_torrents");
 
-                        if let Err(err) = &result {
-                            error!("Error grabbing selected torrents: {err:?}");
-                        }
-                        {
-                            stats
-                                .update(|stats| {
-                                    stats.downloader_result = Some(result);
-                                })
-                                .await;
-                        }
-                    }
-                }
-            });
-        }
-
-        for (i, grab) in config.autograbs.iter().enumerate() {
-            let config = config.clone();
-            let db = db.clone();
-            let mam = mam.clone();
-            let downloader_tx = downloader_tx.clone();
-            let (tx, mut rx) = watch::channel(());
-            search_tx.insert(i, tx);
-            search_rx.insert(i, rx.clone());
-            let stats = stats.clone();
-            let grab = Arc::new(grab.clone());
-            tokio::spawn(async move {
-                loop {
-                    let interval = grab.search_interval.unwrap_or(config.search_interval);
-                    if interval > 0 {
-                        select! {
-                            () = sleep(Duration::from_secs(60 * grab.search_interval.unwrap_or(config.search_interval))) => {},
-                            result = rx.changed() => {
-                                if let Err(err) = result {
-                                    error!("Error listening on search_rx: {err:?}");
-                                    stats.update(|stats| {
-                                        stats.autograbber_result.insert(i, Err(err.into()));
-                                    }).await;
-                                }
-                            },
-                        }
-                    } else {
-                        let result = rx.changed().await;
-                        if let Err(err) = result {
-                            error!("Error listening on search_rx: {err:?}");
-                            stats
-                                .update(|stats| {
-                                    stats.autograbber_result.insert(i, Err(err.into()));
-                                })
-                                .await;
-                        }
-                    }
-                    {
-                        stats
-                            .update(|stats| {
-                                stats
-                                    .autograbber_run_at
-                                    .insert(i, OffsetDateTime::now_utc());
-                                stats.autograbber_result.remove(&i);
-                            })
-                            .await;
-                    }
-                    let result = run_autograbber(
-                        config.clone(),
-                        db.clone(),
-                        mam.clone(),
-                        downloader_tx.clone(),
-                        i,
-                        grab.clone(),
-                    )
-                    .await
-                    .context("autograbbers");
-                    if let Err(err) = &result {
-                        error!("Error running autograbbers: {err:?}");
-                    }
-                    {
-                        stats
-                            .update(|stats| {
-                                stats.autograbber_result.insert(i, result);
-                            })
-                            .await;
-                    }
-                }
-            });
-        }
-
-        for (i, grab) in config.snatchlist.iter().enumerate() {
-            let i = i + config.autograbs.len();
-            let config = config.clone();
-            let db = db.clone();
-            let mam = mam.clone();
-            let (tx, mut rx) = watch::channel(());
-            search_tx.insert(i, tx);
-            search_rx.insert(i, rx.clone());
-            let stats = stats.clone();
-            let grab = Arc::new(grab.clone());
-            tokio::spawn(async move {
-                loop {
-                    let interval = grab.search_interval.unwrap_or(config.search_interval);
-                    if interval > 0 {
-                        select! {
-                            () = sleep(Duration::from_secs(60 * interval)) => {},
-                            result = rx.changed() => {
-                                if let Err(err) = result {
-                                    error!("Error listening on search_rx for snatchlist: {err:?}");
-                                    stats.update(|stats| {
-                                        stats.autograbber_result.insert(i, Err(err.into()));
-                                    }).await;
-                                }
-                            },
-                        }
-                    } else {
-                        let result = rx.changed().await;
-                        if let Err(err) = result {
-                            error!("Error listening on search_rx for snatchlist: {err:?}");
-                            stats
-                                .update(|stats| {
-                                    stats.autograbber_result.insert(i, Err(err.into()));
-                                })
-                                .await;
-                        }
-                    }
-                    {
-                        stats
-                            .update(|stats| {
-                                stats
-                                    .autograbber_run_at
-                                    .insert(i, OffsetDateTime::now_utc());
-                                stats.autograbber_result.remove(&i);
-                            })
-                            .await;
-                    }
-                    let result = run_snatchlist_search(
-                        config.clone(),
-                        db.clone(),
-                        mam.clone(),
-                        i,
-                        grab.clone(),
-                    )
-                    .await
-                    .context("snatchlist_search");
-                    if let Err(err) = &result {
-                        error!("Error running snatchlist_search: {err:?}");
-                    }
-                    {
-                        stats
-                            .update(|stats| {
-                                stats.autograbber_result.insert(i, result);
-                            })
-                            .await;
-                    }
-                }
-            });
-        }
-
-        for (i, list) in get_lists(&config).into_iter().enumerate() {
-            let config = config.clone();
-            let db = db.clone();
-            let mam = mam.clone();
-            let downloader_tx = downloader_tx.clone();
-            let (tx, mut rx) = watch::channel(());
-            import_tx.insert(i, tx);
-            import_rx.insert(i, rx.clone());
-            let stats = stats.clone();
-            let list = Arc::new(list);
-            tokio::spawn(async move {
-                loop {
-                    let interval = list.search_interval().unwrap_or(config.import_interval);
-                    if interval > 0 {
-                        select! {
-                            () = sleep(Duration::from_secs(60 * interval)) => {},
-                            result = rx.changed() => {
-                                if let Err(err) = result {
-                                    error!("Error listening on import_rx: {err:?}");
-                                    stats.update(|stats| {
-                                        stats.import_result.insert(i, Err(err.into()));
-                                    }).await;
-                                }
-                            },
-                        }
-                    } else {
-                        let result = rx.changed().await;
-                        if let Err(err) = result {
-                            error!("Error listening on import_rx: {err:?}");
-                            stats
-                                .update(|stats| {
-                                    stats.import_result.insert(i, Err(err.into()));
-                                })
-                                .await;
-                        }
-                    }
-                    {
-                        stats
-                            .update(|stats| {
-                                stats.import_run_at.insert(i, OffsetDateTime::now_utc());
-                                stats.import_result.remove(&i);
-                            })
-                            .await;
-                    }
-                    let result = run_list_import(
-                        config.clone(),
-                        db.clone(),
-                        mam.clone(),
-                        list.clone(),
-                        i,
-                        downloader_tx.clone(),
-                    )
-                    .await
-                    .context("import");
-                    if let Err(err) = &result {
-                        error!("Error running import: {err:?}");
-                    }
-                    {
-                        stats
-                            .update(|stats| {
-                                stats.import_result.insert(i, result);
-                            })
-                            .await;
-                    }
-                }
-            });
-        }
-
-        {
-            for qbit_conf in config.qbittorrent.clone() {
-                let config = config.clone();
-                let db = db.clone();
-                let mam = mam.clone();
-                let stats = stats.clone();
-                let mut linker_rx = torrent_linker_rx.clone();
-                tokio::spawn(async move {
-                    loop {
-                        select! {
-                            () = sleep(Duration::from_secs(60 * config.link_interval)) => {},
-                            result = linker_rx.changed() => {
-                                if let Err(err) = result {
-                                    error!("Error listening on link_rx: {err:?}");
-                                    stats
-                                        .update(|stats| {
-                                            stats.torrent_linker_run_at = Some(OffsetDateTime::now_utc());
-                                            stats.torrent_linker_result = Some(Err(err.into()));
-                                        }).await;
-                                }
-                            },
-                        }
-                        {
-                            stats
-                                .update(|stats| {
-                                    stats.torrent_linker_run_at = Some(OffsetDateTime::now_utc());
-                                    stats.torrent_linker_result = None;
-                                })
-                                .await;
-                        }
-                        let qbit = match qbit::Api::new_login_username_password(
-                            &qbit_conf.url,
-                            &qbit_conf.username,
-                            &qbit_conf.password,
-                        )
-                        .await
-                        {
-                            Ok(qbit) => qbit,
-                            Err(err) => {
-                                error!("Error logging in to qbit {}: {err}", qbit_conf.url);
-                                stats
-                                    .update(|stats| {
-                                        stats.torrent_linker_run_at =
-                                            Some(OffsetDateTime::now_utc());
-                                        stats.torrent_linker_result =
-                                            Some(Err(anyhow::Error::msg(format!(
-                                                "Error logging in to qbit {}: {err}",
-                                                qbit_conf.url,
-                                            ))));
-                                    })
-                                    .await;
-                                continue;
-                            }
-                        };
-                        let result = link_torrents_to_library(
-                            config.clone(),
-                            db.clone(),
-                            (&qbit_conf, &qbit),
-                            &mam,
-                        )
-                        .await
-                        .context("link_torrents_to_library");
-                        if let Err(err) = &result {
-                            error!("Error running linker: {err:?}");
-                        }
-                        {
-                            stats
-                                .update(|stats| {
-                                    stats.torrent_linker_result = Some(result);
-                                    stats.cleaner_run_at = Some(OffsetDateTime::now_utc());
-                                    stats.cleaner_result = None;
-                                })
-                                .await;
-                        }
-                        let result = run_library_cleaner(config.clone(), db.clone())
-                            .await
-                            .context("library_cleaner");
-                        if let Err(err) = &result {
-                            error!("Error running library_cleaner: {err:?}");
-                        }
-                        {
-                            stats
-                                .update(|stats| {
-                                    stats.cleaner_result = Some(result);
-                                })
-                                .await;
-                        }
-                    }
-                });
-            }
-        }
-    }
-    {
-        let config = config.clone();
-        let db = db.clone();
-        let stats = stats.clone();
-        let mut linker_rx = folder_linker_rx.clone();
-        tokio::spawn(async move {
-            loop {
-                select! {
-                    () = sleep(Duration::from_secs(60 * config.link_interval)) => {},
-                    result = linker_rx.changed() => {
-                        if let Err(err) = result {
-                            error!("Error listening on link_rx: {err:?}");
-                            stats
-                                .update(|stats| {
-                                    stats.folder_linker_run_at = Some(OffsetDateTime::now_utc());
-                                    stats.folder_linker_result = Some(Err(err.into()));
-                                }).await;
-                        }
-                    },
-                }
-                {
-                    stats
-                        .update(|stats| {
-                            stats.folder_linker_run_at = Some(OffsetDateTime::now_utc());
-                            stats.folder_linker_result = None;
-                        })
-                        .await;
-                }
-                let result = link_folders_to_library(config.clone(), db.clone())
-                    .await
-                    .context("link_torrents_to_library");
-                if let Err(err) = &result {
-                    error!("Error running linker: {err:?}");
-                }
-                {
-                    stats
-                        .update(|stats| {
-                            stats.folder_linker_result = Some(result);
-                            stats.cleaner_run_at = Some(OffsetDateTime::now_utc());
-                            stats.cleaner_result = None;
-                        })
-                        .await;
-                }
-                let result = run_library_cleaner(config.clone(), db.clone())
-                    .await
-                    .context("library_cleaner");
-                if let Err(err) = &result {
-                    error!("Error running library_cleaner: {err:?}");
-                }
-                {
-                    stats
-                        .update(|stats| {
-                            stats.cleaner_result = Some(result);
-                        })
-                        .await;
-                }
-            }
-        });
-    }
-
-    if let Some(config) = &config.audiobookshelf {
-        let config = config.clone();
-        let db = db.clone();
-        let stats = stats.clone();
-        tokio::spawn(async move {
-            loop {
-                select! {
-                    () = sleep(Duration::from_secs(60 * config.interval)) => {},
-                    result = audiobookshelf_rx.changed() => {
-                        if let Err(err) = result {
-                            error!("Error listening on audiobookshelf_rx: {err:?}");
-                        stats
-                            .update(|stats| {
-                                stats.audiobookshelf_result = Some(Err(err.into()));
-                            })
-                            .await;
-                        }
-                    },
-                }
-                {
-                    stats
-                        .update(|stats| {
-                            stats.audiobookshelf_run_at = Some(OffsetDateTime::now_utc());
-                            stats.audiobookshelf_result = None;
-                        })
-                        .await;
-                }
-                let result = match_torrents_to_abs(&config, db.clone())
-                    .await
-                    .context("audiobookshelf_matcher");
-                if let Err(err) = &result {
-                    error!("Error running audiobookshelf matcher: {err:?}");
-                }
-                {
-                    stats
-                        .update(|stats| {
-                            stats.audiobookshelf_result = Some(result);
-                        })
-                        .await;
-                }
-            }
-        });
-    }
-
-    let triggers = Triggers {
-        search_tx,
-        import_tx,
-        torrent_linker_tx,
-        folder_linker_tx,
-        downloader_tx,
-        audiobookshelf_tx,
-    };
     #[cfg(target_family = "windows")]
     let web_port = config.web_port;
-    let context = Context {
-        config: Arc::new(Mutex::new(config)),
-        db,
-        mam: Arc::new(mam),
-        stats,
-        metadata: metadata_service,
-        triggers,
-    };
+
+    let context = mlm_core::runner::spawn_tasks(config, db, Arc::new(mam), stats, metadata_service);
 
     let result = start_webserver(context).await;
 

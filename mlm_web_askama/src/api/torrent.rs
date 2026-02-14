@@ -5,11 +5,11 @@ use axum::{
 use mlm_db::{Torrent, TorrentKey};
 use serde_json::json;
 
-use crate::{
+use mlm_core::{
     qbittorrent::{self},
     stats::Context,
-    web::AppError,
 };
+use crate::AppError;
 
 pub async fn torrent_api(
     State(context): State<Context>,

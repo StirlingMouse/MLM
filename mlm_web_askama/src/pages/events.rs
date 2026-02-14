@@ -9,7 +9,7 @@ use mlm_db::{Event, EventKey, EventType, Torrent, TorrentCost, TorrentKey};
 use native_db::Database;
 use serde::{Deserialize, Serialize};
 
-use crate::web::{
+use crate::{
     AppError, Conditional, Page, TorrentLink,
     tables::{Key, Pagination, PaginationParams, table_styles},
     time,

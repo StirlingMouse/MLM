@@ -2,11 +2,11 @@ mod common;
 
 use anyhow::Result;
 use common::{MockFs, TestDb, mock_config};
-use mlm::config::{
+use mlm_core::config::{
     Library, LibraryByDownloadDir, LibraryLinkMethod, LibraryOptions, LibraryTagFilters, QbitConfig,
 };
-use mlm::linker::torrent::{MaMApi, link_torrents_to_library};
-use mlm::qbittorrent::QbitApi;
+use mlm_core::linker::torrent::{MaMApi, link_torrents_to_library};
+use mlm_core::qbittorrent::QbitApi;
 use mlm_db::DatabaseExt as _;
 use mlm_mam::search::MaMTorrent;
 use qbit::models::{Torrent as QbitTorrent, TorrentContent, Tracker};
@@ -504,7 +504,7 @@ async fn test_relink() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    mlm::linker::torrent::relink_internal(
+    mlm_core::linker::torrent::relink_internal(
         &config,
         &qbit_config,
         &db.db,
@@ -617,7 +617,7 @@ async fn test_refresh_metadata_relink() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    mlm::linker::torrent::refresh_metadata_relink_internal(
+    mlm_core::linker::torrent::refresh_metadata_relink_internal(
         &config,
         &qbit_config,
         &db.db,

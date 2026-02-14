@@ -1,4 +1,4 @@
-use mlm::config::{Cost, EditionFilter, GoodreadsList, Grab, TorrentFilter};
+use mlm_core::config::{Cost, EditionFilter, GoodreadsList, Grab, TorrentFilter};
 use mlm_db::AudiobookCategory;
 use mlm_mam::enums::Categories;
 

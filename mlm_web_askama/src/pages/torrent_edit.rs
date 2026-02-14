@@ -14,11 +14,11 @@ use mlm_db::{
 use native_db::Database;
 use serde::Deserialize;
 
-use crate::{
+use mlm_core::{
     autograbber::update_torrent_meta,
     stats::Context,
-    web::{AppError, Page},
 };
+use crate::{AppError, Page};
 
 pub async fn torrent_edit_page(
     State(db): State<Arc<Database<'static>>>,

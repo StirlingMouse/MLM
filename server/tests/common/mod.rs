@@ -1,8 +1,8 @@
 use anyhow::Result;
-use mlm::config::{Config, Library, LibraryByRipDir, LibraryLinkMethod, LibraryOptions};
+use mlm_core::config::{Config, Library, LibraryByRipDir, LibraryLinkMethod, LibraryOptions};
 use mlm_db::{
-    Database, MODELS, MainCat, MediaType, MetadataSource, Size, Timestamp, Torrent, TorrentMeta,
-    migrate,
+    migrate, Database, MainCat, MediaType, MetadataSource, Size, Timestamp, Torrent, TorrentMeta,
+    MODELS,
 };
 use native_db::Builder;
 use std::path::PathBuf;
@@ -190,8 +190,8 @@ pub fn mock_config(rip_dir: PathBuf, library_dir: PathBuf) -> Config {
             },
             filter: Default::default(),
         })],
-        metadata_providers: vec![mlm::config::ProviderConfig::RomanceIo(
-            mlm::config::RomanceIoConfig {
+        metadata_providers: vec![mlm_core::config::ProviderConfig::RomanceIo(
+            mlm_core::config::RomanceIoConfig {
                 enabled: true,
                 timeout_secs: None,
             },

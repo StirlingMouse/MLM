@@ -16,16 +16,15 @@ use mlm_db::{Language, LibraryMismatch, Torrent, TorrentKey};
 use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
 
-use crate::{
+use mlm_core::{
     cleaner::clean_torrent,
     linker::{refresh_mam_metadata, refresh_metadata_relink},
     stats::Context,
-    web::{
-        AppError,
-        tables::{Flex, HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable},
-        time,
-    },
-    web::{Page, flag_icons, tables},
+};
+use crate::{
+    AppError, Page, flag_icons, tables,
+    tables::{Flex, HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable},
+    time,
 };
 use mlm_db::{
     ClientStatus, DatabaseExt as _, Flags, MediaType, MetadataSource, OldCategory, Series,

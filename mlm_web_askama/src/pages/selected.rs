@@ -17,13 +17,11 @@ use native_db::Database;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
+use mlm_core::stats::Context;
 use crate::{
-    stats::Context,
-    web::{
-        AppError, Page, flag_icons,
-        tables::{self, Flex, HidableColumns, Key, SortOn, Sortable},
-        time,
-    },
+    AppError, Page, flag_icons,
+    tables::{self, Flex, HidableColumns, Key, SortOn, Sortable},
+    time,
 };
 
 pub async fn selected_page(

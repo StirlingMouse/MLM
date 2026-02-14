@@ -8,8 +8,16 @@ use axum::{
     response::{Html, IntoResponse, Redirect},
 };
 use axum_extra::extract::Form;
-use grscraper::{BookMetadata, MetadataRequestBuilder};
 use itertools::Itertools;
+use mlm_db::{
+    ClientStatus, DatabaseExt as _, Event, EventKey, EventType, Size, Torrent, TorrentCost,
+    TorrentKey, TorrentMeta,
+};
+use mlm_mam::{
+    api::MaM,
+    enums::SearchIn,
+    search::{MaMTorrent, SearchFields, SearchQuery, Tor},
+};
 use native_db::Database;
 use qbit::{
     models::{Category, Torrent as QbitTorrent, Tracker},
@@ -21,29 +29,24 @@ use serde::Deserialize;
 use time::UtcDateTime;
 use tokio_util::io::ReaderStream;
 
-use crate::{
+use mlm_core::metadata::mam_meta::match_meta;
+use mlm_core::{
     audiobookshelf::{Abs, LibraryItemMinified},
     cleaner::clean_torrent,
     config::Config,
-    data::{
-        ClientStatus, DatabaseExt as _, Event, EventKey, EventType, Size, Torrent, TorrentCost,
-        TorrentKey, TorrentMeta,
+    linker::{
+        find_library, library_dir, map_path, refresh_mam_metadata, refresh_metadata_relink, relink,
     },
-    linker::{find_library, library_dir, map_path, refresh_metadata, refresh_metadata_relink},
-    mam::{
-        api::MaM,
-        enums::SearchIn,
-        search::{MaMTorrent, SearchQuery, Tor},
-    },
-    qbittorrent::{self},
+    qbittorrent::{self, ensure_category_exists},
     stats::Context,
-    web::{
-        AppError, Conditional, MaMTorrentsTemplate, Page, TorrentLink,
-        pages::{search::select_torrent, torrents::TorrentsPageFilter},
-        tables::table_styles,
-        time,
-    },
 };
+use crate::{
+    AppError, Conditional, MaMTorrentsTemplate, Page, TorrentLink, flag_icons,
+    pages::{search::select_torrent, torrents::TorrentsPageFilter},
+    tables::table_styles,
+    time,
+};
+use mlm_db::MetadataSource;
 
 pub async fn torrent_file(
     State(context): State<Context>,
@@ -124,7 +127,7 @@ async fn torrent_page_mam_id(
 
     println!("mam_torrent: {:?}", mam_torrent);
     println!("mam_meta: {:?}", meta);
-    let config = context.config.lock().await.clone();
+    let config = context.config().await;
     let other_torrents = other_torrents(&config, &context.db, &mam, &meta).await?;
 
     let template = TorrentMamPageTemplate {
@@ -172,22 +175,30 @@ async fn torrent_page_id(
         .db
         .r_transaction()?
         .scan()
-        .secondary::<Event>(EventKey::mam_id)?;
-    let events = events.range(Some(torrent.mam_id)..=Some(torrent.mam_id))?;
+        .secondary::<Event>(EventKey::torrent_id)?;
+    let events = events.range(Some(torrent.id.clone())..=Some(torrent.id.clone()))?;
     let mut events = events.collect::<Result<Vec<_>, _>>()?;
     events.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
     let mam = context.mam()?;
-    let mam_torrent = mam.get_torrent_info_by_id(torrent.mam_id).await?;
-    let mam_meta = mam_torrent.as_ref().map(|t| t.as_meta()).transpose()?;
+    let mam_torrent = if let Some(mam_id) = torrent.mam_id {
+        mam.get_torrent_info_by_id(mam_id).await?
+    } else {
+        None
+    };
+    let mut mam_meta = mam_torrent.as_ref().map(|t| t.as_meta()).transpose()?;
 
-    if let Some(mam_meta) = &mam_meta
-        && torrent.meta.uploaded_at.0 == UtcDateTime::UNIX_EPOCH
-    {
-        let (_guard, rw) = context.db.rw_async().await?;
-        torrent.meta.uploaded_at = mam_meta.uploaded_at;
-        rw.upsert(torrent.clone())?;
-        rw.commit()?;
+    if let Some(mam_meta) = &mut mam_meta {
+        let mut ids = torrent.meta.ids.clone();
+        ids.append(&mut mam_meta.ids); // MaM adds its IDs
+        mam_meta.ids = ids;
+
+        if torrent.meta.uploaded_at.0 == UtcDateTime::UNIX_EPOCH {
+            let (_guard, rw) = context.db.rw_async().await?;
+            torrent.meta.uploaded_at = mam_meta.uploaded_at;
+            rw.upsert(torrent.clone())?;
+            rw.commit()?;
+        }
     }
 
     let mut qbit_data = None;
@@ -240,39 +251,6 @@ async fn torrent_page_id(
         rw.commit()?;
     }
     let other_torrents = other_torrents(&config, &context.db, &mam, &torrent.meta).await?;
-    let goodreads_meta = if let Some(id) = torrent.goodreads_id {
-        MetadataRequestBuilder::default()
-            .with_id(id.to_string().as_str())
-            .execute()
-            .await
-    } else if let Some(ref mam_torrent) = mam_torrent
-        && let Some(isbn) = &mam_torrent.isbn
-        && !isbn.starts_with("ASIN")
-    {
-        MetadataRequestBuilder::default()
-            .with_isbn(isbn)
-            .execute()
-            .await
-    } else {
-        println!(
-            "search with {} {}",
-            &torrent.meta.title,
-            &torrent.meta.authors.first().cloned().unwrap_or_default()
-        );
-        MetadataRequestBuilder::default()
-            .with_title(&torrent.meta.title)
-            .with_author(&torrent.meta.authors.first().cloned().unwrap_or_default())
-            .execute()
-            .await
-    };
-    let goodreads_meta = match goodreads_meta {
-        Ok(meta) => meta,
-        Err(err) => {
-            println!("Failed to fetch Goodreads metadata: {:?}", err);
-            None
-        }
-    };
-    println!("goodreads_meta: {:?}", goodreads_meta);
 
     let template = TorrentPageTemplate {
         abs_url: config
@@ -286,11 +264,11 @@ async fn torrent_page_id(
         book,
         mam_torrent,
         mam_meta,
-        goodreads_meta,
         qbit_data,
         wanted_path,
         qbit_files,
         other_torrents,
+        metadata_providers: context.metadata.enabled_providers(),
     };
     Ok::<_, AppError>(Html(template.to_string()))
 }
@@ -361,11 +339,59 @@ pub async fn torrent_page_post_id(
         }
         "refresh" => {
             let mam = context.mam()?;
-            refresh_metadata(&config, &context.db, &mam, id).await?;
+            refresh_mam_metadata(&config, &context.db, &mam, id).await?;
+        }
+        "relink" => {
+            relink(&config, &context.db, id).await?;
         }
         "refresh-relink" => {
             let mam = context.mam()?;
             refresh_metadata_relink(&config, &context.db, &mam, id).await?;
+        }
+        "match" => {
+            // Build a query from existing torrent metadata
+            let Some(mut torrent) = context.db.r_transaction()?.get().primary::<Torrent>(id)?
+            else {
+                return Err(anyhow::Error::msg("Could not find torrent").into());
+            };
+
+            let provider_id = match &form.provider {
+                Some(p) => p.as_str(),
+                None => {
+                    tracing::error!("metadata match failed: no provider selected");
+                    return Err(anyhow::Error::msg("no provider selected").into());
+                }
+            };
+
+            match match_meta(&context, &torrent.meta, provider_id).await {
+                Ok((new_meta, pid, fields)) => {
+                    let ev = Event {
+                        id: mlm_db::Uuid::new(),
+                        torrent_id: Some(torrent.id.clone()),
+                        mam_id: torrent.mam_id,
+                        created_at: mlm_db::Timestamp::now(),
+                        event: EventType::Updated {
+                            fields: fields.clone(),
+                            source: (MetadataSource::Match, pid.clone()),
+                        },
+                    };
+
+                    let (_guard, rw) = context.db.rw_async().await?;
+                    // apply meta updates
+                    let mut meta = new_meta;
+                    meta.source = MetadataSource::Match;
+                    torrent.meta = meta;
+                    // update title_search to normalized title
+                    torrent.title_search = mlm_parse::normalize_title(&torrent.meta.title);
+
+                    rw.upsert(torrent)?;
+                    rw.insert(ev)?;
+                    rw.commit()?;
+                }
+                Err(e) => {
+                    tracing::error!("metadata match failed for provider {}: {}", provider_id, e)
+                }
+            }
         }
         "remove" => {
             let (_guard, rw) = context.db.rw_async().await?;
@@ -397,10 +423,12 @@ pub async fn torrent_page_post_id(
             rw.commit()?;
         }
         "qbit" => {
-            let Some((torrent, qbit, _)) = qbittorrent::get_torrent(&config, &id).await? else {
+            let Some((torrent, qbit, qbit_conf)) = qbittorrent::get_torrent(&config, &id).await?
+            else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
 
+            ensure_category_exists(&qbit, &qbit_conf.url, &form.category).await?;
             qbit.set_category(Some(vec![&id]), &form.category).await?;
             let mut torrent_tags = torrent.tags.split(", ").collect::<BTreeSet<&str>>();
             if torrent.tags.is_empty() {
@@ -460,6 +488,8 @@ pub async fn torrent_page_post_id(
 pub struct TorrentPageForm {
     action: String,
     #[serde(default)]
+    provider: Option<String>,
+    #[serde(default)]
     category: String,
     #[serde(default)]
     tags: Vec<String>,
@@ -476,11 +506,11 @@ struct TorrentPageTemplate {
     book: Option<LibraryItemMinified>,
     mam_torrent: Option<MaMTorrent>,
     mam_meta: Option<TorrentMeta>,
-    goodreads_meta: Option<BookMetadata>,
     qbit_data: Option<QbitData>,
     wanted_path: Option<PathBuf>,
     qbit_files: Vec<qbit::models::TorrentContent>,
     other_torrents: MaMTorrentsTemplate,
+    metadata_providers: Vec<String>,
 }
 
 impl TorrentPageTemplate {
@@ -572,7 +602,10 @@ async fn other_torrents(
 
     let result = mam
         .search(&SearchQuery {
-            media_info: true,
+            fields: SearchFields {
+                media_info: true,
+                ..Default::default()
+            },
             tor: Tor {
                 text: if meta.authors.is_empty() {
                     title.to_string()
@@ -594,12 +627,12 @@ async fn other_torrents(
     let torrents = result
         .data
         .into_iter()
-        .filter(|t| t.id != meta.mam_id)
+        .filter(|t| Some(t.id) != meta.mam_id())
         .map(|mam_torrent| {
             let meta = mam_torrent.as_meta()?;
             let torrent = r
                 .get()
-                .secondary::<Torrent>(TorrentKey::mam_id, meta.mam_id)?;
+                .secondary::<Torrent>(TorrentKey::mam_id, meta.mam_id())?;
             let selected_torrent = r.get().primary(mam_torrent.id)?;
 
             Ok((mam_torrent, meta, torrent, selected_torrent))
