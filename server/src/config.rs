@@ -16,6 +16,7 @@ use time::Date;
 pub enum ProviderConfig {
     Hardcover(HardcoverConfig),
     RomanceIo(RomanceIoConfig),
+    OpenLibrary(OpenLibraryConfig),
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -37,11 +38,21 @@ pub struct RomanceIoConfig {
     pub timeout_secs: Option<u64>,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpenLibraryConfig {
+    #[serde(default = "default_provider_enabled")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub timeout_secs: Option<u64>,
+}
+
 impl ProviderConfig {
     pub fn id(&self) -> &str {
         match self {
             ProviderConfig::Hardcover(_) => "hardcover",
             ProviderConfig::RomanceIo(_) => "romanceio",
+            ProviderConfig::OpenLibrary(_) => "openlibrary",
         }
     }
 
@@ -49,6 +60,7 @@ impl ProviderConfig {
         match self {
             ProviderConfig::Hardcover(c) => c.enabled,
             ProviderConfig::RomanceIo(c) => c.enabled,
+            ProviderConfig::OpenLibrary(c) => c.enabled,
         }
     }
 
@@ -56,6 +68,7 @@ impl ProviderConfig {
         match self {
             ProviderConfig::Hardcover(c) => c.timeout_secs,
             ProviderConfig::RomanceIo(c) => c.timeout_secs,
+            ProviderConfig::OpenLibrary(c) => c.timeout_secs,
         }
     }
 }

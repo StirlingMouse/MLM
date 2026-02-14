@@ -30,7 +30,7 @@
   </form>
 {% endif %}
 <div class="row">
-  <div>
+  <div class="row">
     {% if let Some(mam_id) = torrent.mam_id %}id: {{ mam_id }} {% endif %}{% if let Some(vip_status) = torrent.meta.vip_status %}{{ vip_status }}{% endif %}
     {% if let Some(book) = book %}
       <a href="{{ abs_url }}/audiobookshelf/item/{{ book.id }}" target=_blank class=btn>Open in ABS</a>
@@ -38,6 +38,12 @@
     {% if let Some(mam_torrent) = mam_torrent %}
       <a href="https://www.myanonamouse.net/t/{{ mam_torrent.id }}" target=_blank class=btn>Open in MaM</a>
     {% endif %}
+    {% for provider in metadata_providers %}
+    <form method=post>
+      <input type=hidden name=provider value="{{ provider }}">
+      <button name=action value=match>Match meta ({{ provider }})</button>
+    </form>
+    {% endfor %}
   </div>
   <form method=post>
     <button name=action value=remove data-prompt="Are you sure you want to remove this torrents?">remove torrent from MLM</button>
@@ -74,15 +80,6 @@
       <button name=action value=clean data-prompt="Are you sure you want to clean this torrent?">clean torrent</button>
     </form>
   </div>
-  <form method=post class="row" style="justify-content:flex-start">
-    {% for provider in metadata_providers %}
-      {% if provider == "hardcover" %}
-        <button name=action value="match-hardcover">Match meta (Hardcover)</button>
-      {% else if provider == "romanceio" %}
-        <button name=action value="match-romanceio">Match meta (Romance.io)</button>
-      {% endif %}
-    {% endfor %}
-  </form>
 {% endif %}
 {% if wanted_path != torrent.library_path %}
   {% if let Some(wanted_path) = wanted_path %}

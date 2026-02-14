@@ -2,7 +2,7 @@ use crate::stats::Context;
 use anyhow::Result;
 use mlm_db::DatabaseExt as _;
 use mlm_db::{Event, EventType, MetadataSource, TorrentMeta};
-use mlm_meta::providers::{Hardcover, RomanceIo};
+use mlm_meta::providers::{Hardcover, OpenLibrary, RomanceIo};
 use mlm_meta::traits::Provider;
 use std::sync::Arc;
 use tokio::time::{Duration, timeout};
@@ -24,6 +24,10 @@ pub enum ProviderSetting {
         api_key: Option<String>,
     },
     RomanceIo {
+        enabled: bool,
+        timeout_secs: Option<u64>,
+    },
+    OpenLibrary {
         enabled: bool,
         timeout_secs: Option<u64>,
     },
@@ -66,6 +70,18 @@ impl MetadataService {
                         .map(Duration::from_secs)
                         .unwrap_or(default_timeout);
                     providers.push((Arc::new(RomanceIo::new()), to));
+                }
+                ProviderSetting::OpenLibrary {
+                    enabled,
+                    timeout_secs,
+                } => {
+                    if !enabled {
+                        continue;
+                    }
+                    let to = timeout_secs
+                        .map(Duration::from_secs)
+                        .unwrap_or(default_timeout);
+                    providers.push((Arc::new(OpenLibrary::new()), to));
                 }
             }
         }

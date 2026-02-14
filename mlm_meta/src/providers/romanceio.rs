@@ -139,7 +139,25 @@ impl MetadataProvider for RomanceIo {
             .fetch_html(json_url.as_str())
             .await
             .context("fetch search json")?;
-        let v: serde_json::Value = serde_json::from_str(&body).context("parse search json")?;
+
+        let v: serde_json::Value = match serde_json::from_str(&body) {
+            Ok(v) => v,
+            Err(e) => {
+                let preview = if body.len() > 50000 {
+                    format!("{}...", &body[..50000])
+                } else {
+                    body.clone()
+                };
+                tracing::warn!(
+                    url = %json_url,
+                    response_preview = %preview,
+                    "failed to parse romance.io search response: {}",
+                    e
+                );
+                return Err(anyhow::anyhow!("parse search json: {}", e))
+                    .context("parse search json");
+            }
+        };
 
         let books = v.get("books").and_then(|b| b.as_array()).cloned();
         debug!(

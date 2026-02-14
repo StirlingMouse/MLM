@@ -67,14 +67,12 @@ pub fn score_candidate(
     let q_title_norm = q_title.as_ref().map(|t| normalize_title(t));
 
     let mut title_score = 0.0f64;
-    let mut title_exact = false;
     if let Some(qt_norm) = q_title_norm.as_ref()
         && let Some(ct) = cand_title
     {
         let cand = normalize_title(ct);
         if cand == *qt_norm {
             title_score = 1.0;
-            title_exact = true;
         } else if cand.contains(qt_norm.as_str()) || qt_norm.contains(cand.as_str()) {
             title_score = 0.9;
         } else {
@@ -83,7 +81,6 @@ pub fn score_candidate(
     }
 
     let mut author_score = 0.0f64;
-    let mut authors_match = false;
     if !q_auths.is_empty() {
         let q_auths_norm = normalize_authors(q_auths);
         let mut best = 0.0f64;
@@ -94,7 +91,6 @@ pub fn score_candidate(
             for qa in &q_auths_norm {
                 if n.contains(qa) || qa.contains(&n) {
                     best = best.max(1.0);
-                    authors_match = true;
                 } else {
                     best = best.max(token_similarity(&n, qa));
                 }
@@ -103,10 +99,12 @@ pub fn score_candidate(
         author_score = best;
     }
 
-    // Penalize heavily if title is not exact AND no author match
-    // This prevents "Not the Boss of the Year" from matching "Boss of the Year"
-    // when authors don't match
-    if !title_exact && !authors_match && q_title_norm.is_some() && !q_auths.is_empty() {
+    // Require minimum author match score when query has authors.
+    // This prevents false positives from exact title matches with wrong authors
+    // (e.g., "Boss of the Year" by Nicole French matching "Boss of the Year" by T. Funny)
+    // and prevents loose title matches (e.g., "Book Title" matching "Book Title: A Novel")
+    // when the author doesn't match at all.
+    if !q_auths.is_empty() && author_score < 0.5 {
         return 0.0;
     }
 

@@ -89,6 +89,12 @@ async fn test_metadata_fetch_and_persist_romanceio() -> Result<()> {
                     timeout_secs: c.timeout_secs,
                 }
             }
+            mlm::config::ProviderConfig::OpenLibrary(c) => {
+                mlm::metadata::ProviderSetting::OpenLibrary {
+                    enabled: c.enabled,
+                    timeout_secs: c.timeout_secs,
+                }
+            }
         })
         .collect();
     let metadata =

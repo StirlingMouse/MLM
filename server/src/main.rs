@@ -230,6 +230,12 @@ async fn app_main() -> Result<()> {
                     timeout_secs: c.timeout_secs,
                 }
             }
+            mlm::config::ProviderConfig::OpenLibrary(c) => {
+                mlm::metadata::ProviderSetting::OpenLibrary {
+                    enabled: c.enabled,
+                    timeout_secs: c.timeout_secs,
+                }
+            }
         })
         .collect();
     let metadata_service = MetadataService::from_settings(&provider_settings, default_timeout);
