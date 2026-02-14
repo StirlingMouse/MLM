@@ -41,7 +41,7 @@ pub async fn torrent_edit_page_post(
     Form(form): Form<TorrentPageForm>,
 ) -> Result<Redirect, AppError> {
     let config = context.config().await;
-    let mam = context.mam()?;
+    let _mam = context.mam()?;
     let Some(torrent) = context
         .db
         .r_transaction()?
@@ -49,9 +49,6 @@ pub async fn torrent_edit_page_post(
         .primary::<Torrent>(hash.clone())?
     else {
         return Err(anyhow::Error::msg("Could not find torrent").into());
-    };
-    let Some(mam_torrent) = mam.get_torrent_info(&hash).await? else {
-        return Err(anyhow::Error::msg("Could not find torrent on MaM").into());
     };
 
     let authors = form.authors.split("\r\n").map(ToOwned::to_owned).collect();
@@ -78,10 +75,12 @@ pub async fn torrent_edit_page_post(
             })
             .collect::<Result<Vec<_>, _>>()?
     };
-    let language =
-        Language::from_id(form.language).ok_or_else(|| anyhow::Error::msg("Invalid language"))?;
-    let category = OldCategory::from_one_id(form.category)
-        .ok_or_else(|| anyhow::Error::msg("Invalid category"))?;
+    let language = form.language.and_then(Language::from_id);
+    let category = form.category.and_then(OldCategory::from_one_id);
+    let media_type = match &category {
+        Some(c) => c.as_main_cat().into(),
+        None => torrent.meta.media_type,
+    };
     let flags = Flags {
         crude_language: Some(form.crude_language),
         violence: Some(form.violence),
@@ -93,9 +92,9 @@ pub async fn torrent_edit_page_post(
 
     let meta = TorrentMeta {
         title: form.title,
-        media_type: category.as_main_cat().into(),
-        cat: Some(category),
-        language: Some(language),
+        media_type,
+        cat: category,
+        language,
         flags: Some(FlagBits::new(flags.as_bitfield())),
         authors,
         narrators,
@@ -108,7 +107,7 @@ pub async fn torrent_edit_page_post(
         &config,
         &context.db,
         context.db.rw_async().await?,
-        &mam_torrent,
+        None,
         torrent,
         meta,
         true,
@@ -125,8 +124,10 @@ pub struct TorrentPageForm {
     authors: String,
     narrators: String,
     series: String,
-    language: u8,
-    category: u64,
+    #[serde(default)]
+    language: Option<u8>,
+    #[serde(default)]
+    category: Option<u64>,
 
     // #[serde(flatten)]
     // flags: Flags,
