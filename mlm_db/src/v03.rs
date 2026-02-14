@@ -1,6 +1,6 @@
 use super::{v01, v02, v04, v05, v06};
-use native_db::{native_db, Key, ToKey};
-use native_model::{native_model, Model};
+use native_db::{Key, ToKey, native_db};
+use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use time::{OffsetDateTime, UtcDateTime};
