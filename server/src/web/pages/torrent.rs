@@ -186,15 +186,19 @@ async fn torrent_page_id(
     } else {
         None
     };
-    let mam_meta = mam_torrent.as_ref().map(|t| t.as_meta()).transpose()?;
+    let mut mam_meta = mam_torrent.as_ref().map(|t| t.as_meta()).transpose()?;
 
-    if let Some(mam_meta) = &mam_meta
-        && torrent.meta.uploaded_at.0 == UtcDateTime::UNIX_EPOCH
-    {
-        let (_guard, rw) = context.db.rw_async().await?;
-        torrent.meta.uploaded_at = mam_meta.uploaded_at;
-        rw.upsert(torrent.clone())?;
-        rw.commit()?;
+    if let Some(mam_meta) = &mut mam_meta {
+        let mut ids = torrent.meta.ids.clone();
+        ids.append(&mut mam_meta.ids); // MaM adds its IDs
+        mam_meta.ids = ids;
+
+        if torrent.meta.uploaded_at.0 == UtcDateTime::UNIX_EPOCH {
+            let (_guard, rw) = context.db.rw_async().await?;
+            torrent.meta.uploaded_at = mam_meta.uploaded_at;
+            rw.upsert(torrent.clone())?;
+            rw.commit()?;
+        }
     }
 
     let mut qbit_data = None;
@@ -344,17 +348,19 @@ pub async fn torrent_page_post_id(
             let mam = context.mam()?;
             refresh_metadata_relink(&config, &context.db, &mam, id).await?;
         }
-        "match-hardcover" | "match-romanceio" => {
+        "match" => {
             // Build a query from existing torrent metadata
             let Some(mut torrent) = context.db.r_transaction()?.get().primary::<Torrent>(id)?
             else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
 
-            let provider_id = if form.action == "match-hardcover" {
-                "hardcover"
-            } else {
-                "romanceio"
+            let provider_id = match &form.provider {
+                Some(p) => p.as_str(),
+                None => {
+                    tracing::error!("metadata match failed: no provider selected");
+                    return Err(anyhow::Error::msg("no provider selected").into());
+                }
             };
 
             match match_meta(&context, &torrent.meta, provider_id).await {
@@ -382,7 +388,9 @@ pub async fn torrent_page_post_id(
                     rw.insert(ev)?;
                     rw.commit()?;
                 }
-                Err(e) => tracing::error!("metadata match failed: {e}"),
+                Err(e) => {
+                    tracing::error!("metadata match failed for provider {}: {}", provider_id, e)
+                }
             }
         }
         "remove" => {
@@ -479,6 +487,8 @@ pub async fn torrent_page_post_id(
 #[derive(Debug, Deserialize)]
 pub struct TorrentPageForm {
     action: String,
+    #[serde(default)]
+    provider: Option<String>,
     #[serde(default)]
     category: String,
     #[serde(default)]
