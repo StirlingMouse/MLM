@@ -262,7 +262,7 @@ async fn app_main() -> Result<()> {
                                 })
                                 .await;
                         }
-                        let result = grab_selected_torrents(&config, &db, qbit, &mam)
+                        let result = grab_selected_torrents(&config, &db, qbit, &qbit_conf.url, &mam)
                             .await
                             .context("grab_selected_torrents");
 

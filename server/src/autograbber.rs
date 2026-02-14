@@ -37,6 +37,7 @@ use crate::{
     audiobookshelf::{self as abs, Abs},
     config::{Config, Cost, SortBy, TorrentFilter, TorrentSearch, Type},
     logging::{TorrentMetaError, update_errored_torrent, write_event},
+    qbittorrent::add_torrent_with_category,
 };
 
 static AUTOGRABBER_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -115,6 +116,7 @@ pub async fn grab_selected_torrents(
     config: &Config,
     db: &Database<'_>,
     qbit: &qbit::Api,
+    qbit_url: &str,
     mam: &MaM<'_>,
 ) -> Result<()> {
     let selected_torrents = {
@@ -164,7 +166,7 @@ pub async fn grab_selected_torrents(
             continue;
         }
 
-        let result = grab_torrent(config, db, qbit, mam, torrent.clone())
+        let result = grab_torrent(config, db, qbit, qbit_url, mam, torrent.clone())
             .await
             .map_err(|err| anyhow::Error::new(TorrentMetaError(torrent.meta.clone(), err)));
 
@@ -705,6 +707,7 @@ async fn grab_torrent(
     config: &Config,
     db: &Database<'_>,
     qbit: &qbit::Api,
+    qbit_url: &str,
     mam: &MaM<'_>,
     torrent: SelectedTorrent,
 ) -> Result<()> {
@@ -835,20 +838,24 @@ async fn grab_torrent(
     }
 
     mam.add_unsats(1).await;
-    qbit.add_torrent(AddTorrent {
-        torrents: AddTorrentType::Files(vec![TorrentFile {
-            filename: format!("{}.torrent", torrent.mam_id),
-            data: torrent_file_bytes.iter().copied().collect(),
-        }]),
-        stopped: config.add_torrents_stopped,
-        category: torrent.category.clone(),
-        tags: if torrent.tags.is_empty() {
-            None
-        } else {
-            Some(torrent.tags.clone())
+    add_torrent_with_category(
+        qbit,
+        qbit_url,
+        AddTorrent {
+            torrents: AddTorrentType::Files(vec![TorrentFile {
+                filename: format!("{}.torrent", torrent.mam_id),
+                data: torrent_file_bytes.iter().copied().collect(),
+            }]),
+            stopped: config.add_torrents_stopped,
+            category: torrent.category.clone(),
+            tags: if torrent.tags.is_empty() {
+                None
+            } else {
+                Some(torrent.tags.clone())
+            },
+            ..Default::default()
         },
-        ..Default::default()
-    })
+    )
     .await?;
 
     let mam_id = torrent.mam_id;

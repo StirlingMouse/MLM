@@ -12,6 +12,7 @@ use crate::{
     config::Config,
     linker::file_size,
     logging::{TorrentMetaError, update_errored_torrent, write_event},
+    qbittorrent::ensure_category_exists,
 };
 
 #[instrument(skip_all)]
@@ -128,6 +129,7 @@ pub async fn clean_torrent(
                 .await?;
 
                 if let Some(category) = &on_cleaned.category {
+                    ensure_category_exists(&qbit, &qbit_conf.url, category).await?;
                     qbit.set_category(Some(vec![&remove.id]), category).await?;
                 }
 

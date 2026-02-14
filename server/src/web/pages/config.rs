@@ -16,6 +16,7 @@ use tracing::{info, warn};
 use crate::{
     autograbber::update_torrent_meta,
     config::{Config, Cost, Library, TorrentSearch, Type},
+    qbittorrent::ensure_category_exists,
     stats::Context,
     web::{AppError, Page, filter, yaml_items, yaml_nums},
 };
@@ -93,6 +94,7 @@ pub async fn config_page_post(
                     }
                 };
                 if let Some(category) = &tag_filter.category {
+                    ensure_category_exists(&qbit, &qbit_conf.url, category).await?;
                     qbit.set_category(Some(vec![torrent.id.as_str()]), category)
                         .await?;
                     info!(

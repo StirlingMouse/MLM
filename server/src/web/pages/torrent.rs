@@ -34,7 +34,7 @@ use crate::{
     cleaner::clean_torrent,
     config::Config,
     linker::{find_library, library_dir, map_path, refresh_metadata, refresh_metadata_relink},
-    qbittorrent::{self},
+    qbittorrent::{self, ensure_category_exists},
     stats::Context,
     web::{
         AppError, Conditional, MaMTorrentsTemplate, Page, TorrentLink, flag_icons,
@@ -362,10 +362,11 @@ pub async fn torrent_page_post_id(
             rw.commit()?;
         }
         "qbit" => {
-            let Some((torrent, qbit, _)) = qbittorrent::get_torrent(&config, &id).await? else {
+            let Some((torrent, qbit, qbit_conf)) = qbittorrent::get_torrent(&config, &id).await? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
 
+            ensure_category_exists(&qbit, &qbit_conf.url, &form.category).await?;
             qbit.set_category(Some(vec![&id]), &form.category).await?;
             let mut torrent_tags = torrent.tags.split(", ").collect::<BTreeSet<&str>>();
             if torrent.tags.is_empty() {
