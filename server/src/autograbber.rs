@@ -731,7 +731,8 @@ pub async fn update_torrent_meta(
         }
     }
 
-    if linker_is_owner && torrent.linker.is_none()
+    if linker_is_owner
+        && torrent.linker.is_none()
         && let Some(mam_torrent) = mam_torrent
     {
         torrent.linker = Some(mam_torrent.owner_name.clone());
