@@ -687,6 +687,9 @@ pub async fn update_torrent_meta(
     if meta.description.is_empty() {
         meta.description = torrent.meta.description.clone();
     }
+    if meta == torrent.meta {
+        return Ok(());
+    }
 
     if !allow_non_mam && torrent.meta.source != MetadataSource::Mam {
         // Update VIP status and uploaded_at still

@@ -1,0 +1,61 @@
+[package]
+name = "mlm_core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+axum = { version = "0.8.4", features = ["query", "macros"] }
+bytes = "1.11.0"
+dirs = "6.0"
+figment = { version = "0.10", features = ["toml", "env"] }
+file-id = "0.2.2"
+futures = "0.3"
+htmlentity = "1.3.2"
+itertools = "0.14.0"
+lava_torrent = { git = "https://github.com/StirlingMouse/lava_torrent.git" }
+log = "0.4.27"
+matchr = "0.2.5"
+mlm_db = { path = "../mlm_db" }
+mlm_mam = { path = "../mlm_mam" }
+mlm_parse = { path = "../mlm_parse" }
+mlm_meta = { path = "../mlm_meta" }
+native_db = { git = "https://github.com/StirlingMouse/native_db.git", branch = "0.8.x" }
+native_model = "0.4.20"
+once_cell = "1.21.3"
+openssl = { version = "0.10.73", features = ["vendored"] }
+qbit = { git = "https://github.com/StirlingMouse/qbittorrent-webui-api.git" }
+quick-xml = { version = "0.38.0", features = ["serialize"] }
+regex = "1.12.2"
+reqwest = "0.12.20"
+reqwest_cookie_store = "0.8.0"
+sanitize-filename = { git = "https://github.com/StirlingMouse/sanitize-filename.git" }
+scraper = "0.23.1"
+serde = "1.0.136"
+serde_derive = "1.0.136"
+serde_json = "1.0.140"
+serde-nested-json = "0.1.3"
+sublime_fuzzy = "0.7.0"
+thiserror = "2.0.17"
+time = { version = "0.3.41", features = [
+  "formatting",
+  "local-offset",
+  "macros",
+  "serde",
+] }
+tokio = { version = "1.45.1", features = ["full"] }
+tokio-stream = { version = "0.1.17", features = ["sync"] }
+tokio-util = "0.7"
+toml = "0.8.23"
+tower = "0.5.2"
+tracing = "0.1"
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3", features = [
+  "local-time",
+  "env-filter",
+  "tracing-log",
+] }
+tracing-panic = "0.1.2"
+unidecode = "0.3.0"
+urlencoding = "2.1.3"
+uuid = { version = "1.17.0", features = ["serde", "v4"] }

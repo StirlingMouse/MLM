@@ -47,18 +47,18 @@ use tower::ServiceBuilder;
 #[allow(unused)]
 use tower_http::services::{ServeDir, ServeFile};
 
-use crate::{
+use mlm_core::{
     config::{SearchConfig, TorrentFilter},
     stats::Context,
-    web::{
-        api::{
-            search::{search_api, search_api_post},
-            torrent::torrent_api,
-        },
-        pages::{
-            index::stats_updates,
-            search::{search_page, search_page_post},
-        },
+};
+use crate::{
+    api::{
+        search::{search_api, search_api_post},
+        torrent::torrent_api,
+    },
+    pages::{
+        index::stats_updates,
+        search::{search_page, search_page_post},
     },
 };
 

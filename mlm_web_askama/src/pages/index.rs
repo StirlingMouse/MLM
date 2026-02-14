@@ -15,12 +15,12 @@ use mlm_db::Timestamp;
 use serde::Deserialize;
 use tokio_stream::{StreamExt as _, wrappers::WatchStream};
 
-use crate::{
-    config::{Config, TorrentFilter},
+use mlm_core::{
+    config::Config,
     lists::{List, get_lists},
     stats::Context,
-    web::{AppError, Page, time},
 };
+use crate::{AppError, Page, time};
 
 pub async fn index_page(
     State(context): State<Context>,
@@ -30,7 +30,7 @@ pub async fn index_page(
         Ok(mam) => mam.cached_user_info().await.map(|u| u.username),
         Err(_) => None,
     };
-    let config = context.config.lock().await;
+    let config = context.config().await;
     let template = IndexPageTemplate {
         config: config.clone(),
         lists: get_lists(&config),
@@ -172,10 +172,4 @@ impl Page for IndexPageTemplate {}
 pub struct IndexPageForm {
     action: String,
     index: Option<usize>,
-}
-
-impl TorrentFilter {
-    fn display_name(&self, i: usize) -> String {
-        self.name.clone().unwrap_or_else(|| format!("{i}"))
-    }
 }

@@ -2209,14 +2209,43 @@ name = "mlm"
 version = "0.4.6"
 dependencies = [
  "anyhow",
- "askama",
  "async-trait",
  "axum",
- "axum-extra",
- "bytes",
- "cookie",
  "dirs",
  "embed-resource",
+ "figment",
+ "mlm_core",
+ "mlm_db",
+ "mlm_mam",
+ "mlm_meta",
+ "mlm_parse",
+ "mlm_web_askama",
+ "native_db",
+ "once_cell",
+ "open",
+ "qbit",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "time",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-panic",
+ "tracing-subscriber",
+ "tray-item",
+ "url",
+ "winsafe",
+]
+
+[[package]]
+name = "mlm_core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bytes",
+ "dirs",
  "figment",
  "file-id",
  "futures",
@@ -2232,7 +2261,6 @@ dependencies = [
  "native_db",
  "native_model",
  "once_cell",
- "open",
  "openssl",
  "qbit",
  "quick-xml",
@@ -2246,7 +2274,6 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sublime_fuzzy",
- "tempfile",
  "thiserror 2.0.17",
  "time",
  "tokio",
@@ -2254,17 +2281,13 @@ dependencies = [
  "tokio-util",
  "toml 0.8.23",
  "tower",
- "tower-http",
  "tracing",
  "tracing-appender",
  "tracing-panic",
  "tracing-subscriber",
- "tray-item",
  "unidecode",
- "url",
  "urlencoding",
  "uuid",
- "winsafe",
 ]
 
 [[package]]
@@ -2344,6 +2367,40 @@ dependencies = [
  "once_cell",
  "regex",
  "unidecode",
+]
+
+[[package]]
+name = "mlm_web_askama"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "askama",
+ "axum",
+ "axum-extra",
+ "futures",
+ "itertools 0.14.0",
+ "mlm_core",
+ "mlm_db",
+ "mlm_mam",
+ "mlm_parse",
+ "native_db",
+ "once_cell",
+ "qbit",
+ "regex",
+ "reqwest 0.12.24",
+ "serde",
+ "serde_json",
+ "sublime_fuzzy",
+ "thiserror 2.0.17",
+ "time",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "toml 0.8.23",
+ "tower",
+ "tower-http",
+ "tracing",
+ "urlencoding",
 ]
 
 [[package]]

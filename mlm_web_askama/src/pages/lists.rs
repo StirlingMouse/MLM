@@ -3,11 +3,11 @@ use axum::{extract::State, response::Html};
 use itertools::Itertools as _;
 use mlm_db::{List, ListKey};
 
-use crate::{
+use mlm_core::{
     config::GoodreadsList,
     stats::Context,
-    web::{AppError, Page, time},
 };
+use crate::{AppError, Page, time};
 
 pub async fn lists_page(
     State(context): State<Context>,

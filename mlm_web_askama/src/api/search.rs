@@ -10,12 +10,12 @@ use mlm_mam::search::{MaMTorrent, SearchFields};
 use serde::{Deserialize, Serialize};
 use tokio::fs::create_dir_all;
 
-use crate::{
+use mlm_core::{
     autograbber::{mark_removed_torrents, search_torrents, select_torrents},
     config::{Cost, TorrentSearch},
     stats::Context,
-    web::{AppError, MaMState},
 };
+use crate::{AppError, MaMState};
 
 pub async fn search_api(
     State(mam): State<MaMState>,
