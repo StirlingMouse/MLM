@@ -11,6 +11,7 @@ use tokio::sync::{
 };
 
 use crate::config::Config;
+use crate::metadata::MetadataService;
 
 #[derive(Default)]
 pub struct StatsValues {
@@ -55,6 +56,12 @@ impl Stats {
     }
 }
 
+impl Default for Stats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Clone)]
 pub struct Events {
     pub event: (Sender<Option<Event>>, Receiver<Option<Event>>),
@@ -76,6 +83,7 @@ pub struct Context {
     pub db: Arc<Database<'static>>,
     pub mam: Arc<Result<Arc<MaM<'static>>>>,
     pub stats: Stats,
+    pub metadata: Arc<MetadataService>,
     // pub events: Events,
     pub triggers: Triggers,
 }

@@ -162,6 +162,7 @@ impl TorrentFilter {
     }
 }
 
+#[allow(dead_code)]
 impl EditionFilter {
     pub fn matches(&self, torrent: &MaMTorrent) -> bool {
         if !self.media_type.is_empty()

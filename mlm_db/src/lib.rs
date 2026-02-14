@@ -22,8 +22,8 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use mlm_parse::normalize_title;
-use native_db::Models;
 pub use native_db::Database;
+use native_db::Models;
 use native_db::transaction::RwTransaction;
 use native_db::{ToInput, db_type};
 use once_cell::sync::Lazy;
