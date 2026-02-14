@@ -29,8 +29,8 @@ use serde::Deserialize;
 use time::UtcDateTime;
 use tokio_util::io::ReaderStream;
 
-use crate::metadata::mam_meta::match_meta;
-use crate::{
+use mlm_core::metadata::mam_meta::match_meta;
+use mlm_core::{
     audiobookshelf::{Abs, LibraryItemMinified},
     cleaner::clean_torrent,
     config::Config,
@@ -39,12 +39,12 @@ use crate::{
     },
     qbittorrent::{self, ensure_category_exists},
     stats::Context,
-    web::{
-        AppError, Conditional, MaMTorrentsTemplate, Page, TorrentLink, flag_icons,
-        pages::{search::select_torrent, torrents::TorrentsPageFilter},
-        tables::table_styles,
-        time,
-    },
+};
+use crate::{
+    AppError, Conditional, MaMTorrentsTemplate, Page, TorrentLink, flag_icons,
+    pages::{search::select_torrent, torrents::TorrentsPageFilter},
+    tables::table_styles,
+    time,
 };
 use mlm_db::MetadataSource;
 
@@ -127,7 +127,7 @@ async fn torrent_page_mam_id(
 
     println!("mam_torrent: {:?}", mam_torrent);
     println!("mam_meta: {:?}", meta);
-    let config = context.config.lock().await.clone();
+    let config = context.config().await;
     let other_torrents = other_torrents(&config, &context.db, &mam, &meta).await?;
 
     let template = TorrentMamPageTemplate {

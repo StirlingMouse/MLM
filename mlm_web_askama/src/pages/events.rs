@@ -9,7 +9,7 @@ use mlm_db::{Event, EventKey, EventType, Torrent, TorrentCost, TorrentKey};
 use native_db::Database;
 use serde::{Deserialize, Serialize};
 
-use crate::web::{
+use crate::{
     AppError, Conditional, Page, TorrentLink,
     tables::{Key, Pagination, PaginationParams, table_styles},
     time,
@@ -36,7 +36,7 @@ pub async fn event_page(
                     EventType::Linked { .. } => value == "linker",
                     EventType::Cleaned { .. } => value == "cleaner",
                     EventType::Updated { .. } => value == "updated",
-                    EventType::RemovedFromTracker { .. } => value == "removed",
+                    EventType::RemovedFromTracker => value == "removed",
                 },
                 EventPageFilter::Grabber => match t.event {
                     EventType::Grabbed { ref grabber, .. } => {

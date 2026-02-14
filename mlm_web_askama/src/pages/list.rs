@@ -14,7 +14,7 @@ use native_db::Database;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
-use crate::web::{AppError, Page, time};
+use crate::{AppError, Page, time};
 
 pub async fn list_page(
     State(db): State<Arc<Database<'static>>>,

@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail};
-use mlm::linker::{
+use mlm_core::linker::{
     folder::Libation,
     libation_cats::{MappingDepth, three_plus_override_candidates},
 };

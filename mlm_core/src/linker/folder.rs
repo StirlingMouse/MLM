@@ -297,7 +297,7 @@ async fn build_nextory_torrent(
         series,
         source: MetadataSource::File,
         uploaded_at: None,
-    };
+   };
     build_torrent(
         library,
         nextory_torrent_id(nextory_meta.id),
