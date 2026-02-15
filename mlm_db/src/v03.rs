@@ -256,7 +256,7 @@ impl ToKey for Timestamp {
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, Hash)]
-pub struct Uuid(uuid::Uuid);
+pub struct Uuid(pub uuid::Uuid);
 impl Uuid {
     pub fn new() -> Self {
         Self(uuid::Uuid::new_v4())

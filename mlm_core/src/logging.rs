@@ -6,6 +6,8 @@ use tracing::{error, warn};
 
 use mlm_db::{DatabaseExt, ErroredTorrent, ErroredTorrentId, Event, Timestamp, TorrentMeta};
 
+use crate::stats::Events;
+
 #[derive(Debug)]
 pub struct TorrentMetaError(pub TorrentMeta, pub anyhow::Error);
 impl Display for TorrentMetaError {
@@ -59,12 +61,14 @@ pub async fn update_errored_torrent(
     }
 }
 
-pub async fn write_event(db: &Database<'_>, event: Event) {
+pub async fn write_event(db: &Database<'_>, events: &Events, event: Event) {
     if let Err(err) = db.rw_async().await.and_then(|(_guard, rw)| {
         rw.upsert(event.clone())?;
         rw.commit()?;
         Ok(())
     }) {
         error!("Error writing event: {err:?}, event: {event:?}");
+    } else {
+        let _ = events.event.0.send(Some(event));
     }
 }

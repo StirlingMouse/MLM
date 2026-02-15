@@ -26,7 +26,6 @@ use pages::{
     duplicate::{duplicate_page, duplicate_torrents_page_post},
     errors::{errors_page, errors_page_post},
     events::event_page,
-    index::{index_page, index_page_post},
     list::{list_page, list_page_post},
     lists::lists_page,
     replaced::{replaced_torrents_page, replaced_torrents_page_post},
@@ -47,10 +46,6 @@ use tower::ServiceBuilder;
 #[allow(unused)]
 use tower_http::services::{ServeDir, ServeFile};
 
-use mlm_core::{
-    config::{SearchConfig, TorrentFilter},
-    stats::Context,
-};
 use crate::{
     api::{
         search::{search_api, search_api_post},
@@ -61,15 +56,13 @@ use crate::{
         search::{search_page, search_page_post},
     },
 };
+use mlm_core::config::{SearchConfig, TorrentFilter};
+use mlm_core::{Context, ContextExt};
 
 pub type MaMState = Arc<Result<Arc<MaM<'static>>>>;
 
-pub async fn start_webserver(context: Context) -> Result<()> {
-    let config = context.config().await;
-
+pub fn router(context: Context) -> Router {
     let app = Router::new()
-        .route("/", get(index_page).with_state(context.clone()))
-        .route("/", post(index_page_post).with_state(context.clone()))
         .route(
             "/stats-updates",
             get(stats_updates).with_state(context.clone()),
@@ -89,7 +82,7 @@ pub async fn start_webserver(context: Context) -> Result<()> {
         )
         .route(
             "/torrents/{id}/edit",
-            get(torrent_edit_page).with_state(context.db.clone()),
+            get(torrent_edit_page).with_state(context.db().clone()),
         )
         .route(
             "/torrents/{id}/edit",
@@ -99,7 +92,7 @@ pub async fn start_webserver(context: Context) -> Result<()> {
             "/torrents/{id}/{filename}",
             get(torrent_file).with_state(context.clone()),
         )
-        .route("/events", get(event_page).with_state(context.db.clone()))
+        .route("/events", get(event_page).with_state(context.db().clone()))
         .route("/search", get(search_page).with_state(context.clone()))
         .route(
             "/search",
@@ -108,21 +101,21 @@ pub async fn start_webserver(context: Context) -> Result<()> {
         .route("/lists", get(lists_page).with_state(context.clone()))
         .route(
             "/lists/{list_id}",
-            get(list_page).with_state(context.db.clone()),
+            get(list_page).with_state(context.db().clone()),
         )
         .route(
             "/lists/{list_id}",
-            post(list_page_post).with_state(context.db.clone()),
+            post(list_page_post).with_state(context.db().clone()),
         )
-        .route("/errors", get(errors_page).with_state(context.db.clone()))
+        .route("/errors", get(errors_page).with_state(context.db().clone()))
         .route(
             "/errors",
-            post(errors_page_post).with_state(context.db.clone()),
+            post(errors_page_post).with_state(context.db().clone()),
         )
         .route("/selected", get(selected_page).with_state(context.clone()))
         .route(
             "/selected",
-            post(selected_torrents_page_post).with_state(context.db.clone()),
+            post(selected_torrents_page_post).with_state(context.db().clone()),
         )
         .route(
             "/replaced",
@@ -140,14 +133,14 @@ pub async fn start_webserver(context: Context) -> Result<()> {
             "/duplicate",
             post(duplicate_torrents_page_post).with_state(context.clone()),
         )
-        .route("/config", get(config_page).with_state(config.clone()))
+        .route("/config", get(config_page).with_state(context.clone()))
         .route(
             "/config",
             post(config_page_post).with_state(context.clone()),
         )
         .route(
             "/api/search",
-            get(search_api).with_state(context.mam.clone()),
+            get(search_api).with_state(Arc::new(context.mam())),
         )
         .route(
             "/api/search",
@@ -172,11 +165,7 @@ pub async fn start_webserver(context: Context) -> Result<()> {
             .service(ServeFile::new("server/assets/favicon_dev.png")),
     );
 
-    let listener =
-        tokio::net::TcpListener::bind((config.web_host.clone(), config.web_port)).await?;
-    axum::serve(listener, app).await?;
-
-    Ok(())
+    app
 }
 
 pub trait Page {

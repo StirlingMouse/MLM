@@ -11,18 +11,18 @@ use mlm_db::{DatabaseExt as _, Torrent};
 use serde::Deserialize;
 use tracing::{info, warn};
 
-use mlm_core::{
-    autograbber::update_torrent_meta,
-    config::{Config, Library},
-    qbittorrent::ensure_category_exists,
-    stats::Context,
-};
 use crate::{AppError, Page, filter, yaml_items, yaml_nums};
+use mlm_core::config::Library;
+use mlm_core::{
+    Config, Context, ContextExt, autograbber::update_torrent_meta,
+    qbittorrent::ensure_category_exists,
+};
 
 pub async fn config_page(
-    State(config): State<Arc<Config>>,
+    State(context): State<Context>,
     Query(query): Query<ConfigPageQuery>,
 ) -> std::result::Result<Html<String>, AppError> {
+    let config = context.config().await;
     let template = ConfigPageTemplate {
         config,
         show_apply_tags: query.show_apply_tags.unwrap_or_default(),
@@ -60,38 +60,45 @@ pub async fn config_page_post(
                 &qbit_conf.password,
             )
             .await?;
-            let torrents = context.db.r_transaction()?.scan().primary::<Torrent>()?;
-            for torrent in torrents.all()? {
-                let torrent = torrent?;
-                match tag_filter.filter.matches_lib(&torrent) {
-                    Ok(matches) => {
-                        if !matches {
-                            continue;
-                        }
-                    }
-                    Err(err) => {
-                        let Some(mam_id) = torrent.mam_id else {
-                            continue;
-                        };
-                        info!("need to ask mam due to: {err}");
-                        let mam = context.mam()?;
-                        let Some(mam_torrent) = mam.get_torrent_info_by_id(mam_id).await? else {
-                            warn!("could not get torrent from mam");
-                            continue;
-                        };
-                        let new_meta = mam_torrent.as_meta()?;
-                        if new_meta != torrent.meta {
-                            update_torrent_meta(
-                                &config,
-                                &context.db,
-                                context.db.rw_async().await?,
-                                Some(&mam_torrent),
-                                torrent.clone(),
-                                new_meta,
-                                false,
-                                false,
-                            )
-                            .await?;
+
+            // Collect all torrents first
+            let torrents: Vec<Torrent> = context
+                .db()
+                .r_transaction()?
+                .scan()
+                .primary::<Torrent>()?
+                .all()?
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let total_torrents = torrents.len();
+            info!("Processing {} torrents for tag filter", total_torrents);
+
+            // Create semaphore to limit concurrent MAM API calls
+            let mam_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_MAM_REQUESTS));
+            let mut processed_count = 0;
+
+            // Process torrents in batches
+            for (batch_idx, batch) in torrents.chunks(BATCH_SIZE).enumerate() {
+                let batch_start = batch_idx * BATCH_SIZE;
+                let batch_end = (batch_start + batch.len()).min(total_torrents);
+                info!(
+                    "Processing batch {}/{} (torrents {}-{})",
+                    batch_idx + 1,
+                    total_torrents.div_ceil(BATCH_SIZE),
+                    batch_start + 1,
+                    batch_end
+                );
+
+                // First pass: Process MAM API calls with concurrency limiting
+                // Collect torrents that match the filter
+                let mut matched_torrents: Vec<&Torrent> = Vec::with_capacity(batch.len());
+
+                for torrent in batch {
+                    match tag_filter.filter.matches_lib(torrent) {
+                        Ok(matches) => {
+                            if matches {
+                                matched_torrents.push(torrent);
+                            }
                         }
                         Err(err) => {
                             let Some(mam_id) = torrent.mam_id else {

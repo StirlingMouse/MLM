@@ -3,6 +3,8 @@ mod notion;
 
 use std::{borrow::Cow, sync::Arc};
 
+use crate::config::{Config, GoodreadsList, Grab, NotionList};
+use crate::lists::{goodreads::run_goodreads_import, notion::run_notion_import};
 use anyhow::{Context, Result};
 use itertools::Itertools;
 use matchr::score;
@@ -22,11 +24,6 @@ use regex::Regex;
 use serde_json::Value;
 use tokio::sync::watch::Sender;
 use tracing::{debug, instrument, trace};
-
-use crate::{
-    config::{Config, GoodreadsList, Grab, NotionList},
-    lists::{goodreads::run_goodreads_import, notion::run_notion_import},
-};
 
 pub enum List {
     Goodreads(GoodreadsList),
@@ -82,6 +79,7 @@ pub async fn run_list_import(
     list: Arc<List>,
     index: usize,
     autograb_trigger: Sender<()>,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     let user_info = mam.user_info().await?;
     let max_torrents = user_info.unsat.limit.saturating_sub(user_info.unsat.count);
@@ -98,10 +96,10 @@ pub async fn run_list_import(
     if max_torrents > 0 {
         match list.as_ref() {
             List::Goodreads(list) => {
-                run_goodreads_import(config, db, mam, list, max_torrents).await?;
+                run_goodreads_import(config, db, mam, list, max_torrents, events).await?;
             }
             List::Notion(list) => {
-                run_notion_import(config, db, mam, list, max_torrents).await?;
+                run_notion_import(config, db, mam, list, max_torrents, events).await?;
             }
         }
     }

@@ -8,13 +8,13 @@ anyhow = "1.0.100"
 bytes = "1.11.0"
 cookie = "0.18.1"
 itertools = "0.14.0"
-mlm_db = { path = "../mlm_db" }
+mlm_db = { path = "../mlm_db", default-features = false }
 mlm_parse = { path = "../mlm_parse" }
 native_db = { git = "https://github.com/StirlingMouse/native_db.git", branch = "0.8.x" }
 native_model = "0.4.20"
 once_cell = "1.21.3"
 openssl = { version = "0.10.73", features = ["vendored"] }
-reqwest = { version = "0.12.20", features = ["json"] }
+reqwest = { version = "0.12.20", default-features = false, features = ["json", "default-tls"] }
 reqwest_cookie_store = "0.8.0"
 serde = "1.0.136"
 serde_derive = "1.0.136"

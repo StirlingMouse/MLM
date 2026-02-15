@@ -29,22 +29,22 @@ use serde::Deserialize;
 use time::UtcDateTime;
 use tokio_util::io::ReaderStream;
 
-use mlm_core::metadata::mam_meta::match_meta;
-use mlm_core::{
-    audiobookshelf::{Abs, LibraryItemMinified},
-    cleaner::clean_torrent,
-    config::Config,
-    linker::{
-        find_library, library_dir, map_path, refresh_mam_metadata, refresh_metadata_relink, relink,
-    },
-    qbittorrent::{self, ensure_category_exists},
-    stats::Context,
-};
 use crate::{
     AppError, Conditional, MaMTorrentsTemplate, Page, TorrentLink, flag_icons,
     pages::{search::select_torrent, torrents::TorrentsPageFilter},
     tables::table_styles,
     time,
+};
+use mlm_core::config::Config;
+use mlm_core::metadata::mam_meta::match_meta;
+use mlm_core::{
+    Context, ContextExt,
+    audiobookshelf::{Abs, LibraryItemMinified},
+    cleaner::clean_torrent,
+    linker::{
+        find_library, library_dir, map_path, refresh_mam_metadata, refresh_metadata_relink, relink,
+    },
+    qbittorrent::{self, ensure_category_exists},
 };
 use mlm_db::MetadataSource;
 
@@ -53,7 +53,7 @@ pub async fn torrent_file(
     Path((id, filename)): Path<(String, String)>,
 ) -> impl IntoResponse {
     let config = context.config().await;
-    let Some(torrent) = context.db.r_transaction()?.get().primary::<Torrent>(id)? else {
+    let Some(torrent) = context.db().r_transaction()?.get().primary::<Torrent>(id)? else {
         return Err(AppError::NotFound);
     };
     let Some(path) = (if let (Some(library_path), Some(library_file)) = (
@@ -111,7 +111,7 @@ async fn torrent_page_mam_id(
     Path(mam_id): Path<u64>,
 ) -> std::result::Result<Html<String>, AppError> {
     if let Some(torrent) = context
-        .db
+        .db()
         .r_transaction()?
         .get()
         .secondary::<Torrent>(TorrentKey::mam_id, mam_id)?
@@ -128,7 +128,7 @@ async fn torrent_page_mam_id(
     println!("mam_torrent: {:?}", mam_torrent);
     println!("mam_meta: {:?}", meta);
     let config = context.config().await;
-    let other_torrents = other_torrents(&config, &context.db, &mam, &meta).await?;
+    let other_torrents = other_torrents(&config, context.db(), &mam, &meta).await?;
 
     let template = TorrentMamPageTemplate {
         mam_torrent,
@@ -144,7 +144,7 @@ async fn torrent_page_id(
 ) -> std::result::Result<Html<String>, AppError> {
     let config = context.config().await;
     let abs = config.audiobookshelf.as_ref().map(Abs::new);
-    let Some(mut torrent) = context.db.r_transaction()?.get().primary::<Torrent>(id)? else {
+    let Some(mut torrent) = context.db().r_transaction()?.get().primary::<Torrent>(id)? else {
         return Err(AppError::NotFound);
     };
     let replacement_torrent = torrent
@@ -152,7 +152,7 @@ async fn torrent_page_id(
         .as_ref()
         .map(|(id, _)| {
             context
-                .db
+                .db()
                 .r_transaction()?
                 .get()
                 .primary::<Torrent>(id.to_string())
@@ -161,7 +161,7 @@ async fn torrent_page_id(
         .flatten();
 
     if replacement_torrent.is_none() && torrent.replaced_with.is_some() {
-        let (_guard, rw) = context.db.rw_async().await?;
+        let (_guard, rw) = context.db().rw_async().await?;
         torrent.replaced_with = None;
         rw.upsert(torrent.clone())?;
         rw.commit()?;
@@ -172,7 +172,7 @@ async fn torrent_page_id(
     };
 
     let events = context
-        .db
+        .db()
         .r_transaction()?
         .scan()
         .secondary::<Event>(EventKey::torrent_id)?;
@@ -194,7 +194,7 @@ async fn torrent_page_id(
         mam_meta.ids = ids;
 
         if torrent.meta.uploaded_at.0 == UtcDateTime::UNIX_EPOCH {
-            let (_guard, rw) = context.db.rw_async().await?;
+            let (_guard, rw) = context.db().rw_async().await?;
             torrent.meta.uploaded_at = mam_meta.uploaded_at;
             rw.upsert(torrent.clone())?;
             rw.commit()?;
@@ -245,12 +245,12 @@ async fn torrent_page_id(
         && qbit_data.is_none()
         && torrent.client_status != Some(ClientStatus::NotInClient)
     {
-        let (_guard, rw) = context.db.rw_async().await?;
+        let (_guard, rw) = context.db().rw_async().await?;
         torrent.client_status = Some(ClientStatus::NotInClient);
         rw.upsert(torrent.clone())?;
         rw.commit()?;
     }
-    let other_torrents = other_torrents(&config, &context.db, &mam, &torrent.meta).await?;
+    let other_torrents = other_torrents(&config, context.db(), &mam, &torrent.meta).await?;
 
     let template = TorrentPageTemplate {
         abs_url: config
@@ -268,7 +268,7 @@ async fn torrent_page_id(
         wanted_path,
         qbit_files,
         other_torrents,
-        metadata_providers: context.metadata.enabled_providers(),
+        metadata_providers: context.metadata().enabled_providers(),
     };
     Ok::<_, AppError>(Html(template.to_string()))
 }
@@ -294,7 +294,7 @@ pub async fn torrent_page_post_mam_id(
 ) -> Result<Redirect, AppError> {
     let mam_id = form.mam_id.unwrap_or(mam_id);
     if let Some(torrent) = context
-        .db
+        .db()
         .r_transaction()?
         .get()
         .secondary::<Torrent>(TorrentKey::mam_id, mam_id)?
@@ -332,25 +332,25 @@ pub async fn torrent_page_post_id(
             select_torrent(&context, mam_id, form.action == "wedge").await?;
         }
         "clean" => {
-            let Some(torrent) = context.db.r_transaction()?.get().primary(id)? else {
+            let Some(torrent) = context.db().r_transaction()?.get().primary(id)? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
-            clean_torrent(&config, &context.db, torrent, true).await?;
+            clean_torrent(&config, context.db(), torrent, true, &context.events).await?;
         }
         "refresh" => {
             let mam = context.mam()?;
-            refresh_mam_metadata(&config, &context.db, &mam, id).await?;
+            refresh_mam_metadata(&config, context.db(), &mam, id, &context.events).await?;
         }
         "relink" => {
-            relink(&config, &context.db, id).await?;
+            relink(&config, context.db(), id, &context.events).await?;
         }
         "refresh-relink" => {
             let mam = context.mam()?;
-            refresh_metadata_relink(&config, &context.db, &mam, id).await?;
+            refresh_metadata_relink(&config, context.db(), &mam, id, &context.events).await?;
         }
         "match" => {
             // Build a query from existing torrent metadata
-            let Some(mut torrent) = context.db.r_transaction()?.get().primary::<Torrent>(id)?
+            let Some(mut torrent) = context.db().r_transaction()?.get().primary::<Torrent>(id)?
             else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
@@ -365,18 +365,7 @@ pub async fn torrent_page_post_id(
 
             match match_meta(&context, &torrent.meta, provider_id).await {
                 Ok((new_meta, pid, fields)) => {
-                    let ev = Event {
-                        id: mlm_db::Uuid::new(),
-                        torrent_id: Some(torrent.id.clone()),
-                        mam_id: torrent.mam_id,
-                        created_at: mlm_db::Timestamp::now(),
-                        event: EventType::Updated {
-                            fields: fields.clone(),
-                            source: (MetadataSource::Match, pid.clone()),
-                        },
-                    };
-
-                    let (_guard, rw) = context.db.rw_async().await?;
+                    let (_guard, rw) = context.db().rw_async().await?;
                     // apply meta updates
                     let mut meta = new_meta;
                     meta.source = MetadataSource::Match;
@@ -384,9 +373,24 @@ pub async fn torrent_page_post_id(
                     // update title_search to normalized title
                     torrent.title_search = mlm_parse::normalize_title(&torrent.meta.title);
 
-                    rw.upsert(torrent)?;
-                    rw.insert(ev)?;
+                    rw.upsert(torrent.clone())?;
                     rw.commit()?;
+                    drop(_guard);
+
+                    // Write event through the proper channel so SSE gets notified
+                    mlm_core::logging::write_event(
+                        context.db(),
+                        &context.events,
+                        Event::new(
+                            Some(torrent.id.clone()),
+                            torrent.mam_id,
+                            EventType::Updated {
+                                fields: fields.clone(),
+                                source: (MetadataSource::Match, pid.clone()),
+                            },
+                        ),
+                    )
+                    .await;
                 }
                 Err(e) => {
                     tracing::error!("metadata match failed for provider {}: {}", provider_id, e)
@@ -394,7 +398,7 @@ pub async fn torrent_page_post_id(
             }
         }
         "remove" => {
-            let (_guard, rw) = context.db.rw_async().await?;
+            let (_guard, rw) = context.db().rw_async().await?;
             let Some(torrent) = rw.get().primary::<Torrent>(id)? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
@@ -414,7 +418,7 @@ pub async fn torrent_page_post_id(
             qbit.stop(vec![&id]).await?;
         }
         "clear-replacement" => {
-            let (_guard, rw) = context.db.rw_async().await?;
+            let (_guard, rw) = context.db().rw_async().await?;
             let Some(mut torrent) = rw.get().primary::<Torrent>(id)? else {
                 return Err(anyhow::Error::msg("Could not find torrent").into());
             };
@@ -462,7 +466,7 @@ pub async fn torrent_page_post_id(
             }
         }
         "remove-torrent" => {
-            // let Some(torrent) = context.db.r_transaction()?.get().primary(id)? else {
+            // let Some(torrent) = context.db().r_transaction()?.get().primary(id)? else {
             //     return Err(anyhow::Error::msg("Could not find torrent").into());
             // };
             // remove_library_files(&torrent)?;
