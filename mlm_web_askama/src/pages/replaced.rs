@@ -13,13 +13,14 @@ use axum_extra::extract::Form;
 use mlm_db::{Language, Torrent, TorrentKey, ids};
 use serde::{Deserialize, Serialize};
 
-use mlm_core::{
-    linker::{refresh_mam_metadata, refresh_metadata_relink},
-    stats::Context,
-};
 use crate::{
-    AppError, Page, time,
+    AppError, Page,
     tables::{self, Flex, HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable},
+    time,
+};
+use mlm_core::{
+    Context, ContextExt,
+    linker::{refresh_mam_metadata, refresh_metadata_relink},
 };
 use mlm_db::DatabaseExt as _;
 
@@ -33,7 +34,7 @@ pub async fn replaced_torrents_page(
 ) -> std::result::Result<Response, AppError> {
     let config = context.config().await;
     let torrents = context
-        .db
+        .db()
         .r_transaction()?
         .scan()
         .secondary::<Torrent>(TorrentKey::created_at)?;
@@ -112,7 +113,7 @@ pub async fn replaced_torrents_page(
         let Some((with, _)) = &torrent.replaced_with else {
             continue;
         };
-        let Some(replacement) = context.db.r_transaction()?.get().primary(with.clone())? else {
+        let Some(replacement) = context.db().r_transaction()?.get().primary(with.clone())? else {
             continue;
         };
         torrents.push((torrent, replacement));
@@ -139,18 +140,19 @@ pub async fn replaced_torrents_page_post(
         "refresh" => {
             let mam = context.mam()?;
             for torrent in form.torrents {
-                refresh_mam_metadata(&config, &context.db, &mam, torrent).await?;
+                refresh_mam_metadata(&config, context.db(), &mam, torrent, &context.events).await?;
             }
         }
         "refresh-relink" => {
             let mam = context.mam()?;
             for torrent in form.torrents {
-                refresh_metadata_relink(&config, &context.db, &mam, torrent).await?;
+                refresh_metadata_relink(&config, context.db(), &mam, torrent, &context.events)
+                    .await?;
             }
         }
         "remove" => {
             for torrent in form.torrents {
-                let (_guard, rw) = context.db.rw_async().await?;
+                let (_guard, rw) = context.db().rw_async().await?;
                 let Some(torrent) = rw.get().primary::<Torrent>(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };

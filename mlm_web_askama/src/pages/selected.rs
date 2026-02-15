@@ -17,12 +17,12 @@ use native_db::Database;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use mlm_core::stats::Context;
 use crate::{
     AppError, Page, flag_icons,
     tables::{self, Flex, HidableColumns, Key, SortOn, Sortable},
     time,
 };
+use mlm_core::{Context, ContextExt};
 
 pub async fn selected_page(
     State(context): State<Context>,
@@ -34,7 +34,7 @@ pub async fn selected_page(
     let show = show.show.unwrap_or_default();
 
     let mut torrents = context
-        .db
+        .db()
         .r_transaction()?
         .scan()
         .primary::<SelectedTorrent>()?
@@ -133,7 +133,7 @@ pub async fn selected_page(
         });
     }
     let downloading_size: f64 = context
-        .db
+        .db()
         .r_transaction()?
         .scan()
         .primary::<SelectedTorrent>()?
@@ -148,7 +148,7 @@ pub async fn selected_page(
         })
         .map(|t| t.meta.size.bytes() as f64)
         .sum();
-    let user_info = match context.mam.as_ref() {
+    let user_info = match context.mam() {
         Ok(mam) => mam.user_info().await.ok(),
         _ => None,
     };

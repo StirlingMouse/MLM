@@ -5,11 +5,11 @@ use axum::{
 use mlm_db::{Torrent, TorrentKey};
 use serde_json::json;
 
-use mlm_core::{
-    qbittorrent::{self},
-    stats::Context,
-};
 use crate::AppError;
+use mlm_core::{
+    Context, ContextExt,
+    qbittorrent::{self},
+};
 
 pub async fn torrent_api(
     State(context): State<Context>,
@@ -27,7 +27,7 @@ async fn torrent_api_mam_id(
     Path(mam_id): Path<u64>,
 ) -> std::result::Result<Json<serde_json::Value>, AppError> {
     if let Some(torrent) = context
-        .db
+        .db()
         .r_transaction()?
         .get()
         .secondary::<Torrent>(TorrentKey::mam_id, mam_id)?
@@ -52,7 +52,7 @@ async fn torrent_api_id(
     Path(id): Path<String>,
 ) -> std::result::Result<Json<serde_json::Value>, AppError> {
     let config = context.config().await;
-    let Some(torrent) = context.db.r_transaction()?.get().primary::<Torrent>(id)? else {
+    let Some(torrent) = context.db().r_transaction()?.get().primary::<Torrent>(id)? else {
         return Err(AppError::NotFound);
     };
     let mut qbit_torrent = None;

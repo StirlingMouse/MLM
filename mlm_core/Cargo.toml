@@ -27,7 +27,7 @@ openssl = { version = "0.10.73", features = ["vendored"] }
 qbit = { git = "https://github.com/StirlingMouse/qbittorrent-webui-api.git" }
 quick-xml = { version = "0.38.0", features = ["serialize"] }
 regex = "1.12.2"
-reqwest = "0.12.20"
+reqwest = { version = "0.12.20", default-features = false, features = ["json", "default-tls"] }
 reqwest_cookie_store = "0.8.0"
 sanitize-filename = { git = "https://github.com/StirlingMouse/sanitize-filename.git" }
 scraper = "0.23.1"
@@ -43,19 +43,19 @@ time = { version = "0.3.41", features = [
   "macros",
   "serde",
 ] }
-tokio = { version = "1.45.1", features = ["full"] }
+tokio = { version = "1.45.1", features = ["sync", "macros", "full"] }
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 tokio-util = "0.7"
 toml = "0.8.23"
-tower = "0.5.2"
+tower = { version = "0.5.2" }
 tracing = "0.1"
-tracing-appender = "0.2.3"
+tracing-appender = { version = "0.2.3" }
 tracing-subscriber = { version = "0.3", features = [
   "local-time",
   "env-filter",
   "tracing-log",
 ] }
-tracing-panic = "0.1.2"
+tracing-panic = { version = "0.1.2" }
 unidecode = "0.3.0"
 urlencoding = "2.1.3"
-uuid = { version = "1.17.0", features = ["serde", "v4"] }
+uuid = { version = "1.17.0", features = ["serde", "v4", "js"] }

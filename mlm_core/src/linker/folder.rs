@@ -28,12 +28,16 @@ use crate::linker::{
 use crate::logging::{update_errored_torrent, write_event};
 
 #[instrument(skip_all)]
-pub async fn link_folders_to_library(config: Arc<Config>, db: Arc<Database<'_>>) -> Result<()> {
+pub async fn link_folders_to_library(
+    config: Arc<Config>,
+    db: Arc<Database<'_>>,
+    events: &crate::stats::Events,
+) -> Result<()> {
     for library in &config.libraries {
         if let Library::ByRipDir(l) = library {
             let mut entries = read_dir(&l.rip_dir).await?;
             while let Some(folder) = entries.next_entry().await? {
-                link_folder(&config, library, &db, folder).await?;
+                link_folder(&config, library, &db, folder, events).await?;
             }
         }
     }
@@ -46,6 +50,7 @@ async fn link_folder(
     library: &Library,
     db: &Database<'_>,
     folder: DirEntry,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     let span = span!(
         Level::TRACE,
@@ -95,9 +100,16 @@ async fn link_folder(
             trace!("Linking libation folder");
             let asin = libation_meta.asin.clone();
             let title = libation_meta.title.clone();
-            let result =
-                link_libation_folder(config, library, db, libation_meta, audio_files, ebook_files)
-                    .await;
+            let result = link_libation_folder(
+                config,
+                library,
+                db,
+                libation_meta,
+                audio_files,
+                ebook_files,
+                events,
+            )
+            .await;
             update_errored_torrent(db, ErroredTorrentId::Linker(asin), title, result).await;
             return Ok(());
         }
@@ -105,9 +117,16 @@ async fn link_folder(
             trace!("Linking nextory folder");
             let id = nextory_torrent_id(nextory_meta.id);
             let title = nextory_meta.title.clone();
-            let result =
-                link_nextory_folder(config, library, db, nextory_meta, audio_files, ebook_files)
-                    .await;
+            let result = link_nextory_folder(
+                config,
+                library,
+                db,
+                nextory_meta,
+                audio_files,
+                ebook_files,
+                events,
+            )
+            .await;
             update_errored_torrent(db, ErroredTorrentId::Linker(id), title, result).await;
             return Ok(());
         }
@@ -128,10 +147,20 @@ async fn link_libation_folder(
     libation_meta: Libation,
     audio_files: Vec<DirEntry>,
     ebook_files: Vec<DirEntry>,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     let torrent =
         build_libation_torrent(library, libation_meta, &audio_files, &ebook_files).await?;
-    link_prepared_folder_torrent(config, library, db, torrent, audio_files, ebook_files).await
+    link_prepared_folder_torrent(
+        config,
+        library,
+        db,
+        torrent,
+        audio_files,
+        ebook_files,
+        events,
+    )
+    .await
 }
 
 async fn link_nextory_folder(
@@ -141,9 +170,19 @@ async fn link_nextory_folder(
     nextory_meta: NextoryRaw,
     audio_files: Vec<DirEntry>,
     ebook_files: Vec<DirEntry>,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     let torrent = build_nextory_torrent(library, nextory_meta, &audio_files, &ebook_files).await?;
-    link_prepared_folder_torrent(config, library, db, torrent, audio_files, ebook_files).await
+    link_prepared_folder_torrent(
+        config,
+        library,
+        db,
+        torrent,
+        audio_files,
+        ebook_files,
+        events,
+    )
+    .await
 }
 
 async fn build_libation_torrent(
@@ -355,6 +394,7 @@ async fn link_prepared_folder_torrent(
     mut torrent: Torrent,
     audio_files: Vec<DirEntry>,
     ebook_files: Vec<DirEntry>,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     let torrent_id = torrent.id.clone();
     let r = db.r_transaction()?;
@@ -458,6 +498,7 @@ async fn link_prepared_folder_torrent(
     if let Some(library_path) = library_path {
         write_event(
             db,
+            events,
             Event::new(
                 Some(torrent_id),
                 None,

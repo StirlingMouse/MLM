@@ -14,10 +14,8 @@ use tokio::{sync::MutexGuard, time::sleep};
 use tracing::{Level, debug, enabled, info, instrument, trace, warn};
 use uuid::Uuid;
 
-use crate::{
-    config::{Config, Cost, SnatchlistSearch, TorrentFilter},
-    logging::write_event,
-};
+use crate::config::{Config, Cost, SnatchlistSearch, TorrentFilter};
+use crate::logging::write_event;
 
 #[instrument(skip_all)]
 pub async fn run_snatchlist_search(
@@ -26,6 +24,7 @@ pub async fn run_snatchlist_search(
     mam: Arc<MaM<'_>>,
     index: usize,
     snatchlist_config: Arc<SnatchlistSearch>,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     if !snatchlist_config.filter.edition.languages.is_empty() {
         bail!("Language filtering is not supported in snatchlist searches");
@@ -48,7 +47,7 @@ pub async fn run_snatchlist_search(
         .unwrap_or_else(|| index.to_string());
     debug!("snatchlist {}", name);
 
-    search_and_update_torrents(&config, &db, &snatchlist_config, &mam)
+    search_and_update_torrents(&config, &db, &snatchlist_config, &mam, events)
         .await
         .context("search_torrents")?;
 
@@ -61,6 +60,7 @@ async fn search_and_update_torrents(
     db: &Database<'_>,
     torrent_search: &SnatchlistSearch,
     mam: &MaM<'_>,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     let max_pages = torrent_search.max_pages.unwrap_or(100);
     let now = UtcDateTime::now();
@@ -99,6 +99,7 @@ async fn search_and_update_torrents(
             &torrent_search.filter,
             torrent_search.cost,
             torrent_search.dry_run,
+            events,
         )
         .await
         .context("update_torrents")?;
@@ -121,6 +122,7 @@ async fn update_torrents<T: Iterator<Item = UserDetailsTorrent>>(
     grabber: &TorrentFilter,
     cost: Cost,
     dry_run: bool,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     'torrent: for torrent in torrents {
         if config.ignore_torrents.contains(&torrent.id) {
@@ -159,6 +161,7 @@ async fn update_torrents<T: Iterator<Item = UserDetailsTorrent>>(
                         old,
                         meta,
                         cost == Cost::MetadataOnlyAdd,
+                        events,
                     )
                     .await?;
                 }
@@ -237,6 +240,7 @@ async fn update_torrent_meta(
     mut torrent: Torrent,
     mut meta: TorrentMeta,
     linker_is_owner: bool,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     // These are missing in user details torrent response, so keep the old values
     meta.ids = torrent.meta.ids.clone();
@@ -303,6 +307,7 @@ async fn update_torrent_meta(
         let mam_id = mam_torrent.map(|m| m.id);
         write_event(
             db,
+            events,
             Event::new(
                 Some(id),
                 mam_id,

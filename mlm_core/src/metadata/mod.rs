@@ -1,4 +1,4 @@
-use crate::stats::Context;
+use crate::{Context, ContextExt};
 use anyhow::Result;
 use mlm_db::DatabaseExt as _;
 use mlm_db::{Event, EventType, MetadataSource, TorrentMeta};
@@ -158,7 +158,7 @@ impl MetadataService {
         };
 
         // Insert event into DB using async rw transaction helper from mlm_db
-        let (guard, rw) = ctx.db.rw_async().await?;
+        let (guard, rw) = ctx.db().rw_async().await?;
         rw.insert(ev)?;
         rw.commit()?;
         drop(guard);
