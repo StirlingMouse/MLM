@@ -1,5 +1,3 @@
-use std::{collections::BTreeMap, path::PathBuf};
-
 use mlm_db::{
     Flags, Language, MediaType, OldDbMainCat, Size,
     impls::{parse, parse_opt, parse_vec},
@@ -9,9 +7,10 @@ use mlm_mam::{
     serde::parse_opt_date,
 };
 use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, path::PathBuf};
 use time::Date;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "id", rename_all = "lowercase")]
 pub enum ProviderConfig {
     Hardcover(HardcoverConfig),
@@ -19,7 +18,7 @@ pub enum ProviderConfig {
     OpenLibrary(OpenLibraryConfig),
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct HardcoverConfig {
     #[serde(default = "default_provider_enabled")]
@@ -29,7 +28,7 @@ pub struct HardcoverConfig {
     pub api_key: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RomanceIoConfig {
     #[serde(default = "default_provider_enabled")]
@@ -38,7 +37,7 @@ pub struct RomanceIoConfig {
     pub timeout_secs: Option<u64>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct OpenLibraryConfig {
     #[serde(default = "default_provider_enabled")]
@@ -77,7 +76,7 @@ fn default_provider_enabled() -> bool {
     true
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub mam_id: String,
@@ -144,14 +143,14 @@ pub struct Config {
     pub metadata_providers: Vec<ProviderConfig>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SearchConfig {
     #[serde(deserialize_with = "parse_opt")]
     pub wedge_over: Option<Size>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AudiobookShelfConfig {
     pub url: String,
@@ -160,8 +159,7 @@ pub struct AudiobookShelfConfig {
     pub interval: u64,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TorrentSearch {
     #[serde(rename = "type")]
     pub kind: Type,
@@ -174,8 +172,6 @@ pub struct TorrentSearch {
     pub max_pages: Option<u8>,
     #[serde(flatten)]
     pub filter: TorrentFilter,
-    #[serde(flatten)]
-    pub edition: EditionFilter,
 
     pub search_interval: Option<u64>,
     pub unsat_buffer: Option<u64>,
@@ -207,8 +203,7 @@ pub enum SortBy {
     Random,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SnatchlistSearch {
     #[serde(rename = "type")]
     pub kind: SnatchlistType,
@@ -217,15 +212,13 @@ pub struct SnatchlistSearch {
     pub max_pages: Option<u8>,
     #[serde(flatten)]
     pub filter: TorrentFilter,
-    #[serde(flatten)]
-    pub edition: EditionFilter,
 
     pub search_interval: Option<u64>,
     #[serde(default)]
     pub dry_run: bool,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GoodreadsList {
     pub url: String,
@@ -242,7 +235,7 @@ pub struct GoodreadsList {
     pub dry_run: bool,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct NotionList {
     pub data_source: String,
@@ -258,32 +251,25 @@ pub struct NotionList {
     pub dry_run: bool,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Grab {
     #[serde(default)]
     pub cost: Cost,
     #[serde(flatten)]
     pub filter: TorrentFilter,
-    #[serde(flatten)]
-    pub edition: EditionFilter,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TagFilter {
     #[serde(flatten)]
     pub filter: TorrentFilter,
-    #[serde(flatten)]
-    pub edition: EditionFilter,
     #[serde(default)]
     pub category: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct TorrentFilter {
     #[serde(default)]
     pub name: Option<String>,
@@ -304,13 +290,11 @@ pub struct TorrentFilter {
     pub min_snatched: Option<u64>,
     pub max_snatched: Option<u64>,
 
-    // TODO: READ from parent
-    #[serde(skip)]
+    #[serde(flatten)]
     pub edition: EditionFilter,
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct EditionFilter {
     #[serde(default)]
     #[serde(deserialize_with = "parse_vec")]
@@ -365,7 +349,7 @@ pub struct QbitUpdate {
     pub tags: Vec<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 #[allow(clippy::enum_variant_names)]
 pub enum Library {
@@ -374,7 +358,7 @@ pub enum Library {
     ByCategory(LibraryByCategory),
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LibraryByRipDir {
     pub rip_dir: PathBuf,
@@ -384,7 +368,7 @@ pub struct LibraryByRipDir {
     pub filter: EditionFilter,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LibraryByDownloadDir {
     pub download_dir: PathBuf,
@@ -394,7 +378,7 @@ pub struct LibraryByDownloadDir {
     pub tag_filters: LibraryTagFilters,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LibraryByCategory {
     pub category: String,
@@ -413,7 +397,7 @@ pub struct LibraryTagFilters {
     pub deny_tags: Vec<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LibraryOptions {
     #[serde(default)]

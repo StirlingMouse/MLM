@@ -3,18 +3,16 @@ use axum::{extract::State, response::Html};
 use itertools::Itertools as _;
 use mlm_db::{List, ListKey};
 
-use mlm_core::{
-    config::GoodreadsList,
-    stats::Context,
-};
 use crate::{AppError, Page, time};
+use mlm_core::config::GoodreadsList;
+use mlm_core::{Context, ContextExt};
 
 pub async fn lists_page(
     State(context): State<Context>,
 ) -> std::result::Result<Html<String>, AppError> {
     let config = context.config().await;
     let db_lists = context
-        .db
+        .db()
         .r_transaction()?
         .scan()
         .secondary::<List>(ListKey::title)?;

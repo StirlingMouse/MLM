@@ -1,8 +1,15 @@
 use std::sync::OnceLock;
 
 use anyhow::{Result, ensure};
-use mlm_db::{AudiobookCategory, EbookCategory, Flags, Language, MediaType, OldCategory, Size, Torrent, TorrentMeta};
-use mlm_mam::{search::MaMTorrent, serde::{DATE_FORMAT, DATE_TIME_FORMAT}, user_torrent::UserDetailsTorrent};
+use mlm_db::{
+    AudiobookCategory, EbookCategory, Flags, Language, MediaType, OldCategory, Size, Torrent,
+    TorrentMeta,
+};
+use mlm_mam::{
+    search::MaMTorrent,
+    serde::{DATE_FORMAT, DATE_TIME_FORMAT},
+    user_torrent::UserDetailsTorrent,
+};
 use reqwest::Url;
 use time::UtcDateTime;
 use tracing::error;
@@ -208,7 +215,7 @@ impl TorrentSearch {
                 .clone()
                 .unwrap_or_else(AudiobookCategory::all)
                 .into_iter()
-                .map(AudiobookCategory::to_id)
+                .map(|c: AudiobookCategory| c.to_id())
             {
                 query.append_pair("tor[cat][]", &cat.to_string());
             }
@@ -220,7 +227,7 @@ impl TorrentSearch {
                 .clone()
                 .unwrap_or_else(EbookCategory::all)
                 .into_iter()
-                .map(EbookCategory::to_id)
+                .map(|c: EbookCategory| c.to_id())
             {
                 query.append_pair("tor[cat][]", &cat.to_string());
             }
@@ -239,7 +246,8 @@ impl TorrentSearch {
                 query.append_pair("tor[browseFlags][]", &flag.to_string());
             }
 
-            if self.filter.edition.min_size.bytes() > 0 || self.filter.edition.max_size.bytes() > 0 {
+            if self.filter.edition.min_size.bytes() > 0 || self.filter.edition.max_size.bytes() > 0
+            {
                 query.append_pair("tor[unit]", "1");
             }
             if self.filter.edition.min_size.bytes() > 0 {
@@ -291,7 +299,6 @@ impl TorrentSearch {
     }
 }
 
-#[allow(dead_code)]
 impl EditionFilter {
     pub fn matches(&self, torrent: &MaMTorrent) -> bool {
         if !self.media_type.is_empty()
@@ -380,11 +387,11 @@ impl EditionFilter {
         true
     }
 
-    pub(crate) fn matches_lib(&self, torrent: &Torrent) -> Result<bool, anyhow::Error> {
+    pub fn matches_lib(&self, torrent: &Torrent) -> Result<bool, anyhow::Error> {
         self.matches_meta(&torrent.meta)
     }
 
-    pub(crate) fn matches_meta(&self, meta: &TorrentMeta) -> Result<bool, anyhow::Error> {
+    pub fn matches_meta(&self, meta: &TorrentMeta) -> Result<bool, anyhow::Error> {
         if !self.media_type.is_empty() && !self.media_type.contains(&meta.media_type) {
             return Ok(false);
         }
@@ -507,7 +514,7 @@ impl GoodreadsList {
     pub fn allow_audio(&self) -> bool {
         self.grab
             .iter()
-            .any(|g| match g.edition.categories.audio.as_ref() {
+            .any(|g| match g.filter.edition.categories.audio.as_ref() {
                 None => true,
                 Some(c) => !c.is_empty(),
             })
@@ -516,7 +523,7 @@ impl GoodreadsList {
     pub fn allow_ebook(&self) -> bool {
         self.grab
             .iter()
-            .any(|g| match g.edition.categories.ebook.as_ref() {
+            .any(|g| match g.filter.edition.categories.ebook.as_ref() {
                 None => true,
                 Some(c) => !c.is_empty(),
             })
@@ -1509,10 +1516,7 @@ mod tests {
                 )),
                 ..default_meta()
             });
-            assert!(
-                filter.matches_lib(&torrent).unwrap(),
-                "Torrent should pass all checks when all allowed filter criteria match."
-            );
+            assert!(filter.matches_lib(&torrent).unwrap());
         }
     }
 }

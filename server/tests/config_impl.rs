@@ -63,7 +63,6 @@ fn test_allow_audio_true_when_none_or_nonempty() {
         grab: vec![Grab {
             cost: Cost::default(),
             filter: TorrentFilter::default(),
-            edition: EditionFilter::default(),
         }],
         search_interval: None,
         unsat_buffer: None,
@@ -83,9 +82,11 @@ fn test_allow_audio_true_when_none_or_nonempty() {
         prefer_format: None,
         grab: vec![Grab {
             cost: Cost::default(),
-            filter: TorrentFilter::default(),
-            edition: EditionFilter {
-                categories: cats,
+            filter: TorrentFilter {
+                edition: EditionFilter {
+                    categories: cats,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         }],
@@ -110,9 +111,11 @@ fn test_allow_audio_false_when_all_grabs_empty_audio() {
         prefer_format: None,
         grab: vec![Grab {
             cost: Cost::default(),
-            filter: TorrentFilter::default(),
-            edition: EditionFilter {
-                categories: cats,
+            filter: TorrentFilter {
+                edition: EditionFilter {
+                    categories: cats,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         }],
@@ -135,7 +138,6 @@ fn test_allow_ebook_behaviour() {
         grab: vec![Grab {
             cost: Cost::default(),
             filter: TorrentFilter::default(),
-            edition: EditionFilter::default(),
         }],
         search_interval: None,
         unsat_buffer: None,
@@ -155,9 +157,11 @@ fn test_allow_ebook_behaviour() {
         prefer_format: None,
         grab: vec![Grab {
             cost: Cost::default(),
-            filter: TorrentFilter::default(),
-            edition: EditionFilter {
-                categories: cats,
+            filter: TorrentFilter {
+                edition: EditionFilter {
+                    categories: cats,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         }],

@@ -29,6 +29,7 @@ pub async fn grab_selected_torrents(
     qbit: &qbit::Api,
     qbit_url: &str,
     mam: &MaM<'_>,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     let selected_torrents = {
         let r = db.r_transaction()?;
@@ -77,7 +78,7 @@ pub async fn grab_selected_torrents(
             continue;
         }
 
-        let result = grab_torrent(config, db, qbit, qbit_url, mam, torrent.clone())
+        let result = grab_torrent(config, db, qbit, qbit_url, mam, torrent.clone(), events)
             .await
             .map_err(|err| anyhow::Error::new(TorrentMetaError(torrent.meta.clone(), err)));
 
@@ -107,6 +108,7 @@ async fn grab_torrent(
     qbit_url: &str,
     mam: &MaM<'_>,
     torrent: SelectedTorrent,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     info!(
         "Grabbing torrent \"{}\", with category {:?} and tags {:?}",
@@ -276,6 +278,7 @@ async fn grab_torrent(
 
     write_event(
         db,
+        events,
         Event::new(
             Some(hash),
             Some(mam_id),

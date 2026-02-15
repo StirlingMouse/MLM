@@ -28,12 +28,16 @@ use crate::linker::{
 use crate::logging::{update_errored_torrent, write_event};
 
 #[instrument(skip_all)]
-pub async fn link_folders_to_library(config: Arc<Config>, db: Arc<Database<'_>>) -> Result<()> {
+pub async fn link_folders_to_library(
+    config: Arc<Config>,
+    db: Arc<Database<'_>>,
+    events: &crate::stats::Events,
+) -> Result<()> {
     for library in &config.libraries {
         if let Library::ByRipDir(l) = library {
             let mut entries = read_dir(&l.rip_dir).await?;
             while let Some(folder) = entries.next_entry().await? {
-                link_folder(&config, library, &db, folder).await?;
+                link_folder(&config, library, &db, folder, events).await?;
             }
         }
     }
@@ -46,6 +50,7 @@ async fn link_folder(
     library: &Library,
     db: &Database<'_>,
     folder: DirEntry,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     let span = span!(
         Level::TRACE,
@@ -93,9 +98,16 @@ async fn link_folder(
         trace!("Linking libation folder");
         let asin = libation_meta.asin.clone();
         let title = libation_meta.title.clone();
-        let result =
-            link_libation_folder(config, library, db, libation_meta, audio_files, ebook_files)
-                .await;
+        let result = link_libation_folder(
+            config,
+            library,
+            db,
+            libation_meta,
+            audio_files,
+            ebook_files,
+            events,
+        )
+        .await;
         update_errored_torrent(db, ErroredTorrentId::Linker(asin), title, result).await;
     }
 
@@ -109,6 +121,7 @@ async fn link_libation_folder(
     libation_meta: Libation,
     audio_files: Vec<DirEntry>,
     ebook_files: Vec<DirEntry>,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     let r = db.r_transaction()?;
     let existing_torrent: Option<Torrent> = r.get().primary(libation_meta.asin.clone())?;
@@ -208,7 +221,9 @@ async fn link_libation_folder(
     }
 
     if let Some(filter) = library.edition_filter()
-        && !filter.matches_meta(&meta).is_ok_and(|matches| matches)
+        && !filter
+            .matches_meta(&meta)
+            .is_ok_and(|matches: bool| matches)
     {
         trace!("Skipping folder due to edition filter");
         return Ok(());
@@ -283,6 +298,7 @@ async fn link_libation_folder(
     if let Some(library_path) = library_path {
         write_event(
             db,
+            events,
             Event::new(
                 Some(libation_meta.asin),
                 None,

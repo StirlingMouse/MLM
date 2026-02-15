@@ -11,18 +11,18 @@ use mlm_db::{DatabaseExt as _, Torrent};
 use serde::Deserialize;
 use tracing::{info, warn};
 
-use mlm_core::{
-    autograbber::update_torrent_meta,
-    config::{Config, Library},
-    qbittorrent::ensure_category_exists,
-    stats::Context,
-};
 use crate::{AppError, Page, filter, yaml_items, yaml_nums};
+use mlm_core::config::Library;
+use mlm_core::{
+    Config, Context, ContextExt, autograbber::update_torrent_meta,
+    qbittorrent::ensure_category_exists,
+};
 
 pub async fn config_page(
-    State(config): State<Arc<Config>>,
+    State(context): State<Context>,
     Query(query): Query<ConfigPageQuery>,
 ) -> std::result::Result<Html<String>, AppError> {
+    let config = context.config().await;
     let template = ConfigPageTemplate {
         config,
         show_apply_tags: query.show_apply_tags.unwrap_or_default(),
@@ -55,7 +55,7 @@ pub async fn config_page_post(
                 &qbit_conf.password,
             )
             .await?;
-            let torrents = context.db.r_transaction()?.scan().primary::<Torrent>()?;
+            let torrents = context.db().r_transaction()?.scan().primary::<Torrent>()?;
             for torrent in torrents.all()? {
                 let torrent = torrent?;
                 match tag_filter.filter.matches_lib(&torrent) {
@@ -78,13 +78,14 @@ pub async fn config_page_post(
                         if new_meta != torrent.meta {
                             update_torrent_meta(
                                 &config,
-                                &context.db,
-                                context.db.rw_async().await?,
+                                context.db(),
+                                context.db().rw_async().await?,
                                 Some(&mam_torrent),
                                 torrent.clone(),
                                 new_meta,
                                 false,
                                 false,
+                                &context.events,
                             )
                             .await?;
                         }

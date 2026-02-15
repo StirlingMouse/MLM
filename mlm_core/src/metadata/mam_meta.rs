@@ -1,4 +1,4 @@
-use crate::stats::Context;
+use crate::{Context, ContextExt};
 use anyhow::Result;
 use mlm_db::TorrentMeta;
 
@@ -26,7 +26,11 @@ pub async fn match_meta(
     // centralized MetadataService attached to the Context. This keeps
     // provider configuration in one place and avoids duplicating instantiation
     // logic here.
-    let fetched = ctx.metadata.fetch_provider(ctx, query, provider_id).await?;
+    let fetched = ctx
+        .ssr()
+        .metadata
+        .fetch_provider(ctx, query, provider_id)
+        .await?;
 
     // Merge fetched metadata into original meta: only overwrite fields when
     // the provider supplied non-empty / non-default values. This preserves

@@ -101,9 +101,11 @@ impl<T: QbitApi + ?Sized> QbitApi for Arc<T> {
 
 const CATEGORY_CACHE_TTL_SECS: u64 = 60;
 
+type CategoryCacheValue = (HashMap<String, ()>, Instant);
+
 #[derive(Clone)]
 pub struct CategoryCache {
-    cache: Arc<RwLock<HashMap<String, (HashMap<String, ()>, Instant)>>>,
+    cache: Arc<RwLock<HashMap<String, CategoryCacheValue>>>,
 }
 
 impl CategoryCache {
@@ -118,18 +120,22 @@ impl CategoryCache {
         qbit: &Q,
         url: &str,
     ) -> Result<HashMap<String, ()>> {
-
         let now = Instant::now();
         let cache = self.cache.read().await;
 
-        if let Some((categories, cached_at)) = cache.get(url) {
-            if now.duration_since(*cached_at) < Duration::from_secs(CATEGORY_CACHE_TTL_SECS) {
-                return Ok(categories.clone());
-            }
+        if let Some((categories, cached_at)) = cache.get(url)
+            && now.duration_since(*cached_at) < Duration::from_secs(CATEGORY_CACHE_TTL_SECS)
+        {
+            return Ok(categories.clone());
         }
         drop(cache);
 
-        let categories: HashMap<String, ()> = qbit.categories().await?.into_keys().map(|k| (k, ())).collect();
+        let categories: HashMap<String, ()> = qbit
+            .categories()
+            .await?
+            .into_keys()
+            .map(|k| (k, ()))
+            .collect();
         let mut cache = self.cache.write().await;
         cache.insert(url.to_string(), (categories.clone(), now));
 
@@ -178,16 +184,18 @@ pub async fn add_torrent_with_category(
     url: &str,
     add_torrent: AddTorrent,
 ) -> Result<()> {
-    if let Some(ref category) = add_torrent.category {
-        if !category.is_empty() {
-            ensure_category_exists(qbit, url, category).await?;
-        }
+    if let Some(ref category) = add_torrent.category
+        && !category.is_empty()
+    {
+        ensure_category_exists(qbit, url, category).await?;
     }
 
-    qbit.add_torrent(add_torrent).await.map_err(|e| anyhow::Error::new(e))
+    qbit.add_torrent(add_torrent)
+        .await
+        .map_err(anyhow::Error::new)
 }
 
-pub async fn get_torrent<'a, 'b>(
+pub async fn get_torrent<'a>(
     config: &'a Config,
     hash: &str,
 ) -> Result<Option<(Torrent, qbit::Api, &'a QbitConfig)>> {

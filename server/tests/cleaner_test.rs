@@ -1,7 +1,7 @@
 mod common;
 
 use common::{MockFs, MockTorrentBuilder, TestDb, mock_config};
-use mlm_core::cleaner::run_library_cleaner;
+use mlm_core::{Events, cleaner::run_library_cleaner};
 use mlm_db::{DatabaseExt, Torrent};
 use std::sync::Arc;
 
@@ -45,7 +45,7 @@ async fn test_run_library_cleaner() -> anyhow::Result<()> {
         rw.commit()?;
     }
 
-    run_library_cleaner(config.clone(), test_db.db.clone()).await?;
+    run_library_cleaner(config.clone(), test_db.db.clone(), &Events::new()).await?;
 
     let r = test_db.db.r_transaction()?;
     let t1_after: Torrent = r.get().primary("ID1".to_string())?.unwrap();

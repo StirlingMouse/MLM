@@ -9,10 +9,8 @@ use serde_json::Value;
 use tokio::time::sleep;
 use tracing::{instrument, trace};
 
-use crate::{
-    autograbber::select_torrents,
-    config::{Config, NotionList},
-};
+use crate::autograbber::select_torrents;
+use crate::config::{Config, NotionList};
 
 static IMPORT_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
@@ -23,6 +21,7 @@ pub async fn run_notion_import(
     mam: Arc<MaM<'_>>,
     list: &NotionList,
     max_torrents: u64,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     // Make sure we are only running one import at a time
     let _guard = IMPORT_MUTEX.lock().await;
@@ -85,6 +84,7 @@ pub async fn run_notion_import(
                         list.dry_run,
                         max_torrents,
                         None,
+                        events,
                     )
                     .await
                     .context("select_torrents")?;

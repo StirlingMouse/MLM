@@ -44,7 +44,7 @@ pub fn rank_torrents(config: &Config, batch: Vec<Torrent>) -> Vec<Torrent> {
                 let mut size = 0;
                 if let Some(library_path) = &torrent.library_path {
                     for file in &torrent.library_files {
-                        let path = library_path.join(file);
+                        let path: std::path::PathBuf = library_path.join(file);
                         size += fs::metadata(path).map_or(0, |s| file_size(&s));
                     }
                 }

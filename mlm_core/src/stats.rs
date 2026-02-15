@@ -1,17 +1,10 @@
-use std::{collections::BTreeMap, sync::Arc};
-
 use anyhow::Result;
-use mlm_db::Event;
-use mlm_mam::api::MaM;
-use native_db::Database;
+use std::{collections::BTreeMap, sync::Arc};
 use time::{OffsetDateTime, UtcDateTime};
 use tokio::sync::{
     Mutex,
     watch::{self, Receiver, Sender},
 };
-
-use crate::config::Config;
-use crate::metadata::MetadataService;
 
 #[derive(Default)]
 pub struct StatsValues {
@@ -32,6 +25,28 @@ pub struct StatsValues {
 }
 
 #[derive(Clone)]
+pub struct Events {
+    pub event: (
+        Sender<Option<mlm_db::Event>>,
+        Receiver<Option<mlm_db::Event>>,
+    ),
+}
+
+impl Events {
+    pub fn new() -> Self {
+        Self {
+            event: watch::channel(None),
+        }
+    }
+}
+
+impl Default for Events {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Clone)]
 pub struct Stats {
     pub values: Arc<Mutex<StatsValues>>,
     values_updated: (Sender<UtcDateTime>, Receiver<UtcDateTime>),
@@ -48,7 +63,7 @@ impl Stats {
     pub async fn update(&self, f: impl FnOnce(&mut StatsValues)) {
         let mut data = self.values.lock().await;
         f(&mut data);
-        self.values_updated.0.send(UtcDateTime::now()).unwrap();
+        let _ = self.values_updated.0.send(UtcDateTime::now());
     }
 
     pub fn updates(&self) -> Receiver<UtcDateTime> {
@@ -59,45 +74,5 @@ impl Stats {
 impl Default for Stats {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-#[derive(Clone)]
-pub struct Events {
-    pub event: (Sender<Option<Event>>, Receiver<Option<Event>>),
-}
-
-#[derive(Clone)]
-pub struct Triggers {
-    pub search_tx: BTreeMap<usize, Sender<()>>,
-    pub import_tx: BTreeMap<usize, Sender<()>>,
-    pub torrent_linker_tx: Sender<()>,
-    pub folder_linker_tx: Sender<()>,
-    pub downloader_tx: Sender<()>,
-    pub audiobookshelf_tx: Sender<()>,
-}
-
-#[derive(Clone)]
-pub struct Context {
-    pub config: Arc<Mutex<Arc<Config>>>,
-    pub db: Arc<Database<'static>>,
-    pub mam: Arc<Result<Arc<MaM<'static>>>>,
-    pub stats: Stats,
-    pub metadata: Arc<MetadataService>,
-    // pub events: Events,
-    pub triggers: Triggers,
-}
-
-impl Context {
-    pub async fn config(&self) -> Arc<Config> {
-        self.config.lock().await.clone()
-    }
-
-    pub fn mam(&self) -> Result<Arc<MaM<'static>>> {
-        let Ok(mam) = self.mam.as_ref() else {
-            return Err(anyhow::Error::msg("mam_id error"));
-        };
-
-        Ok(mam.clone())
     }
 }

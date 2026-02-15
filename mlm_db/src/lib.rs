@@ -190,7 +190,7 @@ pub enum OldMainCat {
     Radio,
 }
 
-#[derive(Clone, Default, Debug, Deserialize)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
 #[serde(try_from = "HashMap<String, bool>")]
 pub struct Flags {
     pub crude_language: Option<bool>,

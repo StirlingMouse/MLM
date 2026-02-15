@@ -16,15 +16,15 @@ use mlm_db::{Language, LibraryMismatch, Torrent, TorrentKey};
 use serde::{Deserialize, Serialize};
 use sublime_fuzzy::FuzzySearch;
 
-use mlm_core::{
-    cleaner::clean_torrent,
-    linker::{refresh_mam_metadata, refresh_metadata_relink},
-    stats::Context,
-};
 use crate::{
     AppError, Page, flag_icons, tables,
     tables::{Flex, HidableColumns, Key, Pagination, PaginationParams, SortOn, Sortable},
     time,
+};
+use mlm_core::{
+    Context, ContextExt,
+    cleaner::clean_torrent,
+    linker::{refresh_mam_metadata, refresh_metadata_relink},
 };
 use mlm_db::{
     ClientStatus, DatabaseExt as _, Flags, MediaType, MetadataSource, OldCategory, Series,
@@ -39,7 +39,7 @@ pub async fn torrents_page(
     Query(show): Query<TorrentsPageColumnsQuery>,
     Query(paging): Query<PaginationParams>,
 ) -> std::result::Result<Response, AppError> {
-    let r = context.db.r_transaction()?;
+    let r = context.db().r_transaction()?;
 
     let torrent_count = r.len().secondary::<Torrent>(TorrentKey::created_at)?;
     let torrents = r.scan().secondary::<Torrent>(TorrentKey::created_at)?;
@@ -630,16 +630,16 @@ pub async fn torrents_page_post(
     match form.action.as_str() {
         "clean" => {
             for torrent in form.torrents {
-                let Some(torrent) = context.db.r_transaction()?.get().primary(torrent)? else {
+                let Some(torrent) = context.db().r_transaction()?.get().primary(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };
-                clean_torrent(&config, &context.db, torrent, true).await?;
+                clean_torrent(&config, context.db(), torrent, true, &context.events).await?;
             }
         }
         "refresh" => {
             let mam = context.mam()?;
             for torrent in form.torrents {
-                refresh_mam_metadata(&config, &context.db, &mam, torrent).await?;
+                refresh_mam_metadata(&config, context.db(), &mam, torrent, &context.events).await?;
             }
         }
         "refresh-relink" => {
@@ -647,16 +647,17 @@ pub async fn torrents_page_post(
             for torrent in form.torrents {
                 refresh_metadata_relink(
                     context.config.lock().await.as_ref(),
-                    &context.db,
+                    context.db(),
                     &mam,
                     torrent,
+                    &context.events,
                 )
                 .await?;
             }
         }
         "remove" => {
             for torrent in form.torrents {
-                let (_guard, rw) = context.db.rw_async().await?;
+                let (_guard, rw) = context.db().rw_async().await?;
                 let Some(torrent) = rw.get().primary::<Torrent>(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };

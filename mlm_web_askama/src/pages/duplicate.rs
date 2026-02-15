@@ -12,15 +12,12 @@ use mlm_parse::normalize_title;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use mlm_core::{
-    cleaner::clean_torrent,
-    stats::Context,
-};
 use crate::{
     AppError, Page,
     tables::{Key, SortOn, Sortable, table_styles_rows},
     time,
 };
+use mlm_core::{Context, ContextExt, cleaner::clean_torrent};
 
 pub async fn duplicate_page(
     State(context): State<Context>,
@@ -29,7 +26,7 @@ pub async fn duplicate_page(
 ) -> std::result::Result<Html<String>, AppError> {
     let config = context.config().await;
     let mut duplicate_torrents = context
-        .db
+        .db()
         .r_transaction()?
         .scan()
         .primary::<DuplicateTorrent>()?
@@ -75,7 +72,7 @@ pub async fn duplicate_page(
         let Some(with) = &torrent.duplicate_of else {
             continue;
         };
-        let Some(duplicate) = context.db.r_transaction()?.get().primary(with.clone())? else {
+        let Some(duplicate) = context.db().r_transaction()?.get().primary(with.clone())? else {
             continue;
         };
         torrents.push((torrent, duplicate));
@@ -98,7 +95,7 @@ pub async fn duplicate_torrents_page_post(
         "replace" => {
             let mam = context.mam()?;
             for torrent in form.torrents {
-                let r = context.db.r_transaction()?;
+                let r = context.db().r_transaction()?;
                 let Some(duplicate_torrent) = r.get().primary::<DuplicateTorrent>(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };
@@ -151,7 +148,7 @@ pub async fn duplicate_torrents_page_post(
                 );
 
                 {
-                    let (_guard, rw) = context.db.rw_async().await?;
+                    let (_guard, rw) = context.db().rw_async().await?;
                     rw.insert(SelectedTorrent {
                         mam_id: mam_torrent.id,
                         hash: None,
@@ -177,12 +174,12 @@ pub async fn duplicate_torrents_page_post(
                     rw.remove(duplicate_torrent)?;
                     rw.commit()?;
                 }
-                clean_torrent(&config, &context.db, duplicate_of, false).await?;
+                clean_torrent(&config, context.db(), duplicate_of, false, &context.events).await?;
             }
         }
         "remove" => {
             for torrent in form.torrents {
-                let (_guard, rw) = context.db.rw_async().await?;
+                let (_guard, rw) = context.db().rw_async().await?;
                 let Some(torrent) = rw.get().primary::<DuplicateTorrent>(torrent)? else {
                     return Err(anyhow::Error::msg("Could not find torrent").into());
                 };

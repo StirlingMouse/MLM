@@ -7,16 +7,20 @@ use mlm_db::{
 use native_db::Database;
 use tracing::{debug, info, instrument, trace, warn};
 
+use crate::config::Config;
 use crate::{
     audiobookshelf::Abs,
-    config::Config,
     linker::rank_torrents,
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     qbittorrent::ensure_category_exists,
 };
 
 #[instrument(skip_all)]
-pub async fn run_library_cleaner(config: Arc<Config>, db: Arc<Database<'_>>) -> Result<()> {
+pub async fn run_library_cleaner(
+    config: Arc<Config>,
+    db: Arc<Database<'_>>,
+    events: &crate::stats::Events,
+) -> Result<()> {
     let torrents: Vec<Torrent> = {
         let r = db.r_transaction()?;
         let torrents = r.scan().secondary::<Torrent>(TorrentKey::title_search)?;
@@ -30,20 +34,25 @@ pub async fn run_library_cleaner(config: Arc<Config>, db: Arc<Database<'_>>) -> 
     for torrent in torrents {
         if let Some(current) = batch.first() {
             if !current.matches(&torrent) {
-                process_batch(&config, &db, mem::take(&mut batch)).await?;
+                process_batch(&config, &db, mem::take(&mut batch), events).await?;
             }
             batch.push(torrent);
         } else {
             batch.push(torrent);
         }
     }
-    process_batch(&config, &db, batch).await?;
+    process_batch(&config, &db, batch, events).await?;
 
     Ok(())
 }
 
 #[instrument(skip_all)]
-async fn process_batch(config: &Config, db: &Database<'_>, batch: Vec<Torrent>) -> Result<()> {
+async fn process_batch(
+    config: &Config,
+    db: &Database<'_>,
+    batch: Vec<Torrent>,
+    events: &crate::stats::Events,
+) -> Result<()> {
     if batch.len() == 1 {
         return Ok(());
     };
@@ -60,6 +69,7 @@ async fn process_batch(config: &Config, db: &Database<'_>, batch: Vec<Torrent>) 
             db,
             remove.clone(),
             keep.library_path.is_some() && keep.library_path != remove.library_path,
+            events,
         )
         .await
         .map_err(|err| anyhow::Error::new(TorrentMetaError(remove.meta.clone(), err)));
@@ -81,11 +91,12 @@ pub async fn clean_torrent(
     db: &Database<'_>,
     mut remove: Torrent,
     delete_in_abs: bool,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     if remove.id_is_hash {
         for qbit_conf in config.qbittorrent.iter() {
             if let Some(on_cleaned) = &qbit_conf.on_cleaned {
-                let qbit = qbit::Api::new_login_username_password(
+                let qbit: qbit::Api = qbit::Api::new_login_username_password(
                     &qbit_conf.url,
                     &qbit_conf.username,
                     &qbit_conf.password,
@@ -127,6 +138,7 @@ pub async fn clean_torrent(
     if let Some(library_path) = library_path {
         write_event(
             db,
+            events,
             Event::new(
                 Some(id),
                 mam_id,

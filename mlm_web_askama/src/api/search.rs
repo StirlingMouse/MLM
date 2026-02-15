@@ -10,12 +10,12 @@ use mlm_mam::search::{MaMTorrent, SearchFields};
 use serde::{Deserialize, Serialize};
 use tokio::fs::create_dir_all;
 
-use mlm_core::{
-    autograbber::{mark_removed_torrents, search_torrents, select_torrents},
-    config::{Cost, TorrentSearch},
-    stats::Context,
-};
 use crate::{AppError, MaMState};
+use mlm_core::config::{Cost, TorrentSearch};
+use mlm_core::{
+    Context, ContextExt,
+    autograbber::{mark_removed_torrents, search_torrents, select_torrents},
+};
 
 pub async fn search_api(
     State(mam): State<MaMState>,
@@ -84,13 +84,13 @@ pub async fn search_api_post(
     }
 
     if form.mark_removed {
-        mark_removed_torrents(&context.db, &mam, &torrents).await?;
+        mark_removed_torrents(context.db(), &mam, &torrents, &context.events).await?;
     }
 
     if form.add {
         select_torrents(
             &config,
-            &context.db,
+            context.db(),
             &mam,
             torrents.into_iter(),
             &search.filter,
@@ -101,6 +101,7 @@ pub async fn search_api_post(
             search.dry_run,
             u64::MAX,
             None,
+            &context.events,
         )
         .await?;
         return Ok::<_, AppError>(Json(SearchApiResponse {

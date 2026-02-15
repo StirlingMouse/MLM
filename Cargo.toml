@@ -1,3 +1,21 @@
 [workspace]
 resolver = "3"
-members = ["server", "mlm_db", "mlm_parse", "mlm_mam", "mlm_meta", "mlm_core", "mlm_web_askama"]
+members = [
+  "server",
+  "mlm_db",
+  "mlm_parse",
+  "mlm_mam",
+  "mlm_meta",
+  "mlm_core",
+  "mlm_web_askama",
+]
+
+# Faster dev builds for WASM
+[profile.dev.package."*"]
+opt-level = 1
+
+# Keep debug builds fast for the server
+[profile.dev]
+opt-level = 0
+codegen-units = 256
+debug = 1

@@ -3,7 +3,7 @@
 use std::{
     env,
     fs::{self, create_dir_all},
-    io, mem,
+    io,
     path::PathBuf,
     process,
     sync::Arc,
@@ -25,7 +25,7 @@ use tracing_subscriber::{
 };
 
 use mlm_core::{config::Config, metadata::MetadataService, stats::Stats};
-use mlm_web_askama::start_webserver;
+use mlm_web_askama::router as askama_router;
 
 #[cfg(target_family = "windows")]
 use mlm::windows;
@@ -155,27 +155,7 @@ async fn app_main() -> Result<()> {
         .unwrap();
         return Ok(());
     }
-    let mut config = config?;
-    for autograb in &mut config.autograbs {
-        autograb.filter.edition = mem::take(&mut autograb.edition);
-    }
-    for snatchlist in &mut config.snatchlist {
-        snatchlist.filter.edition = mem::take(&mut snatchlist.edition);
-    }
-    for list in &mut config.goodreads_lists {
-        for grab in &mut list.grab {
-            grab.filter.edition = mem::take(&mut grab.edition);
-        }
-    }
-    for list in &mut config.notion_lists {
-        for grab in &mut list.grab {
-            grab.filter.edition = mem::take(&mut grab.edition);
-        }
-    }
-    for tag in &mut config.tags {
-        tag.filter.edition = mem::take(&mut tag.edition);
-    }
-    let config = Arc::new(config);
+    let config = Arc::new(config?);
 
     let db = native_db::Builder::new().create(&mlm_db::MODELS, database_file)?;
     mlm_db::migrate(&db)?;
@@ -229,12 +209,15 @@ async fn app_main() -> Result<()> {
         MaM::new(&config.mam_id, db.clone()).await.map(Arc::new)
     };
 
-    #[cfg(target_family = "windows")]
     let web_port = config.web_port;
+    let web_host = config.web_host.clone();
 
     let context = mlm_core::runner::spawn_tasks(config, db, Arc::new(mam), stats, metadata_service);
 
-    let result = start_webserver(context).await;
+    let app = askama_router(context.clone());
+
+    let listener = tokio::net::TcpListener::bind((web_host, web_port)).await?;
+    let result: Result<()> = axum::serve(listener, app).await.map_err(|e| e.into());
 
     #[cfg(target_family = "windows")]
     if let Err(err) = &result {

@@ -14,8 +14,8 @@ use mlm_parse::normalize_title;
 use serde::Deserialize;
 use tracing::info;
 
-use mlm_core::stats::Context;
 use crate::{AppError, MaMTorrentsTemplate, Page};
+use mlm_core::{Context, ContextExt};
 
 pub async fn search_page(
     State(context): State<Context>,
@@ -37,7 +37,7 @@ pub async fn search_page(
         })
         .await?;
 
-    let r = context.db.r_transaction()?;
+    let r = context.db().r_transaction()?;
     let mut torrents = result
         .data
         .into_iter()
@@ -144,7 +144,7 @@ pub async fn select_torrent(context: &Context, mam_id: u64, wedge: bool) -> Resu
         torrent.title, torrent.filetype, cost, category, tags
     );
     {
-        let (_guard, rw) = context.db.rw_async().await?;
+        let (_guard, rw) = context.db().rw_async().await?;
         rw.insert(SelectedTorrent {
             mam_id: torrent.id,
             hash: None,
@@ -166,7 +166,9 @@ pub async fn select_torrent(context: &Context, mam_id: u64, wedge: bool) -> Resu
         })?;
         rw.commit()?;
     }
-    context.triggers.downloader_tx.send(())?;
+    if let Some(tx) = &context.triggers.downloader_tx {
+        tx.send(())?;
+    }
 
     Ok(())
 }

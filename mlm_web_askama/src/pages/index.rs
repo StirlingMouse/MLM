@@ -1,3 +1,7 @@
+// NOTE: This file is kept for reference but is no longer used.
+// The home page has been replaced with a Dioxus implementation in mlm_web_dioxus/src/home.rs
+#![allow(dead_code)]
+
 use std::{collections::BTreeMap, convert::Infallible, sync::Arc, time::Duration};
 
 use anyhow::Result;
@@ -15,18 +19,18 @@ use mlm_db::Timestamp;
 use serde::Deserialize;
 use tokio_stream::{StreamExt as _, wrappers::WatchStream};
 
-use mlm_core::{
-    config::Config,
-    lists::{List, get_lists},
-    stats::Context,
-};
 use crate::{AppError, Page, time};
+use mlm_core::config::Config;
+use mlm_core::{
+    Context, ContextExt,
+    lists::{List, get_lists},
+};
 
 pub async fn index_page(
     State(context): State<Context>,
 ) -> std::result::Result<Html<String>, AppError> {
     let stats = context.stats.values.lock().await;
-    let username = match context.mam.as_ref() {
+    let username = match context.mam() {
         Ok(mam) => mam.cached_user_info().await.map(|u| u.username),
         Err(_) => None,
     };
@@ -34,7 +38,7 @@ pub async fn index_page(
     let template = IndexPageTemplate {
         config: config.clone(),
         lists: get_lists(&config),
-        mam_error: context.mam.as_ref().as_ref().err().map(|e| format!("{e}")),
+        mam_error: context.mam().err().map(|e| format!("{e}")),
         has_no_qbits: config.qbittorrent.is_empty(),
         username,
         autograbber_run_at: stats
@@ -101,10 +105,14 @@ pub async fn index_page_post(
 ) -> Result<Redirect, AppError> {
     match form.action.as_str() {
         "run_torrent_linker" => {
-            context.triggers.torrent_linker_tx.send(())?;
+            if let Some(tx) = &context.triggers.torrent_linker_tx {
+                tx.send(())?;
+            }
         }
         "run_folder_linker" => {
-            context.triggers.folder_linker_tx.send(())?;
+            if let Some(tx) = &context.triggers.folder_linker_tx {
+                tx.send(())?;
+            }
         }
         "run_search" => {
             if let Some(tx) = context.triggers.search_tx.get(
@@ -129,10 +137,14 @@ pub async fn index_page_post(
             }
         }
         "run_downloader" => {
-            context.triggers.downloader_tx.send(())?;
+            if let Some(tx) = &context.triggers.downloader_tx {
+                tx.send(())?;
+            }
         }
         "run_abs_matcher" => {
-            context.triggers.audiobookshelf_tx.send(())?;
+            if let Some(tx) = &context.triggers.audiobookshelf_tx {
+                tx.send(())?;
+            }
         }
         action => {
             eprintln!("unknown action: {action}");

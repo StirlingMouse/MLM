@@ -47,6 +47,7 @@ pub async fn run_autograbber(
     autograb_trigger: Sender<()>,
     index: usize,
     autograb_config: Arc<TorrentSearch>,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     // Make sure we are only running one autograbber at a time
     let _guard = AUTOGRABBER_MUTEX.lock().await;
@@ -96,6 +97,7 @@ pub async fn run_autograbber(
             },
             &mam,
             max_torrents,
+            events,
         )
         .await
         .context("search_torrents")?;
@@ -116,6 +118,7 @@ pub async fn search_and_select_torrents(
     fields: SearchFields,
     mam: &MaM<'_>,
     max_torrents: u64,
+    events: &crate::stats::Events,
 ) -> Result<u64> {
     let torrents = search_torrents(torrent_search, fields, mam)
         .await
@@ -123,7 +126,7 @@ pub async fn search_and_select_torrents(
 
     if torrent_search.mark_removed {
         let torrents = torrents.collect::<Vec<_>>();
-        mark_removed_torrents(db, mam, &torrents)
+        mark_removed_torrents(db, mam, &torrents, events)
             .await
             .context("mark_removed_torrents")?;
 
@@ -140,6 +143,7 @@ pub async fn search_and_select_torrents(
             torrent_search.dry_run,
             max_torrents,
             None,
+            events,
         )
         .await
         .context("select_torrents");
@@ -158,6 +162,7 @@ pub async fn search_and_select_torrents(
         torrent_search.dry_run,
         max_torrents,
         None,
+        events,
     )
     .await
     .context("select_torrents")
@@ -305,6 +310,7 @@ pub async fn mark_removed_torrents(
     db: &Database<'_>,
     mam: &MaM<'_>,
     torrents: &[MaMTorrent],
+    events: &crate::stats::Events,
 ) -> Result<()> {
     if let (Some(first), Some(last)) = (torrents.first(), torrents.last()) {
         let ids = first.id.min(last.id)..=first.id.max(last.id);
@@ -324,8 +330,12 @@ pub async fn mark_removed_torrents(
                         rw.upsert(torrent)?;
                         rw.commit()?;
                         drop(guard);
-                        write_event(db, Event::new(tid, Some(id), EventType::RemovedFromTracker))
-                            .await;
+                        write_event(
+                            db,
+                            events,
+                            Event::new(tid, Some(id), EventType::RemovedFromTracker),
+                        )
+                        .await;
                     }
                     sleep(Duration::from_millis(400)).await;
                 }
@@ -350,6 +360,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
     dry_run: bool,
     max_torrents: u64,
     goodreads_id: Option<u64>,
+    events: &crate::stats::Events,
 ) -> Result<u64> {
     let mut selected_torrents = 0;
     'torrent: for torrent in torrents {
@@ -390,13 +401,15 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                 let mut updated = old_selected.clone();
                 updated.unsat_buffer = Some(unsat_buffer);
                 if updated.meta != meta {
-                    update_selected_torrent_meta(db, rw_opt.unwrap(), mam, updated, meta).await?;
+                    update_selected_torrent_meta(db, rw_opt.unwrap(), mam, updated, meta, events)
+                        .await?;
                 } else {
                     rw.update(old_selected, updated)?;
                     rw_opt.unwrap().1.commit()?;
                 }
             } else if old_selected.meta != meta {
-                update_selected_torrent_meta(db, rw_opt.unwrap(), mam, old_selected, meta).await?;
+                update_selected_torrent_meta(db, rw_opt.unwrap(), mam, old_selected, meta, events)
+                    .await?;
             }
             trace!("Torrent {} is already selected", torrent.id);
             continue;
@@ -420,6 +433,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                         meta,
                         false,
                         cost == Cost::MetadataOnlyAdd,
+                        events,
                     )
                     .await?;
                 }
@@ -467,7 +481,8 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
             for old in old_selected {
                 if old.mam_id == torrent.id {
                     if old.meta != meta {
-                        update_selected_torrent_meta(db, rw_opt.unwrap(), mam, old, meta).await?;
+                        update_selected_torrent_meta(db, rw_opt.unwrap(), mam, old, meta, events)
+                            .await?;
                     }
                     trace!("Torrent {} is already selected2", torrent.id);
                     continue 'torrent;
@@ -536,6 +551,7 @@ pub async fn select_torrents<T: Iterator<Item = MaMTorrent>>(
                             meta,
                             false,
                             false,
+                            events,
                         )
                         .await?;
                     }
@@ -681,6 +697,7 @@ pub async fn update_torrent_meta(
     mut meta: TorrentMeta,
     allow_non_mam: bool,
     linker_is_owner: bool,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     meta.ids.extend(torrent.meta.ids.clone());
     meta.tags = torrent.meta.tags.clone();
@@ -785,6 +802,7 @@ pub async fn update_torrent_meta(
         let mam_id = mam_torrent.map(|m| m.id);
         write_event(
             db,
+            events,
             Event::new(
                 Some(id),
                 mam_id,
@@ -805,6 +823,7 @@ async fn update_selected_torrent_meta(
     mam: &MaM<'_>,
     torrent: SelectedTorrent,
     meta: TorrentMeta,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     let mam_id = torrent.mam_id;
     let diff = torrent.meta.diff(&meta);
@@ -824,6 +843,7 @@ async fn update_selected_torrent_meta(
     drop(guard);
     write_event(
         db,
+        events,
         Event::new(
             hash,
             Some(mam_id),

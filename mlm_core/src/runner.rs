@@ -14,15 +14,15 @@ use tokio::{
 use tracing::error;
 
 use crate::{
+    Context, SsrBackend, Stats, Triggers,
     audiobookshelf::match_torrents_to_abs,
     autograbber::run_autograbber,
     cleaner::run_library_cleaner,
     config::Config,
     linker::{folder::link_folders_to_library, torrent::link_torrents_to_library},
     lists::{get_lists, run_list_import},
-    metadata::MetadataService,
     snatchlist::run_snatchlist_search,
-    stats::{Context, Stats, Triggers},
+    stats::Events,
     torrent_downloader::grab_selected_torrents,
 };
 
@@ -31,8 +31,9 @@ pub fn spawn_tasks(
     db: Arc<mlm_db::Database<'static>>,
     mam: Arc<Result<Arc<MaM<'static>>>>,
     stats: Stats,
-    metadata: Arc<MetadataService>,
+    metadata: Arc<crate::metadata::MetadataService>,
 ) -> Context {
+    let events = Events::new();
     let (mut search_tx, mut search_rx) = (BTreeMap::new(), BTreeMap::new());
     let (mut import_tx, mut import_rx) = (BTreeMap::new(), BTreeMap::new());
     let (torrent_linker_tx, torrent_linker_rx) = watch::channel(());
@@ -63,6 +64,7 @@ pub fn spawn_tasks(
         let db = db.clone();
         let mam = mam.clone();
         let stats = stats.clone();
+        let events = events.clone();
         tokio::spawn(async move {
             if let Some(qbit_conf) = config.qbittorrent.first() {
                 let mut qbit: Option<qbit::Api> = None;
@@ -104,10 +106,16 @@ pub fn spawn_tasks(
                             })
                             .await;
                     }
-                    let result =
-                        grab_selected_torrents(&config, &db, qbit_api, &qbit_conf.url, mam_api)
-                            .await
-                            .context("grab_selected_torrents");
+                    let result = grab_selected_torrents(
+                        &config,
+                        &db,
+                        qbit_api,
+                        &qbit_conf.url,
+                        mam_api,
+                        &events,
+                    )
+                    .await
+                    .context("grab_selected_torrents");
 
                     if let Err(err) = &result {
                         error!("Error grabbing selected torrents: {err:?}");
@@ -132,6 +140,7 @@ pub fn spawn_tasks(
         let downloader_tx = downloader_tx.clone();
         let mut rx = search_rx.remove(&i).unwrap();
         let stats = stats.clone();
+        let events = events.clone();
         let grab = Arc::new(grab.clone());
         tokio::spawn(async move {
             loop {
@@ -181,6 +190,7 @@ pub fn spawn_tasks(
                     downloader_tx.clone(),
                     i,
                     grab.clone(),
+                    &events,
                 )
                 .await
                 .context("autograbbers");
@@ -207,6 +217,7 @@ pub fn spawn_tasks(
         let mut rx = search_rx.remove(&idx).unwrap();
         let stats = stats.clone();
         let grab = Arc::new(grab.clone());
+        let events = events.clone();
         tokio::spawn(async move {
             loop {
                 let interval = grab.search_interval.unwrap_or(config.search_interval);
@@ -254,6 +265,7 @@ pub fn spawn_tasks(
                     mam_api.clone(),
                     idx,
                     grab.clone(),
+                    &events,
                 )
                 .await
                 .context("snatchlist_search");
@@ -280,6 +292,7 @@ pub fn spawn_tasks(
         let mut rx = import_rx.remove(&i).unwrap();
         let stats = stats.clone();
         let list = Arc::new(list);
+        let events = events.clone();
         tokio::spawn(async move {
             loop {
                 let interval = list.search_interval().unwrap_or(config.import_interval);
@@ -326,6 +339,7 @@ pub fn spawn_tasks(
                     list.clone(),
                     i,
                     downloader_tx.clone(),
+                    &events,
                 )
                 .await
                 .context("import");
@@ -349,6 +363,7 @@ pub fn spawn_tasks(
         let db = db.clone();
         let mam = mam.clone();
         let stats = stats.clone();
+        let events = events.clone();
         let mut rx = torrent_linker_rx.clone();
         tokio::spawn(async move {
             loop {
@@ -403,6 +418,7 @@ pub fn spawn_tasks(
                     db.clone(),
                     (&qbit_conf, &qbit),
                     mam_api,
+                    &events,
                 )
                 .await
                 .context("link_torrents_to_library");
@@ -418,7 +434,7 @@ pub fn spawn_tasks(
                         })
                         .await;
                 }
-                let result = run_library_cleaner(config.clone(), db.clone())
+                let result = run_library_cleaner(config.clone(), db.clone(), &events)
                     .await
                     .context("library_cleaner");
                 if let Err(err) = &result {
@@ -440,6 +456,7 @@ pub fn spawn_tasks(
         let config = config.clone();
         let db = db.clone();
         let stats = stats.clone();
+        let events = events.clone();
         let mut rx = folder_linker_rx.clone();
         tokio::spawn(async move {
             loop {
@@ -465,7 +482,7 @@ pub fn spawn_tasks(
                         })
                         .await;
                 }
-                let result = link_folders_to_library(config.clone(), db.clone())
+                let result = link_folders_to_library(config.clone(), db.clone(), &events)
                     .await
                     .context("link_torrents_to_library");
                 if let Err(err) = &result {
@@ -480,7 +497,7 @@ pub fn spawn_tasks(
                         })
                         .await;
                 }
-                let result = run_library_cleaner(config.clone(), db.clone())
+                let result = run_library_cleaner(config.clone(), db.clone(), &events)
                     .await
                     .context("library_cleaner");
                 if let Err(err) = &result {
@@ -543,19 +560,24 @@ pub fn spawn_tasks(
         });
     }
 
+    let backend = Arc::new(SsrBackend {
+        db: db.clone(),
+        mam: mam.clone(),
+        metadata: metadata.clone(),
+    });
+
     Context {
         config: Arc::new(Mutex::new(config)),
-        db,
-        mam,
         stats,
-        metadata,
+        events,
+        backend: Some(backend),
         triggers: Triggers {
             search_tx,
             import_tx,
-            torrent_linker_tx,
-            folder_linker_tx,
-            downloader_tx,
-            audiobookshelf_tx,
+            torrent_linker_tx: Some(torrent_linker_tx),
+            folder_linker_tx: Some(folder_linker_tx),
+            downloader_tx: Some(downloader_tx),
+            audiobookshelf_tx: Some(audiobookshelf_tx),
         },
     }
 }

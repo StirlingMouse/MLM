@@ -17,9 +17,9 @@ use serde::Deserialize;
 use tokio::time::sleep;
 use tracing::{debug, instrument, trace, warn};
 
+use crate::config::{Config, Cost, GoodreadsList, Grab};
 use crate::{
     autograbber::select_torrents,
-    config::{Config, Cost, GoodreadsList, Grab},
     lists::{search_grab, search_library},
 };
 
@@ -35,6 +35,7 @@ pub async fn run_goodreads_import(
     mam: Arc<MaM<'_>>,
     list: &GoodreadsList,
     max_torrents: u64,
+    events: &crate::stats::Events,
 ) -> Result<()> {
     // Make sure we are only running one import at a time
     let _guard = IMPORT_MUTEX.lock().await;
@@ -131,15 +132,25 @@ pub async fn run_goodreads_import(
             }
         };
         trace!("Searching for book {} from Goodreads list", item.title);
-        search_item(&config, &db, &mam, list, &item, db_item, max_torrents)
-            .await
-            .context("search goodreads book")?;
+        search_item(
+            &config,
+            &db,
+            &mam,
+            list,
+            &item,
+            db_item,
+            max_torrents,
+            events,
+        )
+        .await
+        .context("search goodreads book")?;
         sleep(Duration::from_millis(400)).await;
     }
 
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[instrument(skip_all)]
 async fn search_item(
     config: &Config,
@@ -149,6 +160,7 @@ async fn search_item(
     item: &Item,
     mut db_item: ListItem,
     max_torrents: u64,
+    events: &crate::stats::Events,
 ) -> Result<u64> {
     if !db_item.want_audio() && !db_item.want_ebook() {
         return Ok(0);
@@ -257,6 +269,7 @@ async fn search_item(
             list.dry_run,
             max_torrents,
             item.book_id,
+            events,
         )
         .await
         .context("select_torrents")?;
@@ -275,6 +288,7 @@ async fn search_item(
             list.dry_run,
             max_torrents,
             item.book_id,
+            events,
         )
         .await
         .context("select_torrents")?;

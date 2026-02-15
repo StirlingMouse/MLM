@@ -14,11 +14,8 @@ use mlm_db::{
 use native_db::Database;
 use serde::Deserialize;
 
-use mlm_core::{
-    autograbber::update_torrent_meta,
-    stats::Context,
-};
 use crate::{AppError, Page};
+use mlm_core::{Context, ContextExt, autograbber::update_torrent_meta};
 
 pub async fn torrent_edit_page(
     State(db): State<Arc<Database<'static>>>,
@@ -43,7 +40,7 @@ pub async fn torrent_edit_page_post(
     let config = context.config().await;
     let _mam = context.mam()?;
     let Some(torrent) = context
-        .db
+        .db()
         .r_transaction()?
         .get()
         .primary::<Torrent>(hash.clone())?
@@ -105,13 +102,14 @@ pub async fn torrent_edit_page_post(
 
     update_torrent_meta(
         &config,
-        &context.db,
-        context.db.rw_async().await?,
+        context.db(),
+        context.db().rw_async().await?,
         None,
         torrent,
         meta,
         true,
         false,
+        &context.events,
     )
     .await?;
 

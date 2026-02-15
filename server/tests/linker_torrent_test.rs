@@ -2,6 +2,7 @@ mod common;
 
 use anyhow::Result;
 use common::{MockFs, TestDb, mock_config};
+use mlm_core::Events;
 use mlm_core::config::{
     Library, LibraryByDownloadDir, LibraryLinkMethod, LibraryOptions, LibraryTagFilters, QbitConfig,
 };
@@ -166,6 +167,7 @@ async fn test_link_torrent_audiobook() -> anyhow::Result<()> {
         db.db.clone(),
         (qbit_config, &mock_qbit),
         &mock_mam,
+        &Events::new(),
     )
     .await?;
 
@@ -229,6 +231,7 @@ async fn test_skip_incomplete_torrent() -> anyhow::Result<()> {
         db.db.clone(),
         (qbit_config, &mock_qbit),
         &mock_mam,
+        &Events::new(),
     )
     .await?;
 
@@ -320,6 +323,7 @@ async fn test_remove_selected_torrent() -> anyhow::Result<()> {
         db.db.clone(),
         (qbit_config, &mock_qbit),
         &mock_mam,
+        &Events::new(),
     )
     .await;
 
@@ -408,6 +412,7 @@ async fn test_link_torrent_ebook() -> anyhow::Result<()> {
         db.db.clone(),
         (qbit_config, &mock_qbit),
         &mock_mam,
+        &Events::new(),
     )
     .await?;
 
@@ -511,6 +516,7 @@ async fn test_relink() -> anyhow::Result<()> {
         &mock_qbit,
         qbit_torrent,
         torrent_hash.to_string(),
+        &Events::new(),
     )
     .await?;
 
@@ -625,6 +631,7 @@ async fn test_refresh_metadata_relink() -> anyhow::Result<()> {
         &mock_mam,
         qbit_torrent,
         torrent_hash.to_string(),
+        &Events::new(),
     )
     .await?;
 
