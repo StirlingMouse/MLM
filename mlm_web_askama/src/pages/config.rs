@@ -9,6 +9,7 @@ use axum::{
 use axum_extra::extract::Form;
 use mlm_db::{DatabaseExt as _, Torrent};
 use serde::Deserialize;
+use tokio::sync::Semaphore;
 use tracing::{info, warn};
 
 use crate::{AppError, Page, filter, yaml_items, yaml_nums};
@@ -17,13 +18,13 @@ use mlm_core::{
     autograbber::update_torrent_meta,
     config::{Config, Library},
     qbittorrent::ensure_category_exists,
-    stats::Context,
 };
 
 pub async fn config_page(
-    State(config): State<Arc<Config>>,
+    State(context): State<Context>,
     Query(query): Query<ConfigPageQuery>,
 ) -> std::result::Result<Html<String>, AppError> {
+    let config = context.config().await;
     let template = ConfigPageTemplate {
         config,
         show_apply_tags: query.show_apply_tags.unwrap_or_default(),
@@ -39,6 +40,9 @@ pub async fn config_page_post(
     let config = context.config().await;
     match form.action.as_str() {
         "apply" => {
+            const BATCH_SIZE: usize = 100;
+            const MAX_CONCURRENT_MAM_REQUESTS: usize = 5;
+
             let tag_filter = form
                 .tag_filter
                 .ok_or(anyhow::Error::msg("apply requires tag_filter"))?;
@@ -56,60 +60,132 @@ pub async fn config_page_post(
                 &qbit_conf.password,
             )
             .await?;
-            let torrents = context.db.r_transaction()?.scan().primary::<Torrent>()?;
-            for torrent in torrents.all()? {
-                let torrent = torrent?;
-                match tag_filter.filter.matches_lib(&torrent) {
-                    Ok(matches) => {
-                        if !matches {
-                            continue;
+
+            // Collect all torrents first
+            let torrents: Vec<Torrent> = context
+                .db()
+                .r_transaction()?
+                .scan()
+                .primary::<Torrent>()?
+                .all()?
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let total_torrents = torrents.len();
+            info!("Processing {} torrents for tag filter", total_torrents);
+
+            // Create semaphore to limit concurrent MAM API calls
+            let mam_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_MAM_REQUESTS));
+            let mut processed_count = 0;
+
+            // Process torrents in batches
+            for (batch_idx, batch) in torrents.chunks(BATCH_SIZE).enumerate() {
+                let batch_start = batch_idx * BATCH_SIZE;
+                let batch_end = (batch_start + batch.len()).min(total_torrents);
+                info!(
+                    "Processing batch {}/{} (torrents {}-{})",
+                    batch_idx + 1,
+                    total_torrents.div_ceil(BATCH_SIZE),
+                    batch_start + 1,
+                    batch_end
+                );
+
+                // First pass: Process MAM API calls with concurrency limiting
+                // Collect torrents that match the filter
+                let mut matched_torrents: Vec<&Torrent> = Vec::with_capacity(batch.len());
+
+                for torrent in batch {
+                    match tag_filter.filter.matches_lib(torrent) {
+                        Ok(matches) => {
+                            if matches {
+                                matched_torrents.push(torrent);
+                            }
+                        }
+                        Err(err) => {
+                            let Some(mam_id) = torrent.mam_id else {
+                                continue;
+                            };
+                            info!("need to ask mam due to: {err}");
+
+                            let permit = mam_semaphore
+                                .clone()
+                                .acquire_owned()
+                                .await
+                                .map_err(anyhow::Error::new)?;
+
+                            let mam = context.mam()?;
+                            let Some(mam_torrent) = mam.get_torrent_info_by_id(mam_id).await?
+                            else {
+                                drop(permit);
+                                warn!("could not get torrent from mam");
+                                continue;
+                            };
+
+                            drop(permit);
+
+                            let new_meta = mam_torrent.as_meta()?;
+                            if new_meta != torrent.meta {
+                                update_torrent_meta(
+                                    &config,
+                                    context.db(),
+                                    context.db().rw_async().await?,
+                                    Some(&mam_torrent),
+                                    torrent.clone(),
+                                    new_meta,
+                                    false,
+                                    false,
+                                    &context.events,
+                                )
+                                .await?;
+                            }
+
+                            if tag_filter.filter.matches(&mam_torrent) {
+                                matched_torrents.push(torrent);
+                            }
                         }
                     }
-                    Err(err) => {
-                        let Some(mam_id) = torrent.mam_id else {
-                            continue;
-                        };
-                        info!("need to ask mam due to: {err}");
-                        let mam = context.mam()?;
-                        let Some(mam_torrent) = mam.get_torrent_info_by_id(mam_id).await? else {
-                            warn!("could not get torrent from mam");
-                            continue;
-                        };
-                        let new_meta = mam_torrent.as_meta()?;
-                        if new_meta != torrent.meta {
-                            update_torrent_meta(
-                                &config,
-                                &context.db,
-                                context.db.rw_async().await?,
-                                Some(&mam_torrent),
-                                torrent.clone(),
-                                new_meta,
-                                false,
-                                false,
-                            )
-                            .await?;
-                        }
-                        if !tag_filter.filter.matches(&mam_torrent) {
-                            continue;
-                        }
-                    }
-                };
-                if let Some(category) = &tag_filter.category {
-                    ensure_category_exists(&qbit, &qbit_conf.url, category).await?;
-                    qbit.set_category(Some(vec![torrent.id.as_str()]), category)
-                        .await?;
-                    info!("set category {} on torrent {}", category, torrent.meta.title);
                 }
 
-                if !tag_filter.tags.is_empty() {
-                    qbit.add_tags(
-                        Some(vec![torrent.id.as_str()]),
-                        tag_filter.tags.iter().map(Deref::deref).collect(),
-                    )
-                    .await?;
-                    info!("set tags {:?} on torrent {}", tag_filter.tags, torrent.meta.title);
+                if !matched_torrents.is_empty() {
+                    let matched_count = matched_torrents.len();
+                    info!(
+                        "Applying category/tags to {} torrents in batch",
+                        matched_count
+                    );
+
+                    let hashes: Vec<&str> =
+                        matched_torrents.iter().map(|t| t.id.as_str()).collect();
+
+                    if let Some(category) = &tag_filter.category {
+                        ensure_category_exists(&qbit, &qbit_conf.url, category).await?;
+                        qbit.set_category(Some(hashes.clone()), category).await?;
+                        info!("Set category '{}' for {} torrents", category, matched_count);
+                    }
+
+                    if !tag_filter.tags.is_empty() {
+                        let tags: Vec<&str> = tag_filter.tags.iter().map(Deref::deref).collect();
+                        qbit.add_tags(Some(hashes), tags).await?;
+                        info!(
+                            "Added tags {:?} to {} torrents",
+                            tag_filter.tags, matched_count
+                        );
+                    }
+
+                    processed_count += matched_count;
                 }
+
+                info!(
+                    "Completed batch {}/{}, total processed: {}/{}",
+                    batch_idx + 1,
+                    total_torrents.div_ceil(BATCH_SIZE),
+                    processed_count,
+                    total_torrents
+                );
             }
+
+            info!(
+                "Tag filter application complete: {} torrents processed",
+                processed_count
+            );
         }
         action => {
             eprintln!("unknown action: {action}");

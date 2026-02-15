@@ -1,8 +1,8 @@
 use anyhow::Result;
 use mlm_core::config::{Config, Library, LibraryByRipDir, LibraryLinkMethod, LibraryOptions};
 use mlm_db::{
-    migrate, Database, MainCat, MediaType, MetadataSource, Size, Timestamp, Torrent, TorrentMeta,
-    MODELS,
+    Database, MODELS, MainCat, MediaType, MetadataSource, Size, Timestamp, Torrent, TorrentMeta,
+    migrate,
 };
 use native_db::Builder;
 use std::path::PathBuf;
