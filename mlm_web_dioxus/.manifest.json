@@ -1,0 +1,64 @@
+{
+  "cli_version": "0.7.3 (22b06ba)",
+  "rust_version": "rustc 1.92.0 (ded5c06cf 2025-12-08)",
+  "assets": {
+    "assets": {
+      "/home/emma/Development/mlm/mlm_web_dioxus/public/dioxus/events/index.html": [
+        {
+          "absolute_source_path": "/home/emma/Development/mlm/mlm_web_dioxus/public/dioxus/events/index.html",
+          "bundled_path": "../dioxus/events/index.html",
+          "options": {
+            "add_hash": false,
+            "variant": "Unknown"
+          }
+        }
+      ],
+      "/home/emma/Development/mlm/mlm_web_dioxus/public/dioxus/index.html": [
+        {
+          "absolute_source_path": "/home/emma/Development/mlm/mlm_web_dioxus/public/dioxus/index.html",
+          "bundled_path": "../dioxus/index.html",
+          "options": {
+            "add_hash": false,
+            "variant": "Unknown"
+          }
+        }
+      ],
+      "/home/emma/Development/mlm/mlm_web_dioxus/public/index.html": [
+        {
+          "absolute_source_path": "/home/emma/Development/mlm/mlm_web_dioxus/public/index.html",
+          "bundled_path": "../index.html",
+          "options": {
+            "add_hash": false,
+            "variant": "Unknown"
+          }
+        }
+      ],
+      "/home/emma/Development/mlm/target/dx/mlm_web_dioxus/release/web/public/wasm/mlm_web_dioxus.js": [
+        {
+          "absolute_source_path": "/home/emma/Development/mlm/target/dx/mlm_web_dioxus/release/web/public/wasm/mlm_web_dioxus.js",
+          "bundled_path": "mlm_web_dioxus-dxh20ad320678f6d9f.js",
+          "options": {
+            "add_hash": true,
+            "variant": {
+              "Js": {
+                "minify": true,
+                "preload": true,
+                "static_head": false
+              }
+            }
+          }
+        }
+      ],
+      "/home/emma/Development/mlm/target/dx/mlm_web_dioxus/release/web/public/wasm/mlm_web_dioxus_bg.wasm": [
+        {
+          "absolute_source_path": "/home/emma/Development/mlm/target/dx/mlm_web_dioxus/release/web/public/wasm/mlm_web_dioxus_bg.wasm",
+          "bundled_path": "mlm_web_dioxus_bg-dxhd27fe99611983c40.wasm",
+          "options": {
+            "add_hash": true,
+            "variant": "Unknown"
+          }
+        }
+      ]
+    }
+  }
+}

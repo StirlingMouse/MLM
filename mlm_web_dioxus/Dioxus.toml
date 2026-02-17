@@ -1,0 +1,10 @@
+[application]
+name = "mlm_web_dioxus"
+
+[web]
+app_title = "MLM Dioxus"
+watcher_index_on_404 = true
+
+[bundle]
+identifier = "com.mlm.dioxus"
+publisher = "mlm"

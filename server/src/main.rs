@@ -24,8 +24,16 @@ use tracing_subscriber::{
     util::SubscriberInitExt as _,
 };
 
-use mlm_core::{config::Config, metadata::MetadataService, stats::Stats};
-use mlm_web_askama::router as askama_router;
+use axum::{
+    Router,
+    body::Body,
+    http::{HeaderValue, Request, header},
+    middleware::{self, Next},
+    response::Response,
+};
+use mlm_core::{Config, Stats, metadata::MetadataService};
+use mlm_web_askama::{ServeDir, router as askama_router};
+use mlm_web_dioxus::ssr::router as dioxus_router;
 
 #[cfg(target_family = "windows")]
 use mlm::windows;
@@ -214,7 +222,30 @@ async fn app_main() -> Result<()> {
 
     let context = mlm_core::runner::spawn_tasks(config, db, Arc::new(mam), stats, metadata_service);
 
-    let app = askama_router(context.clone());
+    let dioxus_public_path = {
+        let base = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        #[cfg(debug_assertions)]
+        {
+            base.join("target/dx/mlm_web_dioxus/debug/web/public")
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            base.join("target/dx/mlm_web_dioxus/release/web/public")
+        }
+    };
+    unsafe {
+        std::env::set_var("DIOXUS_PUBLIC_PATH", &dioxus_public_path);
+    }
+
+    let dioxus_wasm_dir = dioxus_public_path.join("wasm");
+
+    let wasm_router = Router::new()
+        .nest_service("/wasm", ServeDir::new(&dioxus_wasm_dir))
+        .layer(middleware::from_fn(set_wasm_cache_control));
+
+    let app = wasm_router
+        .merge(dioxus_router(context.clone()))
+        .merge(askama_router(context.clone()));
 
     let listener = tokio::net::TcpListener::bind((web_host, web_port)).await?;
     let result: Result<()> = axum::serve(listener, app).await.map_err(|e| e.into());
@@ -235,4 +266,13 @@ async fn app_main() -> Result<()> {
     result?;
 
     Ok(())
+}
+
+async fn set_wasm_cache_control(request: Request<Body>, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("must-revalidate"),
+    );
+    response
 }

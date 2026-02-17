@@ -44,7 +44,7 @@ use time::{
 use tokio::sync::watch::error::SendError;
 use tower::ServiceBuilder;
 #[allow(unused)]
-use tower_http::services::{ServeDir, ServeFile};
+pub use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
     api::{
@@ -163,6 +163,22 @@ pub fn router(context: Context) -> Router {
         ServiceBuilder::new()
             .layer(middleware::from_fn(set_static_cache_control))
             .service(ServeFile::new("server/assets/favicon_dev.png")),
+    );
+
+    #[cfg(debug_assertions)]
+    let app = app.nest_service(
+        "/favicon.ico",
+        ServiceBuilder::new()
+            .layer(middleware::from_fn(set_static_cache_control))
+            .service(ServeFile::new("server/assets/favicon_dev.png")),
+    );
+
+    #[cfg(not(debug_assertions))]
+    let app = app.nest_service(
+        "/favicon.ico",
+        ServiceBuilder::new()
+            .layer(middleware::from_fn(set_static_cache_control))
+            .service(ServeFile::new("server/assets/favicon.png")),
     );
 
     app
