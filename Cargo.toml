@@ -8,11 +8,16 @@ members = [
   "mlm_meta",
   "mlm_core",
   "mlm_web_askama",
+  "mlm_web_dioxus",
 ]
 
 # Faster dev builds for WASM
 [profile.dev.package."*"]
 opt-level = 1
+
+# Optimize only the WASM package in dev mode for smaller bundle size
+[profile.dev.package.mlm_web_dioxus]
+opt-level = 2
 
 # Keep debug builds fast for the server
 [profile.dev]

@@ -9,6 +9,7 @@ use mlm_db::{Event, EventKey, EventType, TorrentMeta as MetadataQuery};
 use async_trait::async_trait;
 use common::{TestDb, mock_config};
 use mlm_core::Context;
+use mlm_core::Triggers;
 use mlm_core::metadata::MetadataService;
 use url::Url;
 
