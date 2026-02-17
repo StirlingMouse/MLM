@@ -20,6 +20,7 @@ mlm_core = { path = "../mlm_core" }
 mlm_db = { path = "../mlm_db" }
 mlm_mam = { path = "../mlm_mam" }
 mlm_web_askama = { path = "../mlm_web_askama" }
+mlm_web_dioxus = { path = "../mlm_web_dioxus", features = ["server"] }
 native_db = { git = "https://github.com/StirlingMouse/native_db.git", branch = "0.8.x" }
 once_cell = "1.21.3"
 qbit = { git = "https://github.com/StirlingMouse/qbittorrent-webui-api.git" }
