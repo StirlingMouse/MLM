@@ -1,6 +1,7 @@
-use crate::events::Torrent;
 #[cfg(feature = "server")]
-use crate::events::TorrentMeta;
+use crate::dto::convert_torrent;
+use crate::dto::Torrent;
+use crate::utils::format_size;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -96,22 +97,6 @@ pub async fn get_torrents_data(
         .map_err(|e| ServerFnError::new(e.to_string()))?
         .rev();
 
-    let convert_torrent = |db_torrent: &DbTorrent| -> Torrent {
-        Torrent {
-            id: db_torrent.id.clone(),
-            meta: TorrentMeta {
-                title: db_torrent.meta.title.clone(),
-                media_type: db_torrent.meta.media_type.as_str().to_string(),
-                size: db_torrent.meta.size.bytes(),
-                filetypes: db_torrent.meta.filetypes.clone(),
-            },
-            library_path: db_torrent.library_path.clone(),
-            library_files: db_torrent.library_files.clone(),
-            linker: db_torrent.linker.clone(),
-            category: db_torrent.category.clone(),
-        }
-    };
-
     let query = filters
         .iter()
         .find(|f| f.0 == TorrentsPageFilter::Query)
@@ -125,10 +110,74 @@ pub async fn get_torrents_data(
             .map_err(|e: anyhow::Error| ServerFnError::new(e.to_string()))?;
 
         let mut matches = true;
-        for (field, _value) in &filters {
+        for (field, value) in &filters {
             let ok = match field {
                 TorrentsPageFilter::Query => true,
-                _ => true,
+                TorrentsPageFilter::Kind => t.meta.media_type.as_str().eq_ignore_ascii_case(value),
+                TorrentsPageFilter::Category | TorrentsPageFilter::Categories => {
+                    t.meta.categories.iter().any(|c| c.eq_ignore_ascii_case(value))
+                }
+                TorrentsPageFilter::Flags => t
+                    .meta
+                    .flags
+                    .as_ref()
+                    .map(|f| format!("{:?}", f).eq_ignore_ascii_case(value))
+                    .unwrap_or(false),
+                TorrentsPageFilter::Title => t.meta.title.to_lowercase().contains(&value.to_lowercase()),
+                TorrentsPageFilter::Author => t
+                    .meta
+                    .authors
+                    .iter()
+                    .any(|a| a.to_lowercase().contains(&value.to_lowercase())),
+                TorrentsPageFilter::Narrator => t
+                    .meta
+                    .narrators
+                    .iter()
+                    .any(|n| n.to_lowercase().contains(&value.to_lowercase())),
+                TorrentsPageFilter::Series => t
+                    .meta
+                    .series
+                    .iter()
+                    .any(|s| s.name.to_lowercase().contains(&value.to_lowercase())),
+                TorrentsPageFilter::Language => t
+                    .meta
+                    .language
+                    .as_ref()
+                    .map(|l| l.to_string().eq_ignore_ascii_case(value))
+                    .unwrap_or(false),
+                TorrentsPageFilter::Filetype => t
+                    .meta
+                    .filetypes
+                    .iter()
+                    .any(|f| f.eq_ignore_ascii_case(value)),
+                TorrentsPageFilter::Linker => t.linker.as_deref() == Some(value),
+                TorrentsPageFilter::QbitCategory => t.category.as_deref() == Some(value),
+                TorrentsPageFilter::Linked => {
+                    let wants_linked = value.eq_ignore_ascii_case("true");
+                    let is_linked = t.library_path.is_some();
+                    wants_linked == is_linked
+                }
+                TorrentsPageFilter::LibraryMismatch => {
+                    let wants_mismatch = value.eq_ignore_ascii_case("true");
+                    let has_mismatch = t.library_path.is_some()
+                        && t.library_files.is_empty();
+                    wants_mismatch == has_mismatch
+                }
+                TorrentsPageFilter::ClientStatus => t
+                    .client_status
+                    .as_ref()
+                    .map(|s| format!("{:?}", s).eq_ignore_ascii_case(value))
+                    .unwrap_or(false),
+                TorrentsPageFilter::Abs => {
+                    let wants_abs = value.eq_ignore_ascii_case("true");
+                    t.library_path.is_some() == wants_abs
+                }
+                TorrentsPageFilter::Source => {
+                    format!("{:?}", t.meta.source).eq_ignore_ascii_case(value)
+                }
+                TorrentsPageFilter::Metadata => t.meta.ids.iter().any(|(k, _)| {
+                    k.to_string().eq_ignore_ascii_case(value)
+                }),
             };
             if !ok {
                 matches = false;
@@ -279,21 +328,5 @@ pub fn TorrentsPage() -> Element {
                 Err(e) => rsx! { p { class: "error", "Error: {e}" } },
             }
         }
-    }
-}
-
-fn format_size(bytes: u64) -> String {
-    const KB: u64 = 1024;
-    const MB: u64 = KB * 1024;
-    const GB: u64 = MB * 1024;
-
-    if bytes >= GB {
-        format!("{:.2} GB", bytes as f64 / GB as f64)
-    } else if bytes >= MB {
-        format!("{:.2} MB", bytes as f64 / MB as f64)
-    } else if bytes >= KB {
-        format!("{:.2} KB", bytes as f64 / KB as f64)
-    } else {
-        format!("{} B", bytes)
     }
 }

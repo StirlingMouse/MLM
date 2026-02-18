@@ -1,17 +1,11 @@
-#![allow(dead_code)]
-
+use crate::components::TaskBox;
+#[cfg(feature = "server")]
+use crate::error::{IntoServerFnError, OptionIntoServerFnError};
+use crate::sse::STATS_UPDATE_TRIGGER;
+#[cfg(feature = "server")]
+use crate::utils::format_datetime;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
-
-static STATS_UPDATE_TRIGGER: GlobalSignal<u32> = Signal::global(|| 0);
-
-pub fn trigger_stats_update() {
-    #[cfg(not(feature = "server"))]
-    {
-        let mut val = STATS_UPDATE_TRIGGER.write();
-        *val += 1;
-    }
-}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct HomeData {
@@ -51,31 +45,16 @@ pub struct TaskInfo {
     pub result: Option<Result<(), String>>,
 }
 
-#[cfg(feature = "server")]
-fn format_timestamp(ts: &time::OffsetDateTime) -> String {
-    ts.replace_nanosecond(0)
-        .unwrap()
-        .format(
-            &time::format_description::parse_owned::<2>(
-                "[year]-[month]-[day] [hour]:[minute]:[second]",
-            )
-            .unwrap(),
-        )
-        .unwrap_or_default()
-}
-
 #[server]
 pub async fn get_home_data() -> Result<HomeData, ServerFnError> {
     use dioxus_fullstack::FullstackContext;
     use mlm_core::{Context, ContextExt};
 
     let ctx = FullstackContext::current()
-        .ok_or_else(|| ServerFnError::new("FullstackContext not found"))?;
-    // tracing::info!("FullstackContext found");
-    let context: Context = ctx.extension().ok_or_else(|| {
-        // tracing::error!("Context not found in extensions");
-        ServerFnError::new("Context not found in extensions")
-    })?;
+        .ok_or_server_err("FullstackContext not found")?;
+    let context: Context = ctx
+        .extension()
+        .ok_or_server_err("Context not found in extensions")?;
     let stats = context.stats.values.lock().await;
 
     let username = match context.mam() {
@@ -90,7 +69,7 @@ pub async fn get_home_data() -> Result<HomeData, ServerFnError> {
         autograbbers.push(AutograbberInfo {
             index: i,
             display_name: grab.filter.display_name(i),
-            last_run: stats.autograbber_run_at.get(&i).map(format_timestamp),
+            last_run: stats.autograbber_run_at.get(&i).map(format_datetime),
             result: stats
                 .autograbber_result
                 .get(&i)
@@ -104,7 +83,7 @@ pub async fn get_home_data() -> Result<HomeData, ServerFnError> {
         snatchlist_grabbers.push(AutograbberInfo {
             index: idx,
             display_name: grab.filter.display_name(idx),
-            last_run: stats.autograbber_run_at.get(&idx).map(format_timestamp),
+            last_run: stats.autograbber_run_at.get(&idx).map(format_datetime),
             result: stats
                 .autograbber_result
                 .get(&idx)
@@ -119,7 +98,7 @@ pub async fn get_home_data() -> Result<HomeData, ServerFnError> {
             index: i,
             list_type: list.list_type().to_string(),
             display_name: list.display_name(i),
-            last_run: stats.import_run_at.get(&i).map(format_timestamp),
+            last_run: stats.import_run_at.get(&i).map(format_datetime),
             result: stats
                 .import_result
                 .get(&i)
@@ -135,35 +114,35 @@ pub async fn get_home_data() -> Result<HomeData, ServerFnError> {
         snatchlist_grabbers,
         lists,
         torrent_linker: stats.torrent_linker_run_at.as_ref().map(|t| TaskInfo {
-            last_run: Some(format_timestamp(t)),
+            last_run: Some(format_datetime(t)),
             result: stats
                 .torrent_linker_result
                 .as_ref()
                 .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
         }),
         folder_linker: stats.folder_linker_run_at.as_ref().map(|t| TaskInfo {
-            last_run: Some(format_timestamp(t)),
+            last_run: Some(format_datetime(t)),
             result: stats
                 .folder_linker_result
                 .as_ref()
                 .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
         }),
         cleaner: stats.cleaner_run_at.as_ref().map(|t| TaskInfo {
-            last_run: Some(format_timestamp(t)),
+            last_run: Some(format_datetime(t)),
             result: stats
                 .cleaner_result
                 .as_ref()
                 .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
         }),
         downloader: stats.downloader_run_at.as_ref().map(|t| TaskInfo {
-            last_run: Some(format_timestamp(t)),
+            last_run: Some(format_datetime(t)),
             result: stats
                 .downloader_result
                 .as_ref()
                 .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
         }),
         audiobookshelf: stats.audiobookshelf_run_at.as_ref().map(|t| TaskInfo {
-            last_run: Some(format_timestamp(t)),
+            last_run: Some(format_datetime(t)),
             result: stats
                 .audiobookshelf_result
                 .as_ref()
@@ -178,10 +157,10 @@ pub async fn run_torrent_linker() -> Result<(), ServerFnError> {
 
     let context: mlm_core::Context = FullstackContext::current()
         .and_then(|ctx| ctx.extension())
-        .ok_or_else(|| ServerFnError::new("Context not found in extensions"))?;
+        .ok_or_server_err("Context not found in extensions")?;
     if let Some(tx) = &context.triggers.torrent_linker_tx {
         tx.send(())
-            .map_err(|e| ServerFnError::new(format!("{e:?}")))?;
+            .server_err()?;
     }
     Ok(())
 }
@@ -192,10 +171,10 @@ pub async fn run_folder_linker() -> Result<(), ServerFnError> {
 
     let context: mlm_core::Context = FullstackContext::current()
         .and_then(|ctx| ctx.extension())
-        .ok_or_else(|| ServerFnError::new("Context not found in extensions"))?;
+        .ok_or_server_err("Context not found in extensions")?;
     if let Some(tx) = &context.triggers.folder_linker_tx {
         tx.send(())
-            .map_err(|e| ServerFnError::new(format!("{e:?}")))?;
+            .server_err()?;
     }
     Ok(())
 }
@@ -206,10 +185,10 @@ pub async fn run_search(index: usize) -> Result<(), ServerFnError> {
 
     let context: mlm_core::Context = FullstackContext::current()
         .and_then(|ctx| ctx.extension())
-        .ok_or_else(|| ServerFnError::new("Context not found in extensions"))?;
+        .ok_or_server_err("Context not found in extensions")?;
     if let Some(tx) = context.triggers.search_tx.get(&index) {
         tx.send(())
-            .map_err(|e| ServerFnError::new(format!("{e:?}")))?;
+            .server_err()?;
     } else {
         return Err(ServerFnError::new("Invalid index"));
     }
@@ -222,10 +201,10 @@ pub async fn run_import(index: usize) -> Result<(), ServerFnError> {
 
     let context: mlm_core::Context = FullstackContext::current()
         .and_then(|ctx| ctx.extension())
-        .ok_or_else(|| ServerFnError::new("Context not found in extensions"))?;
+        .ok_or_server_err("Context not found in extensions")?;
     if let Some(tx) = context.triggers.import_tx.get(&index) {
         tx.send(())
-            .map_err(|e| ServerFnError::new(format!("{e:?}")))?;
+            .server_err()?;
     } else {
         return Err(ServerFnError::new("Invalid index"));
     }
@@ -238,10 +217,10 @@ pub async fn run_downloader() -> Result<(), ServerFnError> {
 
     let context: mlm_core::Context = FullstackContext::current()
         .and_then(|ctx| ctx.extension())
-        .ok_or_else(|| ServerFnError::new("Context not found in extensions"))?;
+        .ok_or_server_err("Context not found in extensions")?;
     if let Some(tx) = &context.triggers.downloader_tx {
         tx.send(())
-            .map_err(|e| ServerFnError::new(format!("{e:?}")))?;
+            .server_err()?;
     }
     Ok(())
 }
@@ -252,10 +231,10 @@ pub async fn run_abs_matcher() -> Result<(), ServerFnError> {
 
     let context: mlm_core::Context = FullstackContext::current()
         .and_then(|ctx| ctx.extension())
-        .ok_or_else(|| ServerFnError::new("Context not found in extensions"))?;
+        .ok_or_server_err("Context not found in extensions")?;
     if let Some(tx) = &context.triggers.audiobookshelf_tx {
         tx.send(())
-            .map_err(|e| ServerFnError::new(format!("{e:?}")))?;
+            .server_err()?;
     }
     Ok(())
 }
@@ -330,19 +309,39 @@ fn HomePageContent(data: HomeData) -> Element {
 
             div { class: "infoboxes",
                 if let Some(info) = &data.torrent_linker {
-                    TorrentLinkerBox { info: info.clone() }
+                    TaskBoxWrapper {
+                        title: "Torrent Linker".to_string(),
+                        info: info.clone(),
+                        action: "torrent_linker",
+                    }
                 }
                 if let Some(info) = &data.folder_linker {
-                    FolderLinkerBox { info: info.clone() }
+                    TaskBoxWrapper {
+                        title: "Folder Linker".to_string(),
+                        info: info.clone(),
+                        action: "folder_linker",
+                    }
                 }
                 if let Some(info) = &data.cleaner {
-                    CleanerBox { info: info.clone() }
+                    TaskBoxWrapper {
+                        title: "Cleaner".to_string(),
+                        info: info.clone(),
+                        action: "cleaner",
+                    }
                 }
                 if let Some(info) = &data.downloader {
-                    DownloaderBox { info: info.clone() }
+                    TaskBoxWrapper {
+                        title: "Torrent downloader".to_string(),
+                        info: info.clone(),
+                        action: "downloader",
+                    }
                 }
                 if let Some(info) = &data.audiobookshelf {
-                    AudiobookshelfBox { info: info.clone() }
+                    TaskBoxWrapper {
+                        title: "Audiobookshelf Matcher".to_string(),
+                        info: info.clone(),
+                        action: "audiobookshelf",
+                    }
                 }
             }
 
@@ -359,21 +358,17 @@ fn HomePageContent(data: HomeData) -> Element {
 fn AutograbberBox(info: AutograbberInfo) -> Element {
     let index = info.index;
     let display_name = info.display_name.clone();
-    let last_run = info.last_run.clone().unwrap_or_else(|| "never".to_string());
     let has_run = info.last_run.is_some();
-    let result_text = info
-        .result
-        .as_ref()
-        .map(|res| match res {
-            Ok(()) => "success".to_string(),
-            Err(e) => e.clone(),
-        })
-        .unwrap_or_else(|| "running".to_string());
 
     rsx! {
         div { class: "infobox",
             h2 { "Autograbber: {display_name}" }
-            p { "Last run: {last_run}" }
+            TaskBox {
+                title: String::new(),
+                last_run: info.last_run.clone(),
+                result: info.result.clone(),
+                show_result: has_run,
+            }
             button {
                 onclick: move |_| {
                     let index = index;
@@ -382,9 +377,6 @@ fn AutograbberBox(info: AutograbberInfo) -> Element {
                     });
                 },
                 "run now"
-            }
-            if has_run {
-                p { "Result: {result_text}" }
             }
         }
     }
@@ -395,21 +387,17 @@ fn ListBox(info: ListInfo) -> Element {
     let index = info.index;
     let list_type = info.list_type.clone();
     let display_name = info.display_name.clone();
-    let last_run = info.last_run.clone().unwrap_or_else(|| "never".to_string());
     let has_run = info.last_run.is_some();
-    let result_text = info
-        .result
-        .as_ref()
-        .map(|res| match res {
-            Ok(()) => "success".to_string(),
-            Err(e) => e.clone(),
-        })
-        .unwrap_or_else(|| "running".to_string());
 
     rsx! {
         div { class: "infobox",
             h2 { "{list_type} Import: {display_name}" }
-            p { "Last run: {last_run}" }
+            TaskBox {
+                title: String::new(),
+                last_run: info.last_run.clone(),
+                result: info.result.clone(),
+                show_result: has_run,
+            }
             button {
                 onclick: move |_| {
                     let index = index;
@@ -419,160 +407,47 @@ fn ListBox(info: ListInfo) -> Element {
                 },
                 "run now"
             }
-            if has_run {
-                p { "Result: {result_text}" }
-            }
         }
     }
 }
 
+#[derive(Props, Clone, PartialEq)]
+struct TaskBoxWrapperProps {
+    title: String,
+    info: TaskInfo,
+    action: String,
+}
+
 #[component]
-fn TorrentLinkerBox(info: TaskInfo) -> Element {
-    let last_run = info.last_run.clone().unwrap_or_else(|| "never".to_string());
-    let has_run = info.last_run.is_some();
-    let result_text = info
-        .result
-        .as_ref()
-        .map(|res| match res {
-            Ok(()) => "success".to_string(),
-            Err(e) => e.clone(),
-        })
-        .unwrap_or_else(|| "running".to_string());
+fn TaskBoxWrapper(props: TaskBoxWrapperProps) -> Element {
+    let action = props.action.clone();
+    let has_run = props.info.last_run.is_some();
+    let has_action = action != "cleaner";
 
     rsx! {
         div { class: "infobox",
-            h2 { "Torrent Linker" }
-            p { "Last run: {last_run}" }
-            button {
-                onclick: move |_| {
-                    spawn(async move {
-                        let _ = run_torrent_linker().await;
-                    });
+            h2 { "{props.title}" }
+            TaskBox {
+                title: String::new(),
+                last_run: props.info.last_run.clone(),
+                result: props.info.result.clone(),
+                show_result: has_run,
+                on_run: if has_action {
+                    Some(EventHandler::new(move |_| {
+                        let action = action.clone();
+                        spawn(async move {
+                            match action.as_str() {
+                                "torrent_linker" => { let _ = run_torrent_linker().await; }
+                                "folder_linker" => { let _ = run_folder_linker().await; }
+                                "downloader" => { let _ = run_downloader().await; }
+                                "audiobookshelf" => { let _ = run_abs_matcher().await; }
+                                _ => {}
+                            }
+                        });
+                    }))
+                } else {
+                    None
                 },
-                "run now"
-            }
-            if has_run {
-                p { "Result: {result_text}" }
-            }
-        }
-    }
-}
-
-#[component]
-fn FolderLinkerBox(info: TaskInfo) -> Element {
-    let last_run = info.last_run.clone().unwrap_or_else(|| "never".to_string());
-    let has_run = info.last_run.is_some();
-    let result_text = info
-        .result
-        .as_ref()
-        .map(|res| match res {
-            Ok(()) => "success".to_string(),
-            Err(e) => e.clone(),
-        })
-        .unwrap_or_else(|| "running".to_string());
-
-    rsx! {
-        div { class: "infobox",
-            h2 { "Folder Linker" }
-            p { "Last run: {last_run}" }
-            button {
-                onclick: move |_| {
-                    spawn(async move {
-                        let _ = run_folder_linker().await;
-                    });
-                },
-                "run now"
-            }
-            if has_run {
-                p { "Result: {result_text}" }
-            }
-        }
-    }
-}
-
-#[component]
-fn CleanerBox(info: TaskInfo) -> Element {
-    let last_run = info.last_run.clone().unwrap_or_else(|| "never".to_string());
-    let has_run = info.last_run.is_some();
-    let result_text = info
-        .result
-        .as_ref()
-        .map(|res| match res {
-            Ok(()) => "success".to_string(),
-            Err(e) => e.clone(),
-        })
-        .unwrap_or_else(|| "running".to_string());
-
-    rsx! {
-        div { class: "infobox",
-            h2 { "Cleaner" }
-            p { "Last run: {last_run}" }
-            if has_run {
-                p { "Result: {result_text}" }
-            }
-        }
-    }
-}
-
-#[component]
-fn DownloaderBox(info: TaskInfo) -> Element {
-    let last_run = info.last_run.clone().unwrap_or_else(|| "never".to_string());
-    let has_run = info.last_run.is_some();
-    let result_text = info
-        .result
-        .as_ref()
-        .map(|res| match res {
-            Ok(()) => "success".to_string(),
-            Err(e) => e.clone(),
-        })
-        .unwrap_or_else(|| "running".to_string());
-
-    rsx! {
-        div { class: "infobox",
-            h2 { "Torrent downloader" }
-            p { "Last run: {last_run}" }
-            button {
-                onclick: move |_| {
-                    spawn(async move {
-                        let _ = run_downloader().await;
-                    });
-                },
-                "run now"
-            }
-            if has_run {
-                p { "Result: {result_text}" }
-            }
-        }
-    }
-}
-
-#[component]
-fn AudiobookshelfBox(info: TaskInfo) -> Element {
-    let last_run = info.last_run.clone().unwrap_or_else(|| "never".to_string());
-    let has_run = info.last_run.is_some();
-    let result_text = info
-        .result
-        .as_ref()
-        .map(|res| match res {
-            Ok(()) => "success".to_string(),
-            Err(e) => e.clone(),
-        })
-        .unwrap_or_else(|| "running".to_string());
-
-    rsx! {
-        div { class: "infobox",
-            h2 { "Audiobookshelf Matcher" }
-            p { "Last run: {last_run}" }
-            button {
-                onclick: move |_| {
-                    spawn(async move {
-                        let _ = run_abs_matcher().await;
-                    });
-                },
-                "run now"
-            }
-            if has_run {
-                p { "Result: {result_text}" }
             }
         }
     }

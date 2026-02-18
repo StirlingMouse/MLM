@@ -1,9 +1,15 @@
 pub mod app;
+pub mod components;
+pub mod dto;
+pub mod error;
 pub mod events;
 pub mod home;
+pub mod search;
+pub mod sse;
 pub mod stats;
 pub mod torrent_detail;
 pub mod torrents;
+pub mod utils;
 
 #[cfg(feature = "server")]
 pub mod ssr {
@@ -50,7 +56,9 @@ pub mod ssr {
 
 #[cfg(feature = "web")]
 pub mod web {
+    use crate::app::root;
+
     pub fn launch() {
-        dioxus::launch(crate::app::root);
+        dioxus::launch(root);
     }
 }

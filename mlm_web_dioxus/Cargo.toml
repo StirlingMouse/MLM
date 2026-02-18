@@ -19,6 +19,7 @@ anyhow = "1.0"
 tracing = "0.1"
 wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = ["EventSource", "MessageEvent"] }
+urlencoding = "2.1"
 time = { version = "0.3.41", features = ["formatting", "local-offset", "macros", "serde"] }
 
 # Server-side dependencies

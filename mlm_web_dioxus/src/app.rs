@@ -1,5 +1,8 @@
 use crate::events::EventsPage;
 use crate::home::HomePage;
+use crate::search::SearchPage;
+#[cfg(feature = "web")]
+use crate::sse::{trigger_events_update, trigger_stats_update};
 use crate::stats::StatsPage;
 use crate::torrent_detail::TorrentDetailPage;
 use crate::torrents::TorrentsPage;
@@ -30,6 +33,9 @@ pub enum Route {
 
     #[route("/dioxus/torrents/:..segments")]
     TorrentsWithQuery { segments: Vec<String> },
+
+    #[route("/dioxus/search")]
+    Search {},
 }
 
 pub fn root() -> Element {
@@ -51,7 +57,7 @@ pub fn App() -> Element {
             a { href: "/", "Home (Legacy)" }
             a { href: "/torrents", "Torrents" }
             Link { to: Route::Events {}, "Events" }
-            a { href: "/search", "Search" }
+            Link { to: Route::Search {}, "Search" }
             a { href: "/lists", "Goodreads lists" }
             a { href: "/errors", "Errors" }
             a { href: "/selected", "Selected Torrents" }
@@ -100,6 +106,11 @@ fn TorrentDetail(id: String) -> Element {
     rsx! { TorrentDetailPage { id } }
 }
 
+#[component]
+fn Search() -> Element {
+    rsx! { SearchPage {} }
+}
+
 fn setup_sse() {
     #[cfg(feature = "web")]
     {
@@ -107,38 +118,25 @@ fn setup_sse() {
         use wasm_bindgen::prelude::*;
         use web_sys::EventSource;
 
-        // Stats SSE
-        spawn(async move {
-            match EventSource::new("/dioxus-stats-updates") {
-                Ok(es) => {
-                    let onmessage_callback =
-                        Closure::<dyn FnMut(_)>::new(move |_event: web_sys::MessageEvent| {
-                            crate::home::trigger_stats_update();
+        fn connect_sse(url: &'static str, on_message: impl Fn() + 'static) {
+            spawn(async move {
+                match EventSource::new(url) {
+                    Ok(es) => {
+                        let callback = Closure::<dyn FnMut(_)>::new(move |_: web_sys::MessageEvent| {
+                            on_message();
                         });
-                    es.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
-                    onmessage_callback.forget();
-                    // Prevent ES from being dropped
-                    Box::leak(Box::new(es));
+                        es.set_onmessage(Some(callback.as_ref().unchecked_ref()));
+                        // Intentionally leak to keep SSE connection alive for app lifetime.
+                        // Browser cleans up on page unload.
+                        std::mem::forget(callback);
+                        std::mem::forget(es);
+                    }
+                    Err(e) => tracing::error!("Failed to create EventSource for {}: {:?}", url, e),
                 }
-                Err(e) => tracing::error!("Failed to create EventSource for stats: {:?}", e),
-            }
-        });
+            });
+        }
 
-        // Events SSE
-        spawn(async move {
-            match EventSource::new("/dioxus-events-updates") {
-                Ok(es) => {
-                    let onmessage_callback =
-                        Closure::<dyn FnMut(_)>::new(move |_event: web_sys::MessageEvent| {
-                            crate::events::trigger_events_update();
-                        });
-                    es.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
-                    onmessage_callback.forget();
-                    // Prevent ES from being dropped
-                    Box::leak(Box::new(es));
-                }
-                Err(e) => tracing::error!("Failed to create EventSource for events: {:?}", e),
-            }
-        });
+        connect_sse("/dioxus-stats-updates", trigger_stats_update);
+        connect_sse("/dioxus-events-updates", trigger_events_update);
     }
 }
