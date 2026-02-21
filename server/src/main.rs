@@ -12,6 +12,7 @@ mod logging;
 mod qbittorrent;
 mod snatchlist;
 mod stats;
+mod torrent_downloader;
 mod web;
 #[cfg(target_family = "windows")]
 mod windows;
@@ -29,7 +30,7 @@ use std::{
 
 use anyhow::{Context as _, Result};
 use audiobookshelf::match_torrents_to_abs;
-use autograbber::{grab_selected_torrents, run_autograbber};
+use autograbber::run_autograbber;
 use cleaner::run_library_cleaner;
 use dirs::{config_dir, data_local_dir};
 use exporter::export_db;
@@ -52,6 +53,7 @@ use tracing_subscriber::{
     util::SubscriberInitExt as _,
 };
 use web::start_webserver;
+use torrent_downloader::grab_selected_torrents;
 
 use crate::{
     config::Config,
