@@ -62,6 +62,21 @@ pub async fn link_torrents_to_library(
         let library = find_library(&config, &torrent);
         let r = db.r_transaction()?;
         let mut existing_torrent: Option<Torrent> = r.get().primary(torrent.hash.clone())?;
+        {
+            let selected_torrent: Option<SelectedTorrent> = r.get().secondary::<SelectedTorrent>(
+                SelectedTorrentKey::hash,
+                Some(torrent.hash.clone()),
+            )?;
+            if let Some(selected_torrent) = selected_torrent {
+                debug!(
+                    "Finished Downloading torrent {} {}",
+                    selected_torrent.mam_id, selected_torrent.meta.title
+                );
+                let (_guard, rw) = db.rw_async().await?;
+                rw.remove(selected_torrent)?;
+                rw.commit()?;
+            }
+        }
         if let Some(t) = &mut existing_torrent {
             let library_name = library.and_then(|l| l.tag_filters().name.as_ref());
             if t.linker.as_ref() != library_name {
@@ -169,21 +184,6 @@ pub async fn link_torrents_to_library(
             }
         }
 
-        {
-            let selected_torrent: Option<SelectedTorrent> = r.get().secondary::<SelectedTorrent>(
-                SelectedTorrentKey::hash,
-                Some(torrent.hash.clone()),
-            )?;
-            if let Some(selected_torrent) = selected_torrent {
-                debug!(
-                    "Finished Downloading torrent {} {}",
-                    selected_torrent.mam_id, selected_torrent.meta.title
-                );
-                let (_guard, rw) = db.rw_async().await?;
-                rw.remove(selected_torrent)?;
-                rw.commit()?;
-            }
-        }
         let Some(library) = library else {
             trace!(
                 "Could not find matching library for torrent \"{}\", save_path {}",
