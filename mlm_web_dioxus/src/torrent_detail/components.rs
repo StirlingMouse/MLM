@@ -1,15 +1,13 @@
-use dioxus::prelude::*;
-use crate::components::{DownloadButtons, DownloadButtonMode, SimpleDownloadButtons};
-use crate::events::EventContent;
-use super::types::*;
 use super::server_fns::{
-    get_torrent_detail, get_metadata_providers, get_qbit_data,
-    remove_torrent_action, clean_torrent_action,
-    refresh_metadata_action, relink_torrent_action, refresh_and_relink_action,
-    match_metadata_action, clear_replacement_action,
-    torrent_start_action, torrent_stop_action, set_qbit_category_tags_action,
-    remove_seeding_files_action,
+    clean_torrent_action, clear_replacement_action, get_metadata_providers, get_qbit_data,
+    get_torrent_detail, match_metadata_action, refresh_and_relink_action, refresh_metadata_action,
+    relink_torrent_action, remove_seeding_files_action, remove_torrent_action,
+    set_qbit_category_tags_action, torrent_start_action, torrent_stop_action,
 };
+use super::types::*;
+use crate::components::{DownloadButtonMode, DownloadButtons, SimpleDownloadButtons};
+use crate::events::EventContent;
+use dioxus::prelude::*;
 
 #[component]
 pub fn TorrentDetailPage(id: String) -> Element {
@@ -643,7 +641,12 @@ fn QbitControls(
         })
         .collect::<Vec<_>>();
 
-    let trackers_text = qbit.trackers.iter().map(|t| t.url.clone()).collect::<Vec<_>>().join(", ");
+    let trackers_text = qbit
+        .trackers
+        .iter()
+        .map(|t| t.url.clone())
+        .collect::<Vec<_>>()
+        .join(", ");
 
     let is_paused = qbit.torrent_state.to_lowercase().contains("paused")
         || qbit.torrent_state.to_lowercase().contains("stopped");

@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::torrent_detail::select_torrent_action;
+use dioxus::prelude::*;
 
 /// Display mode for download buttons
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
@@ -58,7 +58,9 @@ pub fn DownloadButtons(props: DownloadButtonsProps) -> Element {
                     props.on_refresh.call(());
                 }
                 Err(e) => {
-                    props.on_status.call((format!("Selection failed: {e}"), true));
+                    props
+                        .on_status
+                        .call((format!("Selection failed: {e}"), true));
                 }
             }
             loading.set(false);

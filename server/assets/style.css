@@ -353,6 +353,10 @@ summary {
         }
 }
 
+.torrents-page .TorrentsTable > .torrents-grid-row {
+        grid-template-columns: var(--torrents-grid);
+}
+
 .list_item {
         display: grid;
         grid-template-columns: auto 1fr;

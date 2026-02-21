@@ -37,12 +37,14 @@ pub fn Pagination(props: PaginationProps) -> Element {
         div { class: "pagination",
             if num_pages > max_pages {
                 button {
+                    r#type: "button",
                     class: if current_page == 1 { "disabled" },
                     onclick: move |_| props.on_change.call(0),
                     "«"
                 }
             }
             button {
+                r#type: "button",
                 class: if current_page == 1 { "disabled" },
                 onclick: move |_| props.on_change.call(props.from.saturating_sub(props.page_size)),
                 "‹"
@@ -54,6 +56,7 @@ pub fn Pagination(props: PaginationProps) -> Element {
                         let active = p == current_page;
                         rsx! {
                             button {
+                                r#type: "button",
                                 class: if active { "active" },
                                 onclick: move |_| props.on_change.call(p_from),
                                 "{p}"
@@ -63,6 +66,7 @@ pub fn Pagination(props: PaginationProps) -> Element {
                 }
             }
             button {
+                r#type: "button",
                 class: if current_page == num_pages { "disabled" },
                 onclick: move |_| {
                     props.on_change.call(
@@ -73,6 +77,7 @@ pub fn Pagination(props: PaginationProps) -> Element {
             }
             if num_pages > max_pages {
                 button {
+                    r#type: "button",
                     class: if current_page == num_pages { "disabled" },
                     onclick: move |_| props.on_change.call((num_pages - 1) * props.page_size),
                     "»"

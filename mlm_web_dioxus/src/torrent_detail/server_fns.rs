@@ -9,8 +9,7 @@ use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use mlm_core::{
     Context, ContextExt, Event as DbEvent, EventKey, EventType as DbEventType,
-    Torrent as DbTorrent,
-    metadata::mam_meta::match_meta,
+    Torrent as DbTorrent, metadata::mam_meta::match_meta,
 };
 #[cfg(feature = "server")]
 use mlm_db::DatabaseExt;
@@ -21,7 +20,7 @@ use mlm_db::DatabaseExt;
 
 #[cfg(feature = "server")]
 fn map_event(e: DbEvent) -> DbEventDto {
-    use crate::dto::{TorrentCost, MetadataSource};
+    use crate::dto::{MetadataSource, TorrentCost};
     DbEventDto {
         id: e.id.0.to_string(),
         created_at: format_timestamp_db(&e.created_at),
@@ -132,9 +131,7 @@ async fn other_torrents_data(
         search::{SearchFields, SearchQuery, Tor},
     };
 
-    let mam = context
-        .mam()
-        .server_err()?;
+    let mam = context.mam().server_err()?;
     let config = context.config().await;
     let title = meta
         .title
@@ -171,19 +168,14 @@ async fn other_torrents_data(
         .await
         .server_err()?;
 
-    let r = context
-        .db()
-        .r_transaction()
-        .server_err()?;
+    let r = context.db().r_transaction().server_err()?;
 
     result
         .data
         .into_iter()
         .filter(|t| Some(t.id) != meta.mam_id())
         .map(|mam_torrent| {
-            let meta = mam_torrent
-                .as_meta()
-                .server_err()?;
+            let meta = mam_torrent.as_meta().server_err()?;
             let torrent = r
                 .get()
                 .secondary::<DbTorrent>(mlm_db::TorrentKey::mam_id, Some(mam_torrent.id))
@@ -260,42 +252,27 @@ async fn get_downloaded_torrent_detail(
         .flatten();
     let replacement_missing = replacement_torrent.is_none() && torrent.replaced_with.is_some();
     if replacement_missing {
-        let (_guard, rw) = db
-            .rw_async()
-            .await
-            .server_err()?;
+        let (_guard, rw) = db.rw_async().await.server_err()?;
         torrent.replaced_with = None;
-        rw.upsert(torrent.clone())
-            .server_err()?;
+        rw.upsert(torrent.clone()).server_err()?;
         rw.commit().server_err()?;
     }
 
     let mut mam_torrent = None;
     let mut mam_meta_diff = vec![];
     if let Some(mam_id) = torrent.mam_id {
-        let mam = context
-            .mam()
-            .server_err()?;
-        mam_torrent = mam
-            .get_torrent_info_by_id(mam_id)
-            .await
-            .server_err()?;
+        let mam = context.mam().server_err()?;
+        mam_torrent = mam.get_torrent_info_by_id(mam_id).await.server_err()?;
         if let Some(ref mam_torrent_data) = mam_torrent {
-            let mut mam_meta = mam_torrent_data
-                .as_meta()
-                .server_err()?;
+            let mut mam_meta = mam_torrent_data.as_meta().server_err()?;
             let mut ids = torrent.meta.ids.clone();
             ids.append(&mut mam_meta.ids);
             mam_meta.ids = ids;
 
             if torrent.meta.uploaded_at.0 == UtcDateTime::UNIX_EPOCH {
-                let (_guard, rw) = db
-                    .rw_async()
-                    .await
-                    .server_err()?;
+                let (_guard, rw) = db.rw_async().await.server_err()?;
                 torrent.meta.uploaded_at = mam_meta.uploaded_at;
-                rw.upsert(torrent.clone())
-                    .server_err()?;
+                rw.upsert(torrent.clone()).server_err()?;
                 rw.commit().server_err()?;
             }
 
@@ -363,12 +340,14 @@ async fn get_downloaded_torrent_detail(
     Ok(super::types::TorrentDetailData {
         torrent: torrent_info,
         events: events_data,
-        replacement_torrent: replacement_torrent.map(|replacement| super::types::ReplacementTorrentInfo {
-            id: replacement.id,
-            title: replacement.meta.title,
-            size: replacement.meta.size.to_string(),
-            filetypes: replacement.meta.filetypes,
-            library_path: replacement.library_path,
+        replacement_torrent: replacement_torrent.map(|replacement| {
+            super::types::ReplacementTorrentInfo {
+                id: replacement.id,
+                title: replacement.meta.title,
+                size: replacement.meta.size.to_string(),
+                filetypes: replacement.meta.filetypes,
+                library_path: replacement.library_path,
+            }
         }),
         replacement_missing,
         abs_item_url,
@@ -379,7 +358,9 @@ async fn get_downloaded_torrent_detail(
 }
 
 #[server]
-pub async fn get_torrent_detail(id: String) -> Result<super::types::TorrentPageData, ServerFnError> {
+pub async fn get_torrent_detail(
+    id: String,
+) -> Result<super::types::TorrentPageData, ServerFnError> {
     use dioxus_fullstack::FullstackContext;
 
     let context: Context = FullstackContext::current()
@@ -414,23 +395,21 @@ pub async fn get_torrent_detail(id: String) -> Result<super::types::TorrentPageD
                 .map(super::types::TorrentPageData::Downloaded);
         }
 
-        let mam = context
-            .mam()
-            .server_err()?;
+        let mam = context.mam().server_err()?;
         let mam_torrent = mam
             .get_torrent_info_by_id(mam_id)
             .await
             .server_err()?
             .ok_or_server_err("Torrent not found")?;
-        let meta = mam_torrent
-            .as_meta()
-            .server_err()?;
+        let meta = mam_torrent.as_meta().server_err()?;
         let other_torrents = other_torrents_data(&context, &meta).await?;
-        return Ok(super::types::TorrentPageData::MamOnly(super::types::TorrentMamData {
-            mam_torrent: map_mam_torrent(&mam_torrent),
-            meta: torrent_info_from_meta(&meta, mam_id.to_string(), Some(mam_id)),
-            other_torrents,
-        }));
+        return Ok(super::types::TorrentPageData::MamOnly(
+            super::types::TorrentMamData {
+                mam_torrent: map_mam_torrent(&mam_torrent),
+                meta: torrent_info_from_meta(&meta, mam_id.to_string(), Some(mam_id)),
+                other_torrents,
+            },
+        ));
     }
 
     Err(ServerFnError::new("Torrent not found"))
@@ -445,18 +424,14 @@ pub async fn select_torrent_action(mam_id: u64, wedge: bool) -> Result<(), Serve
         .and_then(|ctx| ctx.extension())
         .ok_or_server_err("Context not found in extensions")?;
 
-    let mam = context
-        .mam()
-        .server_err()?;
+    let mam = context.mam().server_err()?;
     let torrent = mam
         .get_torrent_info_by_id(mam_id)
         .await
         .server_err()?
         .ok_or_server_err("Torrent not found")?;
 
-    let meta = torrent
-        .as_meta()
-        .server_err()?;
+    let meta = torrent.as_meta().server_err()?;
     let config = context.config().await;
 
     let tags: Vec<_> = config
@@ -478,11 +453,7 @@ pub async fn select_torrent_action(mam_id: u64, wedge: bool) -> Result<(), Serve
         mlm_db::TorrentCost::Ratio
     };
 
-    let (_guard, rw) = context
-        .db()
-        .rw_async()
-        .await
-        .server_err()?;
+    let (_guard, rw) = context.db().rw_async().await.server_err()?;
     rw.insert(SelectedTorrent {
         mam_id: torrent.id,
         hash: None,
@@ -528,13 +499,8 @@ pub async fn remove_torrent_action(id: String) -> Result<(), ServerFnError> {
         .server_err()?
         .ok_or_server_err("Torrent not found")?;
 
-    let (_guard, rw) = context
-        .db()
-        .rw_async()
-        .await
-        .server_err()?;
-    rw.remove(torrent)
-        .server_err()?;
+    let (_guard, rw) = context.db().rw_async().await.server_err()?;
+    rw.remove(torrent).server_err()?;
     rw.commit().server_err()?;
     Ok(())
 }
@@ -571,9 +537,7 @@ pub async fn refresh_metadata_action(id: String) -> Result<(), ServerFnError> {
         .and_then(|ctx| ctx.extension())
         .ok_or_server_err("Context not found in extensions")?;
     let config = context.config().await;
-    let mam = context
-        .mam()
-        .server_err()?;
+    let mam = context.mam().server_err()?;
     refresh_mam_metadata(&config, context.db(), &mam, id, &context.events)
         .await
         .server_err()?;
@@ -602,9 +566,7 @@ pub async fn refresh_and_relink_action(id: String) -> Result<(), ServerFnError> 
         .and_then(|ctx| ctx.extension())
         .ok_or_server_err("Context not found in extensions")?;
     let config = context.config().await;
-    let mam = context
-        .mam()
-        .server_err()?;
+    let mam = context.mam().server_err()?;
     refresh_metadata_relink(&config, context.db(), &mam, id, &context.events)
         .await
         .server_err()?;
@@ -634,19 +596,14 @@ pub async fn match_metadata_action(id: String, provider: String) -> Result<(), S
         .await
         .server_err()?;
 
-    let (_guard, rw) = context
-        .db()
-        .rw_async()
-        .await
-        .server_err()?;
+    let (_guard, rw) = context.db().rw_async().await.server_err()?;
 
     let mut meta = new_meta;
     meta.source = mlm_core::MetadataSource::Match;
     torrent.meta = meta;
     torrent.title_search = mlm_parse::normalize_title(&torrent.meta.title);
 
-    rw.upsert(torrent.clone())
-        .server_err()?;
+    rw.upsert(torrent.clone()).server_err()?;
     rw.commit().server_err()?;
     drop(_guard);
 
@@ -673,21 +630,12 @@ pub async fn clear_replacement_action(id: String) -> Result<(), ServerFnError> {
     let context: Context = FullstackContext::current()
         .and_then(|ctx| ctx.extension())
         .ok_or_server_err("Context not found in extensions")?;
-    let (_guard, rw) = context
-        .db()
-        .rw_async()
-        .await
-        .server_err()?;
-    let Some(mut torrent) = rw
-        .get()
-        .primary::<DbTorrent>(id)
-        .server_err()?
-    else {
+    let (_guard, rw) = context.db().rw_async().await.server_err()?;
+    let Some(mut torrent) = rw.get().primary::<DbTorrent>(id).server_err()? else {
         return Err(ServerFnError::new("Could not find torrent"));
     };
     torrent.replaced_with.take();
-    rw.upsert(torrent)
-        .server_err()?;
+    rw.upsert(torrent).server_err()?;
     rw.commit().server_err()?;
     Ok(())
 }
@@ -723,21 +671,16 @@ pub async fn get_qbit_data(id: String) -> Result<Option<super::types::QbitData>,
         return Ok(None);
     };
 
-    let Some((qbit_torrent, qbit, _qbit_config)) = get_torrent(&config, &torrent.id)
-        .await
-        .server_err()?
+    let Some((qbit_torrent, qbit, _qbit_config)) =
+        get_torrent(&config, &torrent.id).await.server_err()?
     else {
         if !config.qbittorrent.is_empty()
             && torrent.client_status != Some(mlm_db::ClientStatus::NotInClient)
         {
-            let (_guard, rw) = db
-                .rw_async()
-                .await
-                .server_err()?;
+            let (_guard, rw) = db.rw_async().await.server_err()?;
             let mut torrent = torrent.clone();
             torrent.client_status = Some(mlm_db::ClientStatus::NotInClient);
-            rw.upsert(torrent)
-                .server_err()?;
+            rw.upsert(torrent).server_err()?;
             rw.commit().server_err()?;
         }
         return Ok(None);
@@ -752,15 +695,9 @@ pub async fn get_qbit_data(id: String) -> Result<Option<super::types::QbitData>,
         .collect();
     categories.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let tags: Vec<String> = qbit
-        .tags()
-        .await
-        .server_err()?;
+    let tags: Vec<String> = qbit.tags().await.server_err()?;
 
-    let trackers_raw = qbit
-        .trackers(&torrent.id)
-        .await
-        .server_err()?;
+    let trackers_raw = qbit.trackers(&torrent.id).await.server_err()?;
     let tracker_message = trackers_raw
         .iter()
         .rev()
@@ -823,18 +760,13 @@ pub async fn torrent_start_action(id: String) -> Result<(), ServerFnError> {
         .and_then(|ctx| ctx.extension())
         .ok_or_server_err("Context not found in extensions")?;
     let config = context.config().await;
-    let Some((qbit_torrent, qbit, _config)) = get_torrent(&config, &id)
-        .await
-        .server_err()?
-    else {
+    let Some((qbit_torrent, qbit, _config)) = get_torrent(&config, &id).await.server_err()? else {
         return Err(ServerFnError::new(
             "Torrent not found in qBittorrent".to_string(),
         ));
     };
 
-    qbit.start(vec![&qbit_torrent.hash])
-        .await
-        .server_err()?;
+    qbit.start(vec![&qbit_torrent.hash]).await.server_err()?;
 
     Ok(())
 }
@@ -848,18 +780,13 @@ pub async fn torrent_stop_action(id: String) -> Result<(), ServerFnError> {
         .and_then(|ctx| ctx.extension())
         .ok_or_server_err("Context not found in extensions")?;
     let config = context.config().await;
-    let Some((qbit_torrent, qbit, _config)) = get_torrent(&config, &id)
-        .await
-        .server_err()?
-    else {
+    let Some((qbit_torrent, qbit, _config)) = get_torrent(&config, &id).await.server_err()? else {
         return Err(ServerFnError::new(
             "Torrent not found in qBittorrent".to_string(),
         ));
     };
 
-    qbit.stop(vec![&qbit_torrent.hash])
-        .await
-        .server_err()?;
+    qbit.stop(vec![&qbit_torrent.hash]).await.server_err()?;
 
     Ok(())
 }
@@ -877,9 +804,7 @@ pub async fn set_qbit_category_tags_action(
         .and_then(|ctx| ctx.extension())
         .ok_or_server_err("Context not found in extensions")?;
     let config = context.config().await;
-    let Some((qbit_torrent, qbit, qbit_config)) = get_torrent(&config, &id)
-        .await
-        .server_err()?
+    let Some((qbit_torrent, qbit, qbit_config)) = get_torrent(&config, &id).await.server_err()?
     else {
         return Err(ServerFnError::new(
             "Torrent not found in qBittorrent".to_string(),
@@ -940,19 +865,13 @@ pub async fn remove_seeding_files_action(id: String) -> Result<(), ServerFnError
         .server_err()?
         .ok_or_server_err("Torrent not found")?;
 
-    let Some((qbit_torrent, qbit, _config)) = get_torrent(&config, &id)
-        .await
-        .server_err()?
-    else {
+    let Some((qbit_torrent, qbit, _config)) = get_torrent(&config, &id).await.server_err()? else {
         return Err(ServerFnError::new(
             "Torrent not found in qBittorrent".to_string(),
         ));
     };
 
-    let files = qbit
-        .files(&qbit_torrent.hash, None)
-        .await
-        .server_err()?;
+    let files = qbit.files(&qbit_torrent.hash, None).await.server_err()?;
 
     let library_files_set: std::collections::HashSet<_> = torrent
         .library_path

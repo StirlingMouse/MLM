@@ -65,9 +65,7 @@ pub async fn get_search_data(
         .and_then(|ctx| ctx.extension())
         .ok_or_server_err("Context not found in extensions")?;
 
-    let mam = context
-        .mam()
-        .server_err()?;
+    let mam = context.mam().server_err()?;
     let result = mam
         .search(&SearchQuery {
             fields: SearchFields {
@@ -85,18 +83,13 @@ pub async fn get_search_data(
         .server_err()?;
 
     let search_config = context.config().await.search.clone();
-    let r = context
-        .db()
-        .r_transaction()
-        .server_err()?;
+    let r = context.db().r_transaction().server_err()?;
 
     let mut torrents = result
         .data
         .into_iter()
         .map(|mam_torrent| -> Result<SearchTorrent, ServerFnError> {
-            let meta = mam_torrent
-                .as_meta()
-                .server_err()?;
+            let meta = mam_torrent.as_meta().server_err()?;
             let torrent = r
                 .get()
                 .secondary::<DbTorrent>(TorrentKey::mam_id, meta.mam_id())
