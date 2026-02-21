@@ -2,7 +2,7 @@
 
 use super::types::EventData;
 #[cfg(feature = "server")]
-use crate::dto::{convert_torrent, Event, EventType, MetadataSource, TorrentMetaDiff};
+use crate::dto::{Event, EventType, MetadataSource, TorrentMetaDiff, convert_torrent};
 #[cfg(feature = "server")]
 use crate::error::{IntoServerFnError, OptionIntoServerFnError};
 #[cfg(feature = "server")]
@@ -149,10 +149,7 @@ pub async fn get_events_data(
         .secondary::<DbEvent>(EventKey::created_at)
         .server_err_ctx("scan")?;
 
-    let events = events_iter
-        .all()
-        .server_err_ctx("all")?
-        .rev();
+    let events = events_iter.all().server_err_ctx("all")?.rev();
 
     let mut result_events = Vec::new();
     let mut total_matching = 0;

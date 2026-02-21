@@ -122,9 +122,10 @@ fn setup_sse() {
             spawn(async move {
                 match EventSource::new(url) {
                     Ok(es) => {
-                        let callback = Closure::<dyn FnMut(_)>::new(move |_: web_sys::MessageEvent| {
-                            on_message();
-                        });
+                        let callback =
+                            Closure::<dyn FnMut(_)>::new(move |_: web_sys::MessageEvent| {
+                                on_message();
+                            });
                         es.set_onmessage(Some(callback.as_ref().unchecked_ref()));
                         // Intentionally leak to keep SSE connection alive for app lifetime.
                         // Browser cleans up on page unload.
