@@ -50,8 +50,7 @@ pub async fn get_home_data() -> Result<HomeData, ServerFnError> {
     use dioxus_fullstack::FullstackContext;
     use mlm_core::{Context, ContextExt};
 
-    let ctx = FullstackContext::current()
-        .ok_or_server_err("FullstackContext not found")?;
+    let ctx = FullstackContext::current().ok_or_server_err("FullstackContext not found")?;
     let context: Context = ctx
         .extension()
         .ok_or_server_err("Context not found in extensions")?;
@@ -159,8 +158,7 @@ pub async fn run_torrent_linker() -> Result<(), ServerFnError> {
         .and_then(|ctx| ctx.extension())
         .ok_or_server_err("Context not found in extensions")?;
     if let Some(tx) = &context.triggers.torrent_linker_tx {
-        tx.send(())
-            .server_err()?;
+        tx.send(()).server_err()?;
     }
     Ok(())
 }
@@ -173,8 +171,7 @@ pub async fn run_folder_linker() -> Result<(), ServerFnError> {
         .and_then(|ctx| ctx.extension())
         .ok_or_server_err("Context not found in extensions")?;
     if let Some(tx) = &context.triggers.folder_linker_tx {
-        tx.send(())
-            .server_err()?;
+        tx.send(()).server_err()?;
     }
     Ok(())
 }
@@ -187,8 +184,7 @@ pub async fn run_search(index: usize) -> Result<(), ServerFnError> {
         .and_then(|ctx| ctx.extension())
         .ok_or_server_err("Context not found in extensions")?;
     if let Some(tx) = context.triggers.search_tx.get(&index) {
-        tx.send(())
-            .server_err()?;
+        tx.send(()).server_err()?;
     } else {
         return Err(ServerFnError::new("Invalid index"));
     }
@@ -203,8 +199,7 @@ pub async fn run_import(index: usize) -> Result<(), ServerFnError> {
         .and_then(|ctx| ctx.extension())
         .ok_or_server_err("Context not found in extensions")?;
     if let Some(tx) = context.triggers.import_tx.get(&index) {
-        tx.send(())
-            .server_err()?;
+        tx.send(()).server_err()?;
     } else {
         return Err(ServerFnError::new("Invalid index"));
     }
@@ -219,8 +214,7 @@ pub async fn run_downloader() -> Result<(), ServerFnError> {
         .and_then(|ctx| ctx.extension())
         .ok_or_server_err("Context not found in extensions")?;
     if let Some(tx) = &context.triggers.downloader_tx {
-        tx.send(())
-            .server_err()?;
+        tx.send(()).server_err()?;
     }
     Ok(())
 }
@@ -233,8 +227,7 @@ pub async fn run_abs_matcher() -> Result<(), ServerFnError> {
         .and_then(|ctx| ctx.extension())
         .ok_or_server_err("Context not found in extensions")?;
     if let Some(tx) = &context.triggers.audiobookshelf_tx {
-        tx.send(())
-            .server_err()?;
+        tx.send(()).server_err()?;
     }
     Ok(())
 }

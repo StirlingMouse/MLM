@@ -272,12 +272,6 @@ async fn get_downloaded_torrent_detail(
         .transpose()?
         .flatten();
     let replacement_missing = replacement_torrent.is_none() && torrent.replaced_with.is_some();
-    if replacement_missing {
-        let (_guard, rw) = db.rw_async().await.server_err()?;
-        torrent.replaced_with = None;
-        rw.upsert(torrent.clone()).server_err()?;
-        rw.commit().server_err()?;
-    }
 
     let mut mam_torrent = None;
     let mut mam_meta_diff = vec![];
@@ -290,7 +284,10 @@ async fn get_downloaded_torrent_detail(
             ids.append(&mut mam_meta.ids);
             mam_meta.ids = ids;
 
-            if torrent.meta.uploaded_at.0 == UtcDateTime::UNIX_EPOCH {
+            if match torrent.meta.uploaded_at.as_ref() {
+                None => true,
+                Some(uploaded_at) => uploaded_at.0 == UtcDateTime::UNIX_EPOCH,
+            } {
                 let (_guard, rw) = db.rw_async().await.server_err()?;
                 torrent.meta.uploaded_at = mam_meta.uploaded_at;
                 rw.upsert(torrent.clone()).server_err()?;
