@@ -1,9 +1,12 @@
 [application]
 name = "mlm_web_dioxus"
+asset_dir = "../server/assets"
 
-[web]
-app_title = "MLM Dioxus"
-watcher_index_on_404 = true
+[web.app]
+title = "MLM"
+
+[web.watcher]
+index_on_404 = true
 
 [bundle]
 identifier = "com.mlm.dioxus"

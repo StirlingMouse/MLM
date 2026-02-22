@@ -2,8 +2,6 @@ use crate::components::{DownloadButtonMode, SimpleDownloadButtons};
 use crate::dto::Series;
 #[cfg(feature = "server")]
 use crate::error::{IntoServerFnError, OptionIntoServerFnError};
-#[cfg(feature = "server")]
-use crate::utils::format_series;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -131,7 +129,7 @@ pub async fn get_search_data(
                     .iter()
                     .map(|s| Series {
                         name: s.name.clone(),
-                        entries: format_series(s),
+                        entries: s.entries.to_string(),
                     })
                     .collect(),
                 tags: mam_torrent.tags,
