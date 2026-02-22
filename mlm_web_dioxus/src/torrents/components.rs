@@ -131,22 +131,40 @@ fn flag_icon(flag: &str) -> Option<(&'static str, &'static str)> {
 
 #[component]
 pub fn TorrentsPage() -> Element {
-    let mut query_input = use_signal(String::new);
-    let mut submitted_query = use_signal(String::new);
-    let mut sort = use_signal(|| None::<TorrentsPageSort>);
-    let mut asc = use_signal(|| false);
-    let mut filters = use_signal(Vec::<(TorrentsPageFilter, String)>::new);
-    let mut from = use_signal(|| 0usize);
-    let mut page_size = use_signal(|| 500usize);
-    let mut show = use_signal(TorrentsPageColumns::default);
+    let initial_state = parse_legacy_query_state();
+    let initial_query_input = initial_state.query.clone();
+    let initial_submitted_query = initial_state.query.clone();
+    let initial_sort = initial_state.sort;
+    let initial_asc = initial_state.asc;
+    let initial_filters = initial_state.filters.clone();
+    let initial_from = initial_state.from;
+    let initial_page_size = initial_state.page_size;
+    let initial_show = initial_state.show;
+    let initial_request_key = build_legacy_query_string(
+        &initial_state.query,
+        initial_state.sort,
+        initial_state.asc,
+        &initial_state.filters,
+        initial_state.from,
+        initial_state.page_size,
+        initial_state.show,
+    );
+
+    let mut query_input = use_signal(move || initial_query_input.clone());
+    let mut submitted_query = use_signal(move || initial_submitted_query.clone());
+    let sort = use_signal(move || initial_sort);
+    let asc = use_signal(move || initial_asc);
+    let mut filters = use_signal(move || initial_filters.clone());
+    let mut from = use_signal(move || initial_from);
+    let mut page_size = use_signal(move || initial_page_size);
+    let show = use_signal(move || initial_show);
     let mut selected = use_signal(BTreeSet::<String>::new);
     let mut status_msg = use_signal(|| None::<(String, bool)>);
     let mut cached = use_signal(|| None::<TorrentsData>);
     let loading_action = use_signal(|| false);
-    let mut last_request_key = use_signal(String::new);
-    let mut url_init_done = use_signal(|| false);
+    let mut last_request_key = use_signal(move || initial_request_key.clone());
 
-    let mut torrents_data = match use_server_future(move || async move {
+    let mut torrents_data = use_server_future(move || async move {
         let mut server_filters = filters.read().clone();
         let query = submitted_query.read().trim().to_string();
         if !query.is_empty() {
@@ -161,24 +179,16 @@ pub fn TorrentsPage() -> Element {
             *show.read(),
         )
         .await
-    }) {
-        Ok(resource) => resource,
-        Err(_) => {
-            return rsx! {
-                div { class: "torrents-page",
-                    div { class: "row",
-                        h1 { "Torrents" }
-                    }
-                    p { "Loading torrents..." }
-                }
-            };
-        }
-    };
+    })
+    .ok();
 
-    let value = torrents_data.value();
-    let pending = torrents_data.pending();
+    let pending = torrents_data
+        .as_ref()
+        .map(|resource| resource.pending())
+        .unwrap_or(true);
+    let value = torrents_data.as_ref().map(|resource| resource.value());
 
-    {
+    if let Some(value) = &value {
         let value = value.read();
         if let Some(Ok(data)) = &*value {
             cached.set(Some(data.clone()));
@@ -186,33 +196,18 @@ pub fn TorrentsPage() -> Element {
     }
 
     let data_to_show = {
-        let value = value.read();
-        match &*value {
-            Some(Ok(data)) => Some(data.clone()),
-            _ => cached.read().clone(),
+        if let Some(value) = &value {
+            let value = value.read();
+            match &*value {
+                Some(Ok(data)) => Some(data.clone()),
+                _ => cached.read().clone(),
+            }
+        } else {
+            cached.read().clone()
         }
     };
 
     use_effect(move || {
-        if *url_init_done.read() {
-            return;
-        }
-        let parsed = parse_legacy_query_state();
-        query_input.set(parsed.query.clone());
-        submitted_query.set(parsed.query);
-        sort.set(parsed.sort);
-        asc.set(parsed.asc);
-        filters.set(parsed.filters);
-        from.set(parsed.from);
-        page_size.set(parsed.page_size);
-        show.set(parsed.show);
-        url_init_done.set(true);
-    });
-
-    use_effect(move || {
-        if !*url_init_done.read() {
-            return;
-        }
         let query = submitted_query.read().trim().to_string();
         let sort = *sort.read();
         let asc = *asc.read();
@@ -227,7 +222,9 @@ pub fn TorrentsPage() -> Element {
         if should_restart {
             last_request_key.set(query_string.clone());
             set_location_query_string(&query_string);
-            torrents_data.restart();
+            if let Some(resource) = torrents_data.as_mut() {
+                resource.restart();
+            }
         }
     });
 
@@ -437,7 +434,9 @@ pub fn TorrentsPage() -> Element {
                                                     status_msg
                                                         .set(Some((action.success_label().to_string(), false)));
                                                     selected.set(BTreeSet::new());
-                                                    torrents_data.restart();
+                                                    if let Some(resource) = torrents_data.as_mut() {
+                                                        resource.restart();
+                                                    }
                                                 }
                                                 Err(e) => {
                                                     status_msg
@@ -455,12 +454,10 @@ pub fn TorrentsPage() -> Element {
                         }
                     }
 
-                    if pending && cached.read().is_some() {
-                        p { class: "loading-indicator", "Refreshing torrent list..." }
-                    }
                     TorrentGridTable {
                         grid_template: show.read().table_grid_template(),
                         extra_class: None,
+                        pending: pending && cached.read().is_some(),
                         {
                             let all_selected = data
                                 .torrents
@@ -943,8 +940,12 @@ pub fn TorrentsPage() -> Element {
                         },
                     }
                 }
-            } else if let Some(Err(e)) = &*value.read() {
-                p { class: "error", "Error: {e}" }
+            } else if let Some(value) = &value {
+                if let Some(Err(e)) = &*value.read() {
+                    p { class: "error", "Error: {e}" }
+                } else {
+                    p { "Loading torrents..." }
+                }
             } else {
                 p { "Loading torrents..." }
             }

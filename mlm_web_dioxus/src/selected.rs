@@ -4,10 +4,9 @@ use std::str::FromStr;
 
 use crate::components::{
     ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, TorrentGridTable,
-    apply_click_filter, build_query_string, encode_query_enum, set_location_query_string,
+    apply_click_filter, build_query_string, encode_query_enum, parse_location_query_pairs,
+    parse_query_enum, set_location_query_string,
 };
-#[cfg(feature = "web")]
-use crate::components::{parse_location_query_pairs, parse_query_enum};
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -559,7 +558,6 @@ fn show_to_query_value(show: SelectedPageColumns) -> String {
     values.join(",")
 }
 
-#[cfg(feature = "web")]
 fn show_from_query_value(value: &str) -> SelectedPageColumns {
     let mut show = SelectedPageColumns {
         category: false,
@@ -604,27 +602,20 @@ struct LegacyQueryState {
 }
 
 fn parse_legacy_query_state() -> LegacyQueryState {
-    #[cfg(feature = "web")]
-    {
-        let mut state = LegacyQueryState::default();
-        for (key, value) in parse_location_query_pairs() {
-            match key.as_str() {
-                "sort_by" => state.sort = parse_query_enum::<SelectedPageSort>(&value),
-                "asc" => state.asc = value == "true",
-                "show" => state.show = show_from_query_value(&value),
-                _ => {
-                    if let Some(field) = parse_query_enum::<SelectedPageFilter>(&key) {
-                        state.filters.push((field, value));
-                    }
+    let mut state = LegacyQueryState::default();
+    for (key, value) in parse_location_query_pairs() {
+        match key.as_str() {
+            "sort_by" => state.sort = parse_query_enum::<SelectedPageSort>(&value),
+            "asc" => state.asc = value == "true",
+            "show" => state.show = show_from_query_value(&value),
+            _ => {
+                if let Some(field) = parse_query_enum::<SelectedPageFilter>(&key) {
+                    state.filters.push((field, value));
                 }
             }
         }
-        state
     }
-    #[cfg(not(feature = "web"))]
-    {
-        LegacyQueryState::default()
-    }
+    state
 }
 
 fn build_legacy_query_string(
@@ -718,19 +709,30 @@ fn set_column_enabled(show: &mut SelectedPageColumns, column: SelectedColumn, en
 
 #[component]
 pub fn SelectedPage() -> Element {
-    let mut sort = use_signal(|| None::<SelectedPageSort>);
-    let mut asc = use_signal(|| false);
-    let mut filters = use_signal(Vec::<(SelectedPageFilter, String)>::new);
-    let mut show = use_signal(SelectedPageColumns::default);
+    let initial_state = parse_legacy_query_state();
+    let initial_sort = initial_state.sort;
+    let initial_asc = initial_state.asc;
+    let initial_filters = initial_state.filters.clone();
+    let initial_show = initial_state.show;
+    let initial_request_key = build_legacy_query_string(
+        initial_state.sort,
+        initial_state.asc,
+        &initial_state.filters,
+        initial_state.show,
+    );
+
+    let sort = use_signal(move || initial_sort);
+    let asc = use_signal(move || initial_asc);
+    let mut filters = use_signal(move || initial_filters.clone());
+    let show = use_signal(move || initial_show);
     let mut selected = use_signal(BTreeSet::<u64>::new);
     let mut unsats_input = use_signal(|| "1".to_string());
     let mut status_msg = use_signal(|| None::<(String, bool)>);
     let mut cached = use_signal(|| None::<SelectedData>);
     let loading_action = use_signal(|| false);
-    let mut last_request_key = use_signal(String::new);
-    let mut url_init_done = use_signal(|| false);
+    let mut last_request_key = use_signal(move || initial_request_key.clone());
 
-    let mut selected_data = match use_server_future(move || async move {
+    let mut selected_data = use_server_future(move || async move {
         get_selected_data(
             *sort.read(),
             *asc.read(),
@@ -738,22 +740,16 @@ pub fn SelectedPage() -> Element {
             *show.read(),
         )
         .await
-    }) {
-        Ok(resource) => resource,
-        Err(_) => {
-            return rsx! {
-                div { class: "selected-page",
-                    h1 { "Selected Torrents" }
-                    p { "Loading selected torrents..." }
-                }
-            };
-        }
-    };
+    })
+    .ok();
 
-    let value = selected_data.value();
-    let pending = selected_data.pending();
+    let pending = selected_data
+        .as_ref()
+        .map(|resource| resource.pending())
+        .unwrap_or(true);
+    let value = selected_data.as_ref().map(|resource| resource.value());
 
-    {
+    if let Some(value) = &value {
         let value = value.read();
         if let Some(Ok(data)) = &*value {
             cached.set(Some(data.clone()));
@@ -761,29 +757,18 @@ pub fn SelectedPage() -> Element {
     }
 
     let data_to_show = {
-        let value = value.read();
-        match &*value {
-            Some(Ok(data)) => Some(data.clone()),
-            _ => cached.read().clone(),
+        if let Some(value) = &value {
+            let value = value.read();
+            match &*value {
+                Some(Ok(data)) => Some(data.clone()),
+                _ => cached.read().clone(),
+            }
+        } else {
+            cached.read().clone()
         }
     };
 
     use_effect(move || {
-        if *url_init_done.read() {
-            return;
-        }
-        let parsed = parse_legacy_query_state();
-        sort.set(parsed.sort);
-        asc.set(parsed.asc);
-        filters.set(parsed.filters);
-        show.set(parsed.show);
-        url_init_done.set(true);
-    });
-
-    use_effect(move || {
-        if !*url_init_done.read() {
-            return;
-        }
         let query_string = build_legacy_query_string(
             *sort.read(),
             *asc.read(),
@@ -794,7 +779,9 @@ pub fn SelectedPage() -> Element {
         if should_restart {
             last_request_key.set(query_string.clone());
             set_location_query_string(&query_string);
-            selected_data.restart();
+            if let Some(resource) = selected_data.as_mut() {
+                resource.restart();
+            }
         }
     });
 
@@ -900,7 +887,9 @@ pub fn SelectedPage() -> Element {
                                         Ok(_) => {
                                             status_msg.set(Some((SelectedBulkAction::Remove.success_label().to_string(), false)));
                                             selected.set(BTreeSet::new());
-                                            selected_data.restart();
+                                            if let Some(resource) = selected_data.as_mut() {
+                                                resource.restart();
+                                            }
                                         }
                                         Err(e) => {
                                             status_msg.set(Some((format!("{} failed: {e}", SelectedBulkAction::Remove.label()), true)));
@@ -941,7 +930,9 @@ pub fn SelectedPage() -> Element {
                                         Ok(_) => {
                                             status_msg.set(Some((SelectedBulkAction::Update.success_label().to_string(), false)));
                                             selected.set(BTreeSet::new());
-                                            selected_data.restart();
+                                            if let Some(resource) = selected_data.as_mut() {
+                                                resource.restart();
+                                            }
                                         }
                                         Err(e) => {
                                             status_msg.set(Some((format!("{} failed: {e}", SelectedBulkAction::Update.label()), true)));
@@ -1007,13 +998,10 @@ pub fn SelectedPage() -> Element {
                         i { "There are currently no torrents selected for downloading" }
                     }
                 } else {
-                    if pending && cached.read().is_some() {
-                        p { class: "loading-indicator", "Refreshing selected torrents..." }
-                    }
-
                     TorrentGridTable {
                         grid_template: show.read().table_grid_template(),
                         extra_class: Some("SelectedTable".to_string()),
+                        pending: pending && cached.read().is_some(),
                         {
                             let all_selected = data.torrents.iter().all(|t| selected.read().contains(&t.mam_id));
                             rsx! {
@@ -1292,8 +1280,12 @@ pub fn SelectedPage() -> Element {
                         }
                     }
                 }
-            } else if let Some(Err(e)) = &*value.read() {
-                p { class: "error", "Error: {e}" }
+            } else if let Some(value) = &value {
+                if let Some(Err(e)) = &*value.read() {
+                    p { class: "error", "Error: {e}" }
+                } else {
+                    p { "Loading selected torrents..." }
+                }
             } else {
                 p { "Loading selected torrents..." }
             }
