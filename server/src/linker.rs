@@ -16,7 +16,7 @@ use file_id::get_file_id;
 use log::error;
 use mlm_db::{
     ClientStatus, DatabaseExt as _, ErroredTorrentId, Event, EventType, LibraryMismatch,
-    SelectedTorrent, SelectedTorrentKey, Size, Timestamp, Torrent, TorrentMeta,
+    SelectedTorrent, SelectedTorrentKey, Size, Timestamp, Torrent, TorrentKey, TorrentMeta,
 };
 use mlm_mam::{api::MaM, meta::MetaError, search::MaMTorrent};
 use mlm_parse::normalize_title;
@@ -232,6 +232,7 @@ async fn match_torrent(
     library: &Library,
     existing_torrent: Option<Torrent>,
 ) -> Result<()> {
+    let mut existing_torrent = existing_torrent;
     let files = qbit.1.files(hash, None).await?;
     let selected_audio_format = select_format(
         &library.tag_filters().audio_types,
@@ -250,6 +251,19 @@ async fn match_torrent(
     let Some(mam_torrent) = mam.get_torrent_info(hash).await.context("get_mam_info")? else {
         bail!("Could not find torrent on mam");
     };
+    if existing_torrent.is_none()
+        && let Some(old_torrent) = db
+            .r_transaction()?
+            .get()
+            .secondary::<Torrent>(TorrentKey::mam_id, mam_torrent.id)?
+    {
+        if old_torrent.id != hash {
+            let (_guard, rw) = db.rw_async().await?;
+            rw.remove(old_torrent.clone())?;
+            rw.commit()?;
+        }
+        existing_torrent = Some(old_torrent);
+    }
     let meta = match mam_torrent.as_meta() {
         Ok(meta) => meta,
         Err(err) => {

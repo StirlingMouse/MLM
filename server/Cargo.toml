@@ -26,7 +26,7 @@ futures = "0.3"
 # goodreads-metadata-scraper = { path = "../goodreads-metadata-scraper" }
 htmlentity = "1.3.2"
 itertools = "0.14.0"
-lava_torrent = "0.11.1"
+lava_torrent = { git = "https://github.com/StirlingMouse/lava_torrent.git" }
 log = "0.4.27"
 matchr = "0.2.5"
 mlm_db = { path = "../mlm_db" }
