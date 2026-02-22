@@ -50,22 +50,6 @@ pub fn format_size(bytes: u64) -> String {
     }
 }
 
-#[cfg(feature = "server")]
-pub fn format_series(series: &mlm_db::Series) -> String {
-    use mlm_db::SeriesEntry;
-    let entries: Vec<String> = series
-        .entries
-        .0
-        .iter()
-        .map(|e| match e {
-            SeriesEntry::Num(n) => format!("#{n}"),
-            SeriesEntry::Range(start, end) => format!("#{start}-{end}"),
-            SeriesEntry::Part(entry, part) => format!("#{entry}p{part}"),
-        })
-        .collect();
-    entries.join(", ")
-}
-
 pub fn path_to_string(path: &std::path::Path) -> String {
     path.to_string_lossy().to_string()
 }

@@ -3,7 +3,7 @@ use crate::dto::{Event as DbEventDto, EventType, Series, TorrentMetaDiff};
 #[cfg(feature = "server")]
 use crate::error::{IntoServerFnError, OptionIntoServerFnError};
 #[cfg(feature = "server")]
-use crate::utils::{format_series, format_timestamp_db};
+use crate::utils::format_timestamp_db;
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
@@ -81,7 +81,7 @@ fn torrent_info_from_meta(
             .iter()
             .map(|s| Series {
                 name: s.name.clone(),
-                entries: format_series(s),
+                entries: s.entries.to_string(),
             })
             .collect(),
         tags: meta.tags.clone(),
@@ -199,7 +199,7 @@ async fn other_torrents_data(
                     .iter()
                     .map(|s| Series {
                         name: s.name.clone(),
-                        entries: format_series(s),
+                        entries: s.entries.to_string(),
                     })
                     .collect(),
                 tags: mam_torrent.tags,

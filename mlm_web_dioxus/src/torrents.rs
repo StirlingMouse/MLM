@@ -23,7 +23,7 @@ use std::str::FromStr;
 use sublime_fuzzy::FuzzySearch;
 
 #[cfg(feature = "server")]
-use crate::utils::{format_series, format_timestamp_db};
+use crate::utils::format_timestamp_db;
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -770,7 +770,7 @@ fn convert_torrent_row(t: &DbTorrent) -> TorrentsRow {
                 .iter()
                 .map(|series| TorrentsSeries {
                     name: series.name.clone(),
-                    entries: format_series(series),
+                    entries: series.entries.to_string(),
                 })
                 .collect(),
             language: t.meta.language.map(|l| l.to_str().to_string()),
@@ -1194,7 +1194,7 @@ pub fn TorrentsPage() -> Element {
             div { class: "header",
                 button {
                     r#type: "button",
-                    class: "filter-link",
+                    class: "link",
                     onclick: {
                         let mut sort = sort;
                         let mut asc = asc;
@@ -1228,6 +1228,11 @@ pub fn TorrentsPage() -> Element {
                 },
                 h1 { "Torrents" }
                 label {
+                    input {
+                        r#type: "submit",
+                        value: "Search",
+                        style: "display: none;",
+                    }
                     "Search: "
                     input {
                         r#type: "text",
@@ -1245,86 +1250,190 @@ pub fn TorrentsPage() -> Element {
                         "×"
                     }
                 }
-                input { r#type: "submit", value: "Search" }
                 div { class: "table_options",
                     div { class: "option_group query",
                         "Columns:"
                         div {
-                            label { "Category" input { r#type: "checkbox", checked: show.read().category, onchange: move |ev| {
-                                let mut next = *show.read();
-                                next.category = ev.value() == "true";
-                                show.set(next);
-                            } } }
-                            label { "Categories" input { r#type: "checkbox", checked: show.read().categories, onchange: move |ev| {
-                                let mut next = *show.read();
-                                next.categories = ev.value() == "true";
-                                show.set(next);
-                            } } }
-                            label { "Flags" input { r#type: "checkbox", checked: show.read().flags, onchange: move |ev| {
-                                let mut next = *show.read();
-                                next.flags = ev.value() == "true";
-                                show.set(next);
-                            } } }
-                            label { "Edition" input { r#type: "checkbox", checked: show.read().edition, onchange: move |ev| {
-                                let mut next = *show.read();
-                                next.edition = ev.value() == "true";
-                                show.set(next);
-                            } } }
-                            label { "Authors" input { r#type: "checkbox", checked: show.read().authors, onchange: move |ev| {
-                                let mut next = *show.read();
-                                next.authors = ev.value() == "true";
-                                show.set(next);
-                            } } }
-                            label { "Narrators" input { r#type: "checkbox", checked: show.read().narrators, onchange: move |ev| {
-                                let mut next = *show.read();
-                                next.narrators = ev.value() == "true";
-                                show.set(next);
-                            } } }
-                            label { "Series" input { r#type: "checkbox", checked: show.read().series, onchange: move |ev| {
-                                let mut next = *show.read();
-                                next.series = ev.value() == "true";
-                                show.set(next);
-                            } } }
-                            label { "Language" input { r#type: "checkbox", checked: show.read().language, onchange: move |ev| {
-                                let mut next = *show.read();
-                                next.language = ev.value() == "true";
-                                show.set(next);
-                            } } }
-                            label { "Size" input { r#type: "checkbox", checked: show.read().size, onchange: move |ev| {
-                                let mut next = *show.read();
-                                next.size = ev.value() == "true";
-                                show.set(next);
-                            } } }
-                            label { "Filetypes" input { r#type: "checkbox", checked: show.read().filetypes, onchange: move |ev| {
-                                let mut next = *show.read();
-                                next.filetypes = ev.value() == "true";
-                                show.set(next);
-                            } } }
-                            label { "Linker" input { r#type: "checkbox", checked: show.read().linker, onchange: move |ev| {
-                                let mut next = *show.read();
-                                next.linker = ev.value() == "true";
-                                show.set(next);
-                            } } }
-                            label { "Qbit Category" input { r#type: "checkbox", checked: show.read().qbit_category, onchange: move |ev| {
-                                let mut next = *show.read();
-                                next.qbit_category = ev.value() == "true";
-                                show.set(next);
-                            } } }
-                            label { "Path" input { r#type: "checkbox", checked: show.read().path, onchange: move |ev| {
-                                let mut next = *show.read();
-                                next.path = ev.value() == "true";
-                                show.set(next);
-                            } } }
-                            label { "Added At" input { r#type: "checkbox", checked: show.read().created_at, onchange: move |ev| {
-                                let mut next = *show.read();
-                                next.created_at = ev.value() == "true";
-                                show.set(next);
-                            } } }
-                            label { "Uploaded At" input { r#type: "checkbox", checked: show.read().uploaded_at, onchange: move |ev| {
-                                let mut next = *show.read();
-                                next.uploaded_at = ev.value() == "true";
-                                show.set(next);
-                            } } }
+                            label {
+                                "Category"
+                                input {
+                                    r#type: "checkbox",
+                                    checked: show.read().category,
+                                    onchange: move |ev| {
+                                        let mut next = *show.read();
+                                        next.category = ev.value() == "true";
+                                        show.set(next);
+                                    },
+                                }
+                            }
+                            label {
+                                "Categories"
+                                input {
+                                    r#type: "checkbox",
+                                    checked: show.read().categories,
+                                    onchange: move |ev| {
+                                        let mut next = *show.read();
+                                        next.categories = ev.value() == "true";
+                                        show.set(next);
+                                    },
+                                }
+                            }
+                            label {
+                                "Flags"
+                                input {
+                                    r#type: "checkbox",
+                                    checked: show.read().flags,
+                                    onchange: move |ev| {
+                                        let mut next = *show.read();
+                                        next.flags = ev.value() == "true";
+                                        show.set(next);
+                                    },
+                                }
+                            }
+                            label {
+                                "Edition"
+                                input {
+                                    r#type: "checkbox",
+                                    checked: show.read().edition,
+                                    onchange: move |ev| {
+                                        let mut next = *show.read();
+                                        next.edition = ev.value() == "true";
+                                        show.set(next);
+                                    },
+                                }
+                            }
+                            label {
+                                "Authors"
+                                input {
+                                    r#type: "checkbox",
+                                    checked: show.read().authors,
+                                    onchange: move |ev| {
+                                        let mut next = *show.read();
+                                        next.authors = ev.value() == "true";
+                                        show.set(next);
+                                    },
+                                }
+                            }
+                            label {
+                                "Narrators"
+                                input {
+                                    r#type: "checkbox",
+                                    checked: show.read().narrators,
+                                    onchange: move |ev| {
+                                        let mut next = *show.read();
+                                        next.narrators = ev.value() == "true";
+                                        show.set(next);
+                                    },
+                                }
+                            }
+                            label {
+                                "Series"
+                                input {
+                                    r#type: "checkbox",
+                                    checked: show.read().series,
+                                    onchange: move |ev| {
+                                        let mut next = *show.read();
+                                        next.series = ev.value() == "true";
+                                        show.set(next);
+                                    },
+                                }
+                            }
+                            label {
+                                "Language"
+                                input {
+                                    r#type: "checkbox",
+                                    checked: show.read().language,
+                                    onchange: move |ev| {
+                                        let mut next = *show.read();
+                                        next.language = ev.value() == "true";
+                                        show.set(next);
+                                    },
+                                }
+                            }
+                            label {
+                                "Size"
+                                input {
+                                    r#type: "checkbox",
+                                    checked: show.read().size,
+                                    onchange: move |ev| {
+                                        let mut next = *show.read();
+                                        next.size = ev.value() == "true";
+                                        show.set(next);
+                                    },
+                                }
+                            }
+                            label {
+                                "Filetypes"
+                                input {
+                                    r#type: "checkbox",
+                                    checked: show.read().filetypes,
+                                    onchange: move |ev| {
+                                        let mut next = *show.read();
+                                        next.filetypes = ev.value() == "true";
+                                        show.set(next);
+                                    },
+                                }
+                            }
+                            label {
+                                "Linker"
+                                input {
+                                    r#type: "checkbox",
+                                    checked: show.read().linker,
+                                    onchange: move |ev| {
+                                        let mut next = *show.read();
+                                        next.linker = ev.value() == "true";
+                                        show.set(next);
+                                    },
+                                }
+                            }
+                            label {
+                                "Qbit Category"
+                                input {
+                                    r#type: "checkbox",
+                                    checked: show.read().qbit_category,
+                                    onchange: move |ev| {
+                                        let mut next = *show.read();
+                                        next.qbit_category = ev.value() == "true";
+                                        show.set(next);
+                                    },
+                                }
+                            }
+                            label {
+                                "Path"
+                                input {
+                                    r#type: "checkbox",
+                                    checked: show.read().path,
+                                    onchange: move |ev| {
+                                        let mut next = *show.read();
+                                        next.path = ev.value() == "true";
+                                        show.set(next);
+                                    },
+                                }
+                            }
+                            label {
+                                "Added At"
+                                input {
+                                    r#type: "checkbox",
+                                    checked: show.read().created_at,
+                                    onchange: move |ev| {
+                                        let mut next = *show.read();
+                                        next.created_at = ev.value() == "true";
+                                        show.set(next);
+                                    },
+                                }
+                            }
+                            label {
+                                "Uploaded At"
+                                input {
+                                    r#type: "checkbox",
+                                    checked: show.read().uploaded_at,
+                                    onchange: move |ev| {
+                                        let mut next = *show.read();
+                                        next.uploaded_at = ev.value() == "true";
+                                        show.set(next);
+                                    },
+                                }
+                            }
                         }
                     }
                     div { class: "option_group query",
@@ -1374,7 +1483,7 @@ pub fn TorrentsPage() -> Element {
                         }
                     }
                 }
-                for (field, value) in filters.read().clone() {
+                for (field , value) in filters.read().clone() {
                     span { class: "item",
                         "{filter_name(field)}: {value}"
                         button {
@@ -1406,7 +1515,9 @@ pub fn TorrentsPage() -> Element {
 
             if let Some(data) = data_to_show {
                 if data.torrents.is_empty() {
-                    p { i { "You have no torrents selected by MLM" } }
+                    p {
+                        i { "You have no torrents selected by MLM" }
+                    }
                 } else {
                     div { class: "actions actions_torrent",
                         for action in [
@@ -1414,7 +1525,8 @@ pub fn TorrentsPage() -> Element {
                             TorrentsBulkAction::RefreshRelink,
                             TorrentsBulkAction::Clean,
                             TorrentsBulkAction::Remove,
-                        ] {
+                        ]
+                        {
                             button {
                                 r#type: "button",
                                 disabled: *loading_action.read(),
@@ -1434,15 +1546,16 @@ pub fn TorrentsPage() -> Element {
                                         spawn(async move {
                                             match apply_torrents_action(action, ids).await {
                                                 Ok(_) => {
-                                                    status_msg.set(Some((action.success_label().to_string(), false)));
+                                                    status_msg
+                                                        .set(Some((action.success_label().to_string(), false)));
                                                     selected.set(BTreeSet::new());
                                                     torrents_data.restart();
                                                 }
                                                 Err(e) => {
-                                                    status_msg.set(Some((
-                                                        format!("{} failed: {e}", action.label()),
-                                                        true,
-                                                    )));
+                                                    status_msg
+                                                        .set(
+                                                            Some((format!("{} failed: {e}", action.label()), true)),
+                                                        );
                                                 }
                                             }
                                             loading_action.set(false);
@@ -1457,7 +1570,9 @@ pub fn TorrentsPage() -> Element {
                     if pending && cached.read().is_some() {
                         p { class: "loading-indicator", "Refreshing torrent list..." }
                     }
-                    div { class: "TorrentsTable table2", style: "--torrents-grid: {show.read().table_grid_template()};",
+                    div {
+                        class: "TorrentsTable table2",
+                        style: "--torrents-grid: {show.read().table_grid_template()};",
                         {
                             let all_selected = data
                                 .torrents
@@ -1490,7 +1605,7 @@ pub fn TorrentsPage() -> Element {
                                                         selected.set(next);
                                                     }
                                                 }
-                                            }
+                                            },
                                         }
                                     }
                                     {sort_header("Type", TorrentsPageSort::Kind)}
@@ -1528,7 +1643,12 @@ pub fn TorrentsPage() -> Element {
                                     if show.read().qbit_category {
                                         {sort_header("Qbit Category", TorrentsPageSort::QbitCategory)}
                                     }
-                                    {sort_header(if show.read().path { "Path" } else { "Linked" }, TorrentsPageSort::Linked)}
+                                    {
+                                        sort_header(
+                                            if show.read().path { "Path" } else { "Linked" },
+                                            TorrentsPageSort::Linked,
+                                        )
+                                    }
                                     if show.read().created_at {
                                         {sort_header("Added At", TorrentsPageSort::CreatedAt)}
                                     }
@@ -1561,13 +1681,13 @@ pub fn TorrentsPage() -> Element {
                                                         }
                                                         selected.set(next);
                                                     }
-                                                }
+                                                },
                                             }
                                         }
                                         div {
                                             button {
                                                 r#type: "button",
-                                                class: "item",
+                                                class: "link",
                                                 title: "{torrent.meta.cat_name}",
                                                 onclick: {
                                                     let value = torrent.meta.media_type.clone();
@@ -1583,7 +1703,7 @@ pub fn TorrentsPage() -> Element {
                                                     div {
                                                         button {
                                                             r#type: "button",
-                                                            class: "item",
+                                                            class: "link",
                                                             onclick: {
                                                                 let label = cat_id.clone();
                                                                 move |_| {
@@ -1602,7 +1722,7 @@ pub fn TorrentsPage() -> Element {
                                                 for category in torrent.meta.categories.clone() {
                                                     button {
                                                         r#type: "button",
-                                                        class: "item",
+                                                        class: "link",
                                                         onclick: {
                                                             let category = category.clone();
                                                             move |_| {
@@ -1621,7 +1741,7 @@ pub fn TorrentsPage() -> Element {
                                                     if let Some((src, title)) = flag_icon(&flag) {
                                                         button {
                                                             r#type: "button",
-                                                            class: "item",
+                                                            class: "link",
                                                             onclick: {
                                                                 let flag = flag.clone();
                                                                 move |_| {
@@ -1643,7 +1763,7 @@ pub fn TorrentsPage() -> Element {
                                         div {
                                             button {
                                                 r#type: "button",
-                                                class: "item",
+                                                class: "link",
                                                 onclick: {
                                                     let title = torrent.meta.title.clone();
                                                     move |_| {
@@ -1654,12 +1774,18 @@ pub fn TorrentsPage() -> Element {
                                                 "{torrent.meta.title}"
                                             }
                                             if torrent.client_status.as_deref() == Some("removed_from_tracker") {
-                                                span { class: "warn", title: "Torrent is removed from tracker but still seeding",
+                                                span {
+                                                    class: "warn",
+                                                    title: "Torrent is removed from tracker but still seeding",
                                                     button {
                                                         r#type: "button",
-                                                        class: "item",
+                                                        class: "link",
                                                         onclick: move |_| {
-                                                            apply_filter(&mut filters, TorrentsPageFilter::ClientStatus, "removed_from_tracker".to_string());
+                                                            apply_filter(
+                                                                &mut filters,
+                                                                TorrentsPageFilter::ClientStatus,
+                                                                "removed_from_tracker".to_string(),
+                                                            );
                                                             from.set(0);
                                                         },
                                                         "⚠"
@@ -1670,9 +1796,13 @@ pub fn TorrentsPage() -> Element {
                                                 span { title: "Torrent is not seeding",
                                                     button {
                                                         r#type: "button",
-                                                        class: "item",
+                                                        class: "link",
                                                         onclick: move |_| {
-                                                            apply_filter(&mut filters, TorrentsPageFilter::ClientStatus, "not_in_client".to_string());
+                                                            apply_filter(
+                                                                &mut filters,
+                                                                TorrentsPageFilter::ClientStatus,
+                                                                "not_in_client".to_string(),
+                                                            );
                                                             from.set(0);
                                                         },
                                                         "ℹ"
@@ -1688,7 +1818,7 @@ pub fn TorrentsPage() -> Element {
                                                 for author in torrent.meta.authors.clone() {
                                                     button {
                                                         r#type: "button",
-                                                        class: "item",
+                                                        class: "link",
                                                         onclick: {
                                                             let author = author.clone();
                                                             move |_| {
@@ -1706,7 +1836,7 @@ pub fn TorrentsPage() -> Element {
                                                 for narrator in torrent.meta.narrators.clone() {
                                                     button {
                                                         r#type: "button",
-                                                        class: "item",
+                                                        class: "link",
                                                         onclick: {
                                                             let narrator = narrator.clone();
                                                             move |_| {
@@ -1724,7 +1854,7 @@ pub fn TorrentsPage() -> Element {
                                                 for series in torrent.meta.series.clone() {
                                                     button {
                                                         r#type: "button",
-                                                        class: "item",
+                                                        class: "link",
                                                         onclick: {
                                                             let series_name = series.name.clone();
                                                             move |_| {
@@ -1745,7 +1875,7 @@ pub fn TorrentsPage() -> Element {
                                             div {
                                                 button {
                                                     r#type: "button",
-                                                    class: "item",
+                                                    class: "link",
                                                     onclick: {
                                                         let value = torrent.meta.language.clone().unwrap_or_default();
                                                         move |_| {
@@ -1765,7 +1895,7 @@ pub fn TorrentsPage() -> Element {
                                                 for filetype in torrent.meta.filetypes.clone() {
                                                     button {
                                                         r#type: "button",
-                                                        class: "item",
+                                                        class: "link",
                                                         onclick: {
                                                             let filetype = filetype.clone();
                                                             move |_| {
@@ -1782,7 +1912,7 @@ pub fn TorrentsPage() -> Element {
                                             div {
                                                 button {
                                                     r#type: "button",
-                                                    class: "item",
+                                                    class: "link",
                                                     onclick: {
                                                         let linker = torrent.linker.clone().unwrap_or_default();
                                                         move |_| {
@@ -1798,11 +1928,15 @@ pub fn TorrentsPage() -> Element {
                                             div {
                                                 button {
                                                     r#type: "button",
-                                                    class: "item",
+                                                    class: "link",
                                                     onclick: {
                                                         let category = torrent.category.clone().unwrap_or_default();
                                                         move |_| {
-                                                            apply_filter(&mut filters, TorrentsPageFilter::QbitCategory, category.clone());
+                                                            apply_filter(
+                                                                &mut filters,
+                                                                TorrentsPageFilter::QbitCategory,
+                                                                category.clone(),
+                                                            );
                                                             from.set(0);
                                                         }
                                                     },
@@ -1817,7 +1951,7 @@ pub fn TorrentsPage() -> Element {
                                                     span { class: "warn", title: "{mismatch.title()}",
                                                         button {
                                                             r#type: "button",
-                                                            class: "item",
+                                                            class: "link",
                                                             onclick: move |_| {
                                                                 apply_filter(
                                                                     &mut filters,
@@ -1837,15 +1971,11 @@ pub fn TorrentsPage() -> Element {
                                                     span { title: "{path}",
                                                         button {
                                                             r#type: "button",
-                                                            class: "item",
+                                                            class: "link",
                                                             onclick: {
                                                                 let linked = torrent.linked;
                                                                 move |_| {
-                                                                    apply_filter(
-                                                                        &mut filters,
-                                                                        TorrentsPageFilter::Linked,
-                                                                        linked.to_string(),
-                                                                    );
+                                                                    apply_filter(&mut filters, TorrentsPageFilter::Linked, linked.to_string());
                                                                     from.set(0);
                                                                 }
                                                             },
@@ -1855,15 +1985,11 @@ pub fn TorrentsPage() -> Element {
                                                 } else {
                                                     button {
                                                         r#type: "button",
-                                                        class: "item",
+                                                        class: "link",
                                                         onclick: {
                                                             let linked = torrent.linked;
                                                             move |_| {
-                                                                apply_filter(
-                                                                    &mut filters,
-                                                                    TorrentsPageFilter::Linked,
-                                                                    linked.to_string(),
-                                                                );
+                                                                apply_filter(&mut filters, TorrentsPageFilter::Linked, linked.to_string());
                                                                 from.set(0);
                                                             }
                                                         },
@@ -1874,7 +2000,7 @@ pub fn TorrentsPage() -> Element {
                                                     span { class: "warn", title: "{mismatch.title()}",
                                                         button {
                                                             r#type: "button",
-                                                            class: "item",
+                                                            class: "link",
                                                             onclick: move |_| {
                                                                 apply_filter(
                                                                     &mut filters,
@@ -1898,7 +2024,11 @@ pub fn TorrentsPage() -> Element {
                                         div {
                                             a { href: "/dioxus/torrents/{torrent.id}", "open" }
                                             if let Some(mam_id) = torrent.mam_id {
-                                                a { href: "https://www.myanonamouse.net/t/{mam_id}", target: "_blank", "MaM" }
+                                                a {
+                                                    href: "https://www.myanonamouse.net/t/{mam_id}",
+                                                    target: "_blank",
+                                                    "MaM"
+                                                }
                                             }
                                             if let (Some(abs_url), Some(abs_id)) = (&data.abs_url, &torrent.abs_id) {
                                                 a {
@@ -1913,14 +2043,16 @@ pub fn TorrentsPage() -> Element {
                             }
                         }
                     }
-                    p { class: "faint", "Showing {data.from} to {data.from + data.torrents.len()} of {data.total}" }
+                    p { class: "faint",
+                        "Showing {data.from} to {data.from + data.torrents.len()} of {data.total}"
+                    }
                     Pagination {
                         total: data.total,
                         from: data.from,
                         page_size: data.page_size,
                         on_change: move |new_from| {
                             from.set(new_from);
-                        }
+                        },
                     }
                 }
             } else if let Some(Err(e)) = &*value.read() {

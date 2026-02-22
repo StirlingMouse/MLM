@@ -71,6 +71,24 @@ button {
                 color: var(--warn);
         }
 
+        &.link {
+                diplay: inline;
+                padding: 0;
+                background: transparent;
+                text-align: left;
+
+                &&:hover {
+                        background: transparent;
+                        text-decoration: underline;
+                }
+
+                &:has(+ .link)::after {
+                        content: ", ";
+                        display: inline-block;
+                        padding-right: 4px;
+                }
+        }
+
         &.icon,
         &:has(> img:only-child) {
                 padding: 4px;
