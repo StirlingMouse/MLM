@@ -1,8 +1,9 @@
 [application]
 name = "mlm_web_dioxus"
+public_dir = "../server"
 
 [web]
-app_title = "MLM Dioxus"
+app_title = "MLM"
 watcher_index_on_404 = true
 
 [bundle]
