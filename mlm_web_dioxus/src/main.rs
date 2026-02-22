@@ -16,6 +16,7 @@ async fn server_main() {
     use mlm_core::Context;
     use mlm_core::{SsrBackend, Stats, metadata::MetadataService};
     use mlm_mam::api::MaM;
+    use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::Mutex;
@@ -24,7 +25,12 @@ async fn server_main() {
         .with_max_level(tracing::Level::INFO)
         .init();
 
-    let database_file = std::path::PathBuf::from("data-dev.db");
+    let database_file = std::env::var("MLM_DX_DB_FILE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("dev.db"));
+    if let Some(parent) = database_file.parent() {
+        std::fs::create_dir_all(parent).expect("Failed to create dev database directory");
+    }
     let db = native_db::Builder::new()
         .create(&mlm_db::MODELS, database_file)
         .expect("Failed to create database");

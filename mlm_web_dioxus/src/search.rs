@@ -2,8 +2,6 @@ use crate::components::{DownloadButtonMode, SimpleDownloadButtons};
 use crate::dto::Series;
 #[cfg(feature = "server")]
 use crate::error::{IntoServerFnError, OptionIntoServerFnError};
-#[cfg(feature = "server")]
-use crate::utils::format_series;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -131,7 +129,7 @@ pub async fn get_search_data(
                     .iter()
                     .map(|s| Series {
                         name: s.name.clone(),
-                        entries: format_series(s),
+                        entries: s.entries.to_string(),
                     })
                     .collect(),
                 tags: mam_torrent.tags,
@@ -253,7 +251,7 @@ pub fn SearchPage() -> Element {
                         r#type: "text",
                         value: "{query_input}",
                         placeholder: "Search torrents...",
-                        oninput: move |ev| query_input.set(ev.value())
+                        oninput: move |ev| query_input.set(ev.value()),
                     }
                     select {
                         value: "{sort_input}",
@@ -265,7 +263,7 @@ pub fn SearchPage() -> Element {
                         r#type: "number",
                         value: "{uploader_input}",
                         placeholder: "Uploader ID",
-                        oninput: move |ev| uploader_input.set(ev.value())
+                        oninput: move |ev| uploader_input.set(ev.value()),
                     }
                     button { r#type: "submit", "Search" }
                 }
@@ -282,13 +280,15 @@ pub fn SearchPage() -> Element {
             if let Some(data) = data_to_show {
                 p { class: "faint", "Showing {data.total} torrents" }
                 if data.torrents.is_empty() {
-                    p { i { "No torrents found" } }
+                    p {
+                        i { "No torrents found" }
+                    }
                 } else {
                     div { class: "Torrents",
                         for torrent in data.torrents {
                             SearchTorrentRow {
-                                torrent: torrent,
-                                status_msg: status_msg,
+                                torrent,
+                                status_msg,
                                 on_refresh: move |_| data_res.restart(),
                                 on_filter: move |(query, sort): (String, String)| {
                                     query_input.set(query.clone());
@@ -298,7 +298,7 @@ pub fn SearchPage() -> Element {
                                     uploader_input.set(String::new());
                                     submitted_uploader.set(None);
                                     data_res.restart();
-                                }
+                                },
                             }
                         }
                     }
@@ -333,13 +333,13 @@ fn SearchTorrentRow(
                         class: "media-icon",
                         src: "{src}",
                         alt: "{torrent.media_type}",
-                        title: "{torrent.media_type}"
+                        title: "{torrent.media_type}",
                     }
                 } else if let Some(cat_id) = torrent.cat_icon_id {
                     img {
                         src: "/assets/icons/cats/{cat_id}_b.png",
                         alt: "{torrent.media_type}",
-                        title: "{torrent.media_type}"
+                        title: "{torrent.media_type}",
                     }
                 } else {
                     span { class: "faint", "{torrent.media_type}" }
@@ -352,7 +352,7 @@ fn SearchTorrentRow(
                     span { class: "pill", "Downloaded" }
                 } else {
                     SimpleDownloadButtons {
-                        mam_id: mam_id,
+                        mam_id,
                         can_wedge: torrent.can_wedge,
                         disabled: false,
                         mode: DownloadButtonMode::Compact,
@@ -361,7 +361,7 @@ fn SearchTorrentRow(
                         },
                         on_refresh: move |_| {
                             on_refresh.call(());
-                        }
+                        },
                     }
                 }
             }
@@ -380,7 +380,7 @@ fn SearchTorrentRow(
                 if !torrent.authors.is_empty() {
                     div { class: "icon-row",
                         "by "
-                        for (i, author) in torrent.authors.iter().enumerate() {
+                        for (i , author) in torrent.authors.iter().enumerate() {
                             if i > 0 {
                                 ", "
                             }
@@ -398,7 +398,7 @@ fn SearchTorrentRow(
                 if !torrent.narrators.is_empty() {
                     div { class: "icon-row",
                         "narrated by "
-                        for (i, narrator) in torrent.narrators.iter().enumerate() {
+                        for (i , narrator) in torrent.narrators.iter().enumerate() {
                             if i > 0 {
                                 ", "
                             }
@@ -416,7 +416,7 @@ fn SearchTorrentRow(
                 if !torrent.series.is_empty() {
                     div { class: "icon-row",
                         "series "
-                        for (i, series) in torrent.series.iter().enumerate() {
+                        for (i , series) in torrent.series.iter().enumerate() {
                             if i > 0 {
                                 ", "
                             }
@@ -436,7 +436,9 @@ fn SearchTorrentRow(
                     }
                 }
                 if !torrent.tags.is_empty() {
-                    div { i { "{torrent.tags}" } }
+                    div {
+                        i { "{torrent.tags}" }
+                    }
                 }
                 div { class: "faint",
                     "{torrent.filetypes.join(\", \")}"
@@ -481,15 +483,27 @@ fn SearchTorrentRow(
             div { class: "stats", grid_area: "stats",
                 span { class: "icon-row",
                     "{torrent.seeders}"
-                    img { alt: "seeders", title: "Seeders", src: "/assets/icons/upBig3.png" }
+                    img {
+                        alt: "seeders",
+                        title: "Seeders",
+                        src: "/assets/icons/upBig3.png",
+                    }
                 }
                 span { class: "icon-row",
                     "{torrent.leechers}"
-                    img { alt: "leechers", title: "Leechers", src: "/assets/icons/downBig3.png" }
+                    img {
+                        alt: "leechers",
+                        title: "Leechers",
+                        src: "/assets/icons/downBig3.png",
+                    }
                 }
                 span { class: "icon-row",
                     "{torrent.snatches}"
-                    img { alt: "snatches", title: "Snatches", src: "/assets/icons/snatched.png" }
+                    img {
+                        alt: "snatches",
+                        title: "Snatches",
+                        src: "/assets/icons/snatched.png",
+                    }
                 }
             }
         }
