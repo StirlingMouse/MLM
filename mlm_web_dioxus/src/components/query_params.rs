@@ -1,4 +1,7 @@
 use dioxus::prelude::{ReadableExt, Signal, WritableExt};
+use serde::Serialize;
+#[cfg(feature = "web")]
+use serde::de::DeserializeOwned;
 
 pub fn apply_click_filter<F: Copy + PartialEq + 'static>(
     filters: &mut Signal<Vec<(F, String)>>,
@@ -44,6 +47,44 @@ pub fn build_query_string(params: &[(String, String)]) -> String {
         .collect::<Vec<_>>()
         .join("&")
 }
+
+#[cfg(feature = "web")]
+pub fn parse_query_enum<T: DeserializeOwned>(value: &str) -> Option<T> {
+    serde_json::from_str::<T>(&format!("\"{value}\"")).ok()
+}
+
+#[cfg(not(feature = "web"))]
+pub fn parse_query_enum<T>(_value: &str) -> Option<T> {
+    None
+}
+
+pub fn encode_query_enum<T: Serialize>(value: T) -> Option<String> {
+    serde_json::to_string(&value)
+        .ok()
+        .map(|raw| raw.trim_matches('"').to_string())
+}
+
+#[cfg(feature = "web")]
+pub fn set_location_query_string(query_string: &str) {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Ok(pathname) = window.location().pathname() else {
+        return;
+    };
+    let target = if query_string.is_empty() {
+        pathname
+    } else {
+        format!("{pathname}?{query_string}")
+    };
+    let Ok(history) = window.history() else {
+        return;
+    };
+    let _ = history.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&target));
+}
+
+#[cfg(not(feature = "web"))]
+pub fn set_location_query_string(_query_string: &str) {}
 
 #[cfg(feature = "web")]
 fn decode_query_value(value: &str) -> String {
