@@ -1,10 +1,6 @@
 use serde::Serialize;
-#[cfg(feature = "web")]
-use serde::de::DeserializeOwned;
 
-use crate::components::build_query_string;
-#[cfg(feature = "web")]
-use crate::components::parse_location_query_pairs;
+use crate::components::{build_query_string, parse_location_query_pairs, parse_query_enum};
 
 use super::{TorrentsPageColumns, TorrentsPageFilter, TorrentsPageSort};
 
@@ -31,11 +27,6 @@ impl Default for LegacyQueryState {
             show: TorrentsPageColumns::default(),
         }
     }
-}
-
-#[cfg(feature = "web")]
-fn parse_query_enum<T: DeserializeOwned>(value: &str) -> Option<T> {
-    serde_json::from_str::<T>(&format!("\"{value}\"")).ok()
 }
 
 fn encode_query_enum<T: Serialize>(value: T) -> Option<String> {
@@ -94,7 +85,6 @@ fn show_to_query_value(show: TorrentsPageColumns) -> String {
     values.join(",")
 }
 
-#[cfg(feature = "web")]
 fn show_from_query_value(value: &str) -> TorrentsPageColumns {
     let mut show = TorrentsPageColumns {
         category: false,
@@ -137,46 +127,39 @@ fn show_from_query_value(value: &str) -> TorrentsPageColumns {
 }
 
 pub(super) fn parse_legacy_query_state() -> LegacyQueryState {
-    #[cfg(feature = "web")]
-    {
-        let mut state = LegacyQueryState::default();
-        for (key, value) in parse_location_query_pairs() {
-            match key.as_str() {
-                "sort_by" => {
-                    state.sort = parse_query_enum::<TorrentsPageSort>(&value);
+    let mut state = LegacyQueryState::default();
+    for (key, value) in parse_location_query_pairs() {
+        match key.as_str() {
+            "sort_by" => {
+                state.sort = parse_query_enum::<TorrentsPageSort>(&value);
+            }
+            "asc" => {
+                state.asc = value == "true";
+            }
+            "from" => {
+                if let Ok(v) = value.parse::<usize>() {
+                    state.from = v;
                 }
-                "asc" => {
-                    state.asc = value == "true";
+            }
+            "page_size" => {
+                if let Ok(v) = value.parse::<usize>() {
+                    state.page_size = v;
                 }
-                "from" => {
-                    if let Ok(v) = value.parse::<usize>() {
-                        state.from = v;
-                    }
-                }
-                "page_size" => {
-                    if let Ok(v) = value.parse::<usize>() {
-                        state.page_size = v;
-                    }
-                }
-                "show" => {
-                    state.show = show_from_query_value(&value);
-                }
-                "query" => {
-                    state.query = value;
-                }
-                _ => {
-                    if let Some(field) = parse_query_enum::<TorrentsPageFilter>(&key) {
-                        state.filters.push((field, value));
-                    }
+            }
+            "show" => {
+                state.show = show_from_query_value(&value);
+            }
+            "query" => {
+                state.query = value;
+            }
+            _ => {
+                if let Some(field) = parse_query_enum::<TorrentsPageFilter>(&key) {
+                    state.filters.push((field, value));
                 }
             }
         }
-        state
     }
-    #[cfg(not(feature = "web"))]
-    {
-        LegacyQueryState::default()
-    }
+    state
 }
 
 pub(super) fn build_legacy_query_string(

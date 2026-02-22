@@ -375,6 +375,55 @@ summary {
         grid-template-columns: var(--torrents-grid);
 }
 
+.TorrentsTable.is-refreshing {
+        position: relative;
+}
+
+.TorrentsTable.is-refreshing > .torrents-grid-row {
+        animation: stale-table-fade 500ms ease 500ms forwards;
+}
+
+.stale-refresh-overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        opacity: 0;
+        animation: stale-overlay-reveal 1ms linear 1000ms forwards;
+}
+
+.stale-refresh-spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid var(--color-3);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: stale-spinner-spin 900ms linear infinite;
+}
+
+@keyframes stale-table-fade {
+        from {
+                opacity: 1;
+        }
+        to {
+                opacity: 0;
+        }
+}
+
+@keyframes stale-overlay-reveal {
+        to {
+                opacity: 1;
+        }
+}
+
+@keyframes stale-spinner-spin {
+        to {
+                transform: rotate(360deg);
+        }
+}
+
 .list_item {
         display: grid;
         grid-template-columns: auto 1fr;

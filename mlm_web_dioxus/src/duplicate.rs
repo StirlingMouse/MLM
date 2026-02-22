@@ -2,10 +2,9 @@ use std::collections::BTreeSet;
 
 use crate::components::{
     ActiveFilterChip, ActiveFilters, PageSizeSelector, Pagination, TorrentGridTable,
-    apply_click_filter, build_query_string, encode_query_enum, set_location_query_string,
+    apply_click_filter, build_query_string, encode_query_enum, parse_location_query_pairs,
+    parse_query_enum, set_location_query_string,
 };
-#[cfg(feature = "web")]
-use crate::components::{parse_location_query_pairs, parse_query_enum};
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -448,36 +447,29 @@ impl Default for LegacyQueryState {
 }
 
 fn parse_legacy_query_state() -> LegacyQueryState {
-    #[cfg(feature = "web")]
-    {
-        let mut state = LegacyQueryState::default();
-        for (key, value) in parse_location_query_pairs() {
-            match key.as_str() {
-                "sort_by" => state.sort = parse_query_enum::<DuplicatePageSort>(&value),
-                "asc" => state.asc = value == "true",
-                "from" => {
-                    if let Ok(v) = value.parse::<usize>() {
-                        state.from = v;
-                    }
+    let mut state = LegacyQueryState::default();
+    for (key, value) in parse_location_query_pairs() {
+        match key.as_str() {
+            "sort_by" => state.sort = parse_query_enum::<DuplicatePageSort>(&value),
+            "asc" => state.asc = value == "true",
+            "from" => {
+                if let Ok(v) = value.parse::<usize>() {
+                    state.from = v;
                 }
-                "page_size" => {
-                    if let Ok(v) = value.parse::<usize>() {
-                        state.page_size = v;
-                    }
+            }
+            "page_size" => {
+                if let Ok(v) = value.parse::<usize>() {
+                    state.page_size = v;
                 }
-                _ => {
-                    if let Some(field) = parse_query_enum::<DuplicatePageFilter>(&key) {
-                        state.filters.push((field, value));
-                    }
+            }
+            _ => {
+                if let Some(field) = parse_query_enum::<DuplicatePageFilter>(&key) {
+                    state.filters.push((field, value));
                 }
             }
         }
-        state
     }
-    #[cfg(not(feature = "web"))]
-    {
-        LegacyQueryState::default()
-    }
+    state
 }
 
 fn build_legacy_query_string(
@@ -510,19 +502,32 @@ fn build_legacy_query_string(
 
 #[component]
 pub fn DuplicatePage() -> Element {
-    let mut sort = use_signal(|| None::<DuplicatePageSort>);
-    let mut asc = use_signal(|| false);
-    let mut filters = use_signal(Vec::<(DuplicatePageFilter, String)>::new);
-    let mut from = use_signal(|| 0usize);
-    let mut page_size = use_signal(|| 500usize);
+    let initial_state = parse_legacy_query_state();
+    let initial_sort = initial_state.sort;
+    let initial_asc = initial_state.asc;
+    let initial_filters = initial_state.filters.clone();
+    let initial_from = initial_state.from;
+    let initial_page_size = initial_state.page_size;
+    let initial_request_key = build_legacy_query_string(
+        initial_state.sort,
+        initial_state.asc,
+        &initial_state.filters,
+        initial_state.from,
+        initial_state.page_size,
+    );
+
+    let sort = use_signal(move || initial_sort);
+    let asc = use_signal(move || initial_asc);
+    let mut filters = use_signal(move || initial_filters.clone());
+    let mut from = use_signal(move || initial_from);
+    let mut page_size = use_signal(move || initial_page_size);
     let mut selected = use_signal(BTreeSet::<u64>::new);
     let mut status_msg = use_signal(|| None::<(String, bool)>);
     let mut cached = use_signal(|| None::<DuplicateData>);
     let loading_action = use_signal(|| false);
-    let mut last_request_key = use_signal(String::new);
-    let mut url_init_done = use_signal(|| false);
+    let mut last_request_key = use_signal(move || initial_request_key.clone());
 
-    let mut duplicate_data = match use_server_future(move || async move {
+    let mut duplicate_data = use_server_future(move || async move {
         get_duplicate_data(
             *sort.read(),
             *asc.read(),
@@ -531,22 +536,16 @@ pub fn DuplicatePage() -> Element {
             Some(*page_size.read()),
         )
         .await
-    }) {
-        Ok(resource) => resource,
-        Err(_) => {
-            return rsx! {
-                div { class: "duplicate-page",
-                    h1 { "Duplicate Torrents" }
-                    p { "Loading duplicate torrents..." }
-                }
-            };
-        }
-    };
+    })
+    .ok();
 
-    let value = duplicate_data.value();
-    let pending = duplicate_data.pending();
+    let pending = duplicate_data
+        .as_ref()
+        .map(|resource| resource.pending())
+        .unwrap_or(true);
+    let value = duplicate_data.as_ref().map(|resource| resource.value());
 
-    {
+    if let Some(value) = &value {
         let value = value.read();
         if let Some(Ok(data)) = &*value {
             cached.set(Some(data.clone()));
@@ -554,30 +553,18 @@ pub fn DuplicatePage() -> Element {
     }
 
     let data_to_show = {
-        let value = value.read();
-        match &*value {
-            Some(Ok(data)) => Some(data.clone()),
-            _ => cached.read().clone(),
+        if let Some(value) = &value {
+            let value = value.read();
+            match &*value {
+                Some(Ok(data)) => Some(data.clone()),
+                _ => cached.read().clone(),
+            }
+        } else {
+            cached.read().clone()
         }
     };
 
     use_effect(move || {
-        if *url_init_done.read() {
-            return;
-        }
-        let parsed = parse_legacy_query_state();
-        sort.set(parsed.sort);
-        asc.set(parsed.asc);
-        filters.set(parsed.filters);
-        from.set(parsed.from);
-        page_size.set(parsed.page_size);
-        url_init_done.set(true);
-    });
-
-    use_effect(move || {
-        if !*url_init_done.read() {
-            return;
-        }
         let query_string = build_legacy_query_string(
             *sort.read(),
             *asc.read(),
@@ -589,7 +576,9 @@ pub fn DuplicatePage() -> Element {
         if should_restart {
             last_request_key.set(query_string.clone());
             set_location_query_string(&query_string);
-            duplicate_data.restart();
+            if let Some(resource) = duplicate_data.as_mut() {
+                resource.restart();
+            }
         }
     });
 
@@ -684,7 +673,9 @@ pub fn DuplicatePage() -> Element {
                                             Ok(_) => {
                                                 status_msg.set(Some((action.success_label().to_string(), false)));
                                                 selected.set(BTreeSet::new());
-                                                duplicate_data.restart();
+                                                if let Some(resource) = duplicate_data.as_mut() {
+                                                    resource.restart();
+                                                }
                                             }
                                             Err(e) => {
                                                 status_msg.set(Some((format!("{} failed: {e}", action.label()), true)));
@@ -736,14 +727,11 @@ pub fn DuplicatePage() -> Element {
                         i { "There are currently no duplicate torrents" }
                     }
                 } else {
-                    if pending && cached.read().is_some() {
-                        p { class: "loading-indicator", "Refreshing duplicate torrents..." }
-                    }
-
                     TorrentGridTable {
                         grid_template: "30px 110px 2fr 1fr 1fr 1fr 81px 100px 72px 157px 132px"
                             .to_string(),
                         extra_class: Some("DuplicateTable".to_string()),
+                        pending: pending && cached.read().is_some(),
                         {
                             let all_selected = data.torrents.iter().all(|p| selected.read().contains(&p.torrent.mam_id));
                             rsx! {
@@ -973,8 +961,12 @@ pub fn DuplicatePage() -> Element {
                         on_change: move |new_from| from.set(new_from),
                     }
                 }
-            } else if let Some(Err(e)) = &*value.read() {
-                p { class: "error", "Error: {e}" }
+            } else if let Some(value) = &value {
+                if let Some(Err(e)) = &*value.read() {
+                    p { class: "error", "Error: {e}" }
+                } else {
+                    p { "Loading duplicate torrents..." }
+                }
             } else {
                 p { "Loading duplicate torrents..." }
             }

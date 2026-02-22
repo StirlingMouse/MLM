@@ -2,10 +2,8 @@ use std::collections::BTreeSet;
 
 use crate::components::{
     ActiveFilterChip, ActiveFilters, TorrentGridTable, apply_click_filter, build_query_string,
-    encode_query_enum, set_location_query_string,
+    encode_query_enum, parse_location_query_pairs, parse_query_enum, set_location_query_string,
 };
-#[cfg(feature = "web")]
-use crate::components::{parse_location_query_pairs, parse_query_enum};
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -172,26 +170,19 @@ struct LegacyQueryState {
 }
 
 fn parse_legacy_query_state() -> LegacyQueryState {
-    #[cfg(feature = "web")]
-    {
-        let mut state = LegacyQueryState::default();
-        for (key, value) in parse_location_query_pairs() {
-            match key.as_str() {
-                "sort_by" => state.sort = parse_query_enum::<ErrorsPageSort>(&value),
-                "asc" => state.asc = value == "true",
-                _ => {
-                    if let Some(field) = parse_query_enum::<ErrorsPageFilter>(&key) {
-                        state.filters.push((field, value));
-                    }
+    let mut state = LegacyQueryState::default();
+    for (key, value) in parse_location_query_pairs() {
+        match key.as_str() {
+            "sort_by" => state.sort = parse_query_enum::<ErrorsPageSort>(&value),
+            "asc" => state.asc = value == "true",
+            _ => {
+                if let Some(field) = parse_query_enum::<ErrorsPageFilter>(&key) {
+                    state.filters.push((field, value));
                 }
             }
         }
-        state
     }
-    #[cfg(not(feature = "web"))]
-    {
-        LegacyQueryState::default()
-    }
+    state
 }
 
 fn build_legacy_query_string(
@@ -216,15 +207,24 @@ fn build_legacy_query_string(
 
 #[component]
 pub fn ErrorsPage() -> Element {
-    let mut sort = use_signal(|| None::<ErrorsPageSort>);
-    let mut asc = use_signal(|| false);
-    let mut filters = use_signal(Vec::<(ErrorsPageFilter, String)>::new);
+    let initial_state = parse_legacy_query_state();
+    let initial_sort = initial_state.sort;
+    let initial_asc = initial_state.asc;
+    let initial_filters = initial_state.filters.clone();
+    let initial_request_key = build_legacy_query_string(
+        initial_state.sort,
+        initial_state.asc,
+        &initial_state.filters,
+    );
+
+    let sort = use_signal(move || initial_sort);
+    let asc = use_signal(move || initial_asc);
+    let mut filters = use_signal(move || initial_filters.clone());
     let mut selected = use_signal(BTreeSet::<String>::new);
     let mut status_msg = use_signal(|| None::<(String, bool)>);
     let mut cached = use_signal(|| None::<ErrorsData>);
     let loading_action = use_signal(|| false);
-    let mut last_request_key = use_signal(String::new);
-    let mut url_init_done = use_signal(|| false);
+    let mut last_request_key = use_signal(move || initial_request_key.clone());
 
     let mut errors_data = match use_server_future(move || async move {
         get_errors_data(*sort.read(), *asc.read(), filters.read().clone()).await
@@ -259,20 +259,6 @@ pub fn ErrorsPage() -> Element {
     };
 
     use_effect(move || {
-        if *url_init_done.read() {
-            return;
-        }
-        let parsed = parse_legacy_query_state();
-        sort.set(parsed.sort);
-        asc.set(parsed.asc);
-        filters.set(parsed.filters);
-        url_init_done.set(true);
-    });
-
-    use_effect(move || {
-        if !*url_init_done.read() {
-            return;
-        }
         let sort = *sort.read();
         let asc = *asc.read();
         let filters = filters.read().clone();
@@ -407,13 +393,10 @@ pub fn ErrorsPage() -> Element {
                         }
                     }
 
-                    if pending && cached.read().is_some() {
-                        p { class: "loading-indicator", "Refreshing errors..." }
-                    }
-
                     TorrentGridTable {
                         grid_template: "30px 100px 1fr 1fr 157px 88px".to_string(),
                         extra_class: Some("ErrorsTable".to_string()),
+                        pending: pending && cached.read().is_some(),
                         {
                             let all_selected = data.errors.iter().all(|e| selected.read().contains(&e.id_json));
                             rsx! {
