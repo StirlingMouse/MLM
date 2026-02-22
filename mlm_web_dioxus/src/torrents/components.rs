@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 
 use crate::components::{
     ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, PageSizeSelector,
-    Pagination, TableView, apply_click_filter,
+    Pagination, TorrentGridTable, apply_click_filter, set_location_query_string,
 };
 
 use super::query::{build_legacy_query_string, parse_legacy_query_state};
@@ -226,6 +226,7 @@ pub fn TorrentsPage() -> Element {
         let should_restart = *last_request_key.read() != query_string;
         if should_restart {
             last_request_key.set(query_string.clone());
+            set_location_query_string(&query_string);
             torrents_data.restart();
         }
     });
@@ -457,9 +458,9 @@ pub fn TorrentsPage() -> Element {
                     if pending && cached.read().is_some() {
                         p { class: "loading-indicator", "Refreshing torrent list..." }
                     }
-                    TableView {
-                        class: "TorrentsTable table2".to_string(),
-                        style: format!("--torrents-grid: {};", show.read().table_grid_template()),
+                    TorrentGridTable {
+                        grid_template: show.read().table_grid_template(),
+                        extra_class: None,
                         {
                             let all_selected = data
                                 .torrents

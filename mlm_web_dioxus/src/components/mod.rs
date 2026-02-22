@@ -12,6 +12,9 @@ pub use filter_controls::{
     ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, PageSizeSelector,
 };
 pub use pagination::Pagination;
-pub use query_params::{apply_click_filter, build_query_string, parse_location_query_pairs};
-pub use table_view::TableView;
+pub use query_params::{
+    apply_click_filter, build_query_string, encode_query_enum, parse_location_query_pairs,
+    parse_query_enum, set_location_query_string,
+};
+pub use table_view::{TableView, TorrentGridTable};
 pub use task_box::TaskBox;
