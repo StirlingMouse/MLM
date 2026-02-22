@@ -2,7 +2,6 @@ mod common;
 
 use anyhow::Result;
 use common::{MockFs, TestDb, mock_config};
-use mlm_core::Events;
 use mlm_core::config::{
     Library, LibraryByDownloadDir, LibraryLinkMethod, LibraryOptions, LibraryTagFilters, QbitConfig,
 };
@@ -122,6 +121,7 @@ async fn test_link_torrent_audiobook() -> anyhow::Result<()> {
         tag_filters: LibraryTagFilters::default(),
     })];
     let config = Arc::new(config);
+    let events = mlm_core::Events::new();
 
     // Setup mock Qbit
     let qbit_torrent = QbitTorrent {
@@ -167,7 +167,7 @@ async fn test_link_torrent_audiobook() -> anyhow::Result<()> {
         db.db.clone(),
         (qbit_config, &mock_qbit),
         &mock_mam,
-        &Events::new(),
+        &events,
     )
     .await?;
 
@@ -212,6 +212,7 @@ async fn test_skip_incomplete_torrent() -> anyhow::Result<()> {
         on_invalid_torrent: None,
     });
     let config = Arc::new(config);
+    let events = mlm_core::Events::new();
 
     let mock_qbit = MockQbit {
         torrents: vec![QbitTorrent {
@@ -231,7 +232,7 @@ async fn test_skip_incomplete_torrent() -> anyhow::Result<()> {
         db.db.clone(),
         (qbit_config, &mock_qbit),
         &mock_mam,
-        &Events::new(),
+        &events,
     )
     .await?;
 
@@ -303,6 +304,7 @@ async fn test_remove_selected_torrent() -> anyhow::Result<()> {
         tag_filters: LibraryTagFilters::default(),
     })];
     let config = Arc::new(config);
+    let events = mlm_core::Events::new();
 
     let mock_qbit = MockQbit {
         torrents: vec![QbitTorrent {
@@ -323,7 +325,7 @@ async fn test_remove_selected_torrent() -> anyhow::Result<()> {
         db.db.clone(),
         (qbit_config, &mock_qbit),
         &mock_mam,
-        &Events::new(),
+        &events,
     )
     .await;
 
@@ -368,6 +370,7 @@ async fn test_link_torrent_ebook() -> anyhow::Result<()> {
         tag_filters: LibraryTagFilters::default(),
     })];
     let config = Arc::new(config);
+    let events = mlm_core::Events::new();
 
     let qbit_torrent = QbitTorrent {
         hash: torrent_hash.to_string(),
@@ -412,7 +415,7 @@ async fn test_link_torrent_ebook() -> anyhow::Result<()> {
         db.db.clone(),
         (qbit_config, &mock_qbit),
         &mock_mam,
-        &Events::new(),
+        &events,
     )
     .await?;
 
@@ -457,6 +460,7 @@ async fn test_relink() -> anyhow::Result<()> {
         tag_filters: LibraryTagFilters::default(),
     })];
     let config = Arc::new(config);
+    let events = mlm_core::Events::new();
 
     let old_library_path = fs.library_dir.join("Old Author").join("Title");
     std::fs::create_dir_all(&old_library_path)?;
@@ -516,7 +520,7 @@ async fn test_relink() -> anyhow::Result<()> {
         &mock_qbit,
         qbit_torrent,
         torrent_hash.to_string(),
-        &Events::new(),
+        &events,
     )
     .await?;
 
@@ -565,6 +569,7 @@ async fn test_refresh_metadata_relink() -> anyhow::Result<()> {
         tag_filters: LibraryTagFilters::default(),
     })];
     let config = Arc::new(config);
+    let events = mlm_core::Events::new();
 
     {
         let (_guard, rw) = db.db.rw_async().await?;
@@ -631,7 +636,7 @@ async fn test_refresh_metadata_relink() -> anyhow::Result<()> {
         &mock_mam,
         qbit_torrent,
         torrent_hash.to_string(),
-        &Events::new(),
+        &events,
     )
     .await?;
 

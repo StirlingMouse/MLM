@@ -8,9 +8,8 @@ use mlm_db::{Event, EventKey, EventType, TorrentMeta as MetadataQuery};
 
 use async_trait::async_trait;
 use common::{TestDb, mock_config};
-use mlm_core::Context;
-use mlm_core::Triggers;
 use mlm_core::metadata::MetadataService;
+use mlm_core::{Context, Events, SsrBackend, Stats, Triggers};
 use url::Url;
 
 // Simple mock fetcher that resolves plan files from the repo for tests.
@@ -109,16 +108,9 @@ async fn test_metadata_fetch_and_persist_romanceio() -> Result<()> {
             metadata: metadata.clone(),
         })),
         config: Arc::new(tokio::sync::Mutex::new(Arc::new(cfg))),
-        stats: mlm_core::stats::Stats::new(),
-        events: mlm_core::Events::new(),
-        triggers: mlm_core::Triggers {
-            search_tx: std::collections::BTreeMap::new(),
-            import_tx: std::collections::BTreeMap::new(),
-            torrent_linker_tx: Some(tokio::sync::watch::channel(()).0),
-            folder_linker_tx: Some(tokio::sync::watch::channel(()).0),
-            downloader_tx: Some(tokio::sync::watch::channel(()).0),
-            audiobookshelf_tx: Some(tokio::sync::watch::channel(()).0),
-        },
+        stats: Stats::new(),
+        events: Events::new(),
+        triggers: Triggers::default(),
     };
 
     // Use a title known to the plan/romanceio mock. Inject the test fetcher
@@ -136,7 +128,7 @@ async fn test_metadata_fetch_and_persist_romanceio() -> Result<()> {
     let metadata = Arc::new(svc);
 
     let ctx = Context {
-        backend: Some(Arc::new(mlm_core::SsrBackend {
+        backend: Some(Arc::new(SsrBackend {
             db: test_db.db.clone(),
             mam: Arc::new(Err(anyhow::anyhow!("no mam"))),
             metadata: metadata.clone(),

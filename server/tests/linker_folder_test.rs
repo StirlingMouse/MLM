@@ -1,7 +1,7 @@
 mod common;
 
 use common::{MockFs, TestDb, mock_config};
-use mlm_core::{Events, linker::folder::link_folders_to_library};
+use mlm_core::linker::folder::link_folders_to_library;
 use mlm_db::{DatabaseExt, Torrent};
 use std::sync::Arc;
 
@@ -13,10 +13,11 @@ async fn test_link_folders_to_library() -> anyhow::Result<()> {
         mock_fs.rip_dir.clone(),
         mock_fs.library_dir.clone(),
     ));
+    let events = mlm_core::Events::new();
 
     mock_fs.create_libation_folder("B00TEST1", "Test Book 1", vec!["Author 1"])?;
 
-    link_folders_to_library(config.clone(), test_db.db.clone(), &Events::new()).await?;
+    link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
 
     let r = test_db.db.r_transaction()?;
     let torrent: Option<Torrent> = r.get().primary("B00TEST1".to_string())?;
@@ -43,6 +44,7 @@ async fn test_link_folders_to_library_duplicate_skipping() -> anyhow::Result<()>
         mock_fs.rip_dir.clone(),
         mock_fs.library_dir.clone(),
     ));
+    let events = mlm_core::Events::new();
 
     // Create a better version already in the DB
     let existing = common::MockTorrentBuilder::new("MAM123", "Test Book 1")
@@ -62,7 +64,7 @@ async fn test_link_folders_to_library_duplicate_skipping() -> anyhow::Result<()>
     // Libation folder files will have small size "fake audio data" = 15 bytes
     mock_fs.create_libation_folder("B00TEST1", "Test Book 1", vec!["Author 1"])?;
 
-    link_folders_to_library(config.clone(), test_db.db.clone(), &Events::new()).await?;
+    link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
 
     let r = test_db.db.r_transaction()?;
     let torrent: Option<Torrent> = r.get().primary("B00TEST1".to_string())?;
@@ -82,10 +84,11 @@ async fn test_link_folders_to_library_filter_size_too_small() -> anyhow::Result<
         l.filter.min_size = mlm_db::Size::from_bytes(100); // Libation folder is 15 bytes
     }
     let config = Arc::new(config);
+    let events = mlm_core::Events::new();
 
     mock_fs.create_libation_folder("B00TEST1", "Test Book 1", vec!["Author 1"])?;
 
-    link_folders_to_library(config.clone(), test_db.db.clone(), &Events::new()).await?;
+    link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
 
     let r = test_db.db.r_transaction()?;
     let torrent: Option<Torrent> = r.get().primary("B00TEST1".to_string())?;
@@ -107,10 +110,11 @@ async fn test_link_folders_to_library_filter_media_type_mismatch() -> anyhow::Re
         l.filter.media_type = vec![mlm_db::MediaType::Ebook]; // Libation is Audiobook
     }
     let config = Arc::new(config);
+    let events = mlm_core::Events::new();
 
     mock_fs.create_libation_folder("B00TEST1", "Test Book 1", vec!["Author 1"])?;
 
-    link_folders_to_library(config.clone(), test_db.db.clone(), &Events::new()).await?;
+    link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
 
     let r = test_db.db.r_transaction()?;
     let torrent: Option<Torrent> = r.get().primary("B00TEST1".to_string())?;
@@ -132,10 +136,11 @@ async fn test_link_folders_to_library_filter_language_mismatch() -> anyhow::Resu
         l.filter.languages = vec![mlm_db::Language::German]; // Libation is English
     }
     let config = Arc::new(config);
+    let events = mlm_core::Events::new();
 
     mock_fs.create_libation_folder("B00TEST1", "Test Book 1", vec!["Author 1"])?;
 
-    link_folders_to_library(config.clone(), test_db.db.clone(), &Events::new()).await?;
+    link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
 
     let r = test_db.db.r_transaction()?;
     let torrent: Option<Torrent> = r.get().primary("B00TEST1".to_string())?;
