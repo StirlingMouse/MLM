@@ -1,10 +1,14 @@
 pub mod app;
 pub mod components;
 pub mod dto;
+pub mod duplicate;
 pub mod error;
+pub mod errors;
 pub mod events;
 pub mod home;
+pub mod replaced;
 pub mod search;
+pub mod selected;
 pub mod sse;
 pub mod stats;
 pub mod torrent_detail;

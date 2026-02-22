@@ -371,7 +371,7 @@ summary {
         }
 }
 
-.torrents-page .TorrentsTable > .torrents-grid-row {
+.TorrentsTable > .torrents-grid-row {
         grid-template-columns: var(--torrents-grid);
 }
 

@@ -1,6 +1,10 @@
+use crate::duplicate::DuplicatePage;
+use crate::errors::ErrorsPage;
 use crate::events::EventsPage;
 use crate::home::HomePage;
+use crate::replaced::ReplacedPage;
 use crate::search::SearchPage;
+use crate::selected::SelectedPage;
 #[cfg(feature = "web")]
 use crate::sse::{trigger_events_update, trigger_stats_update};
 use crate::stats::StatsPage;
@@ -27,6 +31,18 @@ pub enum Route {
     #[route("/dioxus/events/:..segments")]
     EventsWithQuery { segments: Vec<String> },
 
+    #[route("/dioxus/errors")]
+    Errors {},
+
+    #[route("/dioxus/selected")]
+    Selected {},
+
+    #[route("/dioxus/replaced")]
+    Replaced {},
+
+    #[route("/dioxus/duplicate")]
+    Duplicate {},
+
     #[route("/dioxus/torrents")]
     Torrents {},
 
@@ -41,7 +57,9 @@ pub enum Route {
 }
 
 pub fn root() -> Element {
-    rsx! { Router::<Route> {} }
+    rsx! {
+        Router::<Route> {}
+    }
 }
 
 #[component]
@@ -57,60 +75,102 @@ pub fn App() -> Element {
         nav {
             Link { to: Route::Home {}, "Home (Dioxus)" }
             a { href: "/", "Home (Legacy)" }
-            a { href: "/torrents", "Torrents" }
+            Link { to: Route::Torrents {}, "Torrents" }
             Link { to: Route::Events {}, "Events" }
             Link { to: Route::Search {}, "Search" }
             a { href: "/lists", "Goodreads lists" }
-            a { href: "/errors", "Errors" }
-            a { href: "/selected", "Selected Torrents" }
-            a { href: "/replaced", "Replaced Torrents" }
-            a { href: "/duplicate", "Duplicate Torrents" }
+            Link { to: Route::Errors {}, "Errors" }
+            Link { to: Route::Selected {}, "Selected Torrents" }
+            Link { to: Route::Replaced {}, "Replaced Torrents" }
+            Link { to: Route::Duplicate {}, "Duplicate Torrents" }
             a { href: "/config", "Config" }
         }
-        main {
-            Outlet::<Route> {}
-        }
+        main { Outlet::<Route> {} }
     }
 }
 
 #[component]
 fn Home() -> Element {
-    rsx! { HomePage {} }
+    rsx! {
+        HomePage {}
+    }
 }
 
 #[component]
 fn Stats() -> Element {
-    rsx! { StatsPage {} }
+    rsx! {
+        StatsPage {}
+    }
 }
 
 #[component]
 fn Events() -> Element {
-    rsx! { EventsPage {} }
+    rsx! {
+        EventsPage {}
+    }
+}
+
+#[component]
+fn Errors() -> Element {
+    rsx! {
+        ErrorsPage {}
+    }
+}
+
+#[component]
+fn Selected() -> Element {
+    rsx! {
+        SelectedPage {}
+    }
+}
+
+#[component]
+fn Replaced() -> Element {
+    rsx! {
+        ReplacedPage {}
+    }
+}
+
+#[component]
+fn Duplicate() -> Element {
+    rsx! {
+        DuplicatePage {}
+    }
 }
 
 #[component]
 fn EventsWithQuery(segments: Vec<String>) -> Element {
-    rsx! { EventsPage {} }
+    rsx! {
+        EventsPage {}
+    }
 }
 
 #[component]
 fn Torrents() -> Element {
-    rsx! { TorrentsPage {} }
+    rsx! {
+        TorrentsPage {}
+    }
 }
 
 #[component]
 fn TorrentsWithQuery(segments: Vec<String>) -> Element {
-    rsx! { TorrentsPage {} }
+    rsx! {
+        TorrentsPage {}
+    }
 }
 
 #[component]
 fn TorrentDetail(id: String) -> Element {
-    rsx! { TorrentDetailPage { id } }
+    rsx! {
+        TorrentDetailPage { id }
+    }
 }
 
 #[component]
 fn Search() -> Element {
-    rsx! { SearchPage {} }
+    rsx! {
+        SearchPage {}
+    }
 }
 
 fn setup_sse() {
