@@ -13,6 +13,12 @@ path = "src/main.rs"
 [dependencies]
 dioxus = { version = "0.7", features = ["fullstack", "router"] }
 dioxus-fullstack = "0.7"
+lucide-dioxus = { version = "2.562.0", features = [
+  "account",
+  "communication",
+  "multimedia",
+  "text",
+] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 anyhow = "1.0"
@@ -20,7 +26,12 @@ tracing = "0.1"
 wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = ["EventSource", "MessageEvent"] }
 urlencoding = "2.1"
-time = { version = "0.3.41", features = ["formatting", "local-offset", "macros", "serde"] }
+time = { version = "0.3.41", features = [
+  "formatting",
+  "local-offset",
+  "macros",
+  "serde",
+] }
 
 # Server-side dependencies
 axum = { version = "0.8", optional = true }
@@ -40,27 +51,21 @@ tracing-subscriber = { version = "0.3", optional = true }
 
 [features]
 server = [
-    "dioxus/server",
-    "dioxus/cli-config",
-    "dep:axum",
-    "dep:tokio",
-    "dep:tower-http",
-    "dep:tokio-stream",
-    "dep:mlm_core",
-    "dep:mlm_db",
-    "dep:mlm_mam",
-    "dep:mlm_parse",
-    "dep:itertools",
-    "dep:native_db",
-    "dep:sublime_fuzzy",
-    "dep:qbit",
-    "dep:figment",
-    "dep:tracing-subscriber",
+  "dioxus/server",
+  "dioxus/cli-config",
+  "dep:axum",
+  "dep:tokio",
+  "dep:tower-http",
+  "dep:tokio-stream",
+  "dep:mlm_core",
+  "dep:mlm_db",
+  "dep:mlm_mam",
+  "dep:mlm_parse",
+  "dep:itertools",
+  "dep:native_db",
+  "dep:sublime_fuzzy",
+  "dep:qbit",
+  "dep:figment",
+  "dep:tracing-subscriber",
 ]
 web = ["dioxus/web"]
-
-[profile.dev.package."*"]
-opt-level = 1
-
-[profile.dev.package.mlm_web_dioxus]
-opt-level = 2

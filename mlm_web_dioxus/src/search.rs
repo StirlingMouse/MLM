@@ -1,12 +1,32 @@
-use crate::components::{DownloadButtonMode, SimpleDownloadButtons};
+use crate::components::SearchTorrentRow;
+use crate::components::parse_location_query_pairs;
 use crate::dto::Series;
 #[cfg(feature = "server")]
-use crate::error::{IntoServerFnError, OptionIntoServerFnError};
+use crate::error::IntoServerFnError;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "server")]
-use mlm_core::{Context, ContextExt, Torrent as DbTorrent, TorrentKey};
+use mlm_core::{ContextExt, Torrent as DbTorrent, TorrentKey};
+#[cfg(feature = "server")]
+use mlm_db::Flags;
+
+fn search_state_from_params(params: &[(String, String)]) -> (String, String, String, Option<u64>) {
+    let query = params
+        .iter()
+        .find_map(|(k, v)| (k == "q").then_some(v.clone()))
+        .unwrap_or_default();
+    let sort = params
+        .iter()
+        .find_map(|(k, v)| (k == "sort").then_some(v.clone()))
+        .unwrap_or_default();
+    let uploader_input = params
+        .iter()
+        .find_map(|(k, v)| (k == "uploader").then_some(v.clone()))
+        .unwrap_or_default();
+    let uploader = uploader_input.trim().parse::<u64>().ok();
+    (query, sort, uploader_input, uploader)
+}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct SearchData {
@@ -27,8 +47,8 @@ pub struct SearchTorrent {
     pub series: Vec<Series>,
     pub tags: String,
     pub categories: Vec<String>,
+    pub flags: Vec<String>,
     pub old_category: Option<String>,
-    pub cat_icon_id: Option<u8>,
     pub media_type: String,
     pub filetypes: Vec<String>,
     pub size: String,
@@ -42,6 +62,9 @@ pub struct SearchTorrent {
     pub media_duration: Option<String>,
     pub media_format: Option<String>,
     pub audio_bitrate: Option<String>,
+    pub vip: bool,
+    pub personal_freeleech: bool,
+    pub free: bool,
     pub is_downloaded: bool,
     pub is_selected: bool,
     pub can_wedge: bool,
@@ -53,15 +76,12 @@ pub async fn get_search_data(
     sort: String,
     uploader: Option<u64>,
 ) -> Result<SearchData, ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
     use mlm_mam::{
         enums::SearchTarget,
         search::{SearchFields, SearchQuery, Tor},
     };
 
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
 
     let mam = context.mam().server_err()?;
     let result = mam
@@ -113,7 +133,26 @@ pub async fn get_search_data(
                 .as_ref()
                 .map(|m| format!("{} {}", m.audio.bitrate, m.audio.mode));
             let old_category = meta.cat.as_ref().map(|cat| cat.to_string());
-            let cat_icon_id = meta.cat.as_ref().map(|cat| cat.as_id());
+            let flags = Flags::from_bitfield(meta.flags.map_or(0, |f| f.0));
+            let mut flag_values = Vec::new();
+            if flags.crude_language == Some(true) {
+                flag_values.push("language".to_string());
+            }
+            if flags.violence == Some(true) {
+                flag_values.push("violence".to_string());
+            }
+            if flags.some_explicit == Some(true) {
+                flag_values.push("some_explicit".to_string());
+            }
+            if flags.explicit == Some(true) {
+                flag_values.push("explicit".to_string());
+            }
+            if flags.abridged == Some(true) {
+                flag_values.push("abridged".to_string());
+            }
+            if flags.lgbt == Some(true) {
+                flag_values.push("lgbt".to_string());
+            }
 
             Ok(SearchTorrent {
                 mam_id: mam_torrent.id,
@@ -134,8 +173,8 @@ pub async fn get_search_data(
                     .collect(),
                 tags: mam_torrent.tags,
                 categories: meta.categories,
+                flags: flag_values,
                 old_category,
-                cat_icon_id,
                 media_type: meta.media_type.as_str().to_string(),
                 filetypes: meta.filetypes,
                 size: meta.size.to_string(),
@@ -149,6 +188,9 @@ pub async fn get_search_data(
                 media_duration,
                 media_format,
                 audio_bitrate,
+                vip: mam_torrent.vip,
+                personal_freeleech: mam_torrent.personal_freeleech,
+                free: mam_torrent.free,
                 is_downloaded: torrent.is_some(),
                 is_selected: selected_torrent.is_some(),
                 can_wedge,
@@ -180,43 +222,65 @@ pub async fn get_search_data(
     Ok(SearchData { torrents, total })
 }
 
-fn media_icon_src(mediatype: u8, _main_cat: u8) -> Option<&'static str> {
-    match mediatype {
-        1 => Some("/assets/icons/new/abooks_main2.png"),
-        2 => Some("/assets/icons/new/ebooks_main4.png"),
-        3 => Some("/assets/icons/new/music_main.png"),
-        4 => Some("/assets/icons/new/radiogeneral2.png"),
-        _ => None,
-    }
-}
-
-fn search_filter_query(prefix: &str, value: &str) -> String {
-    let escaped = value.replace('"', "\\\"");
-    format!("@{prefix} \"{escaped}\"")
-}
-
 #[component]
 pub fn SearchPage() -> Element {
-    let mut query_input = use_signal(String::new);
-    let mut sort_input = use_signal(String::new);
-    let mut uploader_input = use_signal(String::new);
-    let mut submitted_query = use_signal(String::new);
-    let mut submitted_sort = use_signal(String::new);
-    let mut submitted_uploader = use_signal(|| None::<u64>);
+    let _route: crate::app::Route = use_route();
+    let params = parse_location_query_pairs();
+    let (initial_query, initial_sort, initial_uploader_input, initial_submitted_uploader) =
+        search_state_from_params(&params);
+
+    let query_input_initial = initial_query.clone();
+    let sort_input_initial = initial_sort.clone();
+    let request_query_initial = initial_query;
+    let request_sort_initial = initial_sort;
+    let route_state_initial = (
+        request_query_initial.clone(),
+        request_sort_initial.clone(),
+        initial_uploader_input.clone(),
+    );
+
+    let mut query_input = use_signal(move || query_input_initial.clone());
+    let mut sort_input = use_signal(move || sort_input_initial.clone());
+    let mut uploader_input = use_signal(move || initial_uploader_input.clone());
+    let mut request_query = use_signal(move || request_query_initial.clone());
+    let mut request_sort = use_signal(move || request_sort_initial.clone());
+    let mut request_uploader = use_signal(move || initial_submitted_uploader);
+    let mut last_route_state = use_signal(move || route_state_initial.clone());
     let status_msg = use_signal(|| None::<(String, bool)>);
     let mut cached = use_signal(|| None::<SearchData>);
 
     let mut data_res = use_server_future(move || async move {
         get_search_data(
-            submitted_query.read().clone(),
-            submitted_sort.read().clone(),
-            *submitted_uploader.read(),
+            request_query.read().clone(),
+            request_sort.read().clone(),
+            *request_uploader.read(),
         )
         .await
     })?;
 
     let current_value = data_res.value();
     let pending = data_res.pending();
+
+    {
+        let params = parse_location_query_pairs();
+        let (route_query, route_sort, route_uploader_input, route_uploader) =
+            search_state_from_params(&params);
+        let next_route_state = (
+            route_query.clone(),
+            route_sort.clone(),
+            route_uploader_input.clone(),
+        );
+        if *last_route_state.read() != next_route_state {
+            query_input.set(route_query.clone());
+            sort_input.set(route_sort.clone());
+            uploader_input.set(route_uploader_input);
+            request_query.set(route_query);
+            request_sort.set(route_sort);
+            request_uploader.set(route_uploader);
+            last_route_state.set(next_route_state);
+            data_res.restart();
+        }
+    }
 
     {
         let value = current_value.read();
@@ -235,38 +299,24 @@ pub fn SearchPage() -> Element {
 
     rsx! {
         div { class: "search-page",
-            div { class: "row",
-                h1 { "Search (Dioxus)" }
-                form {
-                    class: "search-controls",
-                    onsubmit: move |ev: Event<FormData>| {
-                        ev.prevent_default();
-                        submitted_query.set(query_input.read().clone());
-                        submitted_sort.set(sort_input.read().clone());
-                        let uploader = uploader_input.read().trim().parse::<u64>().ok();
-                        submitted_uploader.set(uploader);
-                        data_res.restart();
-                    },
-                    input {
-                        r#type: "text",
-                        value: "{query_input}",
-                        placeholder: "Search torrents...",
-                        oninput: move |ev| query_input.set(ev.value()),
-                    }
-                    select {
-                        value: "{sort_input}",
-                        onchange: move |ev| sort_input.set(ev.value()),
-                        option { value: "", "Default" }
-                        option { value: "series", "Series" }
-                    }
-                    input {
-                        r#type: "number",
-                        value: "{uploader_input}",
-                        placeholder: "Uploader ID",
-                        oninput: move |ev| uploader_input.set(ev.value()),
-                    }
-                    button { r#type: "submit", "Search" }
+            form {
+                class: "row",
+                onsubmit: move |ev: Event<FormData>| {
+                    ev.prevent_default();
+                    request_query.set(query_input.read().clone());
+                    request_sort.set(sort_input.read().clone());
+                    let uploader = uploader_input.read().trim().parse::<u64>().ok();
+                    request_uploader.set(uploader);
+                    data_res.restart();
+                },
+                h1 { "MaM Search" }
+                input {
+                    r#type: "text",
+                    value: "{query_input}",
+                    placeholder: "Search torrents...",
+                    oninput: move |ev| query_input.set(ev.value()),
                 }
+                button { r#type: "submit", "Search" }
             }
 
             if let Some((msg, is_error)) = status_msg.read().as_ref() {
@@ -290,15 +340,6 @@ pub fn SearchPage() -> Element {
                                 torrent,
                                 status_msg,
                                 on_refresh: move |_| data_res.restart(),
-                                on_filter: move |(query, sort): (String, String)| {
-                                    query_input.set(query.clone());
-                                    submitted_query.set(query);
-                                    sort_input.set(sort.clone());
-                                    submitted_sort.set(sort);
-                                    uploader_input.set(String::new());
-                                    submitted_uploader.set(None);
-                                    data_res.restart();
-                                },
                             }
                         }
                     }
@@ -307,204 +348,6 @@ pub fn SearchPage() -> Element {
                 p { class: "error", "Error: {e}" }
             } else {
                 p { "Loading search results..." }
-            }
-        }
-    }
-}
-
-#[component]
-fn SearchTorrentRow(
-    torrent: SearchTorrent,
-    mut status_msg: Signal<Option<(String, bool)>>,
-    on_refresh: EventHandler<()>,
-    on_filter: EventHandler<(String, String)>,
-) -> Element {
-    let mam_id = torrent.mam_id;
-    let uploaded_parts = torrent
-        .uploaded_at
-        .split_once(' ')
-        .map(|(d, t)| (d.to_string(), t.to_string()));
-
-    rsx! {
-        div { class: "TorrentRow",
-            div { class: "category", grid_area: "category",
-                if let Some(src) = media_icon_src(torrent.mediatype_id, torrent.main_cat_id) {
-                    img {
-                        class: "media-icon",
-                        src: "{src}",
-                        alt: "{torrent.media_type}",
-                        title: "{torrent.media_type}",
-                    }
-                } else if let Some(cat_id) = torrent.cat_icon_id {
-                    img {
-                        src: "/assets/icons/cats/{cat_id}_b.png",
-                        alt: "{torrent.media_type}",
-                        title: "{torrent.media_type}",
-                    }
-                } else {
-                    span { class: "faint", "{torrent.media_type}" }
-                }
-            }
-            div { class: "icons", grid_area: "icons",
-                if torrent.is_selected {
-                    span { class: "pill", "Queued" }
-                } else if torrent.is_downloaded {
-                    span { class: "pill", "Downloaded" }
-                } else {
-                    SimpleDownloadButtons {
-                        mam_id,
-                        can_wedge: torrent.can_wedge,
-                        disabled: false,
-                        mode: DownloadButtonMode::Compact,
-                        on_status: move |(msg, is_error)| {
-                            status_msg.set(Some((msg, is_error)));
-                        },
-                        on_refresh: move |_| {
-                            on_refresh.call(());
-                        },
-                    }
-                }
-            }
-            div { class: "main", grid_area: "main",
-                div {
-                    if torrent.lang_code != "ENG" {
-                        span { class: "faint", "[{torrent.lang_code}] " }
-                    }
-                    a { href: "/dioxus/torrents/{mam_id}",
-                        b { "{torrent.title}" }
-                    }
-                    if let Some(edition) = &torrent.edition {
-                        i { class: "faint", " {edition}" }
-                    }
-                }
-                if !torrent.authors.is_empty() {
-                    div { class: "icon-row",
-                        "by "
-                        for (i , author) in torrent.authors.iter().enumerate() {
-                            if i > 0 {
-                                ", "
-                            }
-                            button {
-                                class: "filter-link",
-                                onclick: {
-                                    let query = search_filter_query("author", author);
-                                    move |_| on_filter.call((query.clone(), String::new()))
-                                },
-                                "{author}"
-                            }
-                        }
-                    }
-                }
-                if !torrent.narrators.is_empty() {
-                    div { class: "icon-row",
-                        "narrated by "
-                        for (i , narrator) in torrent.narrators.iter().enumerate() {
-                            if i > 0 {
-                                ", "
-                            }
-                            button {
-                                class: "filter-link",
-                                onclick: {
-                                    let query = search_filter_query("narrator", narrator);
-                                    move |_| on_filter.call((query.clone(), String::new()))
-                                },
-                                "{narrator}"
-                            }
-                        }
-                    }
-                }
-                if !torrent.series.is_empty() {
-                    div { class: "icon-row",
-                        "series "
-                        for (i , series) in torrent.series.iter().enumerate() {
-                            if i > 0 {
-                                ", "
-                            }
-                            button {
-                                class: "filter-link",
-                                onclick: {
-                                    let query = search_filter_query("series", &series.name);
-                                    move |_| on_filter.call((query.clone(), "series".to_string()))
-                                },
-                                if series.entries.is_empty() {
-                                    "{series.name}"
-                                } else {
-                                    "{series.name} ({series.entries})"
-                                }
-                            }
-                        }
-                    }
-                }
-                if !torrent.tags.is_empty() {
-                    div {
-                        i { "{torrent.tags}" }
-                    }
-                }
-                div { class: "faint",
-                    "{torrent.filetypes.join(\", \")}"
-                    if let Some(duration) = &torrent.media_duration {
-                        " | {duration}"
-                    }
-                    if let Some(format) = &torrent.media_format {
-                        " | {format}"
-                    }
-                    if let Some(bitrate) = &torrent.audio_bitrate {
-                        " | {bitrate}"
-                    }
-                    " | {torrent.comments} comments"
-                }
-                if torrent.old_category.is_some() || !torrent.categories.is_empty() {
-                    div { class: "CategoryPills",
-                        if let Some(old_category) = &torrent.old_category {
-                            span { class: "CategoryPill old", "{old_category}" }
-                        }
-                        for category in &torrent.categories {
-                            if torrent.old_category.as_ref() != Some(category) {
-                                span { class: "CategoryPill", "{category}" }
-                            }
-                        }
-                    }
-                }
-            }
-            div { class: "files", grid_area: "files",
-                span { "{torrent.num_files}" }
-                span { "{torrent.size}" }
-                span { "{torrent.filetypes.first().map(|t| t.as_str()).unwrap_or_default()}" }
-            }
-            div { class: "uploaded", grid_area: "uploaded",
-                if let Some((date, time)) = uploaded_parts {
-                    span { "{date}" }
-                    span { "{time}" }
-                } else {
-                    span { "{torrent.uploaded_at}" }
-                }
-                span { "{torrent.owner_name}" }
-            }
-            div { class: "stats", grid_area: "stats",
-                span { class: "icon-row",
-                    "{torrent.seeders}"
-                    img {
-                        alt: "seeders",
-                        title: "Seeders",
-                        src: "/assets/icons/upBig3.png",
-                    }
-                }
-                span { class: "icon-row",
-                    "{torrent.leechers}"
-                    img {
-                        alt: "leechers",
-                        title: "Leechers",
-                        src: "/assets/icons/downBig3.png",
-                    }
-                }
-                span { class: "icon-row",
-                    "{torrent.snatches}"
-                    img {
-                        alt: "snatches",
-                        title: "Snatches",
-                        src: "/assets/icons/snatched.png",
-                    }
-                }
             }
         }
     }

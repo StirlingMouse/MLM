@@ -38,6 +38,7 @@ pub fn Pagination(props: PaginationProps) -> Element {
             if num_pages > max_pages {
                 button {
                     r#type: "button",
+                    "aria-label": "First page",
                     class: if current_page == 1 { "disabled" },
                     disabled: current_page == 1,
                     onclick: move |_| {
@@ -50,6 +51,7 @@ pub fn Pagination(props: PaginationProps) -> Element {
             }
             button {
                 r#type: "button",
+                "aria-label": "Previous page",
                 class: if current_page == 1 { "disabled" },
                 disabled: current_page == 1,
                 onclick: move |_| {
@@ -77,6 +79,7 @@ pub fn Pagination(props: PaginationProps) -> Element {
             }
             button {
                 r#type: "button",
+                "aria-label": "Next page",
                 class: if current_page == num_pages { "disabled" },
                 disabled: current_page == num_pages,
                 onclick: move |_| {
@@ -91,6 +94,7 @@ pub fn Pagination(props: PaginationProps) -> Element {
             if num_pages > max_pages {
                 button {
                     r#type: "button",
+                    "aria-label": "Last page",
                     class: if current_page == num_pages { "disabled" },
                     disabled: current_page == num_pages,
                     onclick: move |_| {

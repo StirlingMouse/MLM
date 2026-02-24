@@ -37,8 +37,19 @@ async fn server_main() {
     mlm_db::migrate(&db).expect("Failed to migrate database");
     let db = Arc::new(db);
 
-    let config_file = std::path::PathBuf::from("config.toml");
-    let config: mlm_core::config::Config = if config_file.exists() {
+    let config_file = std::env::var_os("MLM_CONFIG_FILE")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            [
+                std::path::PathBuf::from("config.toml"),
+                std::path::PathBuf::from("../config.toml"),
+                std::path::PathBuf::from("config/config.toml"),
+                std::path::PathBuf::from("../config/config.toml"),
+            ]
+            .into_iter()
+            .find(|path| path.exists())
+        });
+    let config: mlm_core::config::Config = if let Some(config_file) = config_file {
         use figment::{
             Figment,
             providers::{Format, Toml},
@@ -48,7 +59,9 @@ async fn server_main() {
             .extract()
             .expect("Failed to load config")
     } else {
-        tracing::warn!("No config.toml found, using defaults");
+        tracing::warn!(
+            "No config.toml found (checked MLM_CONFIG_FILE, config.toml, ../config.toml, config/config.toml, ../config/config.toml); using defaults"
+        );
         mlm_core::config::Config::default()
     };
     let config = Arc::new(config);
