@@ -1,18 +1,18 @@
 use std::collections::BTreeSet;
 
 use crate::components::{
-    ActiveFilterChip, ActiveFilters, TorrentGridTable, apply_click_filter, build_query_string,
+    ActiveFilterChip, ActiveFilters, FilterLink, TorrentGridTable, build_query_string,
     encode_query_enum, parse_location_query_pairs, parse_query_enum, set_location_query_string,
 };
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "server")]
-use crate::error::OptionIntoServerFnError;
+use crate::error::IntoServerFnError;
 #[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
 #[cfg(feature = "server")]
-use mlm_core::{Context, ContextExt};
+use mlm_core::ContextExt;
 #[cfg(feature = "server")]
 use mlm_db::{DatabaseExt as _, ErroredTorrent, ErroredTorrentId, ErroredTorrentKey, ids};
 
@@ -53,21 +53,17 @@ pub async fn get_errors_data(
     asc: bool,
     filters: Vec<(ErrorsPageFilter, String)>,
 ) -> Result<ErrorsData, ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
 
     let mut errors = context
         .db()
         .r_transaction()
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err()?
         .scan()
         .secondary::<ErroredTorrent>(ErroredTorrentKey::created_at)
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err()?
         .all()
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err()?
         .rev()
         .filter_map(Result::ok)
         .filter(|t| {
@@ -97,37 +93,23 @@ pub async fn get_errors_data(
 
 #[server]
 pub async fn remove_errors_action(error_ids: Vec<String>) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
     if error_ids.is_empty() {
         return Err(ServerFnError::new("No errors selected"));
     }
 
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
 
-    let (_guard, rw) = context
-        .db()
-        .rw_async()
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let (_guard, rw) = context.db().rw_async().await.server_err()?;
 
     for error_id in error_ids {
-        let id = serde_json::from_str::<ErroredTorrentId>(&error_id)
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
-        let Some(error) = rw
-            .get()
-            .primary::<ErroredTorrent>(id)
-            .map_err(|e| ServerFnError::new(e.to_string()))?
-        else {
+        let id = serde_json::from_str::<ErroredTorrentId>(&error_id).server_err()?;
+        let Some(error) = rw.get().primary::<ErroredTorrent>(id).server_err()? else {
             continue;
         };
-        rw.remove(error)
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        rw.remove(error).server_err()?;
     }
 
-    rw.commit().map_err(|e| ServerFnError::new(e.to_string()))?;
+    rw.commit().server_err()?;
     Ok(())
 }
 
@@ -163,14 +145,14 @@ fn filter_name(filter: ErrorsPageFilter) -> &'static str {
 }
 
 #[derive(Clone, Default)]
-struct LegacyQueryState {
+struct PageQueryState {
     sort: Option<ErrorsPageSort>,
     asc: bool,
     filters: Vec<(ErrorsPageFilter, String)>,
 }
 
-fn parse_legacy_query_state() -> LegacyQueryState {
-    let mut state = LegacyQueryState::default();
+fn parse_query_state() -> PageQueryState {
+    let mut state = PageQueryState::default();
     for (key, value) in parse_location_query_pairs() {
         match key.as_str() {
             "sort_by" => state.sort = parse_query_enum::<ErrorsPageSort>(&value),
@@ -185,7 +167,7 @@ fn parse_legacy_query_state() -> LegacyQueryState {
     state
 }
 
-fn build_legacy_query_string(
+fn build_query_url(
     sort: Option<ErrorsPageSort>,
     asc: bool,
     filters: &[(ErrorsPageFilter, String)],
@@ -207,11 +189,12 @@ fn build_legacy_query_string(
 
 #[component]
 pub fn ErrorsPage() -> Element {
-    let initial_state = parse_legacy_query_state();
+    let _route: crate::app::Route = use_route();
+    let initial_state = parse_query_state();
     let initial_sort = initial_state.sort;
     let initial_asc = initial_state.asc;
     let initial_filters = initial_state.filters.clone();
-    let initial_request_key = build_legacy_query_string(
+    let initial_request_key = build_query_url(
         initial_state.sort,
         initial_state.asc,
         &initial_state.filters,
@@ -219,7 +202,7 @@ pub fn ErrorsPage() -> Element {
 
     let sort = use_signal(move || initial_sort);
     let asc = use_signal(move || initial_asc);
-    let mut filters = use_signal(move || initial_filters.clone());
+    let filters = use_signal(move || initial_filters.clone());
     let mut selected = use_signal(BTreeSet::<String>::new);
     let mut status_msg = use_signal(|| None::<(String, bool)>);
     let mut cached = use_signal(|| None::<ErrorsData>);
@@ -244,6 +227,22 @@ pub fn ErrorsPage() -> Element {
     let pending = errors_data.pending();
 
     {
+        let route_state = parse_query_state();
+        let route_request_key =
+            build_query_url(route_state.sort, route_state.asc, &route_state.filters);
+        if *last_request_key.read() != route_request_key {
+            let mut sort = sort;
+            let mut asc = asc;
+            let mut filters_signal = filters;
+            sort.set(route_state.sort);
+            asc.set(route_state.asc);
+            filters_signal.set(route_state.filters);
+            last_request_key.set(route_request_key);
+            errors_data.restart();
+        }
+    }
+
+    {
         let value = value.read();
         if let Some(Ok(data)) = &*value {
             cached.set(Some(data.clone()));
@@ -262,7 +261,7 @@ pub fn ErrorsPage() -> Element {
         let sort = *sort.read();
         let asc = *asc.read();
         let filters = filters.read().clone();
-        let query_string = build_legacy_query_string(sort, asc, &filters);
+        let query_string = build_query_url(sort, asc, &filters);
         let should_restart = *last_request_key.read() != query_string;
         if should_restart {
             last_request_key.set(query_string.clone());
@@ -459,24 +458,16 @@ pub fn ErrorsPage() -> Element {
                                             }
                                         }
                                         div {
-                                            button {
-                                                r#type: "button",
-                                                class: "link",
-                                                onclick: {
-                                                    let value = error.step.clone();
-                                                    move |_| apply_click_filter(&mut filters, ErrorsPageFilter::Step, value.clone())
-                                                },
+                                            FilterLink {
+                                                field: ErrorsPageFilter::Step,
+                                                value: error.step.clone(),
                                                 "{error.step}"
                                             }
                                         }
                                         div {
-                                            button {
-                                                r#type: "button",
-                                                class: "link",
-                                                onclick: {
-                                                    let value = error.title.clone();
-                                                    move |_| apply_click_filter(&mut filters, ErrorsPageFilter::Title, value.clone())
-                                                },
+                                            FilterLink {
+                                                field: ErrorsPageFilter::Title,
+                                                value: error.title.clone(),
                                                 "{error.title}"
                                             }
                                         }

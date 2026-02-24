@@ -3,19 +3,19 @@ use std::collections::BTreeSet;
 use std::str::FromStr;
 
 use crate::components::{
-    ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, TorrentGridTable,
-    apply_click_filter, build_query_string, encode_query_enum, parse_location_query_pairs,
-    parse_query_enum, set_location_query_string,
+    ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, FilterLink, PageColumns,
+    SortHeader, TorrentGridTable, build_query_string, encode_query_enum, flag_icon,
+    parse_location_query_pairs, parse_query_enum, set_location_query_string,
 };
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "server")]
-use crate::error::OptionIntoServerFnError;
+use crate::error::IntoServerFnError;
 #[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
 #[cfg(feature = "server")]
-use mlm_core::{Context, ContextExt};
+use mlm_core::ContextExt;
 #[cfg(feature = "server")]
 use mlm_db::{DatabaseExt as _, Flags, Language, OldCategory, SelectedTorrent, Timestamp};
 
@@ -129,6 +129,40 @@ impl SelectedPageColumns {
         cols.push("44px");
         cols.join(" ")
     }
+
+    pub fn get(self, col: SelectedColumn) -> bool {
+        match col {
+            SelectedColumn::Category => self.category,
+            SelectedColumn::Flags => self.flags,
+            SelectedColumn::Authors => self.authors,
+            SelectedColumn::Narrators => self.narrators,
+            SelectedColumn::Series => self.series,
+            SelectedColumn::Language => self.language,
+            SelectedColumn::Size => self.size,
+            SelectedColumn::Filetypes => self.filetypes,
+            SelectedColumn::Grabber => self.grabber,
+            SelectedColumn::CreatedAt => self.created_at,
+            SelectedColumn::StartedAt => self.started_at,
+            SelectedColumn::RemovedAt => self.removed_at,
+        }
+    }
+
+    pub fn set(&mut self, col: SelectedColumn, enabled: bool) {
+        match col {
+            SelectedColumn::Category => self.category = enabled,
+            SelectedColumn::Flags => self.flags = enabled,
+            SelectedColumn::Authors => self.authors = enabled,
+            SelectedColumn::Narrators => self.narrators = enabled,
+            SelectedColumn::Series => self.series = enabled,
+            SelectedColumn::Language => self.language = enabled,
+            SelectedColumn::Size => self.size = enabled,
+            SelectedColumn::Filetypes => self.filetypes = enabled,
+            SelectedColumn::Grabber => self.grabber = enabled,
+            SelectedColumn::CreatedAt => self.created_at = enabled,
+            SelectedColumn::StartedAt => self.started_at = enabled,
+            SelectedColumn::RemovedAt => self.removed_at = enabled,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -211,22 +245,18 @@ pub async fn get_selected_data(
     filters: Vec<(SelectedPageFilter, String)>,
     show: SelectedPageColumns,
 ) -> Result<SelectedData, ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     let config = context.config().await;
 
     let mut torrents = context
         .db()
         .r_transaction()
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err()?
         .scan()
         .primary::<SelectedTorrent>()
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err()?
         .all()
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err()?
         .filter_map(Result::ok)
         .filter(|t| show.removed_at || t.removed_at.is_none())
         .filter(|t| {
@@ -317,12 +347,12 @@ pub async fn get_selected_data(
     let downloading_size: f64 = context
         .db()
         .r_transaction()
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err()?
         .scan()
         .primary::<SelectedTorrent>()
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err()?
         .all()
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err()?
         .filter_map(Result::ok)
         .filter(|t| t.removed_at.is_none() && t.started_at.is_some())
         .map(|t| t.meta.size.bytes() as f64)
@@ -363,62 +393,41 @@ pub async fn apply_selected_action(
     mam_ids: Vec<u64>,
     unsats: Option<u64>,
 ) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
     if mam_ids.is_empty() {
         return Err(ServerFnError::new("No torrents selected"));
     }
 
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
 
     match action {
         SelectedBulkAction::Remove => {
-            let (_guard, rw) = context
-                .db()
-                .rw_async()
-                .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            let (_guard, rw) = context.db().rw_async().await.server_err()?;
             for mam_id in mam_ids {
-                let Some(mut torrent) = rw
-                    .get()
-                    .primary::<SelectedTorrent>(mam_id)
-                    .map_err(|e| ServerFnError::new(e.to_string()))?
+                let Some(mut torrent) = rw.get().primary::<SelectedTorrent>(mam_id).server_err()?
                 else {
                     continue;
                 };
                 if torrent.removed_at.is_none() {
                     torrent.removed_at = Some(Timestamp::now());
-                    rw.upsert(torrent)
-                        .map_err(|e| ServerFnError::new(e.to_string()))?;
+                    rw.upsert(torrent).server_err()?;
                 } else {
-                    rw.remove(torrent)
-                        .map_err(|e| ServerFnError::new(e.to_string()))?;
+                    rw.remove(torrent).server_err()?;
                 }
             }
-            rw.commit().map_err(|e| ServerFnError::new(e.to_string()))?;
+            rw.commit().server_err()?;
         }
         SelectedBulkAction::Update => {
-            let (_guard, rw) = context
-                .db()
-                .rw_async()
-                .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            let (_guard, rw) = context.db().rw_async().await.server_err()?;
             for mam_id in mam_ids {
-                let Some(mut torrent) = rw
-                    .get()
-                    .primary::<SelectedTorrent>(mam_id)
-                    .map_err(|e| ServerFnError::new(e.to_string()))?
+                let Some(mut torrent) = rw.get().primary::<SelectedTorrent>(mam_id).server_err()?
                 else {
                     continue;
                 };
                 torrent.unsat_buffer = Some(unsats.unwrap_or_default());
                 torrent.removed_at = None;
-                rw.upsert(torrent)
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                rw.upsert(torrent).server_err()?;
             }
-            rw.commit().map_err(|e| ServerFnError::new(e.to_string()))?;
+            rw.commit().server_err()?;
         }
     }
 
@@ -486,21 +495,6 @@ fn convert_selected_row(t: &SelectedTorrent, default_unsat: u64) -> SelectedRow 
     }
 }
 
-fn flag_icon(flag: &str) -> Option<(&'static str, &'static str)> {
-    match flag {
-        "language" => Some(("/assets/icons/language.png", "Crude Language")),
-        "violence" => Some(("/assets/icons/hand.png", "Violence")),
-        "some_explicit" => Some((
-            "/assets/icons/lipssmall.png",
-            "Some Sexually Explicit Content",
-        )),
-        "explicit" => Some(("/assets/icons/flames.png", "Sexually Explicit Content")),
-        "abridged" => Some(("/assets/icons/abridged.png", "Abridged")),
-        "lgbt" => Some(("/assets/icons/lgbt.png", "LGBT")),
-        _ => None,
-    }
-}
-
 fn filter_name(filter: SelectedPageFilter) -> &'static str {
     match filter {
         SelectedPageFilter::Kind => "Type",
@@ -517,97 +511,99 @@ fn filter_name(filter: SelectedPageFilter) -> &'static str {
     }
 }
 
-fn show_to_query_value(show: SelectedPageColumns) -> String {
-    let mut values = Vec::new();
-    if show.category {
-        values.push("category");
-    }
-    if show.flags {
-        values.push("flags");
-    }
-    if show.authors {
-        values.push("author");
-    }
-    if show.narrators {
-        values.push("narrator");
-    }
-    if show.series {
-        values.push("series");
-    }
-    if show.language {
-        values.push("language");
-    }
-    if show.size {
-        values.push("size");
-    }
-    if show.filetypes {
-        values.push("filetype");
-    }
-    if show.grabber {
-        values.push("grabber");
-    }
-    if show.created_at {
-        values.push("created_at");
-    }
-    if show.started_at {
-        values.push("started_at");
-    }
-    if show.removed_at {
-        values.push("removed_at");
-    }
-    values.join(",")
-}
-
-fn show_from_query_value(value: &str) -> SelectedPageColumns {
-    let mut show = SelectedPageColumns {
-        category: false,
-        flags: false,
-        authors: false,
-        narrators: false,
-        series: false,
-        language: false,
-        size: false,
-        filetypes: false,
-        grabber: false,
-        created_at: false,
-        started_at: false,
-        removed_at: false,
-    };
-    for item in value.split(',') {
-        match item {
-            "category" => show.category = true,
-            "flags" => show.flags = true,
-            "author" => show.authors = true,
-            "narrator" => show.narrators = true,
-            "series" => show.series = true,
-            "language" => show.language = true,
-            "size" => show.size = true,
-            "filetype" => show.filetypes = true,
-            "grabber" => show.grabber = true,
-            "created_at" => show.created_at = true,
-            "started_at" => show.started_at = true,
-            "removed_at" => show.removed_at = true,
-            _ => {}
+impl PageColumns for SelectedPageColumns {
+    fn to_query_value(&self) -> String {
+        let mut values = Vec::new();
+        if self.category {
+            values.push("category");
         }
+        if self.flags {
+            values.push("flags");
+        }
+        if self.authors {
+            values.push("author");
+        }
+        if self.narrators {
+            values.push("narrator");
+        }
+        if self.series {
+            values.push("series");
+        }
+        if self.language {
+            values.push("language");
+        }
+        if self.size {
+            values.push("size");
+        }
+        if self.filetypes {
+            values.push("filetype");
+        }
+        if self.grabber {
+            values.push("grabber");
+        }
+        if self.created_at {
+            values.push("created_at");
+        }
+        if self.started_at {
+            values.push("started_at");
+        }
+        if self.removed_at {
+            values.push("removed_at");
+        }
+        values.join(",")
     }
-    show
+
+    fn from_query_value(value: &str) -> Self {
+        let mut show = SelectedPageColumns {
+            category: false,
+            flags: false,
+            authors: false,
+            narrators: false,
+            series: false,
+            language: false,
+            size: false,
+            filetypes: false,
+            grabber: false,
+            created_at: false,
+            started_at: false,
+            removed_at: false,
+        };
+        for item in value.split(',') {
+            match item {
+                "category" => show.category = true,
+                "flags" => show.flags = true,
+                "author" => show.authors = true,
+                "narrator" => show.narrators = true,
+                "series" => show.series = true,
+                "language" => show.language = true,
+                "size" => show.size = true,
+                "filetype" => show.filetypes = true,
+                "grabber" => show.grabber = true,
+                "created_at" => show.created_at = true,
+                "started_at" => show.started_at = true,
+                "removed_at" => show.removed_at = true,
+                _ => {}
+            }
+        }
+        show
+    }
 }
 
 #[derive(Clone, Default)]
-struct LegacyQueryState {
+struct PageQueryState {
     sort: Option<SelectedPageSort>,
     asc: bool,
     filters: Vec<(SelectedPageFilter, String)>,
     show: SelectedPageColumns,
 }
 
-fn parse_legacy_query_state() -> LegacyQueryState {
-    let mut state = LegacyQueryState::default();
+fn parse_query_state() -> PageQueryState {
+    let mut state = PageQueryState::default();
     for (key, value) in parse_location_query_pairs() {
         match key.as_str() {
             "sort_by" => state.sort = parse_query_enum::<SelectedPageSort>(&value),
             "asc" => state.asc = value == "true",
-            "show" => state.show = show_from_query_value(&value),
+            "show" => state.show = SelectedPageColumns::from_query_value(&value),
             _ => {
                 if let Some(field) = parse_query_enum::<SelectedPageFilter>(&key) {
                     state.filters.push((field, value));
@@ -618,7 +614,7 @@ fn parse_legacy_query_state() -> LegacyQueryState {
     state
 }
 
-fn build_legacy_query_string(
+fn build_query_url(
     sort: Option<SelectedPageSort>,
     asc: bool,
     filters: &[(SelectedPageFilter, String)],
@@ -632,7 +628,7 @@ fn build_legacy_query_string(
         params.push(("asc".to_string(), "true".to_string()));
     }
     if show != SelectedPageColumns::default() {
-        params.push(("show".to_string(), show_to_query_value(show)));
+        params.push(("show".to_string(), show.to_query_value()));
     }
     for (field, value) in filters {
         if let Some(name) = encode_query_enum(*field) {
@@ -673,48 +669,15 @@ const COLUMN_OPTIONS: &[(SelectedColumn, &str)] = &[
     (SelectedColumn::RemovedAt, "Removed At"),
 ];
 
-fn column_enabled(show: SelectedPageColumns, column: SelectedColumn) -> bool {
-    match column {
-        SelectedColumn::Category => show.category,
-        SelectedColumn::Flags => show.flags,
-        SelectedColumn::Authors => show.authors,
-        SelectedColumn::Narrators => show.narrators,
-        SelectedColumn::Series => show.series,
-        SelectedColumn::Language => show.language,
-        SelectedColumn::Size => show.size,
-        SelectedColumn::Filetypes => show.filetypes,
-        SelectedColumn::Grabber => show.grabber,
-        SelectedColumn::CreatedAt => show.created_at,
-        SelectedColumn::StartedAt => show.started_at,
-        SelectedColumn::RemovedAt => show.removed_at,
-    }
-}
-
-fn set_column_enabled(show: &mut SelectedPageColumns, column: SelectedColumn, enabled: bool) {
-    match column {
-        SelectedColumn::Category => show.category = enabled,
-        SelectedColumn::Flags => show.flags = enabled,
-        SelectedColumn::Authors => show.authors = enabled,
-        SelectedColumn::Narrators => show.narrators = enabled,
-        SelectedColumn::Series => show.series = enabled,
-        SelectedColumn::Language => show.language = enabled,
-        SelectedColumn::Size => show.size = enabled,
-        SelectedColumn::Filetypes => show.filetypes = enabled,
-        SelectedColumn::Grabber => show.grabber = enabled,
-        SelectedColumn::CreatedAt => show.created_at = enabled,
-        SelectedColumn::StartedAt => show.started_at = enabled,
-        SelectedColumn::RemovedAt => show.removed_at = enabled,
-    }
-}
-
 #[component]
 pub fn SelectedPage() -> Element {
-    let initial_state = parse_legacy_query_state();
+    let _route: crate::app::Route = use_route();
+    let initial_state = parse_query_state();
     let initial_sort = initial_state.sort;
     let initial_asc = initial_state.asc;
     let initial_filters = initial_state.filters.clone();
     let initial_show = initial_state.show;
-    let initial_request_key = build_legacy_query_string(
+    let initial_request_key = build_query_url(
         initial_state.sort,
         initial_state.asc,
         &initial_state.filters,
@@ -723,7 +686,8 @@ pub fn SelectedPage() -> Element {
 
     let sort = use_signal(move || initial_sort);
     let asc = use_signal(move || initial_asc);
-    let mut filters = use_signal(move || initial_filters.clone());
+    let from = use_signal(|| 0usize);
+    let filters = use_signal(move || initial_filters.clone());
     let show = use_signal(move || initial_show);
     let mut selected = use_signal(BTreeSet::<u64>::new);
     let mut unsats_input = use_signal(|| "1".to_string());
@@ -749,6 +713,30 @@ pub fn SelectedPage() -> Element {
         .unwrap_or(true);
     let value = selected_data.as_ref().map(|resource| resource.value());
 
+    {
+        let route_state = parse_query_state();
+        let route_request_key = build_query_url(
+            route_state.sort,
+            route_state.asc,
+            &route_state.filters,
+            route_state.show,
+        );
+        if *last_request_key.read() != route_request_key {
+            let mut sort = sort;
+            let mut asc = asc;
+            let mut filters_signal = filters;
+            let mut show = show;
+            sort.set(route_state.sort);
+            asc.set(route_state.asc);
+            filters_signal.set(route_state.filters);
+            show.set(route_state.show);
+            last_request_key.set(route_request_key);
+            if let Some(resource) = selected_data.as_mut() {
+                resource.restart();
+            }
+        }
+    }
+
     if let Some(value) = &value {
         let value = value.read();
         if let Some(Ok(data)) = &*value {
@@ -769,7 +757,7 @@ pub fn SelectedPage() -> Element {
     };
 
     use_effect(move || {
-        let query_string = build_legacy_query_string(
+        let query_string = build_query_url(
             *sort.read(),
             *asc.read(),
             &filters.read().clone(),
@@ -785,41 +773,10 @@ pub fn SelectedPage() -> Element {
         }
     });
 
-    let sort_header = |label: &'static str, key: SelectedPageSort| {
-        let active = *sort.read() == Some(key);
-        let arrow = if active {
-            if *asc.read() { "↑" } else { "↓" }
-        } else {
-            ""
-        };
-        rsx! {
-            div { class: "header",
-                button {
-                    r#type: "button",
-                    class: "link",
-                    onclick: {
-                        let mut sort = sort;
-                        let mut asc = asc;
-                        move |_| {
-                            if *sort.read() == Some(key) {
-                                let next_asc = !*asc.read();
-                                asc.set(next_asc);
-                            } else {
-                                sort.set(Some(key));
-                                asc.set(false);
-                            }
-                        }
-                    },
-                    "{label}{arrow}"
-                }
-            }
-        }
-    };
-
     let column_options = COLUMN_OPTIONS
         .iter()
         .map(|(column, label)| {
-            let checked = column_enabled(*show.read(), *column);
+            let checked = show.read().get(*column);
             let column = *column;
             ColumnToggleOption {
                 label,
@@ -828,7 +785,7 @@ pub fn SelectedPage() -> Element {
                     let mut show = show;
                     move |enabled| {
                         let mut next = *show.read();
-                        set_column_enabled(&mut next, column, enabled);
+                        next.set(column, enabled);
                         show.set(next);
                     }
                 }),
@@ -1030,39 +987,39 @@ pub fn SelectedPage() -> Element {
                                             },
                                         }
                                     }
-                                    {sort_header("Type", SelectedPageSort::Kind)}
+                                    SortHeader { label: "Type", sort_key: SelectedPageSort::Kind, sort, asc, from }
                                     if show.read().flags {
                                         div { class: "header", "Flags" }
                                     }
-                                    {sort_header("Title", SelectedPageSort::Title)}
+                                    SortHeader { label: "Title", sort_key: SelectedPageSort::Title, sort, asc, from }
                                     if show.read().authors {
-                                        {sort_header("Authors", SelectedPageSort::Authors)}
+                                        SortHeader { label: "Authors", sort_key: SelectedPageSort::Authors, sort, asc, from }
                                     }
                                     if show.read().narrators {
-                                        {sort_header("Narrators", SelectedPageSort::Narrators)}
+                                        SortHeader { label: "Narrators", sort_key: SelectedPageSort::Narrators, sort, asc, from }
                                     }
                                     if show.read().series {
-                                        {sort_header("Series", SelectedPageSort::Series)}
+                                        SortHeader { label: "Series", sort_key: SelectedPageSort::Series, sort, asc, from }
                                     }
                                     if show.read().language {
-                                        {sort_header("Language", SelectedPageSort::Language)}
+                                        SortHeader { label: "Language", sort_key: SelectedPageSort::Language, sort, asc, from }
                                     }
                                     if show.read().size {
-                                        {sort_header("Size", SelectedPageSort::Size)}
+                                        SortHeader { label: "Size", sort_key: SelectedPageSort::Size, sort, asc, from }
                                     }
                                     if show.read().filetypes {
                                         div { class: "header", "Filetypes" }
                                     }
-                                    {sort_header("Cost", SelectedPageSort::Cost)}
-                                    {sort_header("Required Unsats", SelectedPageSort::Buffer)}
+                                    SortHeader { label: "Cost", sort_key: SelectedPageSort::Cost, sort, asc, from }
+                                    SortHeader { label: "Required Unsats", sort_key: SelectedPageSort::Buffer, sort, asc, from }
                                     if show.read().grabber {
-                                        {sort_header("Grabber", SelectedPageSort::Grabber)}
+                                        SortHeader { label: "Grabber", sort_key: SelectedPageSort::Grabber, sort, asc, from }
                                     }
                                     if show.read().created_at {
-                                        {sort_header("Added At", SelectedPageSort::CreatedAt)}
+                                        SortHeader { label: "Added At", sort_key: SelectedPageSort::CreatedAt, sort, asc, from }
                                     }
                                     if show.read().started_at {
-                                        {sort_header("Started At", SelectedPageSort::StartedAt)}
+                                        SortHeader { label: "Started At", sort_key: SelectedPageSort::StartedAt, sort, asc, from }
                                     }
                                     if show.read().removed_at {
                                         div { class: "header", "Removed At" }
@@ -1094,26 +1051,18 @@ pub fn SelectedPage() -> Element {
                                             }
                                         }
                                         div {
-                                            button {
-                                                r#type: "button",
-                                                class: "link",
-                                                title: "{torrent.meta.cat_name}",
-                                                onclick: {
-                                                    let value = torrent.meta.media_type.clone();
-                                                    move |_| apply_click_filter(&mut filters, SelectedPageFilter::Kind, value.clone())
-                                                },
+                                            FilterLink {
+                                                field: SelectedPageFilter::Kind,
+                                                value: torrent.meta.media_type.clone(),
+                                                title: Some(torrent.meta.cat_name.clone()),
                                                 "{torrent.meta.media_type}"
                                             }
                                             if show.read().category {
                                                 if let Some(cat_id) = torrent.meta.cat_id.clone() {
                                                     div {
-                                                        button {
-                                                            r#type: "button",
-                                                            class: "link",
-                                                            onclick: {
-                                                                let cat_id = cat_id.clone();
-                                                                move |_| apply_click_filter(&mut filters, SelectedPageFilter::Category, cat_id.clone())
-                                                            },
+                                                        FilterLink {
+                                                            field: SelectedPageFilter::Category,
+                                                            value: cat_id.clone(),
                                                             "{torrent.meta.cat_name}"
                                                         }
                                                     }
@@ -1124,13 +1073,9 @@ pub fn SelectedPage() -> Element {
                                             div {
                                                 for flag in torrent.meta.flags.clone() {
                                                     if let Some((src, title)) = flag_icon(&flag) {
-                                                        button {
-                                                            r#type: "button",
-                                                            class: "link",
-                                                            onclick: {
-                                                                let flag = flag.clone();
-                                                                move |_| apply_click_filter(&mut filters, SelectedPageFilter::Flags, flag.clone())
-                                                            },
+                                                        FilterLink {
+                                                            field: SelectedPageFilter::Flags,
+                                                            value: flag.clone(),
                                                             img {
                                                                 class: "flag",
                                                                 src: "{src}",
@@ -1143,26 +1088,18 @@ pub fn SelectedPage() -> Element {
                                             }
                                         }
                                         div {
-                                            button {
-                                                r#type: "button",
-                                                class: "link",
-                                                onclick: {
-                                                    let title = torrent.meta.title.clone();
-                                                    move |_| apply_click_filter(&mut filters, SelectedPageFilter::Title, title.clone())
-                                                },
+                                            FilterLink {
+                                                field: SelectedPageFilter::Title,
+                                                value: torrent.meta.title.clone(),
                                                 "{torrent.meta.title}"
                                             }
                                         }
                                         if show.read().authors {
                                             div {
                                                 for author in torrent.meta.authors.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let author = author.clone();
-                                                            move |_| apply_click_filter(&mut filters, SelectedPageFilter::Author, author.clone())
-                                                        },
+                                                    FilterLink {
+                                                        field: SelectedPageFilter::Author,
+                                                        value: author.clone(),
                                                         "{author}"
                                                     }
                                                 }
@@ -1171,13 +1108,9 @@ pub fn SelectedPage() -> Element {
                                         if show.read().narrators {
                                             div {
                                                 for narrator in torrent.meta.narrators.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let narrator = narrator.clone();
-                                                            move |_| apply_click_filter(&mut filters, SelectedPageFilter::Narrator, narrator.clone())
-                                                        },
+                                                    FilterLink {
+                                                        field: SelectedPageFilter::Narrator,
+                                                        value: narrator.clone(),
                                                         "{narrator}"
                                                     }
                                                 }
@@ -1186,13 +1119,9 @@ pub fn SelectedPage() -> Element {
                                         if show.read().series {
                                             div {
                                                 for series in torrent.meta.series.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let series_name = series.name.clone();
-                                                            move |_| apply_click_filter(&mut filters, SelectedPageFilter::Series, series_name.clone())
-                                                        },
+                                                    FilterLink {
+                                                        field: SelectedPageFilter::Series,
+                                                        value: series.name.clone(),
                                                         if series.entries.is_empty() {
                                                             "{series.name}"
                                                         } else {
@@ -1204,13 +1133,9 @@ pub fn SelectedPage() -> Element {
                                         }
                                         if show.read().language {
                                             div {
-                                                button {
-                                                    r#type: "button",
-                                                    class: "link",
-                                                    onclick: {
-                                                        let value = torrent.meta.language.clone().unwrap_or_default();
-                                                        move |_| apply_click_filter(&mut filters, SelectedPageFilter::Language, value.clone())
-                                                    },
+                                                FilterLink {
+                                                    field: SelectedPageFilter::Language,
+                                                    value: torrent.meta.language.clone().unwrap_or_default(),
                                                     "{torrent.meta.language.clone().unwrap_or_default()}"
                                                 }
                                             }
@@ -1221,39 +1146,27 @@ pub fn SelectedPage() -> Element {
                                         if show.read().filetypes {
                                             div {
                                                 for filetype in torrent.meta.filetypes.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let filetype = filetype.clone();
-                                                            move |_| apply_click_filter(&mut filters, SelectedPageFilter::Filetype, filetype.clone())
-                                                        },
+                                                    FilterLink {
+                                                        field: SelectedPageFilter::Filetype,
+                                                        value: filetype.clone(),
                                                         "{filetype}"
                                                     }
                                                 }
                                             }
                                         }
                                         div {
-                                            button {
-                                                r#type: "button",
-                                                class: "link",
-                                                onclick: {
-                                                    let value = torrent.cost.clone();
-                                                    move |_| apply_click_filter(&mut filters, SelectedPageFilter::Cost, value.clone())
-                                                },
+                                            FilterLink {
+                                                field: SelectedPageFilter::Cost,
+                                                value: torrent.cost.clone(),
                                                 "{torrent.cost}"
                                             }
                                         }
                                         div { "{torrent.required_unsats}" }
                                         if show.read().grabber {
                                             div {
-                                                button {
-                                                    r#type: "button",
-                                                    class: "link",
-                                                    onclick: {
-                                                        let value = torrent.grabber.clone().unwrap_or_default();
-                                                        move |_| apply_click_filter(&mut filters, SelectedPageFilter::Grabber, value.clone())
-                                                    },
+                                                FilterLink {
+                                                    field: SelectedPageFilter::Grabber,
+                                                    value: torrent.grabber.clone().unwrap_or_default(),
                                                     "{torrent.grabber.clone().unwrap_or_default()}"
                                                 }
                                             }

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "server")]
 use mlm_core::{
-    Context, ContextExt, Torrent as DbTorrent, TorrentKey,
+    ContextExt, Torrent as DbTorrent, TorrentKey,
     cleaner::clean_torrent,
     linker::{refresh_mam_metadata, refresh_metadata_relink},
 };
@@ -264,11 +264,7 @@ pub async fn get_torrents_data(
     page_size: Option<usize>,
     show: TorrentsPageColumns,
 ) -> Result<TorrentsData, ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_else(|| ServerFnError::new("Context not found in extensions"))?;
+    let context = crate::error::get_context()?;
     let db = context.db();
 
     let mut from_val = from.unwrap_or(0);
@@ -493,15 +489,11 @@ pub async fn apply_torrents_action(
     action: TorrentsBulkAction,
     torrent_ids: Vec<String>,
 ) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
     if torrent_ids.is_empty() {
         return Err(ServerFnError::new("No torrents selected"));
     }
 
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_else(|| ServerFnError::new("Context not found in extensions"))?;
+    let context = crate::error::get_context()?;
 
     match action {
         TorrentsBulkAction::Clean => {

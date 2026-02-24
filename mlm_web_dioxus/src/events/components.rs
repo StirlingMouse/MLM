@@ -187,11 +187,13 @@ fn EventsHeader(
                     label { class: "active",
                         "Linker: {l} "
                         button {
+                            r#type: "button",
+                            "aria-label": "Remove linker filter",
                             onclick: move |_| {
                                 linker.set(None);
                                 from.set(0);
                             },
-                            "[x]"
+                            "×"
                         }
                     }
                 }
@@ -199,11 +201,13 @@ fn EventsHeader(
                     label { class: "active",
                         "Grabber: {g} "
                         button {
+                            r#type: "button",
+                            "aria-label": "Remove grabber filter",
                             onclick: move |_| {
                                 grabber.set(None);
                                 from.set(0);
                             },
-                            "[x]"
+                            "×"
                         }
                     }
                 }
@@ -211,11 +215,13 @@ fn EventsHeader(
                     label { class: "active",
                         "Category: {c} "
                         button {
+                            r#type: "button",
+                            "aria-label": "Remove category filter",
                             onclick: move |_| {
                                 category.set(None);
                                 from.set(0);
                             },
-                            "[x]"
+                            "×"
                         }
                     }
                 }
@@ -252,13 +258,11 @@ fn EventsTable(data: EventData, mut from: Signal<usize>, loading: bool) -> Eleme
             } else {
                 div { id: "events-list", class: "EventsTable table",
                     for item in data.events.clone() {
-                        div { "{item.event.created_at}" }
-                        div {
-                            EventContent {
-                                event: item.event,
-                                torrent: item.torrent,
-                                replacement: item.replacement
-                            }
+                        EventListItem {
+                            event: item.event,
+                            torrent: item.torrent,
+                            replacement: item.replacement,
+                            show_created_at: true,
                         }
                     }
                 }
@@ -270,6 +274,27 @@ fn EventsTable(data: EventData, mut from: Signal<usize>, loading: bool) -> Eleme
                         from.set(new_from);
                     }
                 }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn EventListItem(
+    event: Event,
+    torrent: Option<Torrent>,
+    replacement: Option<Torrent>,
+    show_created_at: bool,
+) -> Element {
+    rsx! {
+        if show_created_at {
+            div { "{event.created_at}" }
+        }
+        div {
+            EventContent {
+                event,
+                torrent,
+                replacement,
             }
         }
     }
