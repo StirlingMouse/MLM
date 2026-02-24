@@ -1,7 +1,7 @@
 mod common;
 
 use common::{MockFs, TestDb, mock_config};
-use mlm_core::linker::folder::link_folders_to_library;
+use mlm::linker::folder::link_folders_to_library;
 use mlm_db::{DatabaseExt, Torrent};
 use std::{fs, sync::Arc};
 
@@ -9,7 +9,10 @@ use std::{fs, sync::Arc};
 async fn test_link_folders_to_library() -> anyhow::Result<()> {
     let test_db = TestDb::new()?;
     let mock_fs = MockFs::new()?;
-    let config = Arc::new(mock_config(mock_fs.rip_dir.clone(), mock_fs.library_dir.clone()));
+    let config = Arc::new(mock_config(
+        mock_fs.rip_dir.clone(),
+        mock_fs.library_dir.clone(),
+    ));
 
     mock_fs.create_libation_folder("B00TEST1", "Test Book 1", vec!["Author 1"])?;
 
@@ -22,7 +25,7 @@ async fn test_link_folders_to_library() -> anyhow::Result<()> {
     assert_eq!(torrent.meta.title, "Test Book 1");
     assert_eq!(torrent.meta.authors, vec!["Author 1"]);
     assert!(torrent.library_path.is_some());
-    
+
     // Check if files were created in library
     let expected_dir = mock_fs.library_dir.join("Author 1").join("Test Book 1");
     assert!(expected_dir.exists());
@@ -36,7 +39,10 @@ async fn test_link_folders_to_library() -> anyhow::Result<()> {
 async fn test_link_folders_to_library_duplicate_skipping() -> anyhow::Result<()> {
     let test_db = TestDb::new()?;
     let mock_fs = MockFs::new()?;
-    let config = Arc::new(mock_config(mock_fs.rip_dir.clone(), mock_fs.library_dir.clone()));
+    let config = Arc::new(mock_config(
+        mock_fs.rip_dir.clone(),
+        mock_fs.library_dir.clone(),
+    ));
 
     // Create a better version already in the DB
     let existing = common::MockTorrentBuilder::new("MAM123", "Test Book 1")
@@ -45,7 +51,7 @@ async fn test_link_folders_to_library_duplicate_skipping() -> anyhow::Result<()>
         .with_author("Author 1")
         .with_language(mlm_db::Language::English)
         .build();
-    
+
     {
         let (_guard, rw) = test_db.db.rw_async().await?;
         rw.insert(existing)?;
@@ -71,7 +77,7 @@ async fn test_link_folders_to_library_filter_size_too_small() -> anyhow::Result<
     let test_db = TestDb::new()?;
     let mock_fs = MockFs::new()?;
     let mut config = mock_config(mock_fs.rip_dir.clone(), mock_fs.library_dir.clone());
-    
+
     if let mlm::config::Library::ByRipDir(ref mut l) = config.libraries[0] {
         l.filter.min_size = mlm_db::Size::from_bytes(100); // Libation folder is 15 bytes
     }
@@ -83,7 +89,10 @@ async fn test_link_folders_to_library_filter_size_too_small() -> anyhow::Result<
 
     let r = test_db.db.r_transaction()?;
     let torrent: Option<Torrent> = r.get().primary("B00TEST1".to_string())?;
-    assert!(torrent.is_none(), "Should have been skipped due to size filter");
+    assert!(
+        torrent.is_none(),
+        "Should have been skipped due to size filter"
+    );
 
     Ok(())
 }
@@ -93,7 +102,7 @@ async fn test_link_folders_to_library_filter_media_type_mismatch() -> anyhow::Re
     let test_db = TestDb::new()?;
     let mock_fs = MockFs::new()?;
     let mut config = mock_config(mock_fs.rip_dir.clone(), mock_fs.library_dir.clone());
-    
+
     if let mlm::config::Library::ByRipDir(ref mut l) = config.libraries[0] {
         l.filter.media_type = vec![mlm_db::MediaType::Ebook]; // Libation is Audiobook
     }
@@ -105,7 +114,10 @@ async fn test_link_folders_to_library_filter_media_type_mismatch() -> anyhow::Re
 
     let r = test_db.db.r_transaction()?;
     let torrent: Option<Torrent> = r.get().primary("B00TEST1".to_string())?;
-    assert!(torrent.is_none(), "Should have been skipped due to media type filter");
+    assert!(
+        torrent.is_none(),
+        "Should have been skipped due to media type filter"
+    );
 
     Ok(())
 }
@@ -115,7 +127,7 @@ async fn test_link_folders_to_library_filter_language_mismatch() -> anyhow::Resu
     let test_db = TestDb::new()?;
     let mock_fs = MockFs::new()?;
     let mut config = mock_config(mock_fs.rip_dir.clone(), mock_fs.library_dir.clone());
-    
+
     if let mlm::config::Library::ByRipDir(ref mut l) = config.libraries[0] {
         l.filter.languages = vec![mlm_db::Language::German]; // Libation is English
     }
@@ -143,7 +155,6 @@ async fn test_link_folders_to_library_libation_missing_subtitle() -> anyhow::Res
         mock_fs.rip_dir.clone(),
         mock_fs.library_dir.clone(),
     ));
-    let events = mlm_core::Events::new();
 
     let folder = mock_fs.rip_dir.join("1977386733");
     fs::create_dir_all(&folder)?;
@@ -175,7 +186,7 @@ async fn test_link_folders_to_library_libation_missing_subtitle() -> anyhow::Res
         "fake audio data",
     )?;
 
-    link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
+    link_folders_to_library(config.clone(), test_db.db.clone()).await?;
 
     let r = test_db.db.r_transaction()?;
     let torrent: Option<Torrent> = r.get().primary("1977386733".to_string())?;
@@ -196,7 +207,6 @@ async fn test_link_folders_to_library_libation_missing_publication_name() -> any
         mock_fs.rip_dir.clone(),
         mock_fs.library_dir.clone(),
     ));
-    let events = mlm_core::Events::new();
 
     let folder = mock_fs.rip_dir.join("B0DZ3R4CCN");
     fs::create_dir_all(&folder)?;
@@ -228,7 +238,7 @@ async fn test_link_folders_to_library_libation_missing_publication_name() -> any
         "fake audio data",
     )?;
 
-    link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
+    link_folders_to_library(config.clone(), test_db.db.clone()).await?;
 
     let r = test_db.db.r_transaction()?;
     let torrent: Option<Torrent> = r.get().primary("B0DZ3R4CCN".to_string())?;
@@ -247,7 +257,6 @@ async fn test_link_folders_to_library_libation_missing_narrators() -> anyhow::Re
         mock_fs.rip_dir.clone(),
         mock_fs.library_dir.clone(),
     ));
-    let events = mlm_core::Events::new();
 
     let folder = mock_fs.rip_dir.join("B0CM7V5MSN");
     fs::create_dir_all(&folder)?;
@@ -274,7 +283,7 @@ async fn test_link_folders_to_library_libation_missing_narrators() -> anyhow::Re
     )?;
     fs::write(folder.join("Fat Ham [B0CM7V5MSN].m4b"), "fake audio data")?;
 
-    link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
+    link_folders_to_library(config.clone(), test_db.db.clone()).await?;
 
     let r = test_db.db.r_transaction()?;
     let torrent: Option<Torrent> = r.get().primary("B0CM7V5MSN".to_string())?;
@@ -294,11 +303,10 @@ async fn test_link_folders_to_library_nextory_wrapped_metadata() -> anyhow::Resu
         mock_fs.rip_dir.clone(),
         mock_fs.library_dir.clone(),
     ));
-    let events = mlm_core::Events::new();
 
     mock_fs.create_nextory_folder("nextory_wrapped", true)?;
 
-    link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
+    link_folders_to_library(config.clone(), test_db.db.clone()).await?;
 
     let r = test_db.db.r_transaction()?;
     let torrent: Option<Torrent> = r.get().primary("nextory_424242".to_string())?;
@@ -335,11 +343,10 @@ async fn test_link_folders_to_library_nextory_raw_metadata() -> anyhow::Result<(
         mock_fs.rip_dir.clone(),
         mock_fs.library_dir.clone(),
     ));
-    let events = mlm_core::Events::new();
 
     mock_fs.create_nextory_folder("nextory_raw_only", false)?;
 
-    link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
+    link_folders_to_library(config.clone(), test_db.db.clone()).await?;
 
     let r = test_db.db.r_transaction()?;
     let torrent: Option<Torrent> = r.get().primary("nextory_424242".to_string())?;
@@ -362,7 +369,6 @@ async fn test_link_folders_to_library_libation_series_subtitle_does_not_overwrit
         mock_fs.rip_dir.clone(),
         mock_fs.library_dir.clone(),
     ));
-    let events = mlm_core::Events::new();
 
     let cases = [
         (
@@ -420,7 +426,7 @@ async fn test_link_folders_to_library_libation_series_subtitle_does_not_overwrit
             "fake audio data",
         )?;
 
-        link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
+        link_folders_to_library(config.clone(), test_db.db.clone()).await?;
 
         let r = test_db.db.r_transaction()?;
         let torrent: Option<Torrent> = r.get().primary(asin.to_string())?;
