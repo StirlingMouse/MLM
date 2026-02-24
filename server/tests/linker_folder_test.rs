@@ -151,3 +151,70 @@ async fn test_link_folders_to_library_filter_language_mismatch() -> anyhow::Resu
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_link_folders_to_library_nextory_wrapped_metadata() -> anyhow::Result<()> {
+    let test_db = TestDb::new()?;
+    let mock_fs = MockFs::new()?;
+    let config = Arc::new(mock_config(
+        mock_fs.rip_dir.clone(),
+        mock_fs.library_dir.clone(),
+    ));
+    let events = mlm_core::Events::new();
+
+    mock_fs.create_nextory_folder("nextory_wrapped", true)?;
+
+    link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
+
+    let r = test_db.db.r_transaction()?;
+    let torrent: Option<Torrent> = r.get().primary("nextory_424242".to_string())?;
+    assert!(torrent.is_some());
+    let torrent = torrent.unwrap();
+    assert_eq!(torrent.meta.title, "Fake Dollar");
+    assert_eq!(torrent.meta.authors, vec!["Fake Author"]);
+    assert_eq!(torrent.meta.narrators, vec!["Fake Narrator"]);
+    assert_eq!(
+        torrent.meta.ids.get(mlm_db::ids::ISBN),
+        Some(&"9780000000001".to_string())
+    );
+    assert_eq!(torrent.meta.language, Some(mlm_db::Language::Swedish));
+    assert_eq!(torrent.meta.series[0].name, "Fake");
+    assert!(torrent.library_path.is_some());
+
+    let expected_dir = mock_fs
+        .library_dir
+        .join("Fake Author")
+        .join("Fake")
+        .join("Fake #2 - Fake Dollar {Fake Narrator}");
+    assert!(expected_dir.exists());
+    assert!(expected_dir.join("Fake Dollar - Fake Author.m4a").exists());
+    assert!(expected_dir.join("metadata.json").exists());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_link_folders_to_library_nextory_raw_metadata() -> anyhow::Result<()> {
+    let test_db = TestDb::new()?;
+    let mock_fs = MockFs::new()?;
+    let config = Arc::new(mock_config(
+        mock_fs.rip_dir.clone(),
+        mock_fs.library_dir.clone(),
+    ));
+    let events = mlm_core::Events::new();
+
+    mock_fs.create_nextory_folder("nextory_raw_only", false)?;
+
+    link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
+
+    let r = test_db.db.r_transaction()?;
+    let torrent: Option<Torrent> = r.get().primary("nextory_424242".to_string())?;
+    assert!(torrent.is_some());
+    let torrent = torrent.unwrap();
+    assert_eq!(torrent.meta.title, "Fake Dollar");
+    assert_eq!(torrent.meta.authors, vec!["Fake Author"]);
+    assert_eq!(torrent.selected_audio_format, Some(".m4a".to_string()),);
+    assert!(torrent.library_path.is_some());
+
+    Ok(())
+}

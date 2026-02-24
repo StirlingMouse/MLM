@@ -300,4 +300,5 @@ pub mod ids {
     pub const GOODREADS: &str = "goodreads";
     pub const ISBN: &str = "isbn";
     pub const MAM: &str = "mam";
+    pub const NEXTORY: &str = "nextory";
 }

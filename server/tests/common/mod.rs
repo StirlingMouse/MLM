@@ -174,6 +174,88 @@ impl MockFs {
 
         Ok(folder_path)
     }
+
+    #[allow(dead_code)]
+    pub fn create_nextory_folder(
+        &self,
+        folder_name: &str,
+        include_wrapped: bool,
+    ) -> Result<PathBuf> {
+        let folder_path = self.rip_dir.join(folder_name);
+        std::fs::create_dir_all(&folder_path)?;
+
+        let raw_meta = serde_json::json!({
+            "authors": [
+                {
+                    "id": 111,
+                    "name": "Fake Author",
+                    "visible": true
+                }
+            ],
+            "average_rating": 4.2,
+            "blurb": "Short fake blurb",
+            "description_full": "Long fake description for integration testing",
+            "formats": [
+                {
+                    "identifier": "FAKEAUDIO1",
+                    "isbn": "9780000000001",
+                    "type": "hls"
+                },
+                {
+                    "identifier": "FAKEEPUB1",
+                    "isbn": "9780000000002",
+                    "type": "epub"
+                }
+            ],
+            "id": 424242,
+            "language": "sv",
+            "media_type": "book",
+            "narrators": [
+                {
+                    "id": 222,
+                    "name": "Fake Narrator"
+                }
+            ],
+            "series": {
+                "id": 333,
+                "name": "Fake Series",
+                "vol": 0
+            },
+            "title": "Fake Dollar",
+            "volume": 2
+        });
+
+        if include_wrapped {
+            let wrapped_meta = serde_json::json!({
+                "raw": raw_meta,
+                "title": "Fake Dollar",
+                "authors": ["Fake Author"],
+                "narrators": ["Fake Narrator"],
+                "description": "Long fake description for integration testing",
+                "language": "sv",
+                "series": "Fake Series",
+                "series_order": 2.0,
+                "isbn": "9780000000001",
+                "publisher": "Fake Publisher",
+                "release_date": [2020, 1],
+                "genres": []
+            });
+            std::fs::write(
+                folder_path.join("metadata.json"),
+                serde_json::to_string(&wrapped_meta)?,
+            )?;
+        }
+
+        std::fs::write(
+            folder_path.join("metadata_raw.json"),
+            serde_json::to_string(&raw_meta)?,
+        )?;
+
+        let audio_path = folder_path.join("Fake Dollar - Fake Author.m4a");
+        std::fs::write(audio_path, "fake nextory audio data")?;
+
+        Ok(folder_path)
+    }
 }
 
 pub fn mock_config(rip_dir: PathBuf, library_dir: PathBuf) -> Config {
