@@ -68,55 +68,124 @@ pub fn DownloadButtons(props: DownloadButtonsProps) -> Element {
     };
 
     let is_disabled = *loading.read() || props.disabled;
+    let auto_wedge =
+        props.can_wedge && !props.is_vip && !props.is_personal_freeleech && !props.is_free;
 
     rsx! {
         if props.is_vip {
             button {
-                class: "btn",
+                class: if props.mode == DownloadButtonMode::Compact { "icon" } else { "btn" },
                 disabled: is_disabled,
                 onclick: move |_| {
                     handle_download(false, "Torrent queued for download".to_string());
                 },
-                if *loading.read() { "..." } else { "Download as VIP" }
+                if *loading.read() {
+                    if props.mode == DownloadButtonMode::Compact {
+                        img {
+                            src: "/assets/icons/down.png",
+                            alt: "Downloading",
+                            title: "Downloading",
+                            style: "filter:saturate(0)",
+                        }
+                    } else {
+                        "..."
+                    }
+                } else if props.mode == DownloadButtonMode::Compact {
+                    img {
+                        src: "/assets/icons/down.png",
+                        alt: "Download",
+                        title: "Download",
+                    }
+                } else {
+                    "Download as VIP"
+                }
             }
         } else if props.is_personal_freeleech {
             button {
-                class: "btn",
+                class: if props.mode == DownloadButtonMode::Compact { "icon" } else { "btn" },
                 disabled: is_disabled,
                 onclick: move |_| {
                     handle_download(false, "Torrent queued for download".to_string());
                 },
-                if *loading.read() { "..." } else { "Download as Personal Freeleech" }
+                if *loading.read() {
+                    if props.mode == DownloadButtonMode::Compact {
+                        img {
+                            src: "/assets/icons/down.png",
+                            alt: "Downloading",
+                            title: "Downloading",
+                            style: "filter:saturate(0)",
+                        }
+                    } else {
+                        "..."
+                    }
+                } else if props.mode == DownloadButtonMode::Compact {
+                    img {
+                        src: "/assets/icons/down.png",
+                        alt: "Download",
+                        title: "Download",
+                    }
+                } else {
+                    "Download as Personal Freeleech"
+                }
             }
         } else if props.is_free {
             button {
-                class: "btn",
+                class: if props.mode == DownloadButtonMode::Compact { "icon" } else { "btn" },
                 disabled: is_disabled,
                 onclick: move |_| {
                     handle_download(false, "Torrent queued for download".to_string());
                 },
-                if *loading.read() { "..." } else { "Download as Global Freeleech" }
+                if *loading.read() {
+                    if props.mode == DownloadButtonMode::Compact {
+                        img {
+                            src: "/assets/icons/down.png",
+                            alt: "Downloading",
+                            title: "Downloading",
+                            style: "filter:saturate(0)",
+                        }
+                    } else {
+                        "..."
+                    }
+                } else if props.mode == DownloadButtonMode::Compact {
+                    img {
+                        src: "/assets/icons/down.png",
+                        alt: "Download",
+                        title: "Download",
+                    }
+                } else {
+                    "Download as Global Freeleech"
+                }
             }
         } else {
             // Regular download options
             if props.mode == DownloadButtonMode::Compact {
-                // Compact mode: icon buttons
                 button {
-                    class: "btn",
+                    class: "icon",
+                    style: if auto_wedge { "filter:hue-rotate(180deg)" },
                     disabled: is_disabled,
                     onclick: move |_| {
-                        handle_download(false, "Torrent queued for download".to_string());
+                        handle_download(
+                            auto_wedge,
+                            if auto_wedge {
+                                "Torrent queued with wedge".to_string()
+                            } else {
+                                "Torrent queued for download".to_string()
+                            },
+                        );
                     },
-                    if *loading.read() { "..." } else { "↓" }
-                }
-                if props.can_wedge {
-                    button {
-                        class: "btn",
-                        disabled: is_disabled,
-                        onclick: move |_| {
-                            handle_download(true, "Torrent queued with wedge".to_string());
-                        },
-                        if *loading.read() { "..." } else { "W" }
+                    if *loading.read() {
+                        img {
+                            src: "/assets/icons/down.png",
+                            alt: "Downloading",
+                            title: "Downloading",
+                            style: "filter:saturate(0)",
+                        }
+                    } else {
+                        img {
+                            src: "/assets/icons/down.png",
+                            alt: if auto_wedge { "Download with Wedge" } else { "Download" },
+                            title: if auto_wedge { "Download with Wedge" } else { "Download" },
+                        }
                     }
                 }
             } else {

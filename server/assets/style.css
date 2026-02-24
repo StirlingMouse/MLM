@@ -17,6 +17,12 @@ body {
         color: var(--text);
 }
 
+#main > nav,
+.links.links {
+        display: flex;
+        gap: 4px;
+}
+
 a {
         color: currentColor;
         text-decoration-color: transparent;

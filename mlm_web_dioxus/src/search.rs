@@ -1,3 +1,4 @@
+use crate::components::parse_location_query_pairs;
 use crate::components::{DownloadButtonMode, SimpleDownloadButtons};
 use crate::dto::Series;
 #[cfg(feature = "server")]
@@ -7,6 +8,8 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "server")]
 use mlm_core::{Context, ContextExt, Torrent as DbTorrent, TorrentKey};
+#[cfg(feature = "server")]
+use mlm_db::Flags;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct SearchData {
@@ -27,8 +30,8 @@ pub struct SearchTorrent {
     pub series: Vec<Series>,
     pub tags: String,
     pub categories: Vec<String>,
+    pub flags: Vec<String>,
     pub old_category: Option<String>,
-    pub cat_icon_id: Option<u8>,
     pub media_type: String,
     pub filetypes: Vec<String>,
     pub size: String,
@@ -42,6 +45,9 @@ pub struct SearchTorrent {
     pub media_duration: Option<String>,
     pub media_format: Option<String>,
     pub audio_bitrate: Option<String>,
+    pub vip: bool,
+    pub personal_freeleech: bool,
+    pub free: bool,
     pub is_downloaded: bool,
     pub is_selected: bool,
     pub can_wedge: bool,
@@ -113,7 +119,26 @@ pub async fn get_search_data(
                 .as_ref()
                 .map(|m| format!("{} {}", m.audio.bitrate, m.audio.mode));
             let old_category = meta.cat.as_ref().map(|cat| cat.to_string());
-            let cat_icon_id = meta.cat.as_ref().map(|cat| cat.as_id());
+            let flags = Flags::from_bitfield(meta.flags.map_or(0, |f| f.0));
+            let mut flag_values = Vec::new();
+            if flags.crude_language == Some(true) {
+                flag_values.push("language".to_string());
+            }
+            if flags.violence == Some(true) {
+                flag_values.push("violence".to_string());
+            }
+            if flags.some_explicit == Some(true) {
+                flag_values.push("some_explicit".to_string());
+            }
+            if flags.explicit == Some(true) {
+                flag_values.push("explicit".to_string());
+            }
+            if flags.abridged == Some(true) {
+                flag_values.push("abridged".to_string());
+            }
+            if flags.lgbt == Some(true) {
+                flag_values.push("lgbt".to_string());
+            }
 
             Ok(SearchTorrent {
                 mam_id: mam_torrent.id,
@@ -134,8 +159,8 @@ pub async fn get_search_data(
                     .collect(),
                 tags: mam_torrent.tags,
                 categories: meta.categories,
+                flags: flag_values,
                 old_category,
-                cat_icon_id,
                 media_type: meta.media_type.as_str().to_string(),
                 filetypes: meta.filetypes,
                 size: meta.size.to_string(),
@@ -149,6 +174,9 @@ pub async fn get_search_data(
                 media_duration,
                 media_format,
                 audio_bitrate,
+                vip: mam_torrent.vip,
+                personal_freeleech: mam_torrent.personal_freeleech,
+                free: mam_torrent.free,
                 is_downloaded: torrent.is_some(),
                 is_selected: selected_torrent.is_some(),
                 can_wedge,
@@ -180,12 +208,32 @@ pub async fn get_search_data(
     Ok(SearchData { torrents, total })
 }
 
-fn media_icon_src(mediatype: u8, _main_cat: u8) -> Option<&'static str> {
-    match mediatype {
-        1 => Some("/assets/icons/new/abooks_main2.png"),
-        2 => Some("/assets/icons/new/ebooks_main4.png"),
-        3 => Some("/assets/icons/new/music_main.png"),
-        4 => Some("/assets/icons/new/radiogeneral2.png"),
+fn media_icon_src(mediatype: u8, main_cat: u8) -> Option<&'static str> {
+    match (mediatype, main_cat) {
+        (1, 1) => Some("/assets/icons/mediatypes/AudiobookF.png"),
+        (1, 2) => Some("/assets/icons/mediatypes/AudiobookNF.png"),
+        (1, _) => Some("/assets/icons/mediatypes/Audiobook.png"),
+        (2, 1) => Some("/assets/icons/mediatypes/EBookF.png"),
+        (2, 2) => Some("/assets/icons/mediatypes/EBookNF.png"),
+        (2, _) => Some("/assets/icons/mediatypes/EBook.png"),
+        (3, 1) => Some("/assets/icons/mediatypes/MusicF.png"),
+        (3, 2) => Some("/assets/icons/mediatypes/MusicNF.png"),
+        (3, _) => Some("/assets/icons/mediatypes/Music.png"),
+        (4, 1) => Some("/assets/icons/mediatypes/RadioF.png"),
+        (4, 2) => Some("/assets/icons/mediatypes/RadioNF.png"),
+        (4, _) => Some("/assets/icons/mediatypes/Radio.png"),
+        (5, 1) => Some("/assets/icons/mediatypes/MangaF.png"),
+        (5, 2) => Some("/assets/icons/mediatypes/MangaNF.png"),
+        (5, _) => Some("/assets/icons/mediatypes/Manga.png"),
+        (6, 1) => Some("/assets/icons/mediatypes/ComicsF.png"),
+        (6, 2) => Some("/assets/icons/mediatypes/ComicsNF.png"),
+        (6, _) => Some("/assets/icons/mediatypes/Comics.png"),
+        (7, 1) => Some("/assets/icons/mediatypes/PeriodicalsF.png"),
+        (7, 2) => Some("/assets/icons/mediatypes/PeriodicalsNF.png"),
+        (7, _) => Some("/assets/icons/mediatypes/Periodicals.png"),
+        (8, 1) => Some("/assets/icons/mediatypes/PeriodicalsAudioF.png"),
+        (8, 2) => Some("/assets/icons/mediatypes/PeriodicalsAudioNF.png"),
+        (8, _) => Some("/assets/icons/mediatypes/PeriodicalsAudio.png"),
         _ => None,
     }
 }
@@ -195,14 +243,49 @@ fn search_filter_query(prefix: &str, value: &str) -> String {
     format!("@{prefix} \"{escaped}\"")
 }
 
+fn flag_icon(flag: &str) -> Option<(&'static str, &'static str)> {
+    match flag {
+        "language" => Some(("/assets/icons/language.png", "Crude Language")),
+        "violence" => Some(("/assets/icons/hand.png", "Violence")),
+        "some_explicit" => Some((
+            "/assets/icons/lipssmall.png",
+            "Some Sexually Explicit Content",
+        )),
+        "explicit" => Some(("/assets/icons/flames.png", "Sexually Explicit Content")),
+        "abridged" => Some(("/assets/icons/abridged.png", "Abridged")),
+        "lgbt" => Some(("/assets/icons/lgbt.png", "LGBT")),
+        _ => None,
+    }
+}
+
 #[component]
 pub fn SearchPage() -> Element {
-    let mut query_input = use_signal(String::new);
-    let mut sort_input = use_signal(String::new);
-    let mut uploader_input = use_signal(String::new);
-    let mut submitted_query = use_signal(String::new);
-    let mut submitted_sort = use_signal(String::new);
-    let mut submitted_uploader = use_signal(|| None::<u64>);
+    let params = parse_location_query_pairs();
+    let initial_query = params
+        .iter()
+        .find_map(|(k, v)| (k == "q").then_some(v.clone()))
+        .unwrap_or_default();
+    let initial_sort = params
+        .iter()
+        .find_map(|(k, v)| (k == "sort").then_some(v.clone()))
+        .unwrap_or_default();
+    let initial_uploader_input = params
+        .iter()
+        .find_map(|(k, v)| (k == "uploader").then_some(v.clone()))
+        .unwrap_or_default();
+    let initial_submitted_uploader = initial_uploader_input.trim().parse::<u64>().ok();
+
+    let query_input_initial = initial_query.clone();
+    let submitted_query_initial = initial_query;
+    let sort_input_initial = initial_sort.clone();
+    let submitted_sort_initial = initial_sort;
+
+    let mut query_input = use_signal(move || query_input_initial.clone());
+    let mut sort_input = use_signal(move || sort_input_initial.clone());
+    let mut uploader_input = use_signal(move || initial_uploader_input.clone());
+    let mut submitted_query = use_signal(move || submitted_query_initial.clone());
+    let mut submitted_sort = use_signal(move || submitted_sort_initial.clone());
+    let mut submitted_uploader = use_signal(move || initial_submitted_uploader);
     let status_msg = use_signal(|| None::<(String, bool)>);
     let mut cached = use_signal(|| None::<SearchData>);
 
@@ -313,7 +396,7 @@ pub fn SearchPage() -> Element {
 }
 
 #[component]
-fn SearchTorrentRow(
+pub(crate) fn SearchTorrentRow(
     torrent: SearchTorrent,
     mut status_msg: Signal<Option<(String, bool)>>,
     on_refresh: EventHandler<()>,
@@ -332,12 +415,6 @@ fn SearchTorrentRow(
                     img {
                         class: "media-icon",
                         src: "{src}",
-                        alt: "{torrent.media_type}",
-                        title: "{torrent.media_type}",
-                    }
-                } else if let Some(cat_id) = torrent.cat_icon_id {
-                    img {
-                        src: "/assets/icons/cats/{cat_id}_b.png",
                         alt: "{torrent.media_type}",
                         title: "{torrent.media_type}",
                     }
@@ -438,6 +515,40 @@ fn SearchTorrentRow(
                 if !torrent.tags.is_empty() {
                     div {
                         i { "{torrent.tags}" }
+                    }
+                }
+                if torrent.personal_freeleech || torrent.vip || torrent.free || !torrent.flags.is_empty() {
+                    div { class: "icon-row",
+                        if torrent.personal_freeleech {
+                            img {
+                                src: "/assets/icons/freedownload.png",
+                                alt: "Personal Freeleech",
+                                title: "Personal Freeleech",
+                                style: "filter:hue-rotate(180deg)",
+                            }
+                        } else if torrent.vip {
+                            img {
+                                src: "/assets/icons/vip.png",
+                                alt: "VIP",
+                                title: "VIP",
+                            }
+                        } else if torrent.free {
+                            img {
+                                src: "/assets/icons/freedownload.png",
+                                alt: "Freeleech",
+                                title: "Freeleech",
+                            }
+                        }
+                        for flag in &torrent.flags {
+                            if let Some((src, title)) = flag_icon(flag) {
+                                img {
+                                    class: "flag",
+                                    src: "{src}",
+                                    alt: "{title}",
+                                    title: "{title}",
+                                }
+                            }
+                        }
                     }
                 }
                 div { class: "faint",

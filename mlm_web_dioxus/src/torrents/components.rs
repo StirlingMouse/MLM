@@ -366,9 +366,7 @@ pub fn TorrentsPage() -> Element {
                     }
                 }
                 div { class: "table_options",
-                    ColumnSelector {
-                        options: column_options,
-                    }
+                    ColumnSelector { options: column_options }
                     PageSizeSelector {
                         page_size: *page_size.read(),
                         options: vec![100, 500, 1000, 5000],
@@ -393,10 +391,7 @@ pub fn TorrentsPage() -> Element {
                 }
             }
 
-            ActiveFilters {
-                chips: active_chips,
-                on_clear_all: clear_all,
-            }
+            ActiveFilters { chips: active_chips, on_clear_all: clear_all }
 
             if let Some(data) = data_to_show {
                 if data.torrents.is_empty() {
@@ -592,7 +587,11 @@ pub fn TorrentsPage() -> Element {
                                                             onclick: {
                                                                 let label = cat_id.clone();
                                                                 move |_| {
-                                                                    apply_click_filter(&mut filters, TorrentsPageFilter::Category, label.clone());
+                                                                    apply_click_filter(
+                                                                        &mut filters,
+                                                                        TorrentsPageFilter::Category,
+                                                                        label.clone(),
+                                                                    );
                                                                     from.set(0);
                                                                 }
                                                             },
@@ -611,7 +610,11 @@ pub fn TorrentsPage() -> Element {
                                                         onclick: {
                                                             let category = category.clone();
                                                             move |_| {
-                                                                apply_click_filter(&mut filters, TorrentsPageFilter::Categories, category.clone());
+                                                                apply_click_filter(
+                                                                    &mut filters,
+                                                                    TorrentsPageFilter::Categories,
+                                                                    category.clone(),
+                                                                );
                                                                 from.set(0);
                                                             }
                                                         },
@@ -725,7 +728,11 @@ pub fn TorrentsPage() -> Element {
                                                         onclick: {
                                                             let narrator = narrator.clone();
                                                             move |_| {
-                                                                apply_click_filter(&mut filters, TorrentsPageFilter::Narrator, narrator.clone());
+                                                                apply_click_filter(
+                                                                    &mut filters,
+                                                                    TorrentsPageFilter::Narrator,
+                                                                    narrator.clone(),
+                                                                );
                                                                 from.set(0);
                                                             }
                                                         },
@@ -743,7 +750,11 @@ pub fn TorrentsPage() -> Element {
                                                         onclick: {
                                                             let series_name = series.name.clone();
                                                             move |_| {
-                                                                apply_click_filter(&mut filters, TorrentsPageFilter::Series, series_name.clone());
+                                                                apply_click_filter(
+                                                                    &mut filters,
+                                                                    TorrentsPageFilter::Series,
+                                                                    series_name.clone(),
+                                                                );
                                                                 from.set(0);
                                                             }
                                                         },
@@ -764,7 +775,11 @@ pub fn TorrentsPage() -> Element {
                                                     onclick: {
                                                         let value = torrent.meta.language.clone().unwrap_or_default();
                                                         move |_| {
-                                                            apply_click_filter(&mut filters, TorrentsPageFilter::Language, value.clone());
+                                                            apply_click_filter(
+                                                                &mut filters,
+                                                                TorrentsPageFilter::Language,
+                                                                value.clone(),
+                                                            );
                                                             from.set(0);
                                                         }
                                                     },
@@ -784,7 +799,11 @@ pub fn TorrentsPage() -> Element {
                                                         onclick: {
                                                             let filetype = filetype.clone();
                                                             move |_| {
-                                                                apply_click_filter(&mut filters, TorrentsPageFilter::Filetype, filetype.clone());
+                                                                apply_click_filter(
+                                                                    &mut filters,
+                                                                    TorrentsPageFilter::Filetype,
+                                                                    filetype.clone(),
+                                                                );
                                                                 from.set(0);
                                                             }
                                                         },
@@ -860,7 +879,11 @@ pub fn TorrentsPage() -> Element {
                                                             onclick: {
                                                                 let linked = torrent.linked;
                                                                 move |_| {
-                                                                    apply_click_filter(&mut filters, TorrentsPageFilter::Linked, linked.to_string());
+                                                                    apply_click_filter(
+                                                                        &mut filters,
+                                                                        TorrentsPageFilter::Linked,
+                                                                        linked.to_string(),
+                                                                    );
                                                                     from.set(0);
                                                                 }
                                                             },
@@ -874,7 +897,11 @@ pub fn TorrentsPage() -> Element {
                                                         onclick: {
                                                             let linked = torrent.linked;
                                                             move |_| {
-                                                                apply_click_filter(&mut filters, TorrentsPageFilter::Linked, linked.to_string());
+                                                                apply_click_filter(
+                                                                    &mut filters,
+                                                                    TorrentsPageFilter::Linked,
+                                                                    linked.to_string(),
+                                                                );
                                                                 from.set(0);
                                                             }
                                                         },
@@ -906,7 +933,7 @@ pub fn TorrentsPage() -> Element {
                                         if show.read().uploaded_at {
                                             div { "{torrent.uploaded_at}" }
                                         }
-                                        div {
+                                        div { class: "links",
                                             a { href: "/dioxus/torrents/{torrent.id}", "open" }
                                             if let Some(mam_id) = torrent.mam_id {
                                                 a {

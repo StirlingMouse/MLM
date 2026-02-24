@@ -2,13 +2,15 @@ use crate::duplicate::DuplicatePage;
 use crate::errors::ErrorsPage;
 use crate::events::EventsPage;
 use crate::home::HomePage;
+use crate::list::ListPage;
+use crate::lists::ListsPage;
 use crate::replaced::ReplacedPage;
 use crate::search::SearchPage;
 use crate::selected::SelectedPage;
 #[cfg(feature = "web")]
 use crate::sse::{trigger_events_update, trigger_stats_update};
-use crate::stats::StatsPage;
 use crate::torrent_detail::TorrentDetailPage;
+use crate::torrent_edit::TorrentEditPage;
 use crate::torrents::TorrentsPage;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -19,11 +21,8 @@ const GLOBAL_STYLE_CSS: &str = include_str!("../../server/assets/style.css");
 #[rustfmt::skip]
 pub enum Route {
     #[layout(App)]
-    #[route("/dioxus/")]
+    #[route("/")]
     Home {},
-
-    #[route("/dioxus/stats")]
-    Stats {},
 
     #[route("/dioxus/events")]
     Events {},
@@ -49,11 +48,20 @@ pub enum Route {
     #[route("/dioxus/torrents/:id")]
     TorrentDetail { id: String },
 
+    #[route("/dioxus/torrents/:id/edit")]
+    TorrentEdit { id: String },
+
     #[route("/dioxus/torrents/:..segments")]
     TorrentsWithQuery { segments: Vec<String> },
 
     #[route("/dioxus/search")]
     Search {},
+
+    #[route("/dioxus/lists")]
+    Lists {},
+
+    #[route("/dioxus/lists/:id")]
+    List { id: String },
 }
 
 pub fn root() -> Element {
@@ -73,12 +81,12 @@ pub fn App() -> Element {
         document::Style { "{GLOBAL_STYLE_CSS}" }
 
         nav {
-            Link { to: Route::Home {}, "Home (Dioxus)" }
-            a { href: "/", "Home (Legacy)" }
+            Link { to: Route::Home {}, "Home" }
             Link { to: Route::Torrents {}, "Torrents" }
             Link { to: Route::Events {}, "Events" }
             Link { to: Route::Search {}, "Search" }
             a { href: "/lists", "Goodreads lists" }
+            Link { to: Route::Lists {}, "Goodreads lists (Dioxus)" }
             Link { to: Route::Errors {}, "Errors" }
             Link { to: Route::Selected {}, "Selected Torrents" }
             Link { to: Route::Replaced {}, "Replaced Torrents" }
@@ -93,13 +101,6 @@ pub fn App() -> Element {
 fn Home() -> Element {
     rsx! {
         HomePage {}
-    }
-}
-
-#[component]
-fn Stats() -> Element {
-    rsx! {
-        StatsPage {}
     }
 }
 
@@ -167,9 +168,30 @@ fn TorrentDetail(id: String) -> Element {
 }
 
 #[component]
+fn TorrentEdit(id: String) -> Element {
+    rsx! {
+        TorrentEditPage { id }
+    }
+}
+
+#[component]
 fn Search() -> Element {
     rsx! {
         SearchPage {}
+    }
+}
+
+#[component]
+fn Lists() -> Element {
+    rsx! {
+        ListsPage {}
+    }
+}
+
+#[component]
+fn List(id: String) -> Element {
+    rsx! {
+        ListPage { id }
     }
 }
 

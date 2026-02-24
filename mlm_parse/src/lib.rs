@@ -1,11 +1,19 @@
+mod html;
+
 use anyhow::Result;
 use htmlentity::entity::{self, ICodedDataTrait as _};
 use once_cell::sync::Lazy;
 use regex::{Captures, Match, Regex};
 use unidecode::unidecode;
 
+use crate::html::AMMONIA;
+
 pub fn clean_value(value: &str) -> Result<String> {
     entity::decode(value.as_bytes()).to_string()
+}
+
+pub fn clean_html(value: &str) -> String {
+    AMMONIA.clean(value).to_string()
 }
 
 pub fn normalize_title(value: &str) -> String {

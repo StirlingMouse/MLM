@@ -1,4 +1,5 @@
 use crate::dto::{Event, Series, TorrentMetaDiff};
+use crate::search::SearchTorrent;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -11,7 +12,7 @@ pub struct TorrentDetailData {
     pub abs_item_url: Option<String>,
     pub mam_torrent: Option<MamTorrentInfo>,
     pub mam_meta_diff: Vec<TorrentMetaDiff>,
-    pub other_torrents: Vec<OtherTorrentInfo>,
+    pub other_torrents: Vec<SearchTorrent>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -31,7 +32,7 @@ pub struct TorrentInfo {
     pub size: String,
     pub num_files: u64,
     pub categories: Vec<String>,
-    pub flags: Option<String>,
+    pub flags: Vec<String>,
     pub library_path: Option<PathBuf>,
     pub library_files: Vec<PathBuf>,
     pub linker: Option<String>,
@@ -42,6 +43,7 @@ pub struct TorrentInfo {
     pub uploaded_at: String,
     pub client_status: Option<String>,
     pub replaced_with: Option<String>,
+    pub goodreads_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -54,7 +56,7 @@ pub enum TorrentPageData {
 pub struct TorrentMamData {
     pub mam_torrent: MamTorrentInfo,
     pub meta: TorrentInfo,
-    pub other_torrents: Vec<OtherTorrentInfo>,
+    pub other_torrents: Vec<SearchTorrent>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -75,29 +77,6 @@ pub struct MamTorrentInfo {
     pub vip: bool,
     pub personal_freeleech: bool,
     pub free: bool,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct OtherTorrentInfo {
-    pub mam_id: u64,
-    pub title: String,
-    pub edition: Option<String>,
-    pub authors: Vec<String>,
-    pub narrators: Vec<String>,
-    pub series: Vec<Series>,
-    pub tags: String,
-    pub categories: Vec<String>,
-    pub size: String,
-    pub filetypes: Vec<String>,
-    pub num_files: u64,
-    pub uploaded_at: String,
-    pub owner_name: String,
-    pub seeders: u64,
-    pub leechers: u64,
-    pub snatches: u64,
-    pub is_downloaded: bool,
-    pub is_selected: bool,
-    pub can_wedge: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

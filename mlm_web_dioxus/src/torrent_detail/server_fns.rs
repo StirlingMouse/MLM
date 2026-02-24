@@ -3,6 +3,8 @@ use crate::dto::{Event as DbEventDto, EventType, Series, TorrentMetaDiff};
 #[cfg(feature = "server")]
 use crate::error::{IntoServerFnError, OptionIntoServerFnError};
 #[cfg(feature = "server")]
+use crate::search::SearchTorrent;
+#[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
 use dioxus::prelude::*;
 
@@ -13,10 +15,35 @@ use mlm_core::{
 };
 #[cfg(feature = "server")]
 use mlm_db::DatabaseExt;
+#[cfg(feature = "server")]
+use mlm_db::ids;
 
-// ============================================================================
-// Server Functions
-// ============================================================================
+#[cfg(feature = "server")]
+fn format_qbit_state(state: &qbit::parameters::TorrentState) -> String {
+    use qbit::parameters::TorrentState;
+    match state {
+        TorrentState::Downloading => "Downloading".to_string(),
+        TorrentState::Uploading => "Seeding".to_string(),
+        TorrentState::StoppedDownloading => "Stopped (Downloading)".to_string(),
+        TorrentState::StoppedUploading => "Stopped (Seeding)".to_string(),
+        TorrentState::QueuedDownloading => "Queued (Downloading)".to_string(),
+        TorrentState::QueuedUploading => "Queued (Seeding)".to_string(),
+        TorrentState::StalledDownloading => "Stalled (Downloading)".to_string(),
+        TorrentState::StalledUploading => "Stalled (Seeding)".to_string(),
+        TorrentState::CheckingDownloading => "Checking (Downloading)".to_string(),
+        TorrentState::CheckingUploading => "Checking (Seeding)".to_string(),
+        TorrentState::CheckingResumeData => "Checking Resume Data".to_string(),
+        TorrentState::ForcedDownloading => "Forced Downloading".to_string(),
+        TorrentState::ForcedUploading => "Forced Seeding".to_string(),
+        TorrentState::Allocating => "Allocating".to_string(),
+        TorrentState::Error => "Error".to_string(),
+        TorrentState::MissingFiles => "Missing Files".to_string(),
+        TorrentState::Moving => "Moving".to_string(),
+        TorrentState::MetadataDownloading => "Metadata Downloading".to_string(),
+        TorrentState::ForcedMetadataDownloading => "Forced Metadata Downloading".to_string(),
+        TorrentState::Unknown => "Unknown".to_string(),
+    }
+}
 
 #[cfg(feature = "server")]
 fn map_event(e: DbEvent) -> DbEventDto {
@@ -70,6 +97,30 @@ fn torrent_info_from_meta(
     id: String,
     mam_id: Option<u64>,
 ) -> super::types::TorrentInfo {
+    use mlm_parse::clean_html;
+
+    let goodreads_id = meta.ids.get(ids::GOODREADS).cloned();
+    let flags = mlm_db::Flags::from_bitfield(meta.flags.map_or(0, |f| f.0));
+    let mut flag_values = Vec::new();
+    if flags.crude_language == Some(true) {
+        flag_values.push("language".to_string());
+    }
+    if flags.violence == Some(true) {
+        flag_values.push("violence".to_string());
+    }
+    if flags.some_explicit == Some(true) {
+        flag_values.push("some_explicit".to_string());
+    }
+    if flags.explicit == Some(true) {
+        flag_values.push("explicit".to_string());
+    }
+    if flags.abridged == Some(true) {
+        flag_values.push("abridged".to_string());
+    }
+    if flags.lgbt == Some(true) {
+        flag_values.push("lgbt".to_string());
+    }
+
     super::types::TorrentInfo {
         id,
         title: meta.title.clone(),
@@ -85,7 +136,7 @@ fn torrent_info_from_meta(
             })
             .collect(),
         tags: meta.tags.clone(),
-        description: meta.description.clone(),
+        description: clean_html(&meta.description),
         media_type: meta.media_type.to_string(),
         main_cat: meta.main_cat.map(|c| c.to_string()),
         language: meta.language.as_ref().map(|l| l.to_string()),
@@ -93,7 +144,7 @@ fn torrent_info_from_meta(
         size: meta.size.to_string(),
         num_files: meta.num_files,
         categories: meta.categories.clone(),
-        flags: meta.flags.as_ref().map(|f| format!("{:?}", f)),
+        flags: flag_values,
         library_path: None,
         library_files: vec![],
         linker: None,
@@ -104,6 +155,7 @@ fn torrent_info_from_meta(
         uploaded_at: format_timestamp_db(&meta.uploaded_at),
         client_status: None,
         replaced_with: None,
+        goodreads_id,
     }
 }
 
@@ -124,7 +176,7 @@ fn map_mam_torrent(mam_torrent: &mlm_mam::search::MaMTorrent) -> super::types::M
 async fn other_torrents_data(
     context: &Context,
     meta: &mlm_db::TorrentMeta,
-) -> Result<Vec<super::types::OtherTorrentInfo>, ServerFnError> {
+) -> Result<Vec<SearchTorrent>, ServerFnError> {
     use itertools::Itertools;
     use mlm_mam::{
         enums::SearchIn,
@@ -188,8 +240,26 @@ async fn other_torrents_data(
                 .search
                 .wedge_over
                 .is_some_and(|wedge_over| meta.size >= wedge_over && !mam_torrent.is_free());
-            Ok(super::types::OtherTorrentInfo {
+            let media_duration = mam_torrent
+                .media_info
+                .as_ref()
+                .map(|m| m.general.duration.clone());
+            let media_format = mam_torrent
+                .media_info
+                .as_ref()
+                .map(|m| format!("{} {}", m.general.format, m.audio.format));
+            let audio_bitrate = mam_torrent
+                .media_info
+                .as_ref()
+                .map(|m| format!("{} {}", m.audio.bitrate, m.audio.mode));
+            let old_category = meta.cat.as_ref().map(|cat| cat.to_string());
+            let cat_icon_id = meta.cat.as_ref().map(|cat| cat.as_id());
+
+            Ok(SearchTorrent {
                 mam_id: mam_torrent.id,
+                mediatype_id: mam_torrent.mediatype,
+                main_cat_id: mam_torrent.main_cat,
+                lang_code: mam_torrent.lang_code,
                 title: meta.title.clone(),
                 edition: meta.edition.as_ref().map(|(ed, _)| ed.clone()),
                 authors: meta.authors.clone(),
@@ -204,6 +274,32 @@ async fn other_torrents_data(
                     .collect(),
                 tags: mam_torrent.tags,
                 categories: meta.categories.clone(),
+                flags: {
+                    let flags = mlm_db::Flags::from_bitfield(meta.flags.map_or(0, |f| f.0));
+                    let mut values = Vec::new();
+                    if flags.crude_language == Some(true) {
+                        values.push("language".to_string());
+                    }
+                    if flags.violence == Some(true) {
+                        values.push("violence".to_string());
+                    }
+                    if flags.some_explicit == Some(true) {
+                        values.push("some_explicit".to_string());
+                    }
+                    if flags.explicit == Some(true) {
+                        values.push("explicit".to_string());
+                    }
+                    if flags.abridged == Some(true) {
+                        values.push("abridged".to_string());
+                    }
+                    if flags.lgbt == Some(true) {
+                        values.push("lgbt".to_string());
+                    }
+                    values
+                },
+                old_category,
+                cat_icon_id,
+                media_type: meta.media_type.as_str().to_string(),
                 size: meta.size.to_string(),
                 filetypes: meta.filetypes.clone(),
                 num_files: mam_torrent.numfiles,
@@ -212,6 +308,13 @@ async fn other_torrents_data(
                 seeders: mam_torrent.seeders,
                 leechers: mam_torrent.leechers,
                 snatches: mam_torrent.times_completed,
+                comments: mam_torrent.comments,
+                media_duration,
+                media_format,
+                audio_bitrate,
+                vip: mam_torrent.vip,
+                personal_freeleech: mam_torrent.personal_freeleech,
+                free: mam_torrent.free,
                 is_downloaded: torrent.is_some(),
                 is_selected: selected.is_some(),
                 can_wedge,
@@ -260,8 +363,9 @@ async fn get_downloaded_torrent_detail(
 
     let mut mam_torrent = None;
     let mut mam_meta_diff = vec![];
-    if let Some(mam_id) = torrent.mam_id {
-        let mam = context.mam().server_err()?;
+    if let Some(mam_id) = torrent.mam_id
+        && let Ok(mam) = context.mam()
+    {
         mam_torrent = mam.get_torrent_info_by_id(mam_id).await.server_err()?;
         if let Some(ref mam_torrent_data) = mam_torrent {
             let mut mam_meta = mam_torrent_data.as_meta().server_err()?;
@@ -309,7 +413,10 @@ async fn get_downloaded_torrent_detail(
     torrent_info.library_files = library_files;
     torrent_info.linker = torrent.linker.clone();
     torrent_info.category = torrent.category.clone();
-    torrent_info.client_status = torrent.client_status.as_ref().map(|s| format!("{:?}", s));
+    torrent_info.client_status = torrent.client_status.as_ref().map(|s| match s {
+        mlm_db::ClientStatus::NotInClient => "Not in Client".to_string(),
+        mlm_db::ClientStatus::RemovedFromTracker => "Removed from Tracker".to_string(),
+    });
     torrent_info.replaced_with = torrent.replaced_with.as_ref().map(|(id, _)| id.clone());
 
     let mut events_data: Vec<DbEventDto> = db
@@ -335,7 +442,9 @@ async fn get_downloaded_torrent_detail(
         None
     };
 
-    let other_torrents = other_torrents_data(context, &torrent.meta).await?;
+    let other_torrents = other_torrents_data(context, &torrent.meta)
+        .await
+        .unwrap_or_default();
 
     Ok(super::types::TorrentDetailData {
         torrent: torrent_info,
@@ -381,13 +490,15 @@ pub async fn get_torrent_detail(
             .map(super::types::TorrentPageData::Downloaded);
     }
 
-    if let Ok(mam_id) = id.parse::<u64>() {
+    if let Ok(mam_id) = id.parse::<u64>()
+        && let Ok(mam) = context.mam()
+    {
         if let Some(torrent) = context
             .db()
             .r_transaction()
             .server_err()?
             .get()
-            .secondary::<DbTorrent>(mlm_db::TorrentKey::mam_id, mam_id)
+            .secondary::<DbTorrent>(mlm_db::TorrentKey::mam_id, Some(mam_id))
             .server_err()?
         {
             return get_downloaded_torrent_detail(&context, torrent.id)
@@ -395,7 +506,6 @@ pub async fn get_torrent_detail(
                 .map(super::types::TorrentPageData::Downloaded);
         }
 
-        let mam = context.mam().server_err()?;
         let mam_torrent = mam
             .get_torrent_info_by_id(mam_id)
             .await
@@ -737,7 +847,7 @@ pub async fn get_qbit_data(id: String) -> Result<Option<super::types::QbitData>,
         .collect();
 
     Ok(Some(super::types::QbitData {
-        torrent_state: format!("{:?}", qbit_torrent.state),
+        torrent_state: format_qbit_state(&qbit_torrent.state),
         torrent_category: qbit_torrent.category.clone(),
         torrent_tags,
         categories,

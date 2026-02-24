@@ -2,7 +2,7 @@ mod components;
 mod server_fns;
 mod types;
 
-pub use components::{EventContent, EventsPage};
+pub use components::{EventContent, EventListItem, EventsPage};
 pub use server_fns::get_events_data;
 pub use types::{EventData, EventWithTorrentData};
 

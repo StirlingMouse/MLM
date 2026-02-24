@@ -5,9 +5,49 @@ use super::server_fns::{
     set_qbit_category_tags_action, torrent_start_action, torrent_stop_action,
 };
 use super::types::*;
-use crate::components::{DownloadButtonMode, DownloadButtons, SimpleDownloadButtons};
-use crate::events::EventContent;
+use crate::components::{DownloadButtonMode, DownloadButtons};
+use crate::events::EventListItem;
+use crate::search::SearchTorrentRow;
 use dioxus::prelude::*;
+
+#[cfg(feature = "web")]
+fn navigate_to_search(query: &str, sort: &str) {
+    let mut params = Vec::new();
+    if !query.is_empty() {
+        params.push(format!("q={}", urlencoding::encode(query)));
+    }
+    if !sort.is_empty() {
+        params.push(format!("sort={}", urlencoding::encode(sort)));
+    }
+
+    let href = if params.is_empty() {
+        "/dioxus/search".to_string()
+    } else {
+        format!("/dioxus/search?{}", params.join("&"))
+    };
+
+    if let Some(window) = web_sys::window() {
+        let _ = window.location().set_href(&href);
+    }
+}
+
+#[cfg(not(feature = "web"))]
+fn navigate_to_search(_query: &str, _sort: &str) {}
+
+fn flag_icon(flag: &str) -> Option<(&'static str, &'static str)> {
+    match flag {
+        "language" => Some(("/assets/icons/language.png", "Crude Language")),
+        "violence" => Some(("/assets/icons/hand.png", "Violence")),
+        "some_explicit" => Some((
+            "/assets/icons/lipssmall.png",
+            "Some Sexually Explicit Content",
+        )),
+        "explicit" => Some(("/assets/icons/flames.png", "Sexually Explicit Content")),
+        "abridged" => Some(("/assets/icons/abridged.png", "Abridged")),
+        "lgbt" => Some(("/assets/icons/lgbt.png", "LGBT")),
+        _ => None,
+    }
+}
 
 #[component]
 pub fn TorrentDetailPage(id: String) -> Element {
@@ -204,8 +244,20 @@ fn TorrentDetailContent(
                     if let Some(status) = &torrent.client_status {
                         dt { "Client Status" } dd { "{status}" }
                     }
-                    if let Some(flags) = &torrent.flags {
-                        dt { "Flags" } dd { "{flags}" }
+                    if !torrent.flags.is_empty() {
+                        dt { "Flags" }
+                        dd {
+                            for flag in &torrent.flags {
+                                if let Some((src, title)) = flag_icon(flag) {
+                                    img {
+                                        class: "flag",
+                                        src: "{src}",
+                                        alt: "{title}",
+                                        title: "{title}",
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -243,11 +295,15 @@ fn TorrentDetailContent(
                     }
                 }
                 div { class: "row", style: "display:flex; flex-wrap:wrap; gap:0.5em; margin:0.6em 0;",
+                    a { class: "btn", href: "/dioxus/torrents/{torrent.id}/edit", "Edit Metadata" }
                     if let Some(abs_url) = abs_item_url {
                         a { class: "btn", href: "{abs_url}", target: "_blank", "Open in ABS" }
                     }
                     if let Some(mam_id) = torrent.mam_id {
                         a { class: "btn", href: "https://www.myanonamouse.net/t/{mam_id}", target: "_blank", "Open in MaM" }
+                    }
+                    if let Some(goodreads_id) = &torrent.goodreads_id {
+                        a { class: "btn", href: "https://www.goodreads.com/book/show/{goodreads_id}", target: "_blank", "Open in Goodreads" }
                     }
                 }
 
@@ -288,10 +344,11 @@ fn TorrentDetailContent(
                 h3 { "Event History" }
                 for event in events {
                     div { class: "event-item",
-                        EventContent {
+                        EventListItem {
                             event: event,
                             torrent: None,
-                            replacement: None
+                            replacement: None,
+                            show_created_at: true,
                         }
                     }
                 }
@@ -380,6 +437,11 @@ fn TorrentMamContent(
                 if !series_text.is_empty() {
                     p { strong { "Series: " }"{series_text}" }
                 }
+                div { class: "row", style: "display:flex; flex-wrap:wrap; gap:0.5em; margin:0.6em 0;",
+                    if let Some(goodreads_id) = &torrent.goodreads_id {
+                        a { class: "btn", href: "https://www.goodreads.com/book/show/{goodreads_id}", target: "_blank", "Open in Goodreads" }
+                    }
+                }
                 div { style: "margin-top:0.8em;",
                     DownloadButtons {
                         mam_id: mam.id,
@@ -420,60 +482,26 @@ fn TorrentMamContent(
 
 #[component]
 fn OtherTorrentsSection(
-    torrents: Vec<OtherTorrentInfo>,
+    torrents: Vec<crate::search::SearchTorrent>,
     mut status_msg: Signal<Option<(String, bool)>>,
     on_refresh: EventHandler<()>,
 ) -> Element {
-    // Pre-compute derived data for each torrent
-    let torrent_rows: Vec<_> = torrents
-        .into_iter()
-        .map(|item| {
-            let authors_text = item.authors.join(", ");
-            let filetypes_text = item.filetypes.join(", ");
-            (item, authors_text, filetypes_text)
-        })
-        .collect();
-
     rsx! {
         div { style: "margin-top:1em;",
             h3 { "Other Torrents" }
-            if torrent_rows.is_empty() {
+            if torrents.is_empty() {
                 p { i { "No other torrents found for this book" } }
             } else {
-                div { class: "other-torrents",
-                    for (item, authors_text, filetypes_text) in torrent_rows {
-                        div { class: "other-torrent",
-                            div {
-                                a { href: "/dioxus/torrents/{item.mam_id}", strong { "{item.title}" } }
-                                if let Some(edition) = item.edition {
-                                    " "
-                                    i { "{edition}" }
-                                }
-                            }
-                            if !item.authors.is_empty() {
-                                div { "By {authors_text}" }
-                            }
-                            div { "{filetypes_text} | {item.size} | {item.seeders}↑/{item.leechers}↓/{item.snatches} snatches" }
-                            div { style: "margin-top:0.4em;",
-                                if item.is_downloaded {
-                                    span { class: "pill", "Downloaded" }
-                                } else if item.is_selected {
-                                    span { class: "pill", "Queued" }
-                                } else {
-                                    SimpleDownloadButtons {
-                                        mam_id: item.mam_id,
-                                        can_wedge: item.can_wedge,
-                                        disabled: false,
-                                        mode: DownloadButtonMode::Full,
-                                        on_status: move |(msg, is_error)| {
-                                            status_msg.set(Some((msg, is_error)));
-                                        },
-                                        on_refresh: move |_| {
-                                            on_refresh.call(());
-                                        }
-                                    }
-                                }
-                            }
+                div { class: "Torrents",
+                    for torrent in torrents {
+                        SearchTorrentRow {
+                            torrent,
+                            status_msg,
+                            on_refresh: move |_| on_refresh.call(()),
+                            on_filter: move |filter: (String, String)| {
+                                let (query, sort) = filter;
+                                navigate_to_search(&query, &sort);
+                            },
                         }
                     }
                 }
