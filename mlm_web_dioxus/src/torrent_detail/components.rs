@@ -5,22 +5,68 @@ use super::server_fns::{
     set_qbit_category_tags_action, torrent_start_action, torrent_stop_action,
 };
 use super::types::*;
-use crate::components::{DownloadButtonMode, DownloadButtons, SimpleDownloadButtons};
-use crate::events::EventContent;
+use crate::components::{
+    DownloadButtonMode, DownloadButtons, SearchMetadataFilterItem, SearchMetadataFilterRow,
+    SearchMetadataKind, SearchTorrentRow, StatusMessage, flag_icon, search_filter_href,
+};
+use crate::events::EventListItem;
 use dioxus::prelude::*;
+
+fn spawn_action(
+    name: String,
+    mut loading: Signal<bool>,
+    mut status_msg: Signal<Option<(String, bool)>>,
+    on_refresh: EventHandler<()>,
+    fut: std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), ServerFnError>>>>,
+) {
+    spawn(async move {
+        loading.set(true);
+        status_msg.set(None);
+        match fut.await {
+            Ok(_) => {
+                status_msg.set(Some((format!("{name} succeeded"), false)));
+                on_refresh.call(());
+                loading.set(false);
+            }
+            Err(e) => {
+                status_msg.set(Some((format!("{name} failed: {e}"), true)));
+                loading.set(false);
+            }
+        }
+    });
+}
+
+fn series_label(name: &str, entries: &str) -> String {
+    if entries.is_empty() {
+        name.to_string()
+    } else {
+        format!("{name} {entries}")
+    }
+}
 
 #[component]
 pub fn TorrentDetailPage(id: String) -> Element {
-    let mut status_msg = use_signal(|| None::<(String, bool)>);
+    let status_msg = use_signal(|| None::<(String, bool)>);
     let mut cached_data = use_signal(|| None::<(TorrentPageData, Vec<String>, Option<QbitData>)>);
 
     let mut data_res = use_server_future(move || {
         let id = id.clone();
         async move {
-            let detail = get_torrent_detail(id.clone()).await;
-            let providers = get_metadata_providers().await;
-            let qbit = get_qbit_data(id).await;
-            (detail, providers, qbit)
+            #[cfg(feature = "server")]
+            {
+                tokio::join!(
+                    get_torrent_detail(id.clone()),
+                    get_metadata_providers(),
+                    get_qbit_data(id),
+                )
+            }
+            #[cfg(not(feature = "server"))]
+            {
+                let detail = get_torrent_detail(id.clone()).await;
+                let providers = get_metadata_providers().await;
+                let qbit = get_qbit_data(id).await;
+                (detail, providers, qbit)
+            }
         }
     })?;
 
@@ -50,30 +96,25 @@ pub fn TorrentDetailPage(id: String) -> Element {
             _ => cached_data.read().clone(),
         }
     };
-    let render_error = {
+    let render_error = if cached_data.read().is_none() {
         let value = current_value.read();
-        match (&*value, cached_data.read().is_some()) {
-            (Some((Err(e), _, _)), false) => Some(e.to_string()),
-            (Some((_, Err(e), _)), false) => Some(e.to_string()),
-            (Some((_, _, Err(e))), false) => Some(e.to_string()),
-            _ => None,
+        if let Some((detail, providers, qbit)) = &*value {
+            detail
+                .as_ref()
+                .err()
+                .or_else(|| providers.as_ref().err())
+                .or_else(|| qbit.as_ref().err())
+                .map(|e| e.to_string())
+        } else {
+            None
         }
+    } else {
+        None
     };
 
     rsx! {
         div { class: "torrent-detail-page",
-            if let Some((msg, is_error)) = status_msg.read().as_ref() {
-                div {
-                    class: if *is_error { "error" } else { "success" },
-                    style: if *is_error { "padding: 10px; margin-bottom: 10px; border-radius: 4px; color: #000; background: #fdd;" } else { "padding: 10px; margin-bottom: 10px; border-radius: 4px; color: #000; background: #dfd;" },
-                    "{msg}"
-                    button {
-                        style: "margin-left: 10px; cursor: pointer;",
-                        onclick: move |_| status_msg.set(None),
-                        "⨯"
-                    }
-                }
-            }
+            StatusMessage { status_msg }
             if is_loading && cached_data.read().is_some() {
                 p { class: "loading-indicator", "Refreshing..." }
             }
@@ -135,16 +176,30 @@ fn TorrentDetailContent(
         .collect::<Vec<_>>();
 
     let filetypes_text = torrent.filetypes.join(", ");
-
-    let series_text = torrent
+    let author_filters = torrent
+        .authors
+        .iter()
+        .map(|author| SearchMetadataFilterItem {
+            label: author.clone(),
+            href: search_filter_href("author", author, ""),
+        })
+        .collect::<Vec<_>>();
+    let narrator_filters = torrent
+        .narrators
+        .iter()
+        .map(|narrator| SearchMetadataFilterItem {
+            label: narrator.clone(),
+            href: search_filter_href("narrator", narrator, ""),
+        })
+        .collect::<Vec<_>>();
+    let series_filters = torrent
         .series
         .iter()
-        .map(|s| format!("{} ({})", s.name, s.entries))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    let authors_text = torrent.authors.join(", ");
-    let narrators_text = torrent.narrators.join(", ");
+        .map(|series| SearchMetadataFilterItem {
+            label: series_label(&series.name, &series.entries),
+            href: search_filter_href("series", &series.name, "series"),
+        })
+        .collect::<Vec<_>>();
 
     rsx! {
         div { class: "torrent-detail-grid",
@@ -212,9 +267,20 @@ fn TorrentDetailContent(
                         dt { "Client Status" }
                         dd { "{status}" }
                     }
-                    if let Some(flags) = &torrent.flags {
+                    if !torrent.flags.is_empty() {
                         dt { "Flags" }
-                        dd { "{flags}" }
+                        dd {
+                            for flag in &torrent.flags {
+                                if let Some((src, title)) = flag_icon(flag) {
+                                    img {
+                                        class: "flag",
+                                        src: "{src}",
+                                        alt: "{title}",
+                                        title: "{title}",
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -233,24 +299,12 @@ fn TorrentDetailContent(
                     }
                 }
 
-                if !torrent.authors.is_empty() {
-                    p {
-                        strong { "Authors: " }
-                        "{authors_text}"
-                    }
+                SearchMetadataFilterRow { kind: SearchMetadataKind::Authors, items: author_filters }
+                SearchMetadataFilterRow {
+                    kind: SearchMetadataKind::Narrators,
+                    items: narrator_filters,
                 }
-                if !torrent.narrators.is_empty() {
-                    p {
-                        strong { "Narrators: " }
-                        "{narrators_text}"
-                    }
-                }
-                if !torrent.series.is_empty() {
-                    p {
-                        strong { "Series: " }
-                        "{series_text}"
-                    }
-                }
+                SearchMetadataFilterRow { kind: SearchMetadataKind::Series, items: series_filters }
                 if !torrent.tags.is_empty() {
                     div {
                         strong { "Tags: " }
@@ -262,6 +316,11 @@ fn TorrentDetailContent(
                 div {
                     class: "row",
                     style: "display:flex; flex-wrap:wrap; gap:0.5em; margin:0.6em 0;",
+                    a {
+                        class: "btn",
+                        href: "/dioxus/torrents/{torrent.id}/edit",
+                        "Edit Metadata"
+                    }
                     if let Some(abs_url) = abs_item_url {
                         a {
                             class: "btn",
@@ -276,6 +335,14 @@ fn TorrentDetailContent(
                             href: "https://www.myanonamouse.net/t/{mam_id}",
                             target: "_blank",
                             "Open in MaM"
+                        }
+                    }
+                    if let Some(goodreads_id) = &torrent.goodreads_id {
+                        a {
+                            class: "btn",
+                            href: "https://www.goodreads.com/book/show/{goodreads_id}",
+                            target: "_blank",
+                            "Open in Goodreads"
                         }
                     }
                 }
@@ -317,10 +384,19 @@ fn TorrentDetailContent(
                     }
                 }
 
-                h3 { "Event History" }
-                for event in events {
-                    div { class: "event-item",
-                        EventContent { event, torrent: None, replacement: None }
+                details {
+                    summary {
+                        h3 { "Event History" }
+                    }
+                    for event in events {
+                        div { class: "event-item",
+                            EventListItem {
+                                event,
+                                torrent: None,
+                                replacement: None,
+                                show_created_at: true,
+                            }
+                        }
                     }
                 }
             }
@@ -370,16 +446,31 @@ fn TorrentMamContent(
     let torrent = data.meta;
     let mam = data.mam_torrent;
 
-    let series_text = torrent
+    let filetypes_text = torrent.filetypes.join(", ");
+    let author_filters = torrent
+        .authors
+        .iter()
+        .map(|author| SearchMetadataFilterItem {
+            label: author.clone(),
+            href: search_filter_href("author", author, ""),
+        })
+        .collect::<Vec<_>>();
+    let narrator_filters = torrent
+        .narrators
+        .iter()
+        .map(|narrator| SearchMetadataFilterItem {
+            label: narrator.clone(),
+            href: search_filter_href("narrator", narrator, ""),
+        })
+        .collect::<Vec<_>>();
+    let series_filters = torrent
         .series
         .iter()
-        .map(|s| format!("{} ({})", s.name, s.entries))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    let filetypes_text = torrent.filetypes.join(", ");
-    let authors_text = torrent.authors.join(", ");
-    let narrators_text = torrent.narrators.join(", ");
+        .map(|series| SearchMetadataFilterItem {
+            label: series_label(&series.name, &series.entries),
+            href: search_filter_href("series", &series.name, "series"),
+        })
+        .collect::<Vec<_>>();
 
     rsx! {
         div { class: "torrent-detail-grid",
@@ -414,22 +505,22 @@ fn TorrentMamContent(
                 if let Some(ed) = &torrent.edition {
                     p { "{ed}" }
                 }
-                if !torrent.authors.is_empty() {
-                    p {
-                        strong { "Authors: " }
-                        "{authors_text}"
-                    }
+                SearchMetadataFilterRow { kind: SearchMetadataKind::Authors, items: author_filters }
+                SearchMetadataFilterRow {
+                    kind: SearchMetadataKind::Narrators,
+                    items: narrator_filters,
                 }
-                if !torrent.narrators.is_empty() {
-                    p {
-                        strong { "Narrators: " }
-                        "{narrators_text}"
-                    }
-                }
-                if !series_text.is_empty() {
-                    p {
-                        strong { "Series: " }
-                        "{series_text}"
+                SearchMetadataFilterRow { kind: SearchMetadataKind::Series, items: series_filters }
+                div {
+                    class: "row",
+                    style: "display:flex; flex-wrap:wrap; gap:0.5em; margin:0.6em 0;",
+                    if let Some(goodreads_id) = &torrent.goodreads_id {
+                        a {
+                            class: "btn",
+                            href: "https://www.goodreads.com/book/show/{goodreads_id}",
+                            target: "_blank",
+                            "Open in Goodreads"
+                        }
                     }
                 }
                 div { style: "margin-top:0.8em;",
@@ -472,66 +563,24 @@ fn TorrentMamContent(
 
 #[component]
 fn OtherTorrentsSection(
-    torrents: Vec<OtherTorrentInfo>,
+    torrents: Vec<crate::search::SearchTorrent>,
     mut status_msg: Signal<Option<(String, bool)>>,
     on_refresh: EventHandler<()>,
 ) -> Element {
-    // Pre-compute derived data for each torrent
-    let torrent_rows: Vec<_> = torrents
-        .into_iter()
-        .map(|item| {
-            let authors_text = item.authors.join(", ");
-            let filetypes_text = item.filetypes.join(", ");
-            (item, authors_text, filetypes_text)
-        })
-        .collect();
-
     rsx! {
         div { style: "margin-top:1em;",
             h3 { "Other Torrents" }
-            if torrent_rows.is_empty() {
+            if torrents.is_empty() {
                 p {
                     i { "No other torrents found for this book" }
                 }
             } else {
-                div { class: "other-torrents",
-                    for (item , authors_text , filetypes_text) in torrent_rows {
-                        div { class: "other-torrent",
-                            div {
-                                a { href: "/dioxus/torrents/{item.mam_id}",
-                                    strong { "{item.title}" }
-                                }
-                                if let Some(edition) = item.edition {
-                                    " "
-                                    i { "{edition}" }
-                                }
-                            }
-                            if !item.authors.is_empty() {
-                                div { "By {authors_text}" }
-                            }
-                            div {
-                                "{filetypes_text} | {item.size} | {item.seeders}↑/{item.leechers}↓/{item.snatches} snatches"
-                            }
-                            div { style: "margin-top:0.4em;",
-                                if item.is_downloaded {
-                                    span { class: "pill", "Downloaded" }
-                                } else if item.is_selected {
-                                    span { class: "pill", "Queued" }
-                                } else {
-                                    SimpleDownloadButtons {
-                                        mam_id: item.mam_id,
-                                        can_wedge: item.can_wedge,
-                                        disabled: false,
-                                        mode: DownloadButtonMode::Full,
-                                        on_status: move |(msg, is_error)| {
-                                            status_msg.set(Some((msg, is_error)));
-                                        },
-                                        on_refresh: move |_| {
-                                            on_refresh.call(());
-                                        },
-                                    }
-                                }
-                            }
+                div { class: "Torrents",
+                    for torrent in torrents {
+                        SearchTorrentRow {
+                            torrent,
+                            status_msg,
+                            on_refresh: move |_| on_refresh.call(()),
                         }
                     }
                 }
@@ -549,27 +598,13 @@ fn TorrentActions(
     on_refresh: EventHandler<()>,
 ) -> Element {
     let mut selected_provider = use_signal(|| providers.first().cloned().unwrap_or_default());
-    let mut loading = use_signal(|| false);
+    let loading = use_signal(|| false);
 
     let handle_action = move |name: String,
                               fut: std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<(), ServerFnError>>>,
     >| {
-        spawn(async move {
-            loading.set(true);
-            status_msg.set(None);
-            match fut.await {
-                Ok(_) => {
-                    status_msg.set(Some((format!("{} succeeded", name), false)));
-                    on_refresh.call(());
-                    loading.set(false);
-                }
-                Err(e) => {
-                    status_msg.set(Some((format!("{} failed: {}", name, e), true)));
-                    loading.set(false);
-                }
-            }
-        });
+        spawn_action(name, loading, status_msg, on_refresh, fut);
     };
 
     rsx! {
@@ -702,7 +737,7 @@ fn QbitControls(
 ) -> Element {
     let mut selected_category = use_signal(|| qbit.torrent_category.clone());
     let mut selected_tags = use_signal(|| qbit.torrent_tags.clone());
-    let mut loading = use_signal(|| false);
+    let loading = use_signal(|| false);
     let qbit_files = qbit
         .qbit_files
         .iter()
@@ -718,21 +753,7 @@ fn QbitControls(
                                    fut: std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<(), ServerFnError>>>,
     >| {
-        spawn(async move {
-            loading.set(true);
-            status_msg.set(None);
-            match fut.await {
-                Ok(_) => {
-                    status_msg.set(Some((format!("{} succeeded", name), false)));
-                    on_refresh.call(());
-                    loading.set(false);
-                }
-                Err(e) => {
-                    status_msg.set(Some((format!("{} failed: {}", name, e), true)));
-                    loading.set(false);
-                }
-            }
-        });
+        spawn_action(name, loading, status_msg, on_refresh, fut);
     };
 
     rsx! {
@@ -744,10 +765,6 @@ fn QbitControls(
                 dd { "{qbit.torrent_state}" }
                 dt { "Uploaded" }
                 dd { "{qbit.uploaded}" }
-                if let Some(msg) = &qbit.tracker_message {
-                    dt { "Tracker Msg" }
-                    dd { "{msg}" }
-                }
             }
 
             if let Some(path) = qbit.wanted_path {

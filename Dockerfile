@@ -5,16 +5,28 @@
 
 FROM rust:1.91 AS build
 
-RUN cargo new --lib app/mlm_db
-RUN cargo new --lib app/mlm_mam
-RUN cargo new --lib app/mlm_parse
-RUN cargo new --bin app/server
+RUN <<EOF
+  set -e
+  cargo new --lib app/mlm_db
+  cargo new --lib app/mlm_mam
+  cargo new --lib app/mlm_parse
+  cargo new --lib app/mlm_meta
+  cargo new --lib app/mlm_core
+  cargo new --lib app/mlm_web_askama
+  cargo new --bin app/mlm_web_dioxus
+  cargo new --bin app/server
+  touch /app/mlm_web_dioxus/src/lib.rs
+EOF
 
 # Capture dependencies
 COPY Cargo.toml Cargo.lock /app/
 COPY mlm_db/Cargo.toml /app/mlm_db/
 COPY mlm_mam/Cargo.toml /app/mlm_mam/
 COPY mlm_parse/Cargo.toml /app/mlm_parse/
+COPY mlm_meta/Cargo.toml /app/mlm_meta/
+COPY mlm_core/Cargo.toml /app/mlm_core/
+COPY mlm_web_askama/Cargo.toml /app/mlm_web_askama/
+COPY mlm_web_dioxus/Cargo.toml /app/mlm_web_dioxus/
 COPY server/Cargo.toml /app/server/
 
 # This step compiles only our dependencies and saves them in a layer. This is the most impactful time savings
@@ -26,6 +38,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry cargo build --release
 COPY ./mlm_db /app/mlm_db
 COPY ./mlm_mam /app/mlm_mam
 COPY ./mlm_parse /app/mlm_parse
+COPY ./mlm_meta /app/mlm_meta
+COPY ./mlm_core /app/mlm_core
+COPY ./mlm_web_askama /app/mlm_web_askama
+COPY ./mlm_web_dioxus /app/mlm_web_dioxus
 COPY ./server /app/server
 
 # A bit of magic here!
@@ -38,6 +54,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry <<EOF
   touch /app/mlm_db/src/lib.rs
   touch /app/mlm_mam/src/lib.rs
   touch /app/mlm_parse/src/lib.rs
+  touch /app/mlm_meta/src/lib.rs
+  touch /app/mlm_core/src/lib.rs
+  touch /app/mlm_web_askama/src/lib.rs
+  touch /app/mlm_web_dioxus/src/lib.rs
+  touch /app/mlm_web_dioxus/src/main.rs
   touch /app/server/src/main.rs
   cargo build --release
 EOF

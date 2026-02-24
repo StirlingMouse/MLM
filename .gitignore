@@ -5,3 +5,9 @@ config.toml
 data.db
 data.db.*
 server/assets/dioxus
+test/e2e.db
+/test-results
+/tests/e2e/test-dbs
+/.manifest.json
+/mlm_web_dioxus/.manifest.json
+/mlm_web_dioxus/dev.db

@@ -3,6 +3,7 @@ use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 use anyhow::Result;
 use axum::http::HeaderMap;
 use mlm_db::{DatabaseExt as _, Flags, Torrent, TorrentMeta, ids, impls::format_serie};
+use mlm_parse::clean_html;
 use native_db::Database;
 use reqwest::{Url, header::AUTHORIZATION};
 use serde::{Deserialize, Serialize};
@@ -628,7 +629,7 @@ impl Abs {
                         })
                         .collect(),
                     narrators: meta.narrators.iter().map(|name| name.as_str()).collect(),
-                    description: Some(&meta.description),
+                    description: Some(&clean_html(&meta.description)),
                     isbn: meta.ids.get(ids::ISBN).map(|s| s.as_str()),
                     asin: meta.ids.get(ids::ASIN).map(|s| s.as_str()),
                     genres: meta

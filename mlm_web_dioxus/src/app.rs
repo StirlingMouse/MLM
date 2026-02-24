@@ -2,13 +2,15 @@ use crate::duplicate::DuplicatePage;
 use crate::errors::ErrorsPage;
 use crate::events::EventsPage;
 use crate::home::HomePage;
+use crate::list::ListPage;
+use crate::lists::ListsPage;
 use crate::replaced::ReplacedPage;
 use crate::search::SearchPage;
 use crate::selected::SelectedPage;
 #[cfg(feature = "web")]
 use crate::sse::{trigger_events_update, trigger_stats_update};
-use crate::stats::StatsPage;
 use crate::torrent_detail::TorrentDetailPage;
+use crate::torrent_edit::TorrentEditPage;
 use crate::torrents::TorrentsPage;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -19,41 +21,47 @@ const GLOBAL_STYLE_CSS: &str = include_str!("../../server/assets/style.css");
 #[rustfmt::skip]
 pub enum Route {
     #[layout(App)]
-    #[route("/dioxus/")]
-    Home {},
-
-    #[route("/dioxus/stats")]
-    Stats {},
+    #[route("/")]
+    HomePage {},
 
     #[route("/dioxus/events")]
-    Events {},
+    EventsPage {},
 
     #[route("/dioxus/events/:..segments")]
     EventsWithQuery { segments: Vec<String> },
 
     #[route("/dioxus/errors")]
-    Errors {},
+    ErrorsPage {},
 
     #[route("/dioxus/selected")]
-    Selected {},
+    SelectedPage {},
 
     #[route("/dioxus/replaced")]
-    Replaced {},
+    ReplacedPage {},
 
     #[route("/dioxus/duplicate")]
-    Duplicate {},
+    DuplicatePage {},
 
     #[route("/dioxus/torrents")]
-    Torrents {},
+    TorrentsPage {},
 
     #[route("/dioxus/torrents/:id")]
-    TorrentDetail { id: String },
+    TorrentDetailPage { id: String },
+
+    #[route("/dioxus/torrents/:id/edit")]
+    TorrentEditPage { id: String },
 
     #[route("/dioxus/torrents/:..segments")]
     TorrentsWithQuery { segments: Vec<String> },
 
     #[route("/dioxus/search")]
-    Search {},
+    SearchPage {},
+
+    #[route("/dioxus/lists")]
+    ListsPage {},
+
+    #[route("/dioxus/lists/:id")]
+    ListPage { id: String },
 }
 
 pub fn root() -> Element {
@@ -72,17 +80,16 @@ pub fn App() -> Element {
         document::Link { rel: "icon", r#type: "image/png", href: "/assets/favicon.png" }
         document::Style { "{GLOBAL_STYLE_CSS}" }
 
-        nav {
-            Link { to: Route::Home {}, "Home (Dioxus)" }
-            a { href: "/", "Home (Legacy)" }
-            Link { to: Route::Torrents {}, "Torrents" }
-            Link { to: Route::Events {}, "Events" }
-            Link { to: Route::Search {}, "Search" }
-            a { href: "/lists", "Goodreads lists" }
-            Link { to: Route::Errors {}, "Errors" }
-            Link { to: Route::Selected {}, "Selected Torrents" }
-            Link { to: Route::Replaced {}, "Replaced Torrents" }
-            Link { to: Route::Duplicate {}, "Duplicate Torrents" }
+        nav { "aria-label": "Main navigation",
+            Link { to: Route::HomePage {}, "Home" }
+            Link { to: Route::TorrentsPage {}, "Torrents" }
+            Link { to: Route::EventsPage {}, "Events" }
+            Link { to: Route::SearchPage {}, "Search" }
+            Link { to: Route::ListsPage {}, "Goodreads Lists" }
+            Link { to: Route::ErrorsPage {}, "Errors" }
+            Link { to: Route::SelectedPage {}, "Selected Torrents" }
+            Link { to: Route::ReplacedPage {}, "Replaced Torrents" }
+            Link { to: Route::DuplicatePage {}, "Duplicate Torrents" }
             a { href: "/config", "Config" }
         }
         main { Outlet::<Route> {} }
@@ -90,87 +97,15 @@ pub fn App() -> Element {
 }
 
 #[component]
-fn Home() -> Element {
-    rsx! {
-        HomePage {}
-    }
-}
-
-#[component]
-fn Stats() -> Element {
-    rsx! {
-        StatsPage {}
-    }
-}
-
-#[component]
-fn Events() -> Element {
-    rsx! {
-        EventsPage {}
-    }
-}
-
-#[component]
-fn Errors() -> Element {
-    rsx! {
-        ErrorsPage {}
-    }
-}
-
-#[component]
-fn Selected() -> Element {
-    rsx! {
-        SelectedPage {}
-    }
-}
-
-#[component]
-fn Replaced() -> Element {
-    rsx! {
-        ReplacedPage {}
-    }
-}
-
-#[component]
-fn Duplicate() -> Element {
-    rsx! {
-        DuplicatePage {}
-    }
-}
-
-#[component]
 fn EventsWithQuery(segments: Vec<String>) -> Element {
-    rsx! {
-        EventsPage {}
-    }
-}
-
-#[component]
-fn Torrents() -> Element {
-    rsx! {
-        TorrentsPage {}
-    }
+    let _ = segments;
+    rsx! { EventsPage {} }
 }
 
 #[component]
 fn TorrentsWithQuery(segments: Vec<String>) -> Element {
-    rsx! {
-        TorrentsPage {}
-    }
-}
-
-#[component]
-fn TorrentDetail(id: String) -> Element {
-    rsx! {
-        TorrentDetailPage { id }
-    }
-}
-
-#[component]
-fn Search() -> Element {
-    rsx! {
-        SearchPage {}
-    }
+    let _ = segments;
+    rsx! { TorrentsPage {} }
 }
 
 fn setup_sse() {

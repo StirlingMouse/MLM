@@ -6,12 +6,14 @@ pub mod error;
 pub mod errors;
 pub mod events;
 pub mod home;
+pub mod list;
+pub mod lists;
 pub mod replaced;
 pub mod search;
 pub mod selected;
 pub mod sse;
-pub mod stats;
 pub mod torrent_detail;
+pub mod torrent_edit;
 pub mod torrents;
 pub mod utils;
 

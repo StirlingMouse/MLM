@@ -2,7 +2,6 @@ use dioxus::prelude::*;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct TaskBoxProps {
-    pub title: String,
     pub last_run: Option<String>,
     pub result: Option<Result<(), String>>,
     #[props(default = None)]
