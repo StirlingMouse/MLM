@@ -3,8 +3,8 @@ use std::collections::BTreeSet;
 use std::str::FromStr;
 
 use crate::components::{
-    ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, TorrentGridTable,
-    apply_click_filter, build_query_string, encode_query_enum, parse_location_query_pairs,
+    ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, FilterLink,
+    TorrentGridTable, build_query_string, encode_query_enum, flag_icon, parse_location_query_pairs,
     parse_query_enum, set_location_query_string,
 };
 use dioxus::prelude::*;
@@ -486,21 +486,6 @@ fn convert_selected_row(t: &SelectedTorrent, default_unsat: u64) -> SelectedRow 
     }
 }
 
-fn flag_icon(flag: &str) -> Option<(&'static str, &'static str)> {
-    match flag {
-        "language" => Some(("/assets/icons/language.png", "Crude Language")),
-        "violence" => Some(("/assets/icons/hand.png", "Violence")),
-        "some_explicit" => Some((
-            "/assets/icons/lipssmall.png",
-            "Some Sexually Explicit Content",
-        )),
-        "explicit" => Some(("/assets/icons/flames.png", "Sexually Explicit Content")),
-        "abridged" => Some(("/assets/icons/abridged.png", "Abridged")),
-        "lgbt" => Some(("/assets/icons/lgbt.png", "LGBT")),
-        _ => None,
-    }
-}
-
 fn filter_name(filter: SelectedPageFilter) -> &'static str {
     match filter {
         SelectedPageFilter::Kind => "Type",
@@ -709,6 +694,7 @@ fn set_column_enabled(show: &mut SelectedPageColumns, column: SelectedColumn, en
 
 #[component]
 pub fn SelectedPage() -> Element {
+    let _route: crate::app::Route = use_route();
     let initial_state = parse_legacy_query_state();
     let initial_sort = initial_state.sort;
     let initial_asc = initial_state.asc;
@@ -723,7 +709,7 @@ pub fn SelectedPage() -> Element {
 
     let sort = use_signal(move || initial_sort);
     let asc = use_signal(move || initial_asc);
-    let mut filters = use_signal(move || initial_filters.clone());
+    let filters = use_signal(move || initial_filters.clone());
     let show = use_signal(move || initial_show);
     let mut selected = use_signal(BTreeSet::<u64>::new);
     let mut unsats_input = use_signal(|| "1".to_string());
@@ -748,6 +734,30 @@ pub fn SelectedPage() -> Element {
         .map(|resource| resource.pending())
         .unwrap_or(true);
     let value = selected_data.as_ref().map(|resource| resource.value());
+
+    {
+        let route_state = parse_legacy_query_state();
+        let route_request_key = build_legacy_query_string(
+            route_state.sort,
+            route_state.asc,
+            &route_state.filters,
+            route_state.show,
+        );
+        if *last_request_key.read() != route_request_key {
+            let mut sort = sort;
+            let mut asc = asc;
+            let mut filters_signal = filters;
+            let mut show = show;
+            sort.set(route_state.sort);
+            asc.set(route_state.asc);
+            filters_signal.set(route_state.filters);
+            show.set(route_state.show);
+            last_request_key.set(route_request_key);
+            if let Some(resource) = selected_data.as_mut() {
+                resource.restart();
+            }
+        }
+    }
 
     if let Some(value) = &value {
         let value = value.read();
@@ -1094,26 +1104,20 @@ pub fn SelectedPage() -> Element {
                                             }
                                         }
                                         div {
-                                            button {
-                                                r#type: "button",
-                                                class: "link",
-                                                title: "{torrent.meta.cat_name}",
-                                                onclick: {
-                                                    let value = torrent.meta.media_type.clone();
-                                                    move |_| apply_click_filter(&mut filters, SelectedPageFilter::Kind, value.clone())
-                                                },
+                                            FilterLink {
+                                                filters: filters,
+                                                field: SelectedPageFilter::Kind,
+                                                value: torrent.meta.media_type.clone(),
+                                                title: Some(torrent.meta.cat_name.clone()),
                                                 "{torrent.meta.media_type}"
                                             }
                                             if show.read().category {
                                                 if let Some(cat_id) = torrent.meta.cat_id.clone() {
                                                     div {
-                                                        button {
-                                                            r#type: "button",
-                                                            class: "link",
-                                                            onclick: {
-                                                                let cat_id = cat_id.clone();
-                                                                move |_| apply_click_filter(&mut filters, SelectedPageFilter::Category, cat_id.clone())
-                                                            },
+                                                        FilterLink {
+                                                            filters: filters,
+                                                            field: SelectedPageFilter::Category,
+                                                            value: cat_id.clone(),
                                                             "{torrent.meta.cat_name}"
                                                         }
                                                     }
@@ -1124,13 +1128,10 @@ pub fn SelectedPage() -> Element {
                                             div {
                                                 for flag in torrent.meta.flags.clone() {
                                                     if let Some((src, title)) = flag_icon(&flag) {
-                                                        button {
-                                                            r#type: "button",
-                                                            class: "link",
-                                                            onclick: {
-                                                                let flag = flag.clone();
-                                                                move |_| apply_click_filter(&mut filters, SelectedPageFilter::Flags, flag.clone())
-                                                            },
+                                                        FilterLink {
+                                                            filters: filters,
+                                                            field: SelectedPageFilter::Flags,
+                                                            value: flag.clone(),
                                                             img {
                                                                 class: "flag",
                                                                 src: "{src}",
@@ -1143,26 +1144,20 @@ pub fn SelectedPage() -> Element {
                                             }
                                         }
                                         div {
-                                            button {
-                                                r#type: "button",
-                                                class: "link",
-                                                onclick: {
-                                                    let title = torrent.meta.title.clone();
-                                                    move |_| apply_click_filter(&mut filters, SelectedPageFilter::Title, title.clone())
-                                                },
+                                            FilterLink {
+                                                filters: filters,
+                                                field: SelectedPageFilter::Title,
+                                                value: torrent.meta.title.clone(),
                                                 "{torrent.meta.title}"
                                             }
                                         }
                                         if show.read().authors {
                                             div {
                                                 for author in torrent.meta.authors.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let author = author.clone();
-                                                            move |_| apply_click_filter(&mut filters, SelectedPageFilter::Author, author.clone())
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: SelectedPageFilter::Author,
+                                                        value: author.clone(),
                                                         "{author}"
                                                     }
                                                 }
@@ -1171,13 +1166,10 @@ pub fn SelectedPage() -> Element {
                                         if show.read().narrators {
                                             div {
                                                 for narrator in torrent.meta.narrators.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let narrator = narrator.clone();
-                                                            move |_| apply_click_filter(&mut filters, SelectedPageFilter::Narrator, narrator.clone())
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: SelectedPageFilter::Narrator,
+                                                        value: narrator.clone(),
                                                         "{narrator}"
                                                     }
                                                 }
@@ -1186,13 +1178,10 @@ pub fn SelectedPage() -> Element {
                                         if show.read().series {
                                             div {
                                                 for series in torrent.meta.series.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let series_name = series.name.clone();
-                                                            move |_| apply_click_filter(&mut filters, SelectedPageFilter::Series, series_name.clone())
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: SelectedPageFilter::Series,
+                                                        value: series.name.clone(),
                                                         if series.entries.is_empty() {
                                                             "{series.name}"
                                                         } else {
@@ -1204,13 +1193,10 @@ pub fn SelectedPage() -> Element {
                                         }
                                         if show.read().language {
                                             div {
-                                                button {
-                                                    r#type: "button",
-                                                    class: "link",
-                                                    onclick: {
-                                                        let value = torrent.meta.language.clone().unwrap_or_default();
-                                                        move |_| apply_click_filter(&mut filters, SelectedPageFilter::Language, value.clone())
-                                                    },
+                                                FilterLink {
+                                                    filters: filters,
+                                                    field: SelectedPageFilter::Language,
+                                                    value: torrent.meta.language.clone().unwrap_or_default(),
                                                     "{torrent.meta.language.clone().unwrap_or_default()}"
                                                 }
                                             }
@@ -1221,39 +1207,30 @@ pub fn SelectedPage() -> Element {
                                         if show.read().filetypes {
                                             div {
                                                 for filetype in torrent.meta.filetypes.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let filetype = filetype.clone();
-                                                            move |_| apply_click_filter(&mut filters, SelectedPageFilter::Filetype, filetype.clone())
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: SelectedPageFilter::Filetype,
+                                                        value: filetype.clone(),
                                                         "{filetype}"
                                                     }
                                                 }
                                             }
                                         }
                                         div {
-                                            button {
-                                                r#type: "button",
-                                                class: "link",
-                                                onclick: {
-                                                    let value = torrent.cost.clone();
-                                                    move |_| apply_click_filter(&mut filters, SelectedPageFilter::Cost, value.clone())
-                                                },
+                                            FilterLink {
+                                                filters: filters,
+                                                field: SelectedPageFilter::Cost,
+                                                value: torrent.cost.clone(),
                                                 "{torrent.cost}"
                                             }
                                         }
                                         div { "{torrent.required_unsats}" }
                                         if show.read().grabber {
                                             div {
-                                                button {
-                                                    r#type: "button",
-                                                    class: "link",
-                                                    onclick: {
-                                                        let value = torrent.grabber.clone().unwrap_or_default();
-                                                        move |_| apply_click_filter(&mut filters, SelectedPageFilter::Grabber, value.clone())
-                                                    },
+                                                FilterLink {
+                                                    filters: filters,
+                                                    field: SelectedPageFilter::Grabber,
+                                                    value: torrent.grabber.clone().unwrap_or_default(),
                                                     "{torrent.grabber.clone().unwrap_or_default()}"
                                                 }
                                             }

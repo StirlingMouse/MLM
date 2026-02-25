@@ -3246,6 +3246,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
+name = "lucide-dioxus"
+version = "2.575.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "697ee3753d4ba59db3268e16b16c37888752a1207c01ba8c695d39c2beaa06a9"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
 name = "mac"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3678,6 +3687,7 @@ dependencies = [
  "dioxus-fullstack",
  "figment",
  "itertools 0.14.0",
+ "lucide-dioxus",
  "mlm_core",
  "mlm_db",
  "mlm_mam",

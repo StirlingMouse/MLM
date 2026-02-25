@@ -610,90 +610,126 @@ summary {
         width: max(220px, 20vw);
 }
 
-.search-page .Torrents {
-        display: grid;
-        gap: 8px;
-}
+.Torrents {
+    --alternate: var(--above);
+    word-break: break-word;
 
-.search-page .TorrentRow {
-        display: grid;
-        grid-template-columns: 56px 56px 1fr 80px 130px 80px;
-        grid-template-areas: "category icons main files uploaded stats";
-        gap: 8px;
-        padding: 8px;
-        border-radius: 4px;
-        background: var(--above);
-}
+    &.Torrents {
+        margin: 0 -8px;
+    }
 
-.search-page .TorrentRow .category,
-.search-page .TorrentRow .icons,
-.search-page .TorrentRow .files,
-.search-page .TorrentRow .uploaded,
-.search-page .TorrentRow .stats {
-        display: flex;
-        flex-direction: column;
+    .TorrentRow {
+        grid-template-areas: "category icons main download files uploaded stats";
+        grid-template-columns: 64px 54px 1fr 32px 84px 130px 72px;
         gap: 4px;
-}
+        padding: 4px 8px;
 
-.search-page .TorrentRow .stats {
-        align-items: flex-end;
-}
-
-.search-page .TorrentRow .icon-row {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-}
-
-.search-page .TorrentRow .icon-row img {
-        width: 14px;
-        height: 14px;
-}
-
-.search-page .TorrentRow .media-icon {
-        width: 36px;
-        height: 36px;
-        object-fit: contain;
-}
-
-.search-page .TorrentRow .CategoryPills {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
-        margin-top: 4px;
-}
-
-.search-page .TorrentRow .CategoryPill {
-        display: inline-block;
-        padding: 2px 6px;
-        border-radius: 12px;
-        background: color-mix(in srgb, var(--color-3) 40%, transparent);
-}
-
-.search-page .TorrentRow .CategoryPill.old {
-        background: color-mix(in srgb, var(--accent) 65%, transparent);
-}
-
-.search-page .TorrentRow .filter-link {
-        padding: 0;
-        border: none;
-        background: transparent;
-        color: inherit;
-        text-decoration: underline;
-        text-decoration-color: transparent;
-}
-
-.search-page .TorrentRow .filter-link:hover {
-        text-decoration-color: currentColor;
-        background: transparent;
-}
-
-@media (max-width: 960px) {
-        .search-page .TorrentRow {
-                grid-template-columns: 56px 1fr 80px;
-                grid-template-areas:
-                        "category main main"
-                        "icons main main"
-                        "files uploaded stats";
+        @media (max-width: 750px) {
+            grid-template-areas: "category main main" "icons main main" "icons files stats" "icons uploaded uploaded";
+            grid-template-columns: 64px 1fr auto;
+            grid-template-rows: auto auto auto auto;
         }
+
+        &>div {
+            padding: 4px;
+            overflow: hidden;
+        }
+
+        &>div:nth-child(n+2):nth-child(-n+6) {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        &>div:nth-child(n+4):nth-child(-n+6) {
+            @media (max-width: 750px) {
+                flex-direction: row;
+            }
+        }
+
+        &>div:nth-child(1n+4) {
+            text-align: center;
+        }
+
+        &>div:last-of-type {
+            .icon-row {
+                justify-content: end;
+            }
+        }
+
+        .media-icon {
+                width: 48px;
+        }
+    }
+
+    &>div {
+        display: grid;
+
+        &&&:first-of-type {
+            /* align-items: end; */
+            background: var(--background);
+        }
+
+        &:nth-child(even) {
+            background: var(--alternate);
+        }
+
+        &>.header,
+        &>div {
+            display: block;
+            padding: 4px;
+        }
+
+        &>.header {
+            position: sticky;
+            top: 0;
+            font-weight: bold;
+            border-bottom: 1px solid currentColor;
+            background: var(--background);
+        }
+    }
+
+    &:not(.nohover, .Torrents)>div:hover {
+        background: var(--color-3);
+    }
 }
+
+
+.CategoryPills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.CategoryPill {
+    display: inline-block;
+    padding: 2px 4px;
+    border: 2px solid var(--color-3);
+    border-radius: 10px;
+
+    &.old {
+        background-color: var(--color-3);
+    }
+}
+
+.TorrentIcons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+
+    img {
+        width: 20px;
+        height: 20px;
+    }
+}
+
+.icon-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing, 4px);
+
+    &>span:has(svg) {
+        display: contents;
+    }
+}
+

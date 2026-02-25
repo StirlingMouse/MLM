@@ -253,7 +253,6 @@ async fn other_torrents_data(
                 .as_ref()
                 .map(|m| format!("{} {}", m.audio.bitrate, m.audio.mode));
             let old_category = meta.cat.as_ref().map(|cat| cat.to_string());
-            let cat_icon_id = meta.cat.as_ref().map(|cat| cat.as_id());
 
             Ok(SearchTorrent {
                 mam_id: mam_torrent.id,
@@ -298,7 +297,6 @@ async fn other_torrents_data(
                     values
                 },
                 old_category,
-                cat_icon_id,
                 media_type: meta.media_type.as_str().to_string(),
                 size: meta.size.to_string(),
                 filetypes: meta.filetypes.clone(),

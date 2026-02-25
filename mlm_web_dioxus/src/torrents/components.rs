@@ -3,8 +3,8 @@ use std::collections::BTreeSet;
 use dioxus::prelude::*;
 
 use crate::components::{
-    ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, PageSizeSelector,
-    Pagination, TorrentGridTable, apply_click_filter, set_location_query_string,
+    ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, FilterLink,
+    PageSizeSelector, Pagination, TorrentGridTable, flag_icon, set_location_query_string,
 };
 
 use super::query::{build_legacy_query_string, parse_legacy_query_state};
@@ -114,23 +114,9 @@ fn filter_name(filter: TorrentsPageFilter) -> &'static str {
     }
 }
 
-fn flag_icon(flag: &str) -> Option<(&'static str, &'static str)> {
-    match flag {
-        "language" => Some(("/assets/icons/language.png", "Crude Language")),
-        "violence" => Some(("/assets/icons/hand.png", "Violence")),
-        "some_explicit" => Some((
-            "/assets/icons/lipssmall.png",
-            "Some Sexually Explicit Content",
-        )),
-        "explicit" => Some(("/assets/icons/flames.png", "Sexually Explicit Content")),
-        "abridged" => Some(("/assets/icons/abridged.png", "Abridged")),
-        "lgbt" => Some(("/assets/icons/lgbt.png", "LGBT")),
-        _ => None,
-    }
-}
-
 #[component]
 pub fn TorrentsPage() -> Element {
+    let _route: crate::app::Route = use_route();
     let initial_state = parse_legacy_query_state();
     let initial_query_input = initial_state.query.clone();
     let initial_submitted_query = initial_state.query.clone();
@@ -154,7 +140,7 @@ pub fn TorrentsPage() -> Element {
     let mut submitted_query = use_signal(move || initial_submitted_query.clone());
     let sort = use_signal(move || initial_sort);
     let asc = use_signal(move || initial_asc);
-    let mut filters = use_signal(move || initial_filters.clone());
+    let filters = use_signal(move || initial_filters.clone());
     let mut from = use_signal(move || initial_from);
     let mut page_size = use_signal(move || initial_page_size);
     let show = use_signal(move || initial_show);
@@ -187,6 +173,41 @@ pub fn TorrentsPage() -> Element {
         .map(|resource| resource.pending())
         .unwrap_or(true);
     let value = torrents_data.as_ref().map(|resource| resource.value());
+
+    {
+        let route_state = parse_legacy_query_state();
+        let route_request_key = build_legacy_query_string(
+            &route_state.query,
+            route_state.sort,
+            route_state.asc,
+            &route_state.filters,
+            route_state.from,
+            route_state.page_size,
+            route_state.show,
+        );
+        if *last_request_key.read() != route_request_key {
+            let mut query_input = query_input;
+            let mut submitted_query = submitted_query;
+            let mut sort = sort;
+            let mut asc = asc;
+            let mut filters_signal = filters;
+            let mut from = from;
+            let mut page_size = page_size;
+            let mut show = show;
+            query_input.set(route_state.query.clone());
+            submitted_query.set(route_state.query);
+            sort.set(route_state.sort);
+            asc.set(route_state.asc);
+            filters_signal.set(route_state.filters);
+            from.set(route_state.from);
+            page_size.set(route_state.page_size);
+            show.set(route_state.show);
+            last_request_key.set(route_request_key);
+            if let Some(resource) = torrents_data.as_mut() {
+                resource.restart();
+            }
+        }
+    }
 
     if let Some(value) = &value {
         let value = value.read();
@@ -565,36 +586,24 @@ pub fn TorrentsPage() -> Element {
                                             }
                                         }
                                         div {
-                                            button {
-                                                r#type: "button",
-                                                class: "link",
-                                                title: "{torrent.meta.cat_name}",
-                                                onclick: {
-                                                    let value = torrent.meta.media_type.clone();
-                                                    move |_| {
-                                                        apply_click_filter(&mut filters, TorrentsPageFilter::Kind, value.clone());
-                                                        from.set(0);
-                                                    }
-                                                },
+                                            FilterLink {
+                                                filters: filters,
+                                                field: TorrentsPageFilter::Kind,
+                                                value: torrent.meta.media_type.clone(),
+                                                title: Some(torrent.meta.cat_name.clone()),
+                                                reset_from: true,
+                                                on_apply: move |_| from.set(0),
                                                 "{torrent.meta.media_type}"
                                             }
                                             if show.read().category {
                                                 if let Some(cat_id) = torrent.meta.cat_id.clone() {
                                                     div {
-                                                        button {
-                                                            r#type: "button",
-                                                            class: "link",
-                                                            onclick: {
-                                                                let label = cat_id.clone();
-                                                                move |_| {
-                                                                    apply_click_filter(
-                                                                        &mut filters,
-                                                                        TorrentsPageFilter::Category,
-                                                                        label.clone(),
-                                                                    );
-                                                                    from.set(0);
-                                                                }
-                                                            },
+                                                        FilterLink {
+                                                            filters: filters,
+                                                            field: TorrentsPageFilter::Category,
+                                                            value: cat_id.clone(),
+                                                            reset_from: true,
+                                                            on_apply: move |_| from.set(0),
                                                             "{torrent.meta.cat_name}"
                                                         }
                                                     }
@@ -604,20 +613,12 @@ pub fn TorrentsPage() -> Element {
                                         if show.read().categories {
                                             div {
                                                 for category in torrent.meta.categories.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let category = category.clone();
-                                                            move |_| {
-                                                                apply_click_filter(
-                                                                    &mut filters,
-                                                                    TorrentsPageFilter::Categories,
-                                                                    category.clone(),
-                                                                );
-                                                                from.set(0);
-                                                            }
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: TorrentsPageFilter::Categories,
+                                                        value: category.clone(),
+                                                        reset_from: true,
+                                                        on_apply: move |_| from.set(0),
                                                         "{category}"
                                                     }
                                                 }
@@ -627,16 +628,12 @@ pub fn TorrentsPage() -> Element {
                                             div {
                                                 for flag in torrent.meta.flags.clone() {
                                                     if let Some((src, title)) = flag_icon(&flag) {
-                                                        button {
-                                                            r#type: "button",
-                                                            class: "link",
-                                                            onclick: {
-                                                                let flag = flag.clone();
-                                                                move |_| {
-                                                                    apply_click_filter(&mut filters, TorrentsPageFilter::Flags, flag.clone());
-                                                                    from.set(0);
-                                                                }
-                                                            },
+                                                        FilterLink {
+                                                            filters: filters,
+                                                            field: TorrentsPageFilter::Flags,
+                                                            value: flag.clone(),
+                                                            reset_from: true,
+                                                            on_apply: move |_| from.set(0),
                                                             img {
                                                                 class: "flag",
                                                                 src: "{src}",
@@ -649,50 +646,36 @@ pub fn TorrentsPage() -> Element {
                                             }
                                         }
                                         div {
-                                            button {
-                                                r#type: "button",
-                                                class: "link",
-                                                onclick: {
-                                                    let title = torrent.meta.title.clone();
-                                                    move |_| {
-                                                        apply_click_filter(&mut filters, TorrentsPageFilter::Title, title.clone());
-                                                        from.set(0);
-                                                    }
-                                                },
+                                            FilterLink {
+                                                filters: filters,
+                                                field: TorrentsPageFilter::Title,
+                                                value: torrent.meta.title.clone(),
+                                                reset_from: true,
+                                                on_apply: move |_| from.set(0),
                                                 "{torrent.meta.title}"
                                             }
                                             if torrent.client_status.as_deref() == Some("removed_from_tracker") {
                                                 span {
                                                     class: "warn",
                                                     title: "Torrent is removed from tracker but still seeding",
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: move |_| {
-                                                            apply_click_filter(
-                                                                &mut filters,
-                                                                TorrentsPageFilter::ClientStatus,
-                                                                "removed_from_tracker".to_string(),
-                                                            );
-                                                            from.set(0);
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: TorrentsPageFilter::ClientStatus,
+                                                        value: "removed_from_tracker".to_string(),
+                                                        reset_from: true,
+                                                        on_apply: move |_| from.set(0),
                                                         "⚠"
                                                     }
                                                 }
                                             }
                                             if torrent.client_status.as_deref() == Some("not_in_client") {
                                                 span { title: "Torrent is not seeding",
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: move |_| {
-                                                            apply_click_filter(
-                                                                &mut filters,
-                                                                TorrentsPageFilter::ClientStatus,
-                                                                "not_in_client".to_string(),
-                                                            );
-                                                            from.set(0);
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: TorrentsPageFilter::ClientStatus,
+                                                        value: "not_in_client".to_string(),
+                                                        reset_from: true,
+                                                        on_apply: move |_| from.set(0),
                                                         "ℹ"
                                                     }
                                                 }
@@ -704,16 +687,12 @@ pub fn TorrentsPage() -> Element {
                                         if show.read().authors {
                                             div {
                                                 for author in torrent.meta.authors.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let author = author.clone();
-                                                            move |_| {
-                                                                apply_click_filter(&mut filters, TorrentsPageFilter::Author, author.clone());
-                                                                from.set(0);
-                                                            }
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: TorrentsPageFilter::Author,
+                                                        value: author.clone(),
+                                                        reset_from: true,
+                                                        on_apply: move |_| from.set(0),
                                                         "{author}"
                                                     }
                                                 }
@@ -722,20 +701,12 @@ pub fn TorrentsPage() -> Element {
                                         if show.read().narrators {
                                             div {
                                                 for narrator in torrent.meta.narrators.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let narrator = narrator.clone();
-                                                            move |_| {
-                                                                apply_click_filter(
-                                                                    &mut filters,
-                                                                    TorrentsPageFilter::Narrator,
-                                                                    narrator.clone(),
-                                                                );
-                                                                from.set(0);
-                                                            }
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: TorrentsPageFilter::Narrator,
+                                                        value: narrator.clone(),
+                                                        reset_from: true,
+                                                        on_apply: move |_| from.set(0),
                                                         "{narrator}"
                                                     }
                                                 }
@@ -744,20 +715,12 @@ pub fn TorrentsPage() -> Element {
                                         if show.read().series {
                                             div {
                                                 for series in torrent.meta.series.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let series_name = series.name.clone();
-                                                            move |_| {
-                                                                apply_click_filter(
-                                                                    &mut filters,
-                                                                    TorrentsPageFilter::Series,
-                                                                    series_name.clone(),
-                                                                );
-                                                                from.set(0);
-                                                            }
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: TorrentsPageFilter::Series,
+                                                        value: series.name.clone(),
+                                                        reset_from: true,
+                                                        on_apply: move |_| from.set(0),
                                                         if series.entries.is_empty() {
                                                             "{series.name}"
                                                         } else {
@@ -769,20 +732,12 @@ pub fn TorrentsPage() -> Element {
                                         }
                                         if show.read().language {
                                             div {
-                                                button {
-                                                    r#type: "button",
-                                                    class: "link",
-                                                    onclick: {
-                                                        let value = torrent.meta.language.clone().unwrap_or_default();
-                                                        move |_| {
-                                                            apply_click_filter(
-                                                                &mut filters,
-                                                                TorrentsPageFilter::Language,
-                                                                value.clone(),
-                                                            );
-                                                            from.set(0);
-                                                        }
-                                                    },
+                                                FilterLink {
+                                                    filters: filters,
+                                                    field: TorrentsPageFilter::Language,
+                                                    value: torrent.meta.language.clone().unwrap_or_default(),
+                                                    reset_from: true,
+                                                    on_apply: move |_| from.set(0),
                                                     "{torrent.meta.language.clone().unwrap_or_default()}"
                                                 }
                                             }
@@ -793,20 +748,12 @@ pub fn TorrentsPage() -> Element {
                                         if show.read().filetypes {
                                             div {
                                                 for filetype in torrent.meta.filetypes.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let filetype = filetype.clone();
-                                                            move |_| {
-                                                                apply_click_filter(
-                                                                    &mut filters,
-                                                                    TorrentsPageFilter::Filetype,
-                                                                    filetype.clone(),
-                                                                );
-                                                                from.set(0);
-                                                            }
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: TorrentsPageFilter::Filetype,
+                                                        value: filetype.clone(),
+                                                        reset_from: true,
+                                                        on_apply: move |_| from.set(0),
                                                         "{filetype}"
                                                     }
                                                 }
@@ -814,36 +761,24 @@ pub fn TorrentsPage() -> Element {
                                         }
                                         if show.read().linker {
                                             div {
-                                                button {
-                                                    r#type: "button",
-                                                    class: "link",
-                                                    onclick: {
-                                                        let linker = torrent.linker.clone().unwrap_or_default();
-                                                        move |_| {
-                                                            apply_click_filter(&mut filters, TorrentsPageFilter::Linker, linker.clone());
-                                                            from.set(0);
-                                                        }
-                                                    },
+                                                FilterLink {
+                                                    filters: filters,
+                                                    field: TorrentsPageFilter::Linker,
+                                                    value: torrent.linker.clone().unwrap_or_default(),
+                                                    reset_from: true,
+                                                    on_apply: move |_| from.set(0),
                                                     "{torrent.linker.clone().unwrap_or_default()}"
                                                 }
                                             }
                                         }
                                         if show.read().qbit_category {
                                             div {
-                                                button {
-                                                    r#type: "button",
-                                                    class: "link",
-                                                    onclick: {
-                                                        let category = torrent.category.clone().unwrap_or_default();
-                                                        move |_| {
-                                                            apply_click_filter(
-                                                                &mut filters,
-                                                                TorrentsPageFilter::QbitCategory,
-                                                                category.clone(),
-                                                            );
-                                                            from.set(0);
-                                                        }
-                                                    },
+                                                FilterLink {
+                                                    filters: filters,
+                                                    field: TorrentsPageFilter::QbitCategory,
+                                                    value: torrent.category.clone().unwrap_or_default(),
+                                                    reset_from: true,
+                                                    on_apply: move |_| from.set(0),
                                                     "{torrent.category.clone().unwrap_or_default()}"
                                                 }
                                             }
@@ -853,17 +788,12 @@ pub fn TorrentsPage() -> Element {
                                                 "{torrent.library_path.clone().unwrap_or_default()}"
                                                 if let Some(mismatch) = torrent.library_mismatch.clone() {
                                                     span { class: "warn", title: "{mismatch.title()}",
-                                                        button {
-                                                            r#type: "button",
-                                                            class: "link",
-                                                            onclick: move |_| {
-                                                                apply_click_filter(
-                                                                    &mut filters,
-                                                                    TorrentsPageFilter::LibraryMismatch,
-                                                                    mismatch.filter_value().to_string(),
-                                                                );
-                                                                from.set(0);
-                                                            },
+                                                        FilterLink {
+                                                            filters: filters,
+                                                            field: TorrentsPageFilter::LibraryMismatch,
+                                                            value: mismatch.filter_value().to_string(),
+                                                            reset_from: true,
+                                                            on_apply: move |_| from.set(0),
                                                             "⚠"
                                                         }
                                                     }
@@ -873,54 +803,33 @@ pub fn TorrentsPage() -> Element {
                                             div {
                                                 if let Some(path) = torrent.library_path.clone() {
                                                     span { title: "{path}",
-                                                        button {
-                                                            r#type: "button",
-                                                            class: "link",
-                                                            onclick: {
-                                                                let linked = torrent.linked;
-                                                                move |_| {
-                                                                    apply_click_filter(
-                                                                        &mut filters,
-                                                                        TorrentsPageFilter::Linked,
-                                                                        linked.to_string(),
-                                                                    );
-                                                                    from.set(0);
-                                                                }
-                                                            },
+                                                        FilterLink {
+                                                            filters: filters,
+                                                            field: TorrentsPageFilter::Linked,
+                                                            value: torrent.linked.to_string(),
+                                                            reset_from: true,
+                                                            on_apply: move |_| from.set(0),
                                                             "{torrent.linked}"
                                                         }
                                                     }
                                                 } else {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let linked = torrent.linked;
-                                                            move |_| {
-                                                                apply_click_filter(
-                                                                    &mut filters,
-                                                                    TorrentsPageFilter::Linked,
-                                                                    linked.to_string(),
-                                                                );
-                                                                from.set(0);
-                                                            }
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: TorrentsPageFilter::Linked,
+                                                        value: torrent.linked.to_string(),
+                                                        reset_from: true,
+                                                        on_apply: move |_| from.set(0),
                                                         "{torrent.linked}"
                                                     }
                                                 }
                                                 if let Some(mismatch) = torrent.library_mismatch.clone() {
                                                     span { class: "warn", title: "{mismatch.title()}",
-                                                        button {
-                                                            r#type: "button",
-                                                            class: "link",
-                                                            onclick: move |_| {
-                                                                apply_click_filter(
-                                                                    &mut filters,
-                                                                    TorrentsPageFilter::LibraryMismatch,
-                                                                    mismatch.filter_value().to_string(),
-                                                                );
-                                                                from.set(0);
-                                                            },
+                                                        FilterLink {
+                                                            filters: filters,
+                                                            field: TorrentsPageFilter::LibraryMismatch,
+                                                            value: mismatch.filter_value().to_string(),
+                                                            reset_from: true,
+                                                            on_apply: move |_| from.set(0),
                                                             "⚠"
                                                         }
                                                     }

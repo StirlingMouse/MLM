@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use crate::components::{
-    ActiveFilterChip, ActiveFilters, TorrentGridTable, apply_click_filter, build_query_string,
+    ActiveFilterChip, ActiveFilters, FilterLink, TorrentGridTable, build_query_string,
     encode_query_enum, parse_location_query_pairs, parse_query_enum, set_location_query_string,
 };
 use dioxus::prelude::*;
@@ -207,6 +207,7 @@ fn build_legacy_query_string(
 
 #[component]
 pub fn ErrorsPage() -> Element {
+    let _route: crate::app::Route = use_route();
     let initial_state = parse_legacy_query_state();
     let initial_sort = initial_state.sort;
     let initial_asc = initial_state.asc;
@@ -219,7 +220,7 @@ pub fn ErrorsPage() -> Element {
 
     let sort = use_signal(move || initial_sort);
     let asc = use_signal(move || initial_asc);
-    let mut filters = use_signal(move || initial_filters.clone());
+    let filters = use_signal(move || initial_filters.clone());
     let mut selected = use_signal(BTreeSet::<String>::new);
     let mut status_msg = use_signal(|| None::<(String, bool)>);
     let mut cached = use_signal(|| None::<ErrorsData>);
@@ -242,6 +243,22 @@ pub fn ErrorsPage() -> Element {
 
     let value = errors_data.value();
     let pending = errors_data.pending();
+
+    {
+        let route_state = parse_legacy_query_state();
+        let route_request_key =
+            build_legacy_query_string(route_state.sort, route_state.asc, &route_state.filters);
+        if *last_request_key.read() != route_request_key {
+            let mut sort = sort;
+            let mut asc = asc;
+            let mut filters_signal = filters;
+            sort.set(route_state.sort);
+            asc.set(route_state.asc);
+            filters_signal.set(route_state.filters);
+            last_request_key.set(route_request_key);
+            errors_data.restart();
+        }
+    }
 
     {
         let value = value.read();
@@ -459,24 +476,18 @@ pub fn ErrorsPage() -> Element {
                                             }
                                         }
                                         div {
-                                            button {
-                                                r#type: "button",
-                                                class: "link",
-                                                onclick: {
-                                                    let value = error.step.clone();
-                                                    move |_| apply_click_filter(&mut filters, ErrorsPageFilter::Step, value.clone())
-                                                },
+                                            FilterLink {
+                                                filters: filters,
+                                                field: ErrorsPageFilter::Step,
+                                                value: error.step.clone(),
                                                 "{error.step}"
                                             }
                                         }
                                         div {
-                                            button {
-                                                r#type: "button",
-                                                class: "link",
-                                                onclick: {
-                                                    let value = error.title.clone();
-                                                    move |_| apply_click_filter(&mut filters, ErrorsPageFilter::Title, value.clone())
-                                                },
+                                            FilterLink {
+                                                filters: filters,
+                                                field: ErrorsPageFilter::Title,
+                                                value: error.title.clone(),
                                                 "{error.title}"
                                             }
                                         }

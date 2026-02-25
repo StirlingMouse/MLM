@@ -70,6 +70,15 @@ pub fn build_query_string(params: &[(String, String)]) -> String {
         .join("&")
 }
 
+pub fn build_location_href(query_string: &str) -> String {
+    let pathname = location_pathname();
+    if query_string.is_empty() {
+        pathname
+    } else {
+        format!("{pathname}?{query_string}")
+    }
+}
+
 pub fn parse_query_enum<T: DeserializeOwned>(value: &str) -> Option<T> {
     serde_json::from_str::<T>(&format!("\"{value}\"")).ok()
 }
@@ -85,14 +94,7 @@ pub fn set_location_query_string(query_string: &str) {
     let Some(window) = web_sys::window() else {
         return;
     };
-    let Ok(pathname) = window.location().pathname() else {
-        return;
-    };
-    let target = if query_string.is_empty() {
-        pathname
-    } else {
-        format!("{pathname}?{query_string}")
-    };
+    let target = build_location_href(query_string);
     let Ok(history) = window.history() else {
         return;
     };
@@ -108,4 +110,30 @@ fn decode_query_value(value: &str) -> String {
     urlencoding::decode(&replaced)
         .map(|s| s.to_string())
         .unwrap_or(replaced)
+}
+
+#[cfg(feature = "web")]
+fn location_pathname() -> String {
+    let Some(window) = web_sys::window() else {
+        return "/".to_string();
+    };
+    window
+        .location()
+        .pathname()
+        .unwrap_or_else(|_| "/".to_string())
+}
+
+#[cfg(not(feature = "web"))]
+fn location_pathname() -> String {
+    #[cfg(feature = "server")]
+    {
+        let Some(context) = dioxus_fullstack::FullstackContext::current() else {
+            return "/".to_string();
+        };
+        return context.parts_mut().uri.path().to_string();
+    }
+    #[cfg(not(feature = "server"))]
+    {
+        "/".to_string()
+    }
 }

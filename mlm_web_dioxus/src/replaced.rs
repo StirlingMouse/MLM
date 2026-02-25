@@ -1,6 +1,6 @@
 use crate::components::{
-    ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, PageSizeSelector,
-    Pagination, TorrentGridTable, apply_click_filter, build_query_string, encode_query_enum,
+    ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, FilterLink,
+    PageSizeSelector, Pagination, TorrentGridTable, build_query_string, encode_query_enum,
     parse_location_query_pairs, parse_query_enum, set_location_query_string,
 };
 use dioxus::prelude::*;
@@ -573,6 +573,7 @@ fn set_column_enabled(show: &mut ReplacedPageColumns, column: ReplacedColumn, en
 
 #[component]
 pub fn ReplacedPage() -> Element {
+    let _route: crate::app::Route = use_route();
     let initial_state = parse_legacy_query_state();
     let initial_sort = initial_state.sort;
     let initial_asc = initial_state.asc;
@@ -591,7 +592,7 @@ pub fn ReplacedPage() -> Element {
 
     let sort = use_signal(move || initial_sort);
     let asc = use_signal(move || initial_asc);
-    let mut filters = use_signal(move || initial_filters.clone());
+    let filters = use_signal(move || initial_filters.clone());
     let mut from = use_signal(move || initial_from);
     let mut page_size = use_signal(move || initial_page_size);
     let show = use_signal(move || initial_show);
@@ -619,6 +620,36 @@ pub fn ReplacedPage() -> Element {
         .map(|resource| resource.pending())
         .unwrap_or(true);
     let value = replaced_data.as_ref().map(|resource| resource.value());
+
+    {
+        let route_state = parse_legacy_query_state();
+        let route_request_key = build_legacy_query_string(
+            route_state.sort,
+            route_state.asc,
+            &route_state.filters,
+            route_state.from,
+            route_state.page_size,
+            route_state.show,
+        );
+        if *last_request_key.read() != route_request_key {
+            let mut sort = sort;
+            let mut asc = asc;
+            let mut filters_signal = filters;
+            let mut from = from;
+            let mut page_size = page_size;
+            let mut show = show;
+            sort.set(route_state.sort);
+            asc.set(route_state.asc);
+            filters_signal.set(route_state.filters);
+            from.set(route_state.from);
+            page_size.set(route_state.page_size);
+            show.set(route_state.show);
+            last_request_key.set(route_request_key);
+            if let Some(resource) = replaced_data.as_mut() {
+                resource.restart();
+            }
+        }
+    }
 
     if let Some(value) = &value {
         let value = value.read();
@@ -908,49 +939,34 @@ pub fn ReplacedPage() -> Element {
                                             }
                                         }
                                         div {
-                                            button {
-                                                r#type: "button",
-                                                class: "link",
-                                                onclick: {
-                                                    let value = pair.torrent.meta.media_type.clone();
-                                                    let mut from = from;
-                                                    move |_| {
-                                                        apply_click_filter(&mut filters, ReplacedPageFilter::Kind, value.clone());
-                                                        from.set(0);
-                                                    }
-                                                },
+                                            FilterLink {
+                                                filters: filters,
+                                                field: ReplacedPageFilter::Kind,
+                                                value: pair.torrent.meta.media_type.clone(),
+                                                reset_from: true,
+                                                on_apply: move |_| from.set(0),
                                                 "{pair.torrent.meta.media_type}"
                                             }
                                         }
                                         div {
-                                            button {
-                                                r#type: "button",
-                                                class: "link",
-                                                onclick: {
-                                                    let value = pair.torrent.meta.title.clone();
-                                                    let mut from = from;
-                                                    move |_| {
-                                                        apply_click_filter(&mut filters, ReplacedPageFilter::Title, value.clone());
-                                                        from.set(0);
-                                                    }
-                                                },
+                                            FilterLink {
+                                                filters: filters,
+                                                field: ReplacedPageFilter::Title,
+                                                value: pair.torrent.meta.title.clone(),
+                                                reset_from: true,
+                                                on_apply: move |_| from.set(0),
                                                 "{pair.torrent.meta.title}"
                                             }
                                         }
                                         if show.read().authors {
                                             div {
                                                 for author in pair.torrent.meta.authors.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let author = author.clone();
-                                                            let mut from = from;
-                                                            move |_| {
-                                                                apply_click_filter(&mut filters, ReplacedPageFilter::Author, author.clone());
-                                                                from.set(0);
-                                                            }
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: ReplacedPageFilter::Author,
+                                                        value: author.clone(),
+                                                        reset_from: true,
+                                                        on_apply: move |_| from.set(0),
                                                         "{author}"
                                                     }
                                                 }
@@ -959,17 +975,12 @@ pub fn ReplacedPage() -> Element {
                                         if show.read().narrators {
                                             div {
                                                 for narrator in pair.torrent.meta.narrators.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let narrator = narrator.clone();
-                                                            let mut from = from;
-                                                            move |_| {
-                                                                apply_click_filter(&mut filters, ReplacedPageFilter::Narrator, narrator.clone());
-                                                                from.set(0);
-                                                            }
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: ReplacedPageFilter::Narrator,
+                                                        value: narrator.clone(),
+                                                        reset_from: true,
+                                                        on_apply: move |_| from.set(0),
                                                         "{narrator}"
                                                     }
                                                 }
@@ -978,17 +989,12 @@ pub fn ReplacedPage() -> Element {
                                         if show.read().series {
                                             div {
                                                 for series in pair.torrent.meta.series.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let series_name = series.name.clone();
-                                                            let mut from = from;
-                                                            move |_| {
-                                                                apply_click_filter(&mut filters, ReplacedPageFilter::Series, series_name.clone());
-                                                                from.set(0);
-                                                            }
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: ReplacedPageFilter::Series,
+                                                        value: series.name.clone(),
+                                                        reset_from: true,
+                                                        on_apply: move |_| from.set(0),
                                                         if series.entries.is_empty() {
                                                             "{series.name}"
                                                         } else {
@@ -1000,17 +1006,12 @@ pub fn ReplacedPage() -> Element {
                                         }
                                         if show.read().language {
                                             div {
-                                                button {
-                                                    r#type: "button",
-                                                    class: "link",
-                                                    onclick: {
-                                                        let value = pair.torrent.meta.language.clone().unwrap_or_default();
-                                                        let mut from = from;
-                                                        move |_| {
-                                                            apply_click_filter(&mut filters, ReplacedPageFilter::Language, value.clone());
-                                                            from.set(0);
-                                                        }
-                                                    },
+                                                FilterLink {
+                                                    filters: filters,
+                                                    field: ReplacedPageFilter::Language,
+                                                    value: pair.torrent.meta.language.clone().unwrap_or_default(),
+                                                    reset_from: true,
+                                                    on_apply: move |_| from.set(0),
                                                     "{pair.torrent.meta.language.clone().unwrap_or_default()}"
                                                 }
                                             }
@@ -1021,17 +1022,12 @@ pub fn ReplacedPage() -> Element {
                                         if show.read().filetypes {
                                             div {
                                                 for filetype in pair.torrent.meta.filetypes.clone() {
-                                                    button {
-                                                        r#type: "button",
-                                                        class: "link",
-                                                        onclick: {
-                                                            let filetype = filetype.clone();
-                                                            let mut from = from;
-                                                            move |_| {
-                                                                apply_click_filter(&mut filters, ReplacedPageFilter::Filetype, filetype.clone());
-                                                                from.set(0);
-                                                            }
-                                                        },
+                                                    FilterLink {
+                                                        filters: filters,
+                                                        field: ReplacedPageFilter::Filetype,
+                                                        value: filetype.clone(),
+                                                        reset_from: true,
+                                                        on_apply: move |_| from.set(0),
                                                         "{filetype}"
                                                     }
                                                 }
