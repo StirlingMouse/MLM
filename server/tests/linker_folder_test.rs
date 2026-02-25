@@ -3,7 +3,7 @@ mod common;
 use common::{MockFs, TestDb, mock_config};
 use mlm_core::linker::folder::link_folders_to_library;
 use mlm_db::{DatabaseExt, Torrent};
-use std::sync::Arc;
+use std::{fs, sync::Arc};
 
 #[tokio::test]
 async fn test_link_folders_to_library() -> anyhow::Result<()> {
@@ -148,6 +148,110 @@ async fn test_link_folders_to_library_filter_language_mismatch() -> anyhow::Resu
         torrent.is_none(),
         "Should have been skipped due to language filter"
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_link_folders_to_library_libation_missing_subtitle() -> anyhow::Result<()> {
+    let test_db = TestDb::new()?;
+    let mock_fs = MockFs::new()?;
+    let config = Arc::new(mock_config(
+        mock_fs.rip_dir.clone(),
+        mock_fs.library_dir.clone(),
+    ));
+    let events = mlm_core::Events::new();
+
+    let folder = mock_fs.rip_dir.join("1977386733");
+    fs::create_dir_all(&folder)?;
+    let libation_meta = serde_json::json!({
+        "asin": "1977386733",
+        "title": "The Blueprint",
+        "authors": [{"name": "S.E. Harmon"}],
+        "narrators": [{"name": "Alexander Cendese"}],
+        "series": [],
+        "language": "english",
+        "format_type": "unabridged",
+        "publisher_summary": "Test summary",
+        "merchandising_summary": "Test merchandising summary",
+        "category_ladders": [],
+        "is_adult_product": false,
+        "issue_date": "2018-06-30",
+        "publication_datetime": "2018-06-30T07:00:00Z",
+        "publication_name": "Rules of Possession",
+        "publisher_name": "Tantor Media",
+        "release_date": "2018-06-30",
+        "runtime_length_min": 504
+    });
+    fs::write(
+        folder.join("The Blueprint [1977386733].metadata.json"),
+        serde_json::to_string(&libation_meta)?,
+    )?;
+    fs::write(
+        folder.join("The Blueprint [1977386733].m4b"),
+        "fake audio data",
+    )?;
+
+    link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
+
+    let r = test_db.db.r_transaction()?;
+    let torrent: Option<Torrent> = r.get().primary("1977386733".to_string())?;
+    assert!(torrent.is_some());
+    let torrent = torrent.unwrap();
+    assert_eq!(torrent.meta.title, "The Blueprint");
+    let library_path = torrent.library_path.unwrap();
+    assert!(library_path.join("The Blueprint [1977386733].m4b").exists());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_link_folders_to_library_libation_missing_publication_name() -> anyhow::Result<()> {
+    let test_db = TestDb::new()?;
+    let mock_fs = MockFs::new()?;
+    let config = Arc::new(mock_config(
+        mock_fs.rip_dir.clone(),
+        mock_fs.library_dir.clone(),
+    ));
+    let events = mlm_core::Events::new();
+
+    let folder = mock_fs.rip_dir.join("B0DZ3R4CCN");
+    fs::create_dir_all(&folder)?;
+    let libation_meta = serde_json::json!({
+        "asin": "B0DZ3R4CCN",
+        "title": "Boraleashe",
+        "subtitle": "Lord of the North Wind",
+        "authors": [{"name": "A.E. Via"}],
+        "narrators": [{"name": "Troy Duran"}],
+        "series": [],
+        "language": "english",
+        "format_type": "unabridged",
+        "publisher_summary": "Test summary",
+        "merchandising_summary": "Test merchandising summary",
+        "category_ladders": [],
+        "is_adult_product": false,
+        "issue_date": "2025-03-18",
+        "publication_datetime": "2025-03-18T07:00:00Z",
+        "publisher_name": "Tantor Media",
+        "release_date": "2025-03-18",
+        "runtime_length_min": 283
+    });
+    fs::write(
+        folder.join("Boraleashe [B0DZ3R4CCN].metadata.json"),
+        serde_json::to_string(&libation_meta)?,
+    )?;
+    fs::write(
+        folder.join("Boraleashe [B0DZ3R4CCN].m4b"),
+        "fake audio data",
+    )?;
+
+    link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
+
+    let r = test_db.db.r_transaction()?;
+    let torrent: Option<Torrent> = r.get().primary("B0DZ3R4CCN".to_string())?;
+    assert!(torrent.is_some());
+    let torrent = torrent.unwrap();
+    assert_eq!(torrent.meta.title, "Boraleashe: Lord of the North Wind");
 
     Ok(())
 }

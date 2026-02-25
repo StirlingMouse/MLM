@@ -528,6 +528,7 @@ pub struct Libation {
     pub merchandising_summary: String,
     pub narrators: Vec<Name>,
     pub publication_datetime: String,
+    #[serde(default)]
     pub publication_name: String,
     pub publisher_name: String,
     pub publisher_summary: String,
@@ -535,6 +536,7 @@ pub struct Libation {
     pub runtime_length_min: u64,
     #[serde(default)]
     pub series: Vec<LibationSeries>,
+    #[serde(default)]
     pub subtitle: String,
     pub title: String,
 }
