@@ -2,192 +2,14 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use crate::components::{
-    ActiveFilterChip, ActiveFilters, FilterLink, TorrentGridTable, build_query_string,
-    encode_query_enum, parse_location_query_pairs, parse_query_enum, set_location_query_string,
+    ActiveFilterChip, ActiveFilters, FilterLink, SortHeader, TorrentGridTable,
+    set_location_query_string,
 };
 use crate::sse::ERRORS_UPDATE_TRIGGER;
 use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "server")]
-use crate::error::IntoServerFnError;
-#[cfg(feature = "server")]
-use crate::utils::format_timestamp_db;
-#[cfg(feature = "server")]
-use mlm_core::ContextExt;
-#[cfg(feature = "server")]
-use mlm_db::{DatabaseExt as _, ErroredTorrent, ErroredTorrentId, ErroredTorrentKey, ids};
-
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "lowercase")]
-pub enum ErrorsPageSort {
-    Step,
-    Title,
-    Error,
-    CreatedAt,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum ErrorsPageFilter {
-    Step,
-    Title,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct ErrorsRow {
-    pub id_json: String,
-    pub step: String,
-    pub title: String,
-    pub error: String,
-    pub created_at: String,
-    pub mam_id: Option<u64>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
-pub struct ErrorsData {
-    pub errors: Vec<ErrorsRow>,
-}
-
-#[server]
-pub async fn get_errors_data(
-    sort: Option<ErrorsPageSort>,
-    asc: bool,
-    filters: Vec<(ErrorsPageFilter, String)>,
-) -> Result<ErrorsData, ServerFnError> {
-    let context = crate::error::get_context()?;
-
-    let mut errors = context
-        .db()
-        .r_transaction()
-        .server_err()?
-        .scan()
-        .secondary::<ErroredTorrent>(ErroredTorrentKey::created_at)
-        .server_err()?
-        .all()
-        .server_err()?
-        .rev()
-        .filter_map(Result::ok)
-        .filter(|t| {
-            filters.iter().all(|(field, value)| match field {
-                ErrorsPageFilter::Step => error_step(&t.id) == value,
-                ErrorsPageFilter::Title => t.title == *value,
-            })
-        })
-        .collect::<Vec<_>>();
-
-    if let Some(sort_by) = sort {
-        errors.sort_by(|a, b| {
-            let ord = match sort_by {
-                ErrorsPageSort::Step => error_step(&a.id).cmp(error_step(&b.id)),
-                ErrorsPageSort::Title => a.title.cmp(&b.title),
-                ErrorsPageSort::Error => a.error.cmp(&b.error),
-                ErrorsPageSort::CreatedAt => a.created_at.cmp(&b.created_at),
-            };
-            if asc { ord.reverse() } else { ord }
-        });
-    }
-
-    Ok(ErrorsData {
-        errors: errors.into_iter().map(convert_error_row).collect(),
-    })
-}
-
-#[server]
-pub async fn remove_errors_action(error_ids: Vec<String>) -> Result<(), ServerFnError> {
-    if error_ids.is_empty() {
-        return Err(ServerFnError::new("No errors selected"));
-    }
-
-    let context = crate::error::get_context()?;
-
-    let (_guard, rw) = context.db().rw_async().await.server_err()?;
-
-    for error_id in error_ids {
-        let id = serde_json::from_str::<ErroredTorrentId>(&error_id).server_err()?;
-        let Some(error) = rw.get().primary::<ErroredTorrent>(id).server_err()? else {
-            continue;
-        };
-        rw.remove(error).server_err()?;
-    }
-
-    rw.commit().server_err()?;
-    Ok(())
-}
-
-#[cfg(feature = "server")]
-fn error_step(id: &ErroredTorrentId) -> &'static str {
-    match id {
-        ErroredTorrentId::Grabber(_) => "auto grabber",
-        ErroredTorrentId::Linker(_) => "library linker",
-        ErroredTorrentId::Cleaner(_) => "library cleaner",
-    }
-}
-
-#[cfg(feature = "server")]
-fn convert_error_row(error: ErroredTorrent) -> ErrorsRow {
-    ErrorsRow {
-        id_json: serde_json::to_string(&error.id).unwrap_or_default(),
-        step: error_step(&error.id).to_string(),
-        title: error.title,
-        error: error.error,
-        created_at: format_timestamp_db(&error.created_at),
-        mam_id: error
-            .meta
-            .and_then(|meta| meta.ids.get(ids::MAM).cloned())
-            .and_then(|id| id.parse::<u64>().ok()),
-    }
-}
-
-fn filter_name(filter: ErrorsPageFilter) -> &'static str {
-    match filter {
-        ErrorsPageFilter::Step => "Step",
-        ErrorsPageFilter::Title => "Title",
-    }
-}
-
-#[derive(Clone, Default)]
-struct PageQueryState {
-    sort: Option<ErrorsPageSort>,
-    asc: bool,
-    filters: Vec<(ErrorsPageFilter, String)>,
-}
-
-fn parse_query_state() -> PageQueryState {
-    let mut state = PageQueryState::default();
-    for (key, value) in parse_location_query_pairs() {
-        match key.as_str() {
-            "sort_by" => state.sort = parse_query_enum::<ErrorsPageSort>(&value),
-            "asc" => state.asc = value == "true",
-            _ => {
-                if let Some(field) = parse_query_enum::<ErrorsPageFilter>(&key) {
-                    state.filters.push((field, value));
-                }
-            }
-        }
-    }
-    state
-}
-
-fn build_query_url(
-    sort: Option<ErrorsPageSort>,
-    asc: bool,
-    filters: &[(ErrorsPageFilter, String)],
-) -> String {
-    let mut params = Vec::new();
-    if let Some(sort) = sort.and_then(encode_query_enum) {
-        params.push(("sort_by".to_string(), sort));
-    }
-    if asc {
-        params.push(("asc".to_string(), "true".to_string()));
-    }
-    for (field, value) in filters {
-        if let Some(name) = encode_query_enum(*field) {
-            params.push((name, value.clone()));
-        }
-    }
-    build_query_string(&params)
-}
+use super::server_fns::*;
+use super::types::*;
 
 #[component]
 pub fn ErrorsPage() -> Element {
@@ -211,6 +33,7 @@ pub fn ErrorsPage() -> Element {
     let mut cached = use_signal(|| None::<ErrorsData>);
     let loading_action = use_signal(|| false);
     let mut last_request_key = use_signal(move || initial_request_key.clone());
+    let from = use_signal(|| 0usize);
 
     let mut errors_data = match use_server_future(move || async move {
         get_errors_data(*sort.read(), *asc.read(), filters.read().clone()).await
@@ -277,37 +100,6 @@ pub fn ErrorsPage() -> Element {
             errors_data.restart();
         }
     });
-
-    let sort_header = |label: &'static str, key: ErrorsPageSort| {
-        let active = *sort.read() == Some(key);
-        let arrow = if active {
-            if *asc.read() { "↑" } else { "↓" }
-        } else {
-            ""
-        };
-        rsx! {
-            div { class: "header",
-                button {
-                    r#type: "button",
-                    class: "link",
-                    onclick: {
-                        let mut sort = sort;
-                        let mut asc = asc;
-                        move |_| {
-                            if *sort.read() == Some(key) {
-                                let next_asc = !*asc.read();
-                                asc.set(next_asc);
-                            } else {
-                                sort.set(Some(key));
-                                asc.set(false);
-                            }
-                        }
-                    },
-                    "{label}{arrow}"
-                }
-            }
-        }
-    };
 
     let mut active_chips = Vec::new();
     for (field, value) in filters.read().clone() {
@@ -445,10 +237,10 @@ pub fn ErrorsPage() -> Element {
                                             },
                                         }
                                     }
-                                    {sort_header("Step", ErrorsPageSort::Step)}
-                                    {sort_header("Title", ErrorsPageSort::Title)}
-                                    {sort_header("Error", ErrorsPageSort::Error)}
-                                    {sort_header("When", ErrorsPageSort::CreatedAt)}
+                                    SortHeader { label: "Step".to_string(), sort_key: ErrorsPageSort::Step, sort, asc, from }
+                                    SortHeader { label: "Title".to_string(), sort_key: ErrorsPageSort::Title, sort, asc, from }
+                                    SortHeader { label: "Error".to_string(), sort_key: ErrorsPageSort::Error, sort, asc, from }
+                                    SortHeader { label: "When".to_string(), sort_key: ErrorsPageSort::CreatedAt, sort, asc, from }
                                     div { class: "header", "" }
                                 }
                             }

@@ -5,7 +5,7 @@ use crate::utils::format_size;
 use dioxus::prelude::*;
 
 use super::server_fns::get_events_data;
-use super::types::EventData;
+use super::types::{EventData, EventsFilter};
 
 #[component]
 pub fn EventsPage() -> Element {
@@ -22,12 +22,14 @@ pub fn EventsPage() -> Element {
 
     let mut event_data = match use_server_future(move || async move {
         get_events_data(
-            show.read().clone(),
-            grabber.read().clone(),
-            linker.read().clone(),
-            category.read().clone(),
-            has_updates.read().clone(),
-            field.read().clone(),
+            EventsFilter {
+                show: show.read().clone(),
+                grabber: grabber.read().clone(),
+                linker: linker.read().clone(),
+                category: category.read().clone(),
+                has_updates: has_updates.read().clone(),
+                field: field.read().clone(),
+            },
             Some(*from.read()),
             Some(*page_size.read()),
         )

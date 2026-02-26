@@ -132,3 +132,47 @@ pub fn convert_torrent(db_torrent: &mlm_core::Torrent) -> Torrent {
         category: db_torrent.category.clone(),
     }
 }
+
+/// Convert a `mlm_core::EventType` to the DTO `EventType`. Used by both the
+/// events page and the torrent-detail page so it lives here rather than in
+/// either module.
+#[cfg(feature = "server")]
+pub fn convert_event_type(event: &mlm_core::EventType) -> EventType {
+    match event {
+        mlm_core::EventType::Grabbed {
+            grabber,
+            cost,
+            wedged,
+        } => EventType::Grabbed {
+            grabber: grabber.clone(),
+            cost: cost.as_ref().map(|c| c.into()),
+            wedged: *wedged,
+        },
+        mlm_core::EventType::Linked {
+            linker,
+            library_path,
+        } => EventType::Linked {
+            linker: linker.clone(),
+            library_path: library_path.clone(),
+        },
+        mlm_core::EventType::Cleaned {
+            library_path,
+            files,
+        } => EventType::Cleaned {
+            library_path: library_path.clone(),
+            files: files.clone(),
+        },
+        mlm_core::EventType::Updated { fields, source } => EventType::Updated {
+            fields: fields
+                .iter()
+                .map(|f| TorrentMetaDiff {
+                    field: f.field.to_string(),
+                    from: f.from.clone(),
+                    to: f.to.clone(),
+                })
+                .collect(),
+            source: (MetadataSource::from(&source.0), source.1.clone()),
+        },
+        mlm_core::EventType::RemovedFromTracker => EventType::RemovedFromTracker,
+    }
+}

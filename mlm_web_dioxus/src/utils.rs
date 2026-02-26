@@ -34,6 +34,30 @@ pub fn format_datetime(dt: &time::OffsetDateTime) -> String {
         .unwrap_or_default()
 }
 
+#[cfg(feature = "server")]
+pub fn flags_to_strings(flags: &mlm_db::Flags) -> Vec<String> {
+    let mut values = Vec::new();
+    if flags.crude_language == Some(true) {
+        values.push("language".to_string());
+    }
+    if flags.violence == Some(true) {
+        values.push("violence".to_string());
+    }
+    if flags.some_explicit == Some(true) {
+        values.push("some_explicit".to_string());
+    }
+    if flags.explicit == Some(true) {
+        values.push("explicit".to_string());
+    }
+    if flags.abridged == Some(true) {
+        values.push("abridged".to_string());
+    }
+    if flags.lgbt == Some(true) {
+        values.push("lgbt".to_string());
+    }
+    values
+}
+
 pub fn format_size(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = KB * 1024;

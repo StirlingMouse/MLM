@@ -1,5 +1,5 @@
 #[cfg(feature = "server")]
-use crate::dto::{Event as DbEventDto, EventType, Series, TorrentMetaDiff};
+use crate::dto::{Event as DbEventDto, Series, convert_event_type};
 #[cfg(feature = "server")]
 use crate::error::{IntoServerFnError, OptionIntoServerFnError};
 use crate::search::SearchTorrent;
@@ -9,7 +9,7 @@ use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
 use mlm_core::{
-    Context, ContextExt, Event as DbEvent, EventKey, EventType as DbEventType,
+    Context, ContextExt, Event as DbEvent, EventKey,
     Torrent as DbTorrent, metadata::mam_meta::match_meta,
 };
 #[cfg(feature = "server")]
@@ -46,47 +46,10 @@ fn format_qbit_state(state: &qbit::parameters::TorrentState) -> String {
 
 #[cfg(feature = "server")]
 fn map_event(e: DbEvent) -> DbEventDto {
-    use crate::dto::{MetadataSource, TorrentCost};
     DbEventDto {
         id: e.id.0.to_string(),
         created_at: format_timestamp_db(&e.created_at),
-        event: match e.event {
-            DbEventType::Grabbed {
-                grabber,
-                cost,
-                wedged,
-            } => EventType::Grabbed {
-                grabber,
-                cost: cost.map(|c| TorrentCost::from(&c)),
-                wedged,
-            },
-            DbEventType::Linked {
-                linker,
-                library_path,
-            } => EventType::Linked {
-                linker,
-                library_path,
-            },
-            DbEventType::Cleaned {
-                library_path,
-                files,
-            } => EventType::Cleaned {
-                library_path,
-                files,
-            },
-            DbEventType::Updated { fields, source } => EventType::Updated {
-                fields: fields
-                    .into_iter()
-                    .map(|f| TorrentMetaDiff {
-                        field: f.field.to_string(),
-                        from: f.from,
-                        to: f.to,
-                    })
-                    .collect(),
-                source: (MetadataSource::from(&source.0), source.1),
-            },
-            DbEventType::RemovedFromTracker => EventType::RemovedFromTracker,
-        },
+        event: convert_event_type(&e.event),
     }
 }
 
@@ -100,25 +63,7 @@ fn torrent_info_from_meta(
 
     let goodreads_id = meta.ids.get(ids::GOODREADS).cloned();
     let flags = mlm_db::Flags::from_bitfield(meta.flags.map_or(0, |f| f.0));
-    let mut flag_values = Vec::new();
-    if flags.crude_language == Some(true) {
-        flag_values.push("language".to_string());
-    }
-    if flags.violence == Some(true) {
-        flag_values.push("violence".to_string());
-    }
-    if flags.some_explicit == Some(true) {
-        flag_values.push("some_explicit".to_string());
-    }
-    if flags.explicit == Some(true) {
-        flag_values.push("explicit".to_string());
-    }
-    if flags.abridged == Some(true) {
-        flag_values.push("abridged".to_string());
-    }
-    if flags.lgbt == Some(true) {
-        flag_values.push("lgbt".to_string());
-    }
+    let flag_values = crate::utils::flags_to_strings(&flags);
 
     super::types::TorrentInfo {
         id,
@@ -274,26 +219,7 @@ async fn other_torrents_data(
                 categories: meta.categories.clone(),
                 flags: {
                     let flags = mlm_db::Flags::from_bitfield(meta.flags.map_or(0, |f| f.0));
-                    let mut values = Vec::new();
-                    if flags.crude_language == Some(true) {
-                        values.push("language".to_string());
-                    }
-                    if flags.violence == Some(true) {
-                        values.push("violence".to_string());
-                    }
-                    if flags.some_explicit == Some(true) {
-                        values.push("some_explicit".to_string());
-                    }
-                    if flags.explicit == Some(true) {
-                        values.push("explicit".to_string());
-                    }
-                    if flags.abridged == Some(true) {
-                        values.push("abridged".to_string());
-                    }
-                    if flags.lgbt == Some(true) {
-                        values.push("lgbt".to_string());
-                    }
-                    values
+                    crate::utils::flags_to_strings(&flags)
                 },
                 old_category,
                 media_type: meta.media_type.as_str().to_string(),

@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 
 use crate::components::{
     ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, FilterLink,
-    PageSizeSelector, Pagination, SortHeader, TorrentGridTable, flag_icon,
+    PageSizeSelector, Pagination, SortHeader, StatusMessage, TorrentGridTable, flag_icon,
     set_location_query_string,
 };
 
@@ -53,7 +53,7 @@ const COLUMN_OPTIONS: &[(TorrentColumn, &str)] = &[
 ];
 
 impl TorrentsPageColumns {
-    pub fn get(self, col: TorrentColumn) -> bool {
+    fn get(self, col: TorrentColumn) -> bool {
         match col {
             TorrentColumn::Category => self.category,
             TorrentColumn::Categories => self.categories,
@@ -73,7 +73,7 @@ impl TorrentsPageColumns {
         }
     }
 
-    pub fn set(&mut self, col: TorrentColumn, enabled: bool) {
+    fn set(&mut self, col: TorrentColumn, enabled: bool) {
         match col {
             TorrentColumn::Category => self.category = enabled,
             TorrentColumn::Categories => self.categories = enabled,
@@ -150,7 +150,7 @@ pub fn TorrentsPage() -> Element {
     let show = use_signal(move || initial_show);
     let mut selected = use_signal(BTreeSet::<String>::new);
     let mut last_selected_idx = use_signal(|| None::<usize>);
-    let mut status_msg = use_signal(|| None::<(String, bool)>);
+    let status_msg = use_signal(|| None::<(String, bool)>);
     let mut cached = use_signal(|| None::<TorrentsData>);
     let loading_action = use_signal(|| false);
     let mut last_request_key = use_signal(move || initial_request_key.clone());
@@ -383,17 +383,7 @@ pub fn TorrentsPage() -> Element {
                 }
             }
 
-            if let Some((msg, is_error)) = status_msg.read().as_ref() {
-                p { class: if *is_error { "error" } else { "loading-indicator" },
-                    "{msg}"
-                    button {
-                        r#type: "button",
-                        style: "margin-left: 10px; cursor: pointer;",
-                        onclick: move |_| status_msg.set(None),
-                        "⨯"
-                    }
-                }
-            }
+            StatusMessage { status_msg }
 
             ActiveFilters { chips: active_chips, on_clear_all: clear_all }
 

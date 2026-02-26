@@ -1,4 +1,5 @@
 use crate::components::SearchTorrentRow;
+use crate::components::StatusMessage;
 use crate::components::parse_location_query_pairs;
 use crate::dto::Series;
 #[cfg(feature = "server")]
@@ -134,25 +135,7 @@ pub async fn get_search_data(
                 .map(|m| format!("{} {}", m.audio.bitrate, m.audio.mode));
             let old_category = meta.cat.as_ref().map(|cat| cat.to_string());
             let flags = Flags::from_bitfield(meta.flags.map_or(0, |f| f.0));
-            let mut flag_values = Vec::new();
-            if flags.crude_language == Some(true) {
-                flag_values.push("language".to_string());
-            }
-            if flags.violence == Some(true) {
-                flag_values.push("violence".to_string());
-            }
-            if flags.some_explicit == Some(true) {
-                flag_values.push("some_explicit".to_string());
-            }
-            if flags.explicit == Some(true) {
-                flag_values.push("explicit".to_string());
-            }
-            if flags.abridged == Some(true) {
-                flag_values.push("abridged".to_string());
-            }
-            if flags.lgbt == Some(true) {
-                flag_values.push("lgbt".to_string());
-            }
+            let flag_values = crate::utils::flags_to_strings(&flags);
 
             Ok(SearchTorrent {
                 mam_id: mam_torrent.id,
@@ -319,9 +302,7 @@ pub fn SearchPage() -> Element {
                 button { r#type: "submit", "Search" }
             }
 
-            if let Some((msg, is_error)) = status_msg.read().as_ref() {
-                p { class: if *is_error { "error" } else { "loading-indicator" }, "{msg}" }
-            }
+            StatusMessage { status_msg }
 
             if pending && cached.read().is_some() {
                 p { class: "loading-indicator", "Refreshing..." }
