@@ -1,6 +1,6 @@
 use crate::components::TaskBox;
 #[cfg(feature = "server")]
-use crate::error::{IntoServerFnError, OptionIntoServerFnError};
+use crate::error::IntoServerFnError;
 use crate::sse::STATS_UPDATE_TRIGGER;
 #[cfg(feature = "server")]
 use crate::utils::format_datetime;
@@ -47,13 +47,9 @@ pub struct TaskInfo {
 
 #[server]
 pub async fn get_home_data() -> Result<HomeData, ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-    use mlm_core::{Context, ContextExt};
+    use mlm_core::ContextExt;
 
-    let ctx = FullstackContext::current().ok_or_server_err("FullstackContext not found")?;
-    let context: Context = ctx
-        .extension()
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     let stats = context.stats.values.lock().await;
 
     let username = match context.mam() {
@@ -152,11 +148,7 @@ pub async fn get_home_data() -> Result<HomeData, ServerFnError> {
 
 #[server]
 pub async fn run_torrent_linker() -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
-    let context: mlm_core::Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     if let Some(tx) = &context.triggers.torrent_linker_tx {
         tx.send(()).server_err()?;
     }
@@ -165,11 +157,7 @@ pub async fn run_torrent_linker() -> Result<(), ServerFnError> {
 
 #[server]
 pub async fn run_folder_linker() -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
-    let context: mlm_core::Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     if let Some(tx) = &context.triggers.folder_linker_tx {
         tx.send(()).server_err()?;
     }
@@ -178,11 +166,7 @@ pub async fn run_folder_linker() -> Result<(), ServerFnError> {
 
 #[server]
 pub async fn run_search(index: usize) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
-    let context: mlm_core::Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     if let Some(tx) = context.triggers.search_tx.get(&index) {
         tx.send(()).server_err()?;
     } else {
@@ -193,11 +177,7 @@ pub async fn run_search(index: usize) -> Result<(), ServerFnError> {
 
 #[server]
 pub async fn run_import(index: usize) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
-    let context: mlm_core::Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     if let Some(tx) = context.triggers.import_tx.get(&index) {
         tx.send(()).server_err()?;
     } else {
@@ -208,11 +188,7 @@ pub async fn run_import(index: usize) -> Result<(), ServerFnError> {
 
 #[server]
 pub async fn run_downloader() -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
-    let context: mlm_core::Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     if let Some(tx) = &context.triggers.downloader_tx {
         tx.send(()).server_err()?;
     }
@@ -221,11 +197,7 @@ pub async fn run_downloader() -> Result<(), ServerFnError> {
 
 #[server]
 pub async fn run_abs_matcher() -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
-    let context: mlm_core::Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     if let Some(tx) = &context.triggers.audiobookshelf_tx {
         tx.send(()).server_err()?;
     }
@@ -285,55 +257,91 @@ fn HomePageContent(data: HomeData) -> Element {
 
             div { class: "infoboxes",
                 for grab in data.autograbbers.clone() {
-                    AutograbberBox { info: grab }
+                    InfoTaskBox {
+                        title: format!("Autograbber: {}", grab.display_name),
+                        last_run: grab.last_run.clone(),
+                        result: grab.result.clone(),
+                        on_run: Some(EventHandler::new(move |_| {
+                            let index = grab.index;
+                            spawn(async move { let _ = run_search(index).await; });
+                        })),
+                    }
                 }
                 for grab in data.snatchlist_grabbers.clone() {
-                    AutograbberBox { info: grab }
+                    InfoTaskBox {
+                        title: format!("Autograbber: {}", grab.display_name),
+                        last_run: grab.last_run.clone(),
+                        result: grab.result.clone(),
+                        on_run: Some(EventHandler::new(move |_| {
+                            let index = grab.index;
+                            spawn(async move { let _ = run_search(index).await; });
+                        })),
+                    }
                 }
             }
 
             if !data.lists.is_empty() {
                 div { class: "infoboxes",
                     for list in data.lists.clone() {
-                        ListBox { info: list }
+                        InfoTaskBox {
+                            title: format!("{} Import: {}", list.list_type, list.display_name),
+                            last_run: list.last_run.clone(),
+                            result: list.result.clone(),
+                            on_run: Some(EventHandler::new(move |_| {
+                                let index = list.index;
+                                spawn(async move { let _ = run_import(index).await; });
+                            })),
+                        }
                     }
                 }
             }
 
             div { class: "infoboxes",
                 if let Some(info) = &data.torrent_linker {
-                    TaskBoxWrapper {
+                    InfoTaskBox {
                         title: "Torrent Linker".to_string(),
-                        info: info.clone(),
-                        action: "torrent_linker",
+                        last_run: info.last_run.clone(),
+                        result: info.result.clone(),
+                        on_run: Some(EventHandler::new(move |_| {
+                            spawn(async move { let _ = run_torrent_linker().await; });
+                        })),
                     }
                 }
                 if let Some(info) = &data.folder_linker {
-                    TaskBoxWrapper {
+                    InfoTaskBox {
                         title: "Folder Linker".to_string(),
-                        info: info.clone(),
-                        action: "folder_linker",
+                        last_run: info.last_run.clone(),
+                        result: info.result.clone(),
+                        on_run: Some(EventHandler::new(move |_| {
+                            spawn(async move { let _ = run_folder_linker().await; });
+                        })),
                     }
                 }
                 if let Some(info) = &data.cleaner {
-                    TaskBoxWrapper {
+                    InfoTaskBox {
                         title: "Cleaner".to_string(),
-                        info: info.clone(),
-                        action: "cleaner",
+                        last_run: info.last_run.clone(),
+                        result: info.result.clone(),
                     }
                 }
                 if let Some(info) = &data.downloader {
-                    TaskBoxWrapper {
+                    InfoTaskBox {
                         title: "Torrent downloader".to_string(),
-                        info: info.clone(),
-                        action: "downloader",
+                        last_run: info.last_run.clone(),
+                        result: info.result.clone(),
+                        on_run: Some(EventHandler::new(move |_| {
+                            spawn(async move { let _ = run_downloader().await; });
+                        })),
                     }
                 }
                 if let Some(info) = &data.audiobookshelf {
-                    TaskBoxWrapper {
+                    InfoTaskBox {
                         title: "Audiobookshelf Matcher".to_string(),
-                        info: info.clone(),
-                        action: "audiobookshelf",
+                        last_run: info.last_run.clone(),
+                        result: info.result.clone(),
+                        on_run: Some(EventHandler::new(move |_| {
+                            spawn(async move { let _ = run_abs_matcher().await; });
+                        })),
                     }
                 }
             }
@@ -348,99 +356,21 @@ fn HomePageContent(data: HomeData) -> Element {
 }
 
 #[component]
-fn AutograbberBox(info: AutograbberInfo) -> Element {
-    let index = info.index;
-    let display_name = info.display_name.clone();
-    let has_run = info.last_run.is_some();
-
-    rsx! {
-        div { class: "infobox",
-            h2 { "Autograbber: {display_name}" }
-            TaskBox {
-                title: String::new(),
-                last_run: info.last_run.clone(),
-                result: info.result.clone(),
-                show_result: has_run,
-            }
-            button {
-                onclick: move |_| {
-                    let index = index;
-                    spawn(async move {
-                        let _ = run_search(index).await;
-                    });
-                },
-                "run now"
-            }
-        }
-    }
-}
-
-#[component]
-fn ListBox(info: ListInfo) -> Element {
-    let index = info.index;
-    let list_type = info.list_type.clone();
-    let display_name = info.display_name.clone();
-    let has_run = info.last_run.is_some();
-
-    rsx! {
-        div { class: "infobox",
-            h2 { "{list_type} Import: {display_name}" }
-            TaskBox {
-                title: String::new(),
-                last_run: info.last_run.clone(),
-                result: info.result.clone(),
-                show_result: has_run,
-            }
-            button {
-                onclick: move |_| {
-                    let index = index;
-                    spawn(async move {
-                        let _ = run_import(index).await;
-                    });
-                },
-                "run now"
-            }
-        }
-    }
-}
-
-#[derive(Props, Clone, PartialEq)]
-struct TaskBoxWrapperProps {
+fn InfoTaskBox(
     title: String,
-    info: TaskInfo,
-    action: String,
-}
-
-#[component]
-fn TaskBoxWrapper(props: TaskBoxWrapperProps) -> Element {
-    let action = props.action.clone();
-    let has_run = props.info.last_run.is_some();
-    let has_action = action != "cleaner";
-
+    last_run: Option<String>,
+    result: Option<Result<(), String>>,
+    #[props(default = None)] on_run: Option<EventHandler<()>>,
+) -> Element {
+    let has_run = last_run.is_some();
     rsx! {
         div { class: "infobox",
-            h2 { "{props.title}" }
+            h2 { "{title}" }
             TaskBox {
-                title: String::new(),
-                last_run: props.info.last_run.clone(),
-                result: props.info.result.clone(),
+                last_run,
+                result,
                 show_result: has_run,
-                on_run: if has_action {
-                    Some(EventHandler::new(move |_| {
-                        let action = action.clone();
-                        spawn(async move {
-                            match action.as_str() {
-                                "torrent_linker" => { let _ = run_torrent_linker().await; }
-                                "folder_linker" => { let _ = run_folder_linker().await; }
-                                "downloader" => { let _ = run_downloader().await; }
-                                "audiobookshelf" => { let _ = run_abs_matcher().await; }
-                                _ => {}
-                            }
-                        });
-                    }))
-                } else {
-                    None
-                },
+                on_run,
             }
         }
     }

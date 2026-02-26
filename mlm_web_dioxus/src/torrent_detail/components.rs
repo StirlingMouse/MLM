@@ -12,6 +12,30 @@ use crate::components::{
 use crate::events::EventListItem;
 use dioxus::prelude::*;
 
+fn spawn_action(
+    name: String,
+    mut loading: Signal<bool>,
+    mut status_msg: Signal<Option<(String, bool)>>,
+    on_refresh: EventHandler<()>,
+    fut: std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), ServerFnError>>>>,
+) {
+    spawn(async move {
+        loading.set(true);
+        status_msg.set(None);
+        match fut.await {
+            Ok(_) => {
+                status_msg.set(Some((format!("{name} succeeded"), false)));
+                on_refresh.call(());
+                loading.set(false);
+            }
+            Err(e) => {
+                status_msg.set(Some((format!("{name} failed: {e}"), true)));
+                loading.set(false);
+            }
+        }
+    });
+}
+
 fn series_label(name: &str, entries: &str) -> String {
     if entries.is_empty() {
         name.to_string()
@@ -22,16 +46,27 @@ fn series_label(name: &str, entries: &str) -> String {
 
 #[component]
 pub fn TorrentDetailPage(id: String) -> Element {
-    let mut status_msg = use_signal(|| None::<(String, bool)>);
+    let status_msg = use_signal(|| None::<(String, bool)>);
     let mut cached_data = use_signal(|| None::<(TorrentPageData, Vec<String>, Option<QbitData>)>);
 
     let mut data_res = use_server_future(move || {
         let id = id.clone();
         async move {
-            let detail = get_torrent_detail(id.clone()).await;
-            let providers = get_metadata_providers().await;
-            let qbit = get_qbit_data(id).await;
-            (detail, providers, qbit)
+            #[cfg(feature = "server")]
+            {
+                tokio::join!(
+                    get_torrent_detail(id.clone()),
+                    get_metadata_providers(),
+                    get_qbit_data(id),
+                )
+            }
+            #[cfg(not(feature = "server"))]
+            {
+                let detail = get_torrent_detail(id.clone()).await;
+                let providers = get_metadata_providers().await;
+                let qbit = get_qbit_data(id).await;
+                (detail, providers, qbit)
+            }
         }
     })?;
 
@@ -61,14 +96,20 @@ pub fn TorrentDetailPage(id: String) -> Element {
             _ => cached_data.read().clone(),
         }
     };
-    let render_error = {
+    let render_error = if cached_data.read().is_none() {
         let value = current_value.read();
-        match (&*value, cached_data.read().is_some()) {
-            (Some((Err(e), _, _)), false) => Some(e.to_string()),
-            (Some((_, Err(e), _)), false) => Some(e.to_string()),
-            (Some((_, _, Err(e))), false) => Some(e.to_string()),
-            _ => None,
+        if let Some((detail, providers, qbit)) = &*value {
+            detail
+                .as_ref()
+                .err()
+                .or_else(|| providers.as_ref().err())
+                .or_else(|| qbit.as_ref().err())
+                .map(|e| e.to_string())
+        } else {
+            None
         }
+    } else {
+        None
     };
 
     rsx! {
@@ -557,27 +598,13 @@ fn TorrentActions(
     on_refresh: EventHandler<()>,
 ) -> Element {
     let mut selected_provider = use_signal(|| providers.first().cloned().unwrap_or_default());
-    let mut loading = use_signal(|| false);
+    let loading = use_signal(|| false);
 
     let handle_action = move |name: String,
                               fut: std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<(), ServerFnError>>>,
     >| {
-        spawn(async move {
-            loading.set(true);
-            status_msg.set(None);
-            match fut.await {
-                Ok(_) => {
-                    status_msg.set(Some((format!("{} succeeded", name), false)));
-                    on_refresh.call(());
-                    loading.set(false);
-                }
-                Err(e) => {
-                    status_msg.set(Some((format!("{} failed: {}", name, e), true)));
-                    loading.set(false);
-                }
-            }
-        });
+        spawn_action(name, loading, status_msg, on_refresh, fut);
     };
 
     rsx! {
@@ -710,7 +737,7 @@ fn QbitControls(
 ) -> Element {
     let mut selected_category = use_signal(|| qbit.torrent_category.clone());
     let mut selected_tags = use_signal(|| qbit.torrent_tags.clone());
-    let mut loading = use_signal(|| false);
+    let loading = use_signal(|| false);
     let qbit_files = qbit
         .qbit_files
         .iter()
@@ -727,21 +754,7 @@ fn QbitControls(
                                    fut: std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<(), ServerFnError>>>,
     >| {
-        spawn(async move {
-            loading.set(true);
-            status_msg.set(None);
-            match fut.await {
-                Ok(_) => {
-                    status_msg.set(Some((format!("{} succeeded", name), false)));
-                    on_refresh.call(());
-                    loading.set(false);
-                }
-                Err(e) => {
-                    status_msg.set(Some((format!("{} failed: {}", name, e), true)));
-                    loading.set(false);
-                }
-            }
-        });
+        spawn_action(name, loading, status_msg, on_refresh, fut);
     };
 
     rsx! {

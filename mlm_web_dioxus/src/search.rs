@@ -2,12 +2,12 @@ use crate::components::SearchTorrentRow;
 use crate::components::parse_location_query_pairs;
 use crate::dto::Series;
 #[cfg(feature = "server")]
-use crate::error::{IntoServerFnError, OptionIntoServerFnError};
+use crate::error::IntoServerFnError;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "server")]
-use mlm_core::{Context, ContextExt, Torrent as DbTorrent, TorrentKey};
+use mlm_core::{ContextExt, Torrent as DbTorrent, TorrentKey};
 #[cfg(feature = "server")]
 use mlm_db::Flags;
 
@@ -76,15 +76,12 @@ pub async fn get_search_data(
     sort: String,
     uploader: Option<u64>,
 ) -> Result<SearchData, ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
     use mlm_mam::{
         enums::SearchTarget,
         search::{SearchFields, SearchQuery, Tor},
     };
 
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
 
     let mam = context.mam().server_err()?;
     let result = mam

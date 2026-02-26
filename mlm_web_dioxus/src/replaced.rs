@@ -1,7 +1,7 @@
 use crate::components::{
-    ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, FilterLink,
-    PageSizeSelector, Pagination, TorrentGridTable, build_query_string, encode_query_enum,
-    parse_location_query_pairs, parse_query_enum, set_location_query_string,
+    ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, FilterLink, PageColumns,
+    PageSizeSelector, Pagination, SortHeader, TorrentGridTable, build_query_string,
+    encode_query_enum, parse_location_query_pairs, parse_query_enum, set_location_query_string,
 };
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -10,12 +10,12 @@ use std::collections::BTreeSet;
 use std::str::FromStr;
 
 #[cfg(feature = "server")]
-use crate::error::OptionIntoServerFnError;
+use crate::error::IntoServerFnError;
 #[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
 #[cfg(feature = "server")]
 use mlm_core::{
-    Context, ContextExt, Torrent,
+    ContextExt, Torrent,
     linker::{refresh_mam_metadata, refresh_metadata_relink},
 };
 #[cfg(feature = "server")]
@@ -96,6 +96,28 @@ impl ReplacedPageColumns {
         cols.push("157px");
         cols.push("132px");
         cols.join(" ")
+    }
+
+    pub fn get(self, col: ReplacedColumn) -> bool {
+        match col {
+            ReplacedColumn::Authors => self.authors,
+            ReplacedColumn::Narrators => self.narrators,
+            ReplacedColumn::Series => self.series,
+            ReplacedColumn::Language => self.language,
+            ReplacedColumn::Size => self.size,
+            ReplacedColumn::Filetypes => self.filetypes,
+        }
+    }
+
+    pub fn set(&mut self, col: ReplacedColumn, enabled: bool) {
+        match col {
+            ReplacedColumn::Authors => self.authors = enabled,
+            ReplacedColumn::Narrators => self.narrators = enabled,
+            ReplacedColumn::Series => self.series = enabled,
+            ReplacedColumn::Language => self.language = enabled,
+            ReplacedColumn::Size => self.size = enabled,
+            ReplacedColumn::Filetypes => self.filetypes = enabled,
+        }
     }
 }
 
@@ -231,26 +253,19 @@ pub async fn get_replaced_data(
     page_size: Option<usize>,
     _show: ReplacedPageColumns,
 ) -> Result<ReplacedData, ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
 
     let mut from_val = from.unwrap_or(0);
     let page_size_val = page_size.unwrap_or(500);
 
-    let r = context
-        .db()
-        .r_transaction()
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let r = context.db().r_transaction().server_err()?;
 
     let mut replaced = r
         .scan()
         .secondary::<Torrent>(TorrentKey::created_at)
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err()?
         .all()
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err()?
         .rev()
         .filter_map(Result::ok)
         .filter(|t| t.replaced_with.is_some())
@@ -301,7 +316,7 @@ pub async fn get_replaced_data(
         let Some(replacement) = r
             .get()
             .primary::<Torrent>(replacement_id.clone())
-            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .server_err()?
         else {
             continue;
         };
@@ -332,57 +347,40 @@ pub async fn apply_replaced_action(
     action: ReplacedBulkAction,
     torrent_ids: Vec<String>,
 ) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
     if torrent_ids.is_empty() {
         return Err(ServerFnError::new("No torrents selected"));
     }
 
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
 
     match action {
         ReplacedBulkAction::Refresh => {
             let config = context.config().await;
-            let mam = context
-                .mam()
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            let mam = context.mam().server_err()?;
             for id in torrent_ids {
                 refresh_mam_metadata(&config, context.db(), &mam, id, &context.events)
                     .await
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                    .server_err()?;
             }
         }
         ReplacedBulkAction::RefreshRelink => {
             let config = context.config().await;
-            let mam = context
-                .mam()
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            let mam = context.mam().server_err()?;
             for id in torrent_ids {
                 refresh_metadata_relink(&config, context.db(), &mam, id, &context.events)
                     .await
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                    .server_err()?;
             }
         }
         ReplacedBulkAction::Remove => {
-            let (_guard, rw) = context
-                .db()
-                .rw_async()
-                .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            let (_guard, rw) = context.db().rw_async().await.server_err()?;
             for id in torrent_ids {
-                let Some(torrent) = rw
-                    .get()
-                    .primary::<Torrent>(id)
-                    .map_err(|e| ServerFnError::new(e.to_string()))?
-                else {
+                let Some(torrent) = rw.get().primary::<Torrent>(id).server_err()? else {
                     continue;
                 };
-                rw.remove(torrent)
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                rw.remove(torrent).server_err()?;
             }
-            rw.commit().map_err(|e| ServerFnError::new(e.to_string()))?;
+            rw.commit().server_err()?;
         }
     }
 
@@ -402,54 +400,56 @@ fn filter_name(filter: ReplacedPageFilter) -> &'static str {
     }
 }
 
-fn show_to_query_value(show: ReplacedPageColumns) -> String {
-    let mut values = Vec::new();
-    if show.authors {
-        values.push("author");
-    }
-    if show.narrators {
-        values.push("narrator");
-    }
-    if show.series {
-        values.push("series");
-    }
-    if show.language {
-        values.push("language");
-    }
-    if show.size {
-        values.push("size");
-    }
-    if show.filetypes {
-        values.push("filetype");
-    }
-    values.join(",")
-}
-
-fn show_from_query_value(value: &str) -> ReplacedPageColumns {
-    let mut show = ReplacedPageColumns {
-        authors: false,
-        narrators: false,
-        series: false,
-        language: false,
-        size: false,
-        filetypes: false,
-    };
-    for item in value.split(',') {
-        match item {
-            "author" => show.authors = true,
-            "narrator" => show.narrators = true,
-            "series" => show.series = true,
-            "language" => show.language = true,
-            "size" => show.size = true,
-            "filetype" => show.filetypes = true,
-            _ => {}
+impl PageColumns for ReplacedPageColumns {
+    fn to_query_value(&self) -> String {
+        let mut values = Vec::new();
+        if self.authors {
+            values.push("author");
         }
+        if self.narrators {
+            values.push("narrator");
+        }
+        if self.series {
+            values.push("series");
+        }
+        if self.language {
+            values.push("language");
+        }
+        if self.size {
+            values.push("size");
+        }
+        if self.filetypes {
+            values.push("filetype");
+        }
+        values.join(",")
     }
-    show
+
+    fn from_query_value(value: &str) -> Self {
+        let mut show = ReplacedPageColumns {
+            authors: false,
+            narrators: false,
+            series: false,
+            language: false,
+            size: false,
+            filetypes: false,
+        };
+        for item in value.split(',') {
+            match item {
+                "author" => show.authors = true,
+                "narrator" => show.narrators = true,
+                "series" => show.series = true,
+                "language" => show.language = true,
+                "size" => show.size = true,
+                "filetype" => show.filetypes = true,
+                _ => {}
+            }
+        }
+        show
+    }
 }
 
 #[derive(Clone)]
-struct LegacyQueryState {
+struct PageQueryState {
     sort: Option<ReplacedPageSort>,
     asc: bool,
     filters: Vec<(ReplacedPageFilter, String)>,
@@ -458,7 +458,7 @@ struct LegacyQueryState {
     show: ReplacedPageColumns,
 }
 
-impl Default for LegacyQueryState {
+impl Default for PageQueryState {
     fn default() -> Self {
         Self {
             sort: None,
@@ -471,8 +471,8 @@ impl Default for LegacyQueryState {
     }
 }
 
-fn parse_legacy_query_state() -> LegacyQueryState {
-    let mut state = LegacyQueryState::default();
+fn parse_query_state() -> PageQueryState {
+    let mut state = PageQueryState::default();
     for (key, value) in parse_location_query_pairs() {
         match key.as_str() {
             "sort_by" => state.sort = parse_query_enum::<ReplacedPageSort>(&value),
@@ -487,7 +487,7 @@ fn parse_legacy_query_state() -> LegacyQueryState {
                     state.page_size = v;
                 }
             }
-            "show" => state.show = show_from_query_value(&value),
+            "show" => state.show = ReplacedPageColumns::from_query_value(&value),
             _ => {
                 if let Some(field) = parse_query_enum::<ReplacedPageFilter>(&key) {
                     state.filters.push((field, value));
@@ -498,7 +498,7 @@ fn parse_legacy_query_state() -> LegacyQueryState {
     state
 }
 
-fn build_legacy_query_string(
+fn build_query_url(
     sort: Option<ReplacedPageSort>,
     asc: bool,
     filters: &[(ReplacedPageFilter, String)],
@@ -520,7 +520,7 @@ fn build_legacy_query_string(
         params.push(("page_size".to_string(), page_size.to_string()));
     }
     if show != ReplacedPageColumns::default() {
-        params.push(("show".to_string(), show_to_query_value(show)));
+        params.push(("show".to_string(), show.to_query_value()));
     }
     for (field, value) in filters {
         if let Some(name) = encode_query_enum(*field) {
@@ -549,39 +549,17 @@ const COLUMN_OPTIONS: &[(ReplacedColumn, &str)] = &[
     (ReplacedColumn::Filetypes, "Filetypes"),
 ];
 
-fn column_enabled(show: ReplacedPageColumns, column: ReplacedColumn) -> bool {
-    match column {
-        ReplacedColumn::Authors => show.authors,
-        ReplacedColumn::Narrators => show.narrators,
-        ReplacedColumn::Series => show.series,
-        ReplacedColumn::Language => show.language,
-        ReplacedColumn::Size => show.size,
-        ReplacedColumn::Filetypes => show.filetypes,
-    }
-}
-
-fn set_column_enabled(show: &mut ReplacedPageColumns, column: ReplacedColumn, enabled: bool) {
-    match column {
-        ReplacedColumn::Authors => show.authors = enabled,
-        ReplacedColumn::Narrators => show.narrators = enabled,
-        ReplacedColumn::Series => show.series = enabled,
-        ReplacedColumn::Language => show.language = enabled,
-        ReplacedColumn::Size => show.size = enabled,
-        ReplacedColumn::Filetypes => show.filetypes = enabled,
-    }
-}
-
 #[component]
 pub fn ReplacedPage() -> Element {
     let _route: crate::app::Route = use_route();
-    let initial_state = parse_legacy_query_state();
+    let initial_state = parse_query_state();
     let initial_sort = initial_state.sort;
     let initial_asc = initial_state.asc;
     let initial_filters = initial_state.filters.clone();
     let initial_from = initial_state.from;
     let initial_page_size = initial_state.page_size;
     let initial_show = initial_state.show;
-    let initial_request_key = build_legacy_query_string(
+    let initial_request_key = build_query_url(
         initial_state.sort,
         initial_state.asc,
         &initial_state.filters,
@@ -622,8 +600,8 @@ pub fn ReplacedPage() -> Element {
     let value = replaced_data.as_ref().map(|resource| resource.value());
 
     {
-        let route_state = parse_legacy_query_state();
-        let route_request_key = build_legacy_query_string(
+        let route_state = parse_query_state();
+        let route_request_key = build_query_url(
             route_state.sort,
             route_state.asc,
             &route_state.filters,
@@ -671,7 +649,7 @@ pub fn ReplacedPage() -> Element {
     };
 
     use_effect(move || {
-        let query_string = build_legacy_query_string(
+        let query_string = build_query_url(
             *sort.read(),
             *asc.read(),
             &filters.read().clone(),
@@ -689,43 +667,10 @@ pub fn ReplacedPage() -> Element {
         }
     });
 
-    let sort_header = |label: &'static str, key: ReplacedPageSort| {
-        let active = *sort.read() == Some(key);
-        let arrow = if active {
-            if *asc.read() { "↑" } else { "↓" }
-        } else {
-            ""
-        };
-        rsx! {
-            div { class: "header",
-                button {
-                    r#type: "button",
-                    class: "link",
-                    onclick: {
-                        let mut sort = sort;
-                        let mut asc = asc;
-                        let mut from = from;
-                        move |_| {
-                            if *sort.read() == Some(key) {
-                                let next_asc = !*asc.read();
-                                asc.set(next_asc);
-                            } else {
-                                sort.set(Some(key));
-                                asc.set(false);
-                            }
-                            from.set(0);
-                        }
-                    },
-                    "{label}{arrow}"
-                }
-            }
-        }
-    };
-
     let column_options = COLUMN_OPTIONS
         .iter()
         .map(|(column, label)| {
-            let checked = column_enabled(*show.read(), *column);
+            let checked = show.read().get(*column);
             let column = *column;
             ColumnToggleOption {
                 label,
@@ -734,7 +679,7 @@ pub fn ReplacedPage() -> Element {
                     let mut show = show;
                     move |enabled| {
                         let mut next = *show.read();
-                        set_column_enabled(&mut next, column, enabled);
+                        next.set(column, enabled);
                         show.set(next);
                     }
                 }),
@@ -887,28 +832,28 @@ pub fn ReplacedPage() -> Element {
                                             },
                                         }
                                     }
-                                    {sort_header("Type", ReplacedPageSort::Kind)}
-                                    {sort_header("Title", ReplacedPageSort::Title)}
+                                    SortHeader { label: "Type", sort_key: ReplacedPageSort::Kind, sort, asc, from }
+                                    SortHeader { label: "Title", sort_key: ReplacedPageSort::Title, sort, asc, from }
                                     if show.read().authors {
-                                        {sort_header("Authors", ReplacedPageSort::Authors)}
+                                        SortHeader { label: "Authors", sort_key: ReplacedPageSort::Authors, sort, asc, from }
                                     }
                                     if show.read().narrators {
-                                        {sort_header("Narrators", ReplacedPageSort::Narrators)}
+                                        SortHeader { label: "Narrators", sort_key: ReplacedPageSort::Narrators, sort, asc, from }
                                     }
                                     if show.read().series {
-                                        {sort_header("Series", ReplacedPageSort::Series)}
+                                        SortHeader { label: "Series", sort_key: ReplacedPageSort::Series, sort, asc, from }
                                     }
                                     if show.read().language {
-                                        {sort_header("Language", ReplacedPageSort::Language)}
+                                        SortHeader { label: "Language", sort_key: ReplacedPageSort::Language, sort, asc, from }
                                     }
                                     if show.read().size {
-                                        {sort_header("Size", ReplacedPageSort::Size)}
+                                        SortHeader { label: "Size", sort_key: ReplacedPageSort::Size, sort, asc, from }
                                     }
                                     if show.read().filetypes {
                                         div { class: "header", "Filetypes" }
                                     }
-                                    {sort_header("Replaced", ReplacedPageSort::Replaced)}
-                                    {sort_header("Added At", ReplacedPageSort::CreatedAt)}
+                                    SortHeader { label: "Replaced", sort_key: ReplacedPageSort::Replaced, sort, asc, from }
+                                    SortHeader { label: "Added At", sort_key: ReplacedPageSort::CreatedAt, sort, asc, from }
                                     div { class: "header", "" }
                                 }
                             }
@@ -940,21 +885,17 @@ pub fn ReplacedPage() -> Element {
                                         }
                                         div {
                                             FilterLink {
-                                                filters: filters,
                                                 field: ReplacedPageFilter::Kind,
                                                 value: pair.torrent.meta.media_type.clone(),
                                                 reset_from: true,
-                                                on_apply: move |_| from.set(0),
                                                 "{pair.torrent.meta.media_type}"
                                             }
                                         }
                                         div {
                                             FilterLink {
-                                                filters: filters,
                                                 field: ReplacedPageFilter::Title,
                                                 value: pair.torrent.meta.title.clone(),
                                                 reset_from: true,
-                                                on_apply: move |_| from.set(0),
                                                 "{pair.torrent.meta.title}"
                                             }
                                         }
@@ -962,11 +903,9 @@ pub fn ReplacedPage() -> Element {
                                             div {
                                                 for author in pair.torrent.meta.authors.clone() {
                                                     FilterLink {
-                                                        filters: filters,
                                                         field: ReplacedPageFilter::Author,
                                                         value: author.clone(),
                                                         reset_from: true,
-                                                        on_apply: move |_| from.set(0),
                                                         "{author}"
                                                     }
                                                 }
@@ -976,11 +915,9 @@ pub fn ReplacedPage() -> Element {
                                             div {
                                                 for narrator in pair.torrent.meta.narrators.clone() {
                                                     FilterLink {
-                                                        filters: filters,
                                                         field: ReplacedPageFilter::Narrator,
                                                         value: narrator.clone(),
                                                         reset_from: true,
-                                                        on_apply: move |_| from.set(0),
                                                         "{narrator}"
                                                     }
                                                 }
@@ -990,11 +927,9 @@ pub fn ReplacedPage() -> Element {
                                             div {
                                                 for series in pair.torrent.meta.series.clone() {
                                                     FilterLink {
-                                                        filters: filters,
                                                         field: ReplacedPageFilter::Series,
                                                         value: series.name.clone(),
                                                         reset_from: true,
-                                                        on_apply: move |_| from.set(0),
                                                         if series.entries.is_empty() {
                                                             "{series.name}"
                                                         } else {
@@ -1007,11 +942,9 @@ pub fn ReplacedPage() -> Element {
                                         if show.read().language {
                                             div {
                                                 FilterLink {
-                                                    filters: filters,
                                                     field: ReplacedPageFilter::Language,
                                                     value: pair.torrent.meta.language.clone().unwrap_or_default(),
                                                     reset_from: true,
-                                                    on_apply: move |_| from.set(0),
                                                     "{pair.torrent.meta.language.clone().unwrap_or_default()}"
                                                 }
                                             }
@@ -1023,11 +956,9 @@ pub fn ReplacedPage() -> Element {
                                             div {
                                                 for filetype in pair.torrent.meta.filetypes.clone() {
                                                     FilterLink {
-                                                        filters: filters,
                                                         field: ReplacedPageFilter::Filetype,
                                                         value: filetype.clone(),
                                                         reset_from: true,
-                                                        on_apply: move |_| from.set(0),
                                                         "{filetype}"
                                                     }
                                                 }

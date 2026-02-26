@@ -1,19 +1,19 @@
 use std::collections::BTreeSet;
 
 use crate::components::{
-    ActiveFilterChip, ActiveFilters, FilterLink, PageSizeSelector, Pagination, TorrentGridTable,
-    build_query_string, encode_query_enum, parse_location_query_pairs, parse_query_enum,
-    set_location_query_string,
+    ActiveFilterChip, ActiveFilters, FilterLink, PageSizeSelector, Pagination, SortHeader,
+    TorrentGridTable, build_query_string, encode_query_enum, parse_location_query_pairs,
+    parse_query_enum, set_location_query_string,
 };
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "server")]
-use crate::error::OptionIntoServerFnError;
+use crate::error::{IntoServerFnError, OptionIntoServerFnError};
 #[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
 #[cfg(feature = "server")]
-use mlm_core::{Context, ContextExt, Torrent, cleaner::clean_torrent};
+use mlm_core::{ContextExt, Torrent, cleaner::clean_torrent};
 #[cfg(feature = "server")]
 use mlm_db::{DatabaseExt as _, DuplicateTorrent, SelectedTorrent, Timestamp, TorrentCost, ids};
 #[cfg(feature = "server")]
@@ -192,26 +192,19 @@ pub async fn get_duplicate_data(
     from: Option<usize>,
     page_size: Option<usize>,
 ) -> Result<DuplicateData, ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
 
     let mut from_val = from.unwrap_or(0);
     let page_size_val = page_size.unwrap_or(500);
 
-    let r = context
-        .db()
-        .r_transaction()
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let r = context.db().r_transaction().server_err()?;
 
     let mut duplicates = r
         .scan()
         .primary::<DuplicateTorrent>()
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err()?
         .all()
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err()?
         .filter_map(Result::ok)
         .filter(|t| {
             filters
@@ -254,7 +247,7 @@ pub async fn get_duplicate_data(
         let Some(duplicate_of) = r
             .get()
             .primary::<Torrent>(duplicate_of_id.clone())
-            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .server_err()?
         else {
             continue;
         };
@@ -285,58 +278,41 @@ pub async fn apply_duplicate_action(
     action: DuplicateBulkAction,
     torrent_ids: Vec<u64>,
 ) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
     if torrent_ids.is_empty() {
         return Err(ServerFnError::new("No torrents selected"));
     }
 
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     let config = context.config().await;
 
     match action {
         DuplicateBulkAction::Replace => {
-            let mam = context
-                .mam()
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            let mam = context.mam().server_err()?;
             for mam_id in torrent_ids {
-                let r = context
-                    .db()
-                    .r_transaction()
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
-                let Some(duplicate_torrent) = r
-                    .get()
-                    .primary::<DuplicateTorrent>(mam_id)
-                    .map_err(|e| ServerFnError::new(e.to_string()))?
+                let r = context.db().r_transaction().server_err()?;
+                let Some(duplicate_torrent) =
+                    r.get().primary::<DuplicateTorrent>(mam_id).server_err()?
                 else {
                     continue;
                 };
                 let Some(hash) = duplicate_torrent.duplicate_of.clone() else {
                     return Err(ServerFnError::new("No duplicate_of set"));
                 };
-                let Some(duplicate_of) = r
-                    .get()
-                    .primary::<Torrent>(hash)
-                    .map_err(|e| ServerFnError::new(e.to_string()))?
-                else {
+                let Some(duplicate_of) = r.get().primary::<Torrent>(hash).server_err()? else {
                     return Err(ServerFnError::new("Could not find original torrent"));
                 };
 
                 let Some(mam_torrent) = mam
                     .get_torrent_info_by_id(duplicate_torrent.mam_id)
                     .await
-                    .map_err(|e| ServerFnError::new(e.to_string()))?
+                    .server_err()?
                 else {
                     return Err(ServerFnError::new(
                         "Could not find duplicate torrent on MaM",
                     ));
                 };
 
-                let meta = mam_torrent
-                    .as_meta()
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                let meta = mam_torrent.as_meta().server_err()?;
                 let title_search = normalize_title(&meta.title);
                 let tags: Vec<_> = config
                     .tags
@@ -355,11 +331,7 @@ pub async fn apply_duplicate_action(
                     TorrentCost::TryWedge
                 };
 
-                let (_guard, rw) = context
-                    .db()
-                    .rw_async()
-                    .await
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                let (_guard, rw) = context.db().rw_async().await.server_err()?;
                 rw.insert(SelectedTorrent {
                     mam_id: mam_torrent.id,
                     hash: None,
@@ -380,34 +352,25 @@ pub async fn apply_duplicate_action(
                     started_at: None,
                     removed_at: None,
                 })
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
-                rw.remove(duplicate_torrent)
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
-                rw.commit().map_err(|e| ServerFnError::new(e.to_string()))?;
+                .server_err()?;
+                rw.remove(duplicate_torrent).server_err()?;
+                rw.commit().server_err()?;
 
                 clean_torrent(&config, context.db(), duplicate_of, false, &context.events)
                     .await
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                    .server_err()?;
             }
         }
         DuplicateBulkAction::Remove => {
-            let (_guard, rw) = context
-                .db()
-                .rw_async()
-                .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            let (_guard, rw) = context.db().rw_async().await.server_err()?;
             for mam_id in torrent_ids {
-                let Some(torrent) = rw
-                    .get()
-                    .primary::<DuplicateTorrent>(mam_id)
-                    .map_err(|e| ServerFnError::new(e.to_string()))?
+                let Some(torrent) = rw.get().primary::<DuplicateTorrent>(mam_id).server_err()?
                 else {
                     continue;
                 };
-                rw.remove(torrent)
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                rw.remove(torrent).server_err()?;
             }
-            rw.commit().map_err(|e| ServerFnError::new(e.to_string()))?;
+            rw.commit().server_err()?;
         }
     }
 
@@ -426,7 +389,7 @@ fn filter_name(filter: DuplicatePageFilter) -> &'static str {
 }
 
 #[derive(Clone)]
-struct LegacyQueryState {
+struct PageQueryState {
     sort: Option<DuplicatePageSort>,
     asc: bool,
     filters: Vec<(DuplicatePageFilter, String)>,
@@ -434,7 +397,7 @@ struct LegacyQueryState {
     page_size: usize,
 }
 
-impl Default for LegacyQueryState {
+impl Default for PageQueryState {
     fn default() -> Self {
         Self {
             sort: None,
@@ -446,8 +409,8 @@ impl Default for LegacyQueryState {
     }
 }
 
-fn parse_legacy_query_state() -> LegacyQueryState {
-    let mut state = LegacyQueryState::default();
+fn parse_query_state() -> PageQueryState {
+    let mut state = PageQueryState::default();
     for (key, value) in parse_location_query_pairs() {
         match key.as_str() {
             "sort_by" => state.sort = parse_query_enum::<DuplicatePageSort>(&value),
@@ -472,7 +435,7 @@ fn parse_legacy_query_state() -> LegacyQueryState {
     state
 }
 
-fn build_legacy_query_string(
+fn build_query_url(
     sort: Option<DuplicatePageSort>,
     asc: bool,
     filters: &[(DuplicatePageFilter, String)],
@@ -503,13 +466,13 @@ fn build_legacy_query_string(
 #[component]
 pub fn DuplicatePage() -> Element {
     let _route: crate::app::Route = use_route();
-    let initial_state = parse_legacy_query_state();
+    let initial_state = parse_query_state();
     let initial_sort = initial_state.sort;
     let initial_asc = initial_state.asc;
     let initial_filters = initial_state.filters.clone();
     let initial_from = initial_state.from;
     let initial_page_size = initial_state.page_size;
-    let initial_request_key = build_legacy_query_string(
+    let initial_request_key = build_query_url(
         initial_state.sort,
         initial_state.asc,
         &initial_state.filters,
@@ -547,8 +510,8 @@ pub fn DuplicatePage() -> Element {
     let value = duplicate_data.as_ref().map(|resource| resource.value());
 
     {
-        let route_state = parse_legacy_query_state();
-        let route_request_key = build_legacy_query_string(
+        let route_state = parse_query_state();
+        let route_request_key = build_query_url(
             route_state.sort,
             route_state.asc,
             &route_state.filters,
@@ -593,7 +556,7 @@ pub fn DuplicatePage() -> Element {
     };
 
     use_effect(move || {
-        let query_string = build_legacy_query_string(
+        let query_string = build_query_url(
             *sort.read(),
             *asc.read(),
             &filters.read().clone(),
@@ -609,39 +572,6 @@ pub fn DuplicatePage() -> Element {
             }
         }
     });
-
-    let sort_header = |label: &'static str, key: DuplicatePageSort| {
-        let active = *sort.read() == Some(key);
-        let arrow = if active {
-            if *asc.read() { "↑" } else { "↓" }
-        } else {
-            ""
-        };
-        rsx! {
-            div { class: "header",
-                button {
-                    r#type: "button",
-                    class: "link",
-                    onclick: {
-                        let mut sort = sort;
-                        let mut asc = asc;
-                        let mut from = from;
-                        move |_| {
-                            if *sort.read() == Some(key) {
-                                let next_asc = !*asc.read();
-                                asc.set(next_asc);
-                            } else {
-                                sort.set(Some(key));
-                                asc.set(false);
-                            }
-                            from.set(0);
-                        }
-                    },
-                    "{label}{arrow}"
-                }
-            }
-        }
-    };
 
     let mut active_chips = Vec::new();
     for (field, value) in filters.read().clone() {
@@ -788,15 +718,15 @@ pub fn DuplicatePage() -> Element {
                                             },
                                         }
                                     }
-                                    {sort_header("Type", DuplicatePageSort::Kind)}
-                                    {sort_header("Title", DuplicatePageSort::Title)}
-                                    {sort_header("Authors", DuplicatePageSort::Authors)}
-                                    {sort_header("Narrators", DuplicatePageSort::Narrators)}
-                                    {sort_header("Series", DuplicatePageSort::Series)}
-                                    {sort_header("Size", DuplicatePageSort::Size)}
+                                    SortHeader { label: "Type", sort_key: DuplicatePageSort::Kind, sort, asc, from }
+                                    SortHeader { label: "Title", sort_key: DuplicatePageSort::Title, sort, asc, from }
+                                    SortHeader { label: "Authors", sort_key: DuplicatePageSort::Authors, sort, asc, from }
+                                    SortHeader { label: "Narrators", sort_key: DuplicatePageSort::Narrators, sort, asc, from }
+                                    SortHeader { label: "Series", sort_key: DuplicatePageSort::Series, sort, asc, from }
+                                    SortHeader { label: "Size", sort_key: DuplicatePageSort::Size, sort, asc, from }
                                     div { class: "header", "Filetypes" }
                                     div { class: "header", "Linked" }
-                                    {sort_header("Added At", DuplicatePageSort::CreatedAt)}
+                                    SortHeader { label: "Added At", sort_key: DuplicatePageSort::CreatedAt, sort, asc, from }
                                     div { class: "header", "" }
                                 }
                             }
@@ -825,32 +755,26 @@ pub fn DuplicatePage() -> Element {
                                         }
                                         div {
                                             FilterLink {
-                                                filters: filters,
                                                 field: DuplicatePageFilter::Kind,
                                                 value: pair.torrent.meta.media_type.clone(),
                                                 reset_from: true,
-                                                on_apply: move |_| from.set(0),
                                                 "{pair.torrent.meta.media_type}"
                                             }
                                         }
                                         div {
                                             FilterLink {
-                                                filters: filters,
                                                 field: DuplicatePageFilter::Title,
                                                 value: pair.torrent.meta.title.clone(),
                                                 reset_from: true,
-                                                on_apply: move |_| from.set(0),
                                                 "{pair.torrent.meta.title}"
                                             }
                                         }
                                         div {
                                             for author in pair.torrent.meta.authors.clone() {
                                                 FilterLink {
-                                                    filters: filters,
                                                     field: DuplicatePageFilter::Author,
                                                     value: author.clone(),
                                                     reset_from: true,
-                                                    on_apply: move |_| from.set(0),
                                                     "{author}"
                                                 }
                                             }
@@ -858,11 +782,9 @@ pub fn DuplicatePage() -> Element {
                                         div {
                                             for narrator in pair.torrent.meta.narrators.clone() {
                                                 FilterLink {
-                                                    filters: filters,
                                                     field: DuplicatePageFilter::Narrator,
                                                     value: narrator.clone(),
                                                     reset_from: true,
-                                                    on_apply: move |_| from.set(0),
                                                     "{narrator}"
                                                 }
                                             }
@@ -870,11 +792,9 @@ pub fn DuplicatePage() -> Element {
                                         div {
                                             for series in pair.torrent.meta.series.clone() {
                                                 FilterLink {
-                                                    filters: filters,
                                                     field: DuplicatePageFilter::Series,
                                                     value: series.name.clone(),
                                                     reset_from: true,
-                                                    on_apply: move |_| from.set(0),
                                                     if series.entries.is_empty() {
                                                         "{series.name}"
                                                     } else {
@@ -887,11 +807,9 @@ pub fn DuplicatePage() -> Element {
                                         div {
                                             for filetype in pair.torrent.meta.filetypes.clone() {
                                                 FilterLink {
-                                                    filters: filters,
                                                     field: DuplicatePageFilter::Filetype,
                                                     value: filetype.clone(),
                                                     reset_from: true,
-                                                    on_apply: move |_| from.set(0),
                                                     "{filetype}"
                                                 }
                                             }

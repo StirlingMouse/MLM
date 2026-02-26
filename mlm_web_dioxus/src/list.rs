@@ -1,5 +1,4 @@
 #[cfg(feature = "server")]
-use crate::error::{IntoServerFnError, OptionIntoServerFnError};
 use crate::sse::STATS_UPDATE_TRIGGER;
 #[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
@@ -82,14 +81,10 @@ pub async fn get_list_data(
 ) -> Result<ListPageData, ServerFnError> {
     #[cfg(feature = "server")]
     {
-        use dioxus_fullstack::FullstackContext;
-        use mlm_core::{Context, ContextExt};
-        use mlm_db::{DatabaseExt as _, List, ListItem, ListItemKey};
+        use mlm_core::ContextExt;
+        use mlm_db::{List, ListItem, ListItemKey};
 
-        let ctx = FullstackContext::current().ok_or_server_err("FullstackContext not found")?;
-        let context: Context = ctx
-            .extension()
-            .ok_or_server_err("Context not found in extensions")?;
+        let context = crate::error::get_context()?;
 
         let db = context.db();
 
@@ -175,14 +170,10 @@ pub async fn get_list_data(
 pub async fn mark_list_item_done(list_id: String, item_id: String) -> Result<(), ServerFnError> {
     #[cfg(feature = "server")]
     {
-        use dioxus_fullstack::FullstackContext;
-        use mlm_core::{Context, ContextExt};
+        use mlm_core::ContextExt;
         use mlm_db::{DatabaseExt as _, ListItem, Timestamp};
 
-        let ctx = FullstackContext::current().ok_or_server_err("FullstackContext not found")?;
-        let context: Context = ctx
-            .extension()
-            .ok_or_server_err("Context not found in extensions")?;
+        let context = crate::error::get_context()?;
 
         let db = context.db();
 

@@ -38,6 +38,7 @@ pub fn Pagination(props: PaginationProps) -> Element {
             if num_pages > max_pages {
                 button {
                     r#type: "button",
+                    "aria-label": "First page",
                     class: if current_page == 1 { "disabled" },
                     onclick: move |_| props.on_change.call(0),
                     "«"
@@ -45,6 +46,7 @@ pub fn Pagination(props: PaginationProps) -> Element {
             }
             button {
                 r#type: "button",
+                "aria-label": "Previous page",
                 class: if current_page == 1 { "disabled" },
                 onclick: move |_| props.on_change.call(props.from.saturating_sub(props.page_size)),
                 "‹"
@@ -67,6 +69,7 @@ pub fn Pagination(props: PaginationProps) -> Element {
             }
             button {
                 r#type: "button",
+                "aria-label": "Next page",
                 class: if current_page == num_pages { "disabled" },
                 onclick: move |_| {
                     props.on_change.call(
@@ -78,6 +81,7 @@ pub fn Pagination(props: PaginationProps) -> Element {
             if num_pages > max_pages {
                 button {
                     r#type: "button",
+                    "aria-label": "Last page",
                     class: if current_page == num_pages { "disabled" },
                     onclick: move |_| props.on_change.call((num_pages - 1) * props.page_size),
                     "»"

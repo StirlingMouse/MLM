@@ -468,11 +468,7 @@ async fn get_downloaded_torrent_detail(
 pub async fn get_torrent_detail(
     id: String,
 ) -> Result<super::types::TorrentPageData, ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
 
     if context
         .db()
@@ -525,12 +521,9 @@ pub async fn get_torrent_detail(
 
 #[server]
 pub async fn select_torrent_action(mam_id: u64, wedge: bool) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
     use mlm_db::{SelectedTorrent, Timestamp};
 
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
 
     let mam = context.mam().server_err()?;
     let torrent = mam
@@ -593,10 +586,7 @@ pub async fn select_torrent_action(mam_id: u64, wedge: bool) -> Result<(), Serve
 
 #[server]
 pub async fn remove_torrent_action(id: String) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
 
     let torrent = context
         .db()
@@ -615,11 +605,8 @@ pub async fn remove_torrent_action(id: String) -> Result<(), ServerFnError> {
 
 #[server]
 pub async fn clean_torrent_action(id: String) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
     use mlm_core::cleaner::clean_torrent;
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     let config = context.config().await;
     let Some(torrent) = context
         .db()
@@ -639,11 +626,8 @@ pub async fn clean_torrent_action(id: String) -> Result<(), ServerFnError> {
 
 #[server]
 pub async fn refresh_metadata_action(id: String) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
     use mlm_core::linker::refresh_mam_metadata;
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     let config = context.config().await;
     let mam = context.mam().server_err()?;
     refresh_mam_metadata(&config, context.db(), &mam, id, &context.events)
@@ -654,11 +638,8 @@ pub async fn refresh_metadata_action(id: String) -> Result<(), ServerFnError> {
 
 #[server]
 pub async fn relink_torrent_action(id: String) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
     use mlm_core::linker::relink;
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     let config = context.config().await;
     relink(&config, context.db(), id, &context.events)
         .await
@@ -668,11 +649,8 @@ pub async fn relink_torrent_action(id: String) -> Result<(), ServerFnError> {
 
 #[server]
 pub async fn refresh_and_relink_action(id: String) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
     use mlm_core::linker::refresh_metadata_relink;
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     let config = context.config().await;
     let mam = context.mam().server_err()?;
     refresh_metadata_relink(&config, context.db(), &mam, id, &context.events)
@@ -683,12 +661,9 @@ pub async fn refresh_and_relink_action(id: String) -> Result<(), ServerFnError> 
 
 #[server]
 pub async fn match_metadata_action(id: String, provider: String) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
     use mlm_db::Event as DbEvent;
 
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     let Some(mut torrent) = context
         .db()
         .r_transaction()
@@ -734,10 +709,7 @@ pub async fn match_metadata_action(id: String, provider: String) -> Result<(), S
 
 #[server]
 pub async fn clear_replacement_action(id: String) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     let (_guard, rw) = context.db().rw_async().await.server_err()?;
     let Some(mut torrent) = rw.get().primary::<DbTorrent>(id).server_err()? else {
         return Err(ServerFnError::new("Could not find torrent"));
@@ -750,22 +722,16 @@ pub async fn clear_replacement_action(id: String) -> Result<(), ServerFnError> {
 
 #[server]
 pub async fn get_metadata_providers() -> Result<Vec<String>, ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     Ok(context.metadata().enabled_providers())
 }
 
 #[server]
 pub async fn get_qbit_data(id: String) -> Result<Option<super::types::QbitData>, ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
     use mlm_core::linker::{find_library, library_dir};
     use mlm_core::qbittorrent::get_torrent;
 
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     let config = context.config().await;
     let db = context.db();
 
@@ -861,12 +827,9 @@ pub async fn get_qbit_data(id: String) -> Result<Option<super::types::QbitData>,
 
 #[server]
 pub async fn torrent_start_action(id: String) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
     use mlm_core::qbittorrent::get_torrent;
 
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     let config = context.config().await;
     let Some((qbit_torrent, qbit, _config)) = get_torrent(&config, &id).await.server_err()? else {
         return Err(ServerFnError::new(
@@ -881,12 +844,9 @@ pub async fn torrent_start_action(id: String) -> Result<(), ServerFnError> {
 
 #[server]
 pub async fn torrent_stop_action(id: String) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
     use mlm_core::qbittorrent::get_torrent;
 
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     let config = context.config().await;
     let Some((qbit_torrent, qbit, _config)) = get_torrent(&config, &id).await.server_err()? else {
         return Err(ServerFnError::new(
@@ -905,12 +865,9 @@ pub async fn set_qbit_category_tags_action(
     category: String,
     tags: Vec<String>,
 ) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
     use mlm_core::qbittorrent::{ensure_category_exists, get_torrent};
 
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     let config = context.config().await;
     let Some((qbit_torrent, qbit, qbit_config)) = get_torrent(&config, &id).await.server_err()?
     else {
@@ -956,12 +913,9 @@ pub async fn set_qbit_category_tags_action(
 
 #[server]
 pub async fn remove_seeding_files_action(id: String) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
     use mlm_core::qbittorrent::get_torrent;
 
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     let config = context.config().await;
     let db = context.db();
 

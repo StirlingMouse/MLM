@@ -2,6 +2,11 @@ use dioxus::prelude::{ReadableExt, Signal, WritableExt};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+pub trait PageColumns: Default + PartialEq + Sized {
+    fn to_query_value(&self) -> String;
+    fn from_query_value(s: &str) -> Self;
+}
+
 pub fn apply_click_filter<F: Copy + PartialEq + 'static>(
     filters: &mut Signal<Vec<(F, String)>>,
     field: F,

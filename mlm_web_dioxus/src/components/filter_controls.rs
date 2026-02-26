@@ -89,6 +89,7 @@ pub fn ActiveFilters(
                             "{label}"
                             button {
                                 r#type: "button",
+                                "aria-label": "Remove {label} filter",
                                 onclick: move |_| on_remove.call(()),
                                 " ×"
                             }

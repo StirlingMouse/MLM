@@ -4,7 +4,7 @@ use super::types::EventData;
 #[cfg(feature = "server")]
 use crate::dto::{Event, EventType, MetadataSource, TorrentMetaDiff, convert_torrent};
 #[cfg(feature = "server")]
-use crate::error::{IntoServerFnError, OptionIntoServerFnError};
+use crate::error::IntoServerFnError;
 #[cfg(feature = "server")]
 use crate::utils::format_timestamp;
 use dioxus::prelude::*;
@@ -12,7 +12,7 @@ use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use mlm_core::ContextExt;
 #[cfg(feature = "server")]
-use mlm_core::{Context, Event as DbEvent, EventKey, EventType as DbEventType, TorrentKey};
+use mlm_core::{Event as DbEvent, EventKey, EventType as DbEventType, TorrentKey};
 
 #[cfg(feature = "server")]
 use super::types::EventWithTorrentData;
@@ -28,11 +28,7 @@ pub async fn get_events_data(
     from: Option<usize>,
     page_size: Option<usize>,
 ) -> Result<EventData, ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
-    let context: Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
     let db = context.db();
 
     let from_val = from.unwrap_or(0);

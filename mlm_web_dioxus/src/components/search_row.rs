@@ -207,7 +207,7 @@ pub fn SearchTorrentRow(
                         span { class: "faint", "[{torrent.lang_code}] " }
                     }
                     Link {
-                        to: Route::TorrentDetail {
+                        to: Route::TorrentDetailPage {
                             id: torrent_detail_id,
                         },
                         b { "{torrent.title}" }

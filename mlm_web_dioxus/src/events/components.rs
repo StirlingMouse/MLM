@@ -186,11 +186,13 @@ fn EventsHeader(
                     label { class: "active",
                         "Linker: {l} "
                         button {
+                            r#type: "button",
+                            "aria-label": "Remove linker filter",
                             onclick: move |_| {
                                 linker.set(None);
                                 from.set(0);
                             },
-                            "[x]"
+                            "×"
                         }
                     }
                 }
@@ -198,11 +200,13 @@ fn EventsHeader(
                     label { class: "active",
                         "Grabber: {g} "
                         button {
+                            r#type: "button",
+                            "aria-label": "Remove grabber filter",
                             onclick: move |_| {
                                 grabber.set(None);
                                 from.set(0);
                             },
-                            "[x]"
+                            "×"
                         }
                     }
                 }
@@ -210,11 +214,13 @@ fn EventsHeader(
                     label { class: "active",
                         "Category: {c} "
                         button {
+                            r#type: "button",
+                            "aria-label": "Remove category filter",
                             onclick: move |_| {
                                 category.set(None);
                                 from.set(0);
                             },
-                            "[x]"
+                            "×"
                         }
                     }
                 }

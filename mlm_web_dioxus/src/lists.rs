@@ -1,7 +1,4 @@
 #[cfg(feature = "server")]
-use crate::error::{IntoServerFnError, OptionIntoServerFnError};
-use crate::sse::STATS_UPDATE_TRIGGER;
-#[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -30,16 +27,11 @@ pub struct ListsData {
 pub async fn get_lists() -> Result<ListsData, ServerFnError> {
     #[cfg(feature = "server")]
     {
-        use dioxus_fullstack::FullstackContext;
         use itertools::Itertools as _;
-        use mlm_core::config::GoodreadsList;
-        use mlm_core::{Context, ContextExt};
+        use mlm_core::ContextExt;
         use mlm_db::{List, ListKey};
 
-        let ctx = FullstackContext::current().ok_or_server_err("FullstackContext not found")?;
-        let context: Context = ctx
-            .extension()
-            .ok_or_server_err("Context not found in extensions")?;
+        let context = crate::error::get_context()?;
 
         let config = context.config().await;
         let db = context.db();
@@ -144,7 +136,7 @@ fn ListsPageContent(data: ListsData) -> Element {
 
             for (config, list) in &data.lists {
                 div {
-                    Link { to: Route::List { id: list.id.clone() },
+                    Link { to: Route::ListPage { id: list.id.clone() },
                         h3 {
                             if let Some(name) = &config.name {
                                 "{name}"
@@ -170,7 +162,7 @@ fn ListsPageContent(data: ListsData) -> Element {
 
                 for list in &data.inactive_lists {
                     div {
-                        Link { to: Route::List { id: list.id.clone() },
+                        Link { to: Route::ListPage { id: list.id.clone() },
                             h3 { "{list.title}" }
                         }
                         p {

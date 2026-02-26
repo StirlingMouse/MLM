@@ -30,3 +30,12 @@ impl<T> OptionIntoServerFnError<T> for Option<T> {
         self.ok_or_else(|| ServerFnError::new(msg.to_string()))
     }
 }
+
+/// Extract the application `Context` from the current Dioxus fullstack request.
+#[cfg(feature = "server")]
+pub fn get_context() -> Result<mlm_core::Context, ServerFnError> {
+    use dioxus_fullstack::FullstackContext;
+    FullstackContext::current()
+        .and_then(|ctx| ctx.extension())
+        .ok_or_server_err("Context not found")
+}

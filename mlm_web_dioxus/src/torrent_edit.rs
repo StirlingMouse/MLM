@@ -125,12 +125,9 @@ fn parse_vip_status(
 
 #[server]
 pub async fn get_torrent_meta_edit_data(id: String) -> Result<TorrentMetaEditForm, ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
     use itertools::Itertools;
 
-    let context: mlm_core::Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
 
     let torrent = context
         .db()
@@ -210,11 +207,7 @@ pub async fn get_torrent_meta_edit_data(id: String) -> Result<TorrentMetaEditFor
 
 #[server]
 pub async fn update_torrent_meta_edit_data(form: TorrentMetaEditForm) -> Result<(), ServerFnError> {
-    use dioxus_fullstack::FullstackContext;
-
-    let context: mlm_core::Context = FullstackContext::current()
-        .and_then(|ctx| ctx.extension())
-        .ok_or_server_err("Context not found in extensions")?;
+    let context = crate::error::get_context()?;
 
     let config = context.config().await;
     let torrent = context
@@ -379,10 +372,10 @@ pub fn TorrentEditPage(id: String) -> Element {
         async move { get_torrent_meta_edit_data(id).await }
     })?;
 
-    if let Some(Ok(data)) = &*data_res.value().read() {
-        if form_state.read().as_ref() != Some(data) {
-            form_state.set(Some(data.clone()));
-        }
+    if let Some(Ok(data)) = &*data_res.value().read()
+        && form_state.read().as_ref() != Some(data)
+    {
+        form_state.set(Some(data.clone()));
     }
 
     rsx! {

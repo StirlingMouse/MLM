@@ -4,10 +4,11 @@ use dioxus::prelude::*;
 
 use crate::components::{
     ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, FilterLink,
-    PageSizeSelector, Pagination, TorrentGridTable, flag_icon, set_location_query_string,
+    PageSizeSelector, Pagination, SortHeader, TorrentGridTable, flag_icon,
+    set_location_query_string,
 };
 
-use super::query::{build_legacy_query_string, parse_legacy_query_state};
+use super::query::{build_query_url, parse_query_state};
 use super::{
     TorrentsBulkAction, TorrentsData, TorrentsPageColumns, TorrentsPageFilter, TorrentsPageSort,
     apply_torrents_action, get_torrents_data,
@@ -50,43 +51,45 @@ const COLUMN_OPTIONS: &[(TorrentColumn, &str)] = &[
     (TorrentColumn::UploadedAt, "Uploaded At"),
 ];
 
-fn column_enabled(show: TorrentsPageColumns, column: TorrentColumn) -> bool {
-    match column {
-        TorrentColumn::Category => show.category,
-        TorrentColumn::Categories => show.categories,
-        TorrentColumn::Flags => show.flags,
-        TorrentColumn::Edition => show.edition,
-        TorrentColumn::Authors => show.authors,
-        TorrentColumn::Narrators => show.narrators,
-        TorrentColumn::Series => show.series,
-        TorrentColumn::Language => show.language,
-        TorrentColumn::Size => show.size,
-        TorrentColumn::Filetypes => show.filetypes,
-        TorrentColumn::Linker => show.linker,
-        TorrentColumn::QbitCategory => show.qbit_category,
-        TorrentColumn::Path => show.path,
-        TorrentColumn::CreatedAt => show.created_at,
-        TorrentColumn::UploadedAt => show.uploaded_at,
+impl TorrentsPageColumns {
+    pub fn get(self, col: TorrentColumn) -> bool {
+        match col {
+            TorrentColumn::Category => self.category,
+            TorrentColumn::Categories => self.categories,
+            TorrentColumn::Flags => self.flags,
+            TorrentColumn::Edition => self.edition,
+            TorrentColumn::Authors => self.authors,
+            TorrentColumn::Narrators => self.narrators,
+            TorrentColumn::Series => self.series,
+            TorrentColumn::Language => self.language,
+            TorrentColumn::Size => self.size,
+            TorrentColumn::Filetypes => self.filetypes,
+            TorrentColumn::Linker => self.linker,
+            TorrentColumn::QbitCategory => self.qbit_category,
+            TorrentColumn::Path => self.path,
+            TorrentColumn::CreatedAt => self.created_at,
+            TorrentColumn::UploadedAt => self.uploaded_at,
+        }
     }
-}
 
-fn set_column_enabled(show: &mut TorrentsPageColumns, column: TorrentColumn, enabled: bool) {
-    match column {
-        TorrentColumn::Category => show.category = enabled,
-        TorrentColumn::Categories => show.categories = enabled,
-        TorrentColumn::Flags => show.flags = enabled,
-        TorrentColumn::Edition => show.edition = enabled,
-        TorrentColumn::Authors => show.authors = enabled,
-        TorrentColumn::Narrators => show.narrators = enabled,
-        TorrentColumn::Series => show.series = enabled,
-        TorrentColumn::Language => show.language = enabled,
-        TorrentColumn::Size => show.size = enabled,
-        TorrentColumn::Filetypes => show.filetypes = enabled,
-        TorrentColumn::Linker => show.linker = enabled,
-        TorrentColumn::QbitCategory => show.qbit_category = enabled,
-        TorrentColumn::Path => show.path = enabled,
-        TorrentColumn::CreatedAt => show.created_at = enabled,
-        TorrentColumn::UploadedAt => show.uploaded_at = enabled,
+    pub fn set(&mut self, col: TorrentColumn, enabled: bool) {
+        match col {
+            TorrentColumn::Category => self.category = enabled,
+            TorrentColumn::Categories => self.categories = enabled,
+            TorrentColumn::Flags => self.flags = enabled,
+            TorrentColumn::Edition => self.edition = enabled,
+            TorrentColumn::Authors => self.authors = enabled,
+            TorrentColumn::Narrators => self.narrators = enabled,
+            TorrentColumn::Series => self.series = enabled,
+            TorrentColumn::Language => self.language = enabled,
+            TorrentColumn::Size => self.size = enabled,
+            TorrentColumn::Filetypes => self.filetypes = enabled,
+            TorrentColumn::Linker => self.linker = enabled,
+            TorrentColumn::QbitCategory => self.qbit_category = enabled,
+            TorrentColumn::Path => self.path = enabled,
+            TorrentColumn::CreatedAt => self.created_at = enabled,
+            TorrentColumn::UploadedAt => self.uploaded_at = enabled,
+        }
     }
 }
 
@@ -117,7 +120,7 @@ fn filter_name(filter: TorrentsPageFilter) -> &'static str {
 #[component]
 pub fn TorrentsPage() -> Element {
     let _route: crate::app::Route = use_route();
-    let initial_state = parse_legacy_query_state();
+    let initial_state = parse_query_state();
     let initial_query_input = initial_state.query.clone();
     let initial_submitted_query = initial_state.query.clone();
     let initial_sort = initial_state.sort;
@@ -126,7 +129,7 @@ pub fn TorrentsPage() -> Element {
     let initial_from = initial_state.from;
     let initial_page_size = initial_state.page_size;
     let initial_show = initial_state.show;
-    let initial_request_key = build_legacy_query_string(
+    let initial_request_key = build_query_url(
         &initial_state.query,
         initial_state.sort,
         initial_state.asc,
@@ -175,8 +178,8 @@ pub fn TorrentsPage() -> Element {
     let value = torrents_data.as_ref().map(|resource| resource.value());
 
     {
-        let route_state = parse_legacy_query_state();
-        let route_request_key = build_legacy_query_string(
+        let route_state = parse_query_state();
+        let route_request_key = build_query_url(
             &route_state.query,
             route_state.sort,
             route_state.asc,
@@ -237,8 +240,7 @@ pub fn TorrentsPage() -> Element {
         let page_size = *page_size.read();
         let show = *show.read();
 
-        let query_string =
-            build_legacy_query_string(&query, sort, asc, &filters, from, page_size, show);
+        let query_string = build_query_url(&query, sort, asc, &filters, from, page_size, show);
         let should_restart = *last_request_key.read() != query_string;
         if should_restart {
             last_request_key.set(query_string.clone());
@@ -249,44 +251,10 @@ pub fn TorrentsPage() -> Element {
         }
     });
 
-    let sort_header = |label: &'static str, key: TorrentsPageSort| {
-        let active = *sort.read() == Some(key);
-        let arrow = if active {
-            if *asc.read() { "↑" } else { "↓" }
-        } else {
-            ""
-        };
-        rsx! {
-            div { class: "header",
-                button {
-                    r#type: "button",
-                    class: "link",
-                    onclick: {
-                        let mut sort = sort;
-                        let mut asc = asc;
-                        let mut from = from;
-                        move |_| {
-                            if *sort.read() == Some(key) {
-                                let next_asc = !*asc.read();
-                                asc.set(next_asc);
-                            } else {
-                                sort.set(Some(key));
-                                asc.set(false);
-                            }
-                            from.set(0);
-                        }
-                    },
-                    "{label}"
-                    "{arrow}"
-                }
-            }
-        }
-    };
-
     let column_options = COLUMN_OPTIONS
         .iter()
         .map(|(column, label)| {
-            let checked = column_enabled(*show.read(), *column);
+            let checked = show.read().get(*column);
             let column = *column;
             ColumnToggleOption {
                 label,
@@ -295,7 +263,7 @@ pub fn TorrentsPage() -> Element {
                     let mut show = show;
                     move |enabled| {
                         let mut next = *show.read();
-                        set_column_enabled(&mut next, column, enabled);
+                        next.set(column, enabled);
                         show.set(next);
                     }
                 }),
@@ -367,6 +335,7 @@ pub fn TorrentsPage() -> Element {
                     input {
                         r#type: "submit",
                         value: "Search",
+                        "aria-hidden": "true",
                         style: "display: none;",
                     }
                     "Search: "
@@ -509,52 +478,53 @@ pub fn TorrentsPage() -> Element {
                                             },
                                         }
                                     }
-                                    {sort_header("Type", TorrentsPageSort::Kind)}
+                                    SortHeader { label: "Type", sort_key: TorrentsPageSort::Kind, sort, asc, from }
                                     if show.read().categories {
                                         div { class: "header", "Categories" }
                                     }
                                     if show.read().flags {
                                         div { class: "header", "Flags" }
                                     }
-                                    {sort_header("Title", TorrentsPageSort::Title)}
+                                    SortHeader { label: "Title", sort_key: TorrentsPageSort::Title, sort, asc, from }
                                     if show.read().edition {
-                                        {sort_header("Edition", TorrentsPageSort::Edition)}
+                                        SortHeader { label: "Edition", sort_key: TorrentsPageSort::Edition, sort, asc, from }
                                     }
                                     if show.read().authors {
-                                        {sort_header("Authors", TorrentsPageSort::Authors)}
+                                        SortHeader { label: "Authors", sort_key: TorrentsPageSort::Authors, sort, asc, from }
                                     }
                                     if show.read().narrators {
-                                        {sort_header("Narrators", TorrentsPageSort::Narrators)}
+                                        SortHeader { label: "Narrators", sort_key: TorrentsPageSort::Narrators, sort, asc, from }
                                     }
                                     if show.read().series {
-                                        {sort_header("Series", TorrentsPageSort::Series)}
+                                        SortHeader { label: "Series", sort_key: TorrentsPageSort::Series, sort, asc, from }
                                     }
                                     if show.read().language {
-                                        {sort_header("Language", TorrentsPageSort::Language)}
+                                        SortHeader { label: "Language", sort_key: TorrentsPageSort::Language, sort, asc, from }
                                     }
                                     if show.read().size {
-                                        {sort_header("Size", TorrentsPageSort::Size)}
+                                        SortHeader { label: "Size", sort_key: TorrentsPageSort::Size, sort, asc, from }
                                     }
                                     if show.read().filetypes {
                                         div { class: "header", "Filetypes" }
                                     }
                                     if show.read().linker {
-                                        {sort_header("Linker", TorrentsPageSort::Linker)}
+                                        SortHeader { label: "Linker", sort_key: TorrentsPageSort::Linker, sort, asc, from }
                                     }
                                     if show.read().qbit_category {
-                                        {sort_header("Qbit Category", TorrentsPageSort::QbitCategory)}
+                                        SortHeader { label: "Qbit Category", sort_key: TorrentsPageSort::QbitCategory, sort, asc, from }
                                     }
-                                    {
-                                        sort_header(
-                                            if show.read().path { "Path" } else { "Linked" },
-                                            TorrentsPageSort::Linked,
-                                        )
+                                    SortHeader {
+                                        label: if show.read().path { "Path" } else { "Linked" },
+                                        sort_key: TorrentsPageSort::Linked,
+                                        sort,
+                                        asc,
+                                        from,
                                     }
                                     if show.read().created_at {
-                                        {sort_header("Added At", TorrentsPageSort::CreatedAt)}
+                                        SortHeader { label: "Added At", sort_key: TorrentsPageSort::CreatedAt, sort, asc, from }
                                     }
                                     if show.read().uploaded_at {
-                                        {sort_header("Uploaded At", TorrentsPageSort::UploadedAt)}
+                                        SortHeader { label: "Uploaded At", sort_key: TorrentsPageSort::UploadedAt, sort, asc, from }
                                     }
                                     div { class: "header", "" }
                                 }
@@ -587,23 +557,19 @@ pub fn TorrentsPage() -> Element {
                                         }
                                         div {
                                             FilterLink {
-                                                filters: filters,
                                                 field: TorrentsPageFilter::Kind,
                                                 value: torrent.meta.media_type.clone(),
                                                 title: Some(torrent.meta.cat_name.clone()),
                                                 reset_from: true,
-                                                on_apply: move |_| from.set(0),
                                                 "{torrent.meta.media_type}"
                                             }
                                             if show.read().category {
                                                 if let Some(cat_id) = torrent.meta.cat_id.clone() {
                                                     div {
                                                         FilterLink {
-                                                            filters: filters,
                                                             field: TorrentsPageFilter::Category,
                                                             value: cat_id.clone(),
                                                             reset_from: true,
-                                                            on_apply: move |_| from.set(0),
                                                             "{torrent.meta.cat_name}"
                                                         }
                                                     }
@@ -614,11 +580,9 @@ pub fn TorrentsPage() -> Element {
                                             div {
                                                 for category in torrent.meta.categories.clone() {
                                                     FilterLink {
-                                                        filters: filters,
                                                         field: TorrentsPageFilter::Categories,
                                                         value: category.clone(),
                                                         reset_from: true,
-                                                        on_apply: move |_| from.set(0),
                                                         "{category}"
                                                     }
                                                 }
@@ -629,11 +593,9 @@ pub fn TorrentsPage() -> Element {
                                                 for flag in torrent.meta.flags.clone() {
                                                     if let Some((src, title)) = flag_icon(&flag) {
                                                         FilterLink {
-                                                            filters: filters,
                                                             field: TorrentsPageFilter::Flags,
                                                             value: flag.clone(),
                                                             reset_from: true,
-                                                            on_apply: move |_| from.set(0),
                                                             img {
                                                                 class: "flag",
                                                                 src: "{src}",
@@ -647,11 +609,9 @@ pub fn TorrentsPage() -> Element {
                                         }
                                         div {
                                             FilterLink {
-                                                filters: filters,
                                                 field: TorrentsPageFilter::Title,
                                                 value: torrent.meta.title.clone(),
                                                 reset_from: true,
-                                                on_apply: move |_| from.set(0),
                                                 "{torrent.meta.title}"
                                             }
                                             if torrent.client_status.as_deref() == Some("removed_from_tracker") {
@@ -659,11 +619,9 @@ pub fn TorrentsPage() -> Element {
                                                     class: "warn",
                                                     title: "Torrent is removed from tracker but still seeding",
                                                     FilterLink {
-                                                        filters: filters,
                                                         field: TorrentsPageFilter::ClientStatus,
                                                         value: "removed_from_tracker".to_string(),
                                                         reset_from: true,
-                                                        on_apply: move |_| from.set(0),
                                                         "⚠"
                                                     }
                                                 }
@@ -671,11 +629,9 @@ pub fn TorrentsPage() -> Element {
                                             if torrent.client_status.as_deref() == Some("not_in_client") {
                                                 span { title: "Torrent is not seeding",
                                                     FilterLink {
-                                                        filters: filters,
                                                         field: TorrentsPageFilter::ClientStatus,
                                                         value: "not_in_client".to_string(),
                                                         reset_from: true,
-                                                        on_apply: move |_| from.set(0),
                                                         "ℹ"
                                                     }
                                                 }
@@ -688,11 +644,9 @@ pub fn TorrentsPage() -> Element {
                                             div {
                                                 for author in torrent.meta.authors.clone() {
                                                     FilterLink {
-                                                        filters: filters,
                                                         field: TorrentsPageFilter::Author,
                                                         value: author.clone(),
                                                         reset_from: true,
-                                                        on_apply: move |_| from.set(0),
                                                         "{author}"
                                                     }
                                                 }
@@ -702,11 +656,9 @@ pub fn TorrentsPage() -> Element {
                                             div {
                                                 for narrator in torrent.meta.narrators.clone() {
                                                     FilterLink {
-                                                        filters: filters,
                                                         field: TorrentsPageFilter::Narrator,
                                                         value: narrator.clone(),
                                                         reset_from: true,
-                                                        on_apply: move |_| from.set(0),
                                                         "{narrator}"
                                                     }
                                                 }
@@ -716,11 +668,9 @@ pub fn TorrentsPage() -> Element {
                                             div {
                                                 for series in torrent.meta.series.clone() {
                                                     FilterLink {
-                                                        filters: filters,
                                                         field: TorrentsPageFilter::Series,
                                                         value: series.name.clone(),
                                                         reset_from: true,
-                                                        on_apply: move |_| from.set(0),
                                                         if series.entries.is_empty() {
                                                             "{series.name}"
                                                         } else {
@@ -733,11 +683,9 @@ pub fn TorrentsPage() -> Element {
                                         if show.read().language {
                                             div {
                                                 FilterLink {
-                                                    filters: filters,
                                                     field: TorrentsPageFilter::Language,
                                                     value: torrent.meta.language.clone().unwrap_or_default(),
                                                     reset_from: true,
-                                                    on_apply: move |_| from.set(0),
                                                     "{torrent.meta.language.clone().unwrap_or_default()}"
                                                 }
                                             }
@@ -749,11 +697,9 @@ pub fn TorrentsPage() -> Element {
                                             div {
                                                 for filetype in torrent.meta.filetypes.clone() {
                                                     FilterLink {
-                                                        filters: filters,
                                                         field: TorrentsPageFilter::Filetype,
                                                         value: filetype.clone(),
                                                         reset_from: true,
-                                                        on_apply: move |_| from.set(0),
                                                         "{filetype}"
                                                     }
                                                 }
@@ -762,11 +708,9 @@ pub fn TorrentsPage() -> Element {
                                         if show.read().linker {
                                             div {
                                                 FilterLink {
-                                                    filters: filters,
                                                     field: TorrentsPageFilter::Linker,
                                                     value: torrent.linker.clone().unwrap_or_default(),
                                                     reset_from: true,
-                                                    on_apply: move |_| from.set(0),
                                                     "{torrent.linker.clone().unwrap_or_default()}"
                                                 }
                                             }
@@ -774,11 +718,9 @@ pub fn TorrentsPage() -> Element {
                                         if show.read().qbit_category {
                                             div {
                                                 FilterLink {
-                                                    filters: filters,
                                                     field: TorrentsPageFilter::QbitCategory,
                                                     value: torrent.category.clone().unwrap_or_default(),
                                                     reset_from: true,
-                                                    on_apply: move |_| from.set(0),
                                                     "{torrent.category.clone().unwrap_or_default()}"
                                                 }
                                             }
@@ -789,11 +731,9 @@ pub fn TorrentsPage() -> Element {
                                                 if let Some(mismatch) = torrent.library_mismatch.clone() {
                                                     span { class: "warn", title: "{mismatch.title()}",
                                                         FilterLink {
-                                                            filters: filters,
                                                             field: TorrentsPageFilter::LibraryMismatch,
                                                             value: mismatch.filter_value().to_string(),
                                                             reset_from: true,
-                                                            on_apply: move |_| from.set(0),
                                                             "⚠"
                                                         }
                                                     }
@@ -804,32 +744,26 @@ pub fn TorrentsPage() -> Element {
                                                 if let Some(path) = torrent.library_path.clone() {
                                                     span { title: "{path}",
                                                         FilterLink {
-                                                            filters: filters,
                                                             field: TorrentsPageFilter::Linked,
                                                             value: torrent.linked.to_string(),
                                                             reset_from: true,
-                                                            on_apply: move |_| from.set(0),
                                                             "{torrent.linked}"
                                                         }
                                                     }
                                                 } else {
                                                     FilterLink {
-                                                        filters: filters,
                                                         field: TorrentsPageFilter::Linked,
                                                         value: torrent.linked.to_string(),
                                                         reset_from: true,
-                                                        on_apply: move |_| from.set(0),
                                                         "{torrent.linked}"
                                                     }
                                                 }
                                                 if let Some(mismatch) = torrent.library_mismatch.clone() {
                                                     span { class: "warn", title: "{mismatch.title()}",
                                                         FilterLink {
-                                                            filters: filters,
                                                             field: TorrentsPageFilter::LibraryMismatch,
                                                             value: mismatch.filter_value().to_string(),
                                                             reset_from: true,
-                                                            on_apply: move |_| from.set(0),
                                                             "⚠"
                                                         }
                                                     }

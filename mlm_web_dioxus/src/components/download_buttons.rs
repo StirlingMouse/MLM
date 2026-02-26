@@ -71,8 +71,18 @@ pub fn DownloadButtons(props: DownloadButtonsProps) -> Element {
     let auto_wedge =
         props.can_wedge && !props.is_vip && !props.is_personal_freeleech && !props.is_free;
 
+    let freeleech_label = if props.is_vip {
+        Some("Download as VIP")
+    } else if props.is_personal_freeleech {
+        Some("Download as Personal Freeleech")
+    } else if props.is_free {
+        Some("Download as Global Freeleech")
+    } else {
+        None
+    };
+
     rsx! {
-        if props.is_vip {
+        if let Some(label) = freeleech_label {
             button {
                 class: if props.mode == DownloadButtonMode::Compact { "icon" } else { "btn" },
                 disabled: is_disabled,
@@ -97,63 +107,7 @@ pub fn DownloadButtons(props: DownloadButtonsProps) -> Element {
                         title: "Download",
                     }
                 } else {
-                    "Download as VIP"
-                }
-            }
-        } else if props.is_personal_freeleech {
-            button {
-                class: if props.mode == DownloadButtonMode::Compact { "icon" } else { "btn" },
-                disabled: is_disabled,
-                onclick: move |_| {
-                    handle_download(false, "Torrent queued for download".to_string());
-                },
-                if *loading.read() {
-                    if props.mode == DownloadButtonMode::Compact {
-                        img {
-                            src: "/assets/icons/down.png",
-                            alt: "Downloading",
-                            title: "Downloading",
-                            style: "filter:saturate(0)",
-                        }
-                    } else {
-                        "..."
-                    }
-                } else if props.mode == DownloadButtonMode::Compact {
-                    img {
-                        src: "/assets/icons/down.png",
-                        alt: "Download",
-                        title: "Download",
-                    }
-                } else {
-                    "Download as Personal Freeleech"
-                }
-            }
-        } else if props.is_free {
-            button {
-                class: if props.mode == DownloadButtonMode::Compact { "icon" } else { "btn" },
-                disabled: is_disabled,
-                onclick: move |_| {
-                    handle_download(false, "Torrent queued for download".to_string());
-                },
-                if *loading.read() {
-                    if props.mode == DownloadButtonMode::Compact {
-                        img {
-                            src: "/assets/icons/down.png",
-                            alt: "Downloading",
-                            title: "Downloading",
-                            style: "filter:saturate(0)",
-                        }
-                    } else {
-                        "..."
-                    }
-                } else if props.mode == DownloadButtonMode::Compact {
-                    img {
-                        src: "/assets/icons/down.png",
-                        alt: "Download",
-                        title: "Download",
-                    }
-                } else {
-                    "Download as Global Freeleech"
+                    {label}
                 }
             }
         } else {
