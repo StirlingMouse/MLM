@@ -114,6 +114,11 @@ button {
         &&:focus-ring {
                 background: var(--color-3);
         }
+
+        &.danger {
+                color: var(--warn);
+                border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+        }
 }
 
 form {
@@ -220,6 +225,20 @@ select {
 summary {
         cursor: pointer;
         user-select: none;
+}
+
+.details-summary {
+        display: block;
+        padding: 0.3em 0.6em;
+        margin-bottom: 0.4em;
+        font-weight: bold;
+        border-left: 3px solid var(--color-3);
+        cursor: pointer;
+        user-select: none;
+}
+
+details[open] > .details-summary {
+        border-left-color: var(--accent);
 }
 
 .table_options {
@@ -584,6 +603,91 @@ summary {
 
 .torrent-detail-page .option_group input {
         display: inline;
+}
+
+.torrent-actions-widget {
+        margin-top: 1em;
+}
+
+.torrent-actions-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5em;
+        margin-top: 0.5em;
+}
+
+.dialog-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 100;
+}
+
+.dialog-box {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 101;
+        background: var(--color-2);
+        border: 1px solid var(--color-3);
+        border-radius: 6px;
+        padding: 1.5em;
+        min-width: 400px;
+        max-width: min(700px, 90vw);
+        max-height: 85vh;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1em;
+}
+
+.dialog-field {
+        display: flex;
+        align-items: center;
+        gap: 0.75em;
+}
+
+.dialog-preview {
+        flex: 1;
+        min-height: 4em;
+}
+
+.dialog-actions {
+        display: flex;
+        gap: 0.5em;
+        justify-content: flex-end;
+}
+
+.match-diff-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9em;
+
+        th {
+                text-align: left;
+                padding: 0.3em 0.5em;
+                border-bottom: 1px solid var(--color-3);
+                font-weight: bold;
+        }
+
+        td {
+                padding: 0.3em 0.5em;
+                vertical-align: top;
+        }
+
+        tr:nth-child(even) td {
+                background: var(--color-1);
+        }
+
+        .diff-from {
+                color: var(--text-faint);
+                text-decoration: line-through;
+        }
+
+        .diff-to {
+                color: var(--text);
+        }
 }
 
 @media (max-width: 768px) {

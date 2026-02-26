@@ -1,4 +1,3 @@
-#[cfg(feature = "server")]
 use crate::sse::STATS_UPDATE_TRIGGER;
 #[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;

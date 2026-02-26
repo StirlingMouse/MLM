@@ -1,5 +1,4 @@
 use crate::dto::{Event, Series, TorrentMetaDiff};
-use crate::search::SearchTorrent;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -12,7 +11,6 @@ pub struct TorrentDetailData {
     pub abs_item_url: Option<String>,
     pub mam_torrent: Option<MamTorrentInfo>,
     pub mam_meta_diff: Vec<TorrentMetaDiff>,
-    pub other_torrents: Vec<SearchTorrent>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -56,7 +54,6 @@ pub enum TorrentPageData {
 pub struct TorrentMamData {
     pub mam_torrent: MamTorrentInfo,
     pub meta: TorrentInfo,
-    pub other_torrents: Vec<SearchTorrent>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

@@ -1,4 +1,5 @@
 mod action_button;
+mod details;
 mod download_buttons;
 mod filter_controls;
 mod filter_link;
@@ -12,6 +13,7 @@ mod task_box;
 mod torrent_flags;
 
 pub use action_button::ActionButton;
+pub use details::Details;
 pub use download_buttons::{DownloadButtonMode, DownloadButtons, SimpleDownloadButtons};
 pub use filter_controls::{
     ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, PageSizeSelector,

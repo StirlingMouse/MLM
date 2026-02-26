@@ -1,13 +1,15 @@
 use super::server_fns::{
-    clean_torrent_action, clear_replacement_action, get_metadata_providers, get_qbit_data,
-    get_torrent_detail, match_metadata_action, refresh_and_relink_action, refresh_metadata_action,
-    relink_torrent_action, remove_seeding_files_action, remove_torrent_action,
-    set_qbit_category_tags_action, torrent_start_action, torrent_stop_action,
+    clean_torrent_action, clear_replacement_action, get_metadata_providers, get_other_torrents,
+    get_qbit_data, get_torrent_detail, match_metadata_action, preview_match_metadata,
+    refresh_and_relink_action, refresh_metadata_action, relink_torrent_action,
+    remove_seeding_files_action, remove_torrent_action, set_qbit_category_tags_action,
+    torrent_start_action, torrent_stop_action,
 };
 use super::types::*;
 use crate::components::{
-    DownloadButtonMode, DownloadButtons, SearchMetadataFilterItem, SearchMetadataFilterRow,
-    SearchMetadataKind, SearchTorrentRow, StatusMessage, flag_icon, search_filter_href,
+    Details, DownloadButtonMode, DownloadButtons, SearchMetadataFilterItem,
+    SearchMetadataFilterRow, SearchMetadataKind, SearchTorrentRow, StatusMessage, flag_icon,
+    search_filter_href,
 };
 use crate::events::EventListItem;
 use dioxus::prelude::*;
@@ -47,25 +49,20 @@ fn series_label(name: &str, entries: &str) -> String {
 #[component]
 pub fn TorrentDetailPage(id: String) -> Element {
     let status_msg = use_signal(|| None::<(String, bool)>);
-    let mut cached_data = use_signal(|| None::<(TorrentPageData, Vec<String>, Option<QbitData>)>);
+    let mut cached_data = use_signal(|| None::<(TorrentPageData, Vec<String>)>);
 
     let mut data_res = use_server_future(move || {
         let id = id.clone();
         async move {
             #[cfg(feature = "server")]
             {
-                tokio::join!(
-                    get_torrent_detail(id.clone()),
-                    get_metadata_providers(),
-                    get_qbit_data(id),
-                )
+                tokio::join!(get_torrent_detail(id.clone()), get_metadata_providers())
             }
             #[cfg(not(feature = "server"))]
             {
                 let detail = get_torrent_detail(id.clone()).await;
                 let providers = get_metadata_providers().await;
-                let qbit = get_qbit_data(id).await;
-                (detail, providers, qbit)
+                (detail, providers)
             }
         }
     })?;
@@ -75,9 +72,7 @@ pub fn TorrentDetailPage(id: String) -> Element {
     let next_cache = {
         let value = current_value.read();
         match &*value {
-            Some((Ok(detail), Ok(providers), Ok(qbit))) => {
-                Some((detail.clone(), providers.clone(), qbit.clone()))
-            }
+            Some((Ok(detail), Ok(providers))) => Some((detail.clone(), providers.clone())),
             _ => None,
         }
     };
@@ -90,20 +85,17 @@ pub fn TorrentDetailPage(id: String) -> Element {
     let rendered_data = {
         let value = current_value.read();
         match &*value {
-            Some((Ok(detail), Ok(providers), Ok(qbit))) => {
-                Some((detail.clone(), providers.clone(), qbit.clone()))
-            }
+            Some((Ok(detail), Ok(providers))) => Some((detail.clone(), providers.clone())),
             _ => cached_data.read().clone(),
         }
     };
     let render_error = if cached_data.read().is_none() {
         let value = current_value.read();
-        if let Some((detail, providers, qbit)) = &*value {
+        if let Some((detail, providers)) = &*value {
             detail
                 .as_ref()
                 .err()
                 .or_else(|| providers.as_ref().err())
-                .or_else(|| qbit.as_ref().err())
                 .map(|e| e.to_string())
         } else {
             None
@@ -118,14 +110,13 @@ pub fn TorrentDetailPage(id: String) -> Element {
             if is_loading && cached_data.read().is_some() {
                 p { class: "loading-indicator", "Refreshing..." }
             }
-            if let Some((detail, providers, qbit)) = rendered_data {
+            if let Some((detail, providers)) = rendered_data {
                 match detail {
                     TorrentPageData::Downloaded(data) => {
                         rsx! {
                             TorrentDetailContent {
                                 data,
                                 providers,
-                                qbit_data: qbit,
                                 status_msg,
                                 on_refresh: move |_| data_res.restart(),
                             }
@@ -150,7 +141,6 @@ pub fn TorrentDetailPage(id: String) -> Element {
 fn TorrentDetailContent(
     data: TorrentDetailData,
     providers: Vec<String>,
-    qbit_data: Option<QbitData>,
     mut status_msg: Signal<Option<(String, bool)>>,
     on_refresh: EventHandler<()>,
 ) -> Element {
@@ -162,7 +152,6 @@ fn TorrentDetailContent(
         abs_item_url,
         mam_torrent,
         mam_meta_diff,
-        other_torrents,
     } = data;
 
     let library_files = torrent
@@ -365,8 +354,7 @@ fn TorrentDetailContent(
                         p { "{mam.tags}" }
                     }
                     if let Some(description) = mam.description {
-                        details {
-                            summary { "MaM Description" }
+                        Details { label: "MaM Description",
                             div { dangerous_inner_html: "{description}" }
                         }
                     }
@@ -384,10 +372,7 @@ fn TorrentDetailContent(
                     }
                 }
 
-                details {
-                    summary {
-                        h3 { "Event History" }
-                    }
+                Details { label: "Event History",
                     for event in events {
                         div { class: "event-item",
                             EventListItem {
@@ -403,8 +388,7 @@ fn TorrentDetailContent(
 
             div { class: "torrent-below",
                 if !library_files.is_empty() {
-                    details {
-                        summary { "Library Files ({library_files.len()})" }
+                    Details { label: "Library Files ({library_files.len()})",
                         ul {
                             for file in &library_files {
                                 li {
@@ -419,16 +403,13 @@ fn TorrentDetailContent(
                     }
                 }
 
-                if let Some(qbit) = qbit_data {
-                    QbitControls {
-                        torrent_id: torrent.id.clone(),
-                        qbit,
-                        status_msg,
-                        on_refresh,
-                    }
+                QbitSection {
+                    torrent_id: torrent.id.clone(),
+                    status_msg,
+                    on_refresh,
                 }
                 OtherTorrentsSection {
-                    torrents: other_torrents,
+                    id: torrent.id.clone(),
                     status_msg,
                     on_refresh,
                 }
@@ -552,7 +533,7 @@ fn TorrentMamContent(
             }
             div { class: "torrent-below",
                 OtherTorrentsSection {
-                    torrents: data.other_torrents,
+                    id: torrent.id.clone(),
                     status_msg,
                     on_refresh,
                 }
@@ -563,27 +544,40 @@ fn TorrentMamContent(
 
 #[component]
 fn OtherTorrentsSection(
-    torrents: Vec<crate::search::SearchTorrent>,
+    id: String,
     mut status_msg: Signal<Option<(String, bool)>>,
     on_refresh: EventHandler<()>,
 ) -> Element {
+    let mut other_res = use_resource(move || {
+        let id = id.clone();
+        async move { get_other_torrents(id).await }
+    });
+
+    let inner_refresh = move |_| {
+        other_res.restart();
+        on_refresh.call(());
+    };
+
     rsx! {
         div { style: "margin-top:1em;",
             h3 { "Other Torrents" }
-            if torrents.is_empty() {
-                p {
-                    i { "No other torrents found for this book" }
-                }
-            } else {
-                div { class: "Torrents",
-                    for torrent in torrents {
-                        SearchTorrentRow {
-                            torrent,
-                            status_msg,
-                            on_refresh: move |_| on_refresh.call(()),
+            match &*other_res.read() {
+                None => rsx! { p { class: "loading-indicator", "Loading other torrents..." } },
+                Some(Err(e)) => rsx! { p { class: "error", "Error loading other torrents: {e}" } },
+                Some(Ok(torrents)) if torrents.is_empty() => rsx! {
+                    p { i { "No other torrents found for this book" } }
+                },
+                Some(Ok(torrents)) => rsx! {
+                    div { class: "Torrents",
+                        for torrent in torrents.clone() {
+                            SearchTorrentRow {
+                                torrent,
+                                status_msg,
+                                on_refresh: inner_refresh,
+                            }
                         }
                     }
-                }
+                },
             }
         }
     }
@@ -597,8 +591,8 @@ fn TorrentActions(
     mut status_msg: Signal<Option<(String, bool)>>,
     on_refresh: EventHandler<()>,
 ) -> Element {
-    let mut selected_provider = use_signal(|| providers.first().cloned().unwrap_or_default());
     let loading = use_signal(|| false);
+    let mut dialog_open = use_signal(|| false);
 
     let handle_action = move |name: String,
                               fut: std::pin::Pin<
@@ -608,40 +602,16 @@ fn TorrentActions(
     };
 
     rsx! {
-        div { class: "torrent-actions-widget", style: "margin-top: 1em;",
+        div { class: "torrent-actions-widget",
             h3 { "Actions" }
 
-            div { style: "display: flex; gap: 0.5em; align-items: center; margin: 0.5em;",
-                select {
-                    disabled: *loading.read(),
-                    onchange: move |ev| selected_provider.set(ev.value()),
-                    for p in providers {
-                        option { value: "{p}", "{p}" }
-                    }
-                }
+            div { class: "torrent-actions-row",
                 button {
                     class: "btn",
                     disabled: *loading.read(),
-                    onclick: {
-                        let torrent_id = torrent_id.clone();
-                        move |_| {
-                            let id = torrent_id.clone();
-                            let provider = selected_provider.read().clone();
-                            handle_action(
-                                "Match Metadata".to_string(),
-                                Box::pin(match_metadata_action(id, provider)),
-                            );
-                        }
-                    },
-                    if *loading.read() {
-                        "Matching..."
-                    } else {
-                        "Match Metadata"
-                    }
+                    onclick: move |_| dialog_open.set(true),
+                    "Match Metadata"
                 }
-            }
-
-            div { style: "display: flex; flex-wrap: wrap; gap: 0.5em;",
                 button {
                     class: "btn",
                     disabled: *loading.read(),
@@ -711,8 +681,7 @@ fn TorrentActions(
                     }
                 }
                 button {
-                    class: "btn",
-                    style: "background: #fdd;",
+                    class: "btn danger",
                     disabled: *loading.read(),
                     onclick: {
                         let torrent_id = torrent_id.clone();
@@ -725,6 +694,154 @@ fn TorrentActions(
                 }
             }
         }
+
+        if *dialog_open.read() {
+            MatchDialog {
+                torrent_id: torrent_id.clone(),
+                providers: providers.clone(),
+                status_msg,
+                on_close: move |_| dialog_open.set(false),
+                on_refresh,
+            }
+        }
+    }
+}
+
+#[component]
+fn MatchDialog(
+    torrent_id: String,
+    providers: Vec<String>,
+    mut status_msg: Signal<Option<(String, bool)>>,
+    on_close: EventHandler<()>,
+    on_refresh: EventHandler<()>,
+) -> Element {
+    let mut selected_provider = use_signal(|| providers.first().cloned().unwrap_or_default());
+    let loading = use_signal(|| false);
+
+    let preview_id = torrent_id.clone();
+    let preview = use_resource(move || {
+        let id = preview_id.clone();
+        let provider = selected_provider.read().clone();
+        async move { preview_match_metadata(id, provider).await }
+    });
+
+    let do_match = {
+        let torrent_id = torrent_id.clone();
+        move |_| {
+            let id = torrent_id.clone();
+            let provider = selected_provider.read().clone();
+            spawn_action(
+                "Match Metadata".to_string(),
+                loading,
+                status_msg,
+                EventHandler::new(move |_| {
+                    on_close.call(());
+                    on_refresh.call(());
+                }),
+                Box::pin(match_metadata_action(id, provider)),
+            );
+        }
+    };
+
+    rsx! {
+        div {
+            class: "dialog-overlay",
+            onclick: move |_| {
+                if !*loading.read() {
+                    on_close.call(());
+                }
+            },
+        }
+        div { class: "dialog-box",
+            h3 { "Match Metadata" }
+
+            div { class: "dialog-field",
+                label { "Provider" }
+                select {
+                    disabled: *loading.read(),
+                    onchange: move |ev| selected_provider.set(ev.value()),
+                    for p in providers {
+                        option { value: "{p}", "{p}" }
+                    }
+                }
+            }
+
+            div { class: "dialog-preview",
+                match &*preview.read() {
+                    None => rsx! { p { class: "loading-indicator", "Fetching preview..." } },
+                    Some(Err(e)) => rsx! { p { class: "error", "Preview failed: {e}" } },
+                    Some(Ok(diffs)) if diffs.is_empty() => rsx! {
+                        p { i { "No changes would be made." } }
+                    },
+                    Some(Ok(diffs)) => rsx! {
+                        table { class: "match-diff-table",
+                            thead {
+                                tr {
+                                    th { "Field" }
+                                    th { "Current" }
+                                    th { "New" }
+                                }
+                            }
+                            tbody {
+                                for diff in diffs.clone() {
+                                    tr {
+                                        td { "{diff.field}" }
+                                        td { class: "diff-from", "{diff.from}" }
+                                        td { class: "diff-to", "{diff.to}" }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                }
+            }
+
+            div { class: "dialog-actions",
+                button {
+                    class: "btn",
+                    disabled: *loading.read() || preview.read().is_none(),
+                    onclick: do_match,
+                    if *loading.read() { "Saving..." } else { "Save" }
+                }
+                button {
+                    class: "btn",
+                    disabled: *loading.read(),
+                    onclick: move |_| on_close.call(()),
+                    "Cancel"
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn QbitSection(
+    torrent_id: String,
+    mut status_msg: Signal<Option<(String, bool)>>,
+    on_refresh: EventHandler<()>,
+) -> Element {
+    let qbit_id = torrent_id.clone();
+    let mut qbit_res = use_resource(move || {
+        let id = qbit_id.clone();
+        async move { get_qbit_data(id).await }
+    });
+
+    let on_qbit_refresh = move |_| {
+        qbit_res.restart();
+        on_refresh.call(());
+    };
+
+    match &*qbit_res.read() {
+        None => rsx! { p { class: "loading-indicator", "Loading qBittorrent data..." } },
+        Some(Err(_)) | Some(Ok(None)) => rsx! {},
+        Some(Ok(Some(qbit))) => rsx! {
+            QbitControls {
+                torrent_id,
+                qbit: qbit.clone(),
+                status_msg,
+                on_refresh: on_qbit_refresh,
+            }
+        },
     }
 }
 
@@ -906,8 +1023,7 @@ fn QbitControls(
             }
 
             if !qbit_files.is_empty() {
-                details {
-                    summary { "qBittorrent Files ({qbit_files.len()})" }
+                Details { label: "qBittorrent Files ({qbit_files.len()})",
                     ul {
                         for file in &qbit_files {
                             li {
