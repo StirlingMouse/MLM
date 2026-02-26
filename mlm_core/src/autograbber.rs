@@ -700,6 +700,9 @@ pub async fn update_torrent_meta(
     events: &crate::stats::Events,
 ) -> Result<()> {
     meta.ids.extend(torrent.meta.ids.clone());
+    if meta == torrent.meta {
+        return Ok(());
+    }
     meta.tags = torrent.meta.tags.clone();
     if meta.description.is_empty() {
         meta.description = torrent.meta.description.clone();
