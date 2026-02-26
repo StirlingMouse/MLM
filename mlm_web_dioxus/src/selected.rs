@@ -7,6 +7,7 @@ use crate::components::{
     SortHeader, TorrentGridTable, build_query_string, encode_query_enum, flag_icon,
     parse_location_query_pairs, parse_query_enum, set_location_query_string,
 };
+use crate::sse::{QBIT_PROGRESS, SELECTED_UPDATE_TRIGGER};
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -744,6 +745,13 @@ pub fn SelectedPage() -> Element {
         }
     }
 
+    use_effect(move || {
+        let _ = *SELECTED_UPDATE_TRIGGER.read();
+        if let Some(resource) = selected_data.as_mut() {
+            resource.restart();
+        }
+    });
+
     let data_to_show = {
         if let Some(value) = &value {
             let value = value.read();
@@ -1175,7 +1183,18 @@ pub fn SelectedPage() -> Element {
                                             div { "{torrent.created_at}" }
                                         }
                                         if show.read().started_at {
-                                            div { "{torrent.started_at.clone().unwrap_or_default()}" }
+                                            div {
+                                                "{torrent.started_at.clone().unwrap_or_default()}"
+                                                if torrent.started_at.is_some() && torrent.removed_at.is_none() {
+                                                    if let Some(pct) = QBIT_PROGRESS.read().iter().find(|(id, _)| *id == torrent.mam_id).map(|(_, p)| *p) {
+                                                        " "
+                                                        span {
+                                                            title: "qBittorrent download progress",
+                                                            "{pct}%"
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                         if show.read().removed_at {
                                             div { "{torrent.removed_at.clone().unwrap_or_default()}" }

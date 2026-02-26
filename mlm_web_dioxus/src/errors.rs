@@ -4,6 +4,7 @@ use crate::components::{
     ActiveFilterChip, ActiveFilters, FilterLink, TorrentGridTable, build_query_string,
     encode_query_enum, parse_location_query_pairs, parse_query_enum, set_location_query_string,
 };
+use crate::sse::ERRORS_UPDATE_TRIGGER;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -248,6 +249,11 @@ pub fn ErrorsPage() -> Element {
             cached.set(Some(data.clone()));
         }
     }
+
+    use_effect(move || {
+        let _ = *ERRORS_UPDATE_TRIGGER.read();
+        errors_data.restart();
+    });
 
     let data_to_show = {
         let value = value.read();
