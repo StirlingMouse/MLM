@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "server")]
 use mlm_core::{
@@ -20,240 +19,9 @@ use sublime_fuzzy::FuzzySearch;
 #[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
 
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "lowercase")]
-pub enum TorrentsPageSort {
-    Kind,
-    Category,
-    Title,
-    Edition,
-    Authors,
-    Narrators,
-    Series,
-    Language,
-    Size,
-    Linker,
-    QbitCategory,
-    Linked,
-    CreatedAt,
-    UploadedAt,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum TorrentsPageFilter {
-    Kind,
-    Category,
-    Categories,
-    Flags,
-    Title,
-    Author,
-    Narrator,
-    Series,
-    Language,
-    Filetype,
-    Linker,
-    QbitCategory,
-    Linked,
-    LibraryMismatch,
-    ClientStatus,
-    Abs,
-    Query,
-    Source,
-    Metadata,
-}
-
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum TorrentsBulkAction {
-    Refresh,
-    RefreshRelink,
-    Clean,
-    Remove,
-}
-
-impl TorrentsBulkAction {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Refresh => "refresh metadata",
-            Self::RefreshRelink => "refresh metadata and relink",
-            Self::Clean => "clean torrent",
-            Self::Remove => "remove torrent from MLM",
-        }
-    }
-
-    fn success_label(self) -> &'static str {
-        match self {
-            Self::Refresh => "Refreshed metadata",
-            Self::RefreshRelink => "Refreshed metadata and relinked",
-            Self::Clean => "Cleaned torrents",
-            Self::Remove => "Removed torrents",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
-pub struct TorrentsPageColumns {
-    pub category: bool,
-    pub categories: bool,
-    pub flags: bool,
-    pub edition: bool,
-    pub authors: bool,
-    pub narrators: bool,
-    pub series: bool,
-    pub language: bool,
-    pub size: bool,
-    pub filetypes: bool,
-    pub linker: bool,
-    pub qbit_category: bool,
-    pub path: bool,
-    pub created_at: bool,
-    pub uploaded_at: bool,
-}
-
-impl Default for TorrentsPageColumns {
-    fn default() -> Self {
-        Self {
-            category: false,
-            categories: false,
-            flags: false,
-            edition: false,
-            authors: true,
-            narrators: true,
-            series: true,
-            language: false,
-            size: true,
-            filetypes: true,
-            linker: false,
-            qbit_category: false,
-            path: false,
-            created_at: true,
-            uploaded_at: false,
-        }
-    }
-}
-
-impl TorrentsPageColumns {
-    fn table_grid_template(self) -> String {
-        let mut cols = vec!["30px", if self.category { "130px" } else { "89px" }];
-        if self.categories {
-            cols.push("1fr");
-        }
-        if self.flags {
-            cols.push("60px");
-        }
-        cols.push("2fr");
-        if self.edition {
-            cols.push("80px");
-        }
-        if self.authors {
-            cols.push("1fr");
-        }
-        if self.narrators {
-            cols.push("1fr");
-        }
-        if self.series {
-            cols.push("1fr");
-        }
-        if self.language {
-            cols.push("100px");
-        }
-        if self.size {
-            cols.push("81px");
-        }
-        if self.filetypes {
-            cols.push("100px");
-        }
-        if self.linker {
-            cols.push("130px");
-        }
-        if self.qbit_category {
-            cols.push("100px");
-        }
-        cols.push(if self.path { "2fr" } else { "72px" });
-        if self.created_at {
-            cols.push("157px");
-        }
-        if self.uploaded_at {
-            cols.push("157px");
-        }
-        cols.push("132px");
-        cols.join(" ")
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct TorrentsSeries {
-    pub name: String,
-    pub entries: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub enum TorrentLibraryMismatch {
-    NewLibraryDir(String),
-    NewPath(String),
-    NoLibrary,
-}
-
-impl TorrentLibraryMismatch {
-    fn filter_value(&self) -> &'static str {
-        match self {
-            Self::NewLibraryDir(_) => "new_library",
-            Self::NewPath(_) => "new_path",
-            Self::NoLibrary => "no_library",
-        }
-    }
-
-    fn title(&self) -> String {
-        match self {
-            Self::NewLibraryDir(path) => format!("Wanted library dir: {path}"),
-            Self::NewPath(path) => format!("Wanted library path: {path}"),
-            Self::NoLibrary => "No longer wanted in library".to_string(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct TorrentsMeta {
-    pub title: String,
-    pub media_type: String,
-    pub cat_name: String,
-    pub cat_id: Option<String>,
-    pub categories: Vec<String>,
-    pub flags: Vec<String>,
-    pub edition: Option<String>,
-    pub authors: Vec<String>,
-    pub narrators: Vec<String>,
-    pub series: Vec<TorrentsSeries>,
-    pub language: Option<String>,
-    pub size: String,
-    pub filetypes: Vec<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct TorrentsRow {
-    pub id: String,
-    pub mam_id: Option<u64>,
-    pub meta: TorrentsMeta,
-    pub linker: Option<String>,
-    pub category: Option<String>,
-    pub library_path: Option<String>,
-    pub library_mismatch: Option<TorrentLibraryMismatch>,
-    pub client_status: Option<String>,
-    pub linked: bool,
-    pub created_at: String,
-    pub uploaded_at: String,
-    pub abs_id: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
-pub struct TorrentsData {
-    pub torrents: Vec<TorrentsRow>,
-    pub total: usize,
-    pub from: usize,
-    pub page_size: usize,
-    pub abs_url: Option<String>,
-}
+use super::types::{
+    TorrentsBulkAction, TorrentsData, TorrentsPageColumns, TorrentsPageFilter, TorrentsPageSort,
+};
 
 #[server]
 pub async fn get_torrents_data(
@@ -266,6 +34,12 @@ pub async fn get_torrents_data(
 ) -> Result<TorrentsData, ServerFnError> {
     let context = crate::error::get_context()?;
     let db = context.db();
+    let abs_url = context
+        .config()
+        .await
+        .audiobookshelf
+        .as_ref()
+        .map(|abs| abs.url.clone());
 
     let mut from_val = from.unwrap_or(0);
     let page_size_val = page_size.unwrap_or(500);
@@ -313,13 +87,6 @@ pub async fn get_torrents_data(
             rows.push(convert_torrent_row(&t));
         }
 
-        let abs_url = context
-            .config()
-            .await
-            .audiobookshelf
-            .as_ref()
-            .map(|abs| abs.url.clone());
-
         return Ok(TorrentsData {
             torrents: rows,
             total,
@@ -351,13 +118,6 @@ pub async fn get_torrents_data(
                 total += 1;
             }
         }
-
-        let abs_url = context
-            .config()
-            .await
-            .audiobookshelf
-            .as_ref()
-            .map(|abs| abs.url.clone());
 
         return Ok(TorrentsData {
             torrents: rows,
@@ -467,13 +227,6 @@ pub async fn get_torrents_data(
             .take(page_size_val)
             .collect();
     }
-
-    let abs_url = context
-        .config()
-        .await
-        .audiobookshelf
-        .as_ref()
-        .map(|abs| abs.url.clone());
 
     Ok(TorrentsData {
         torrents: rows,
@@ -697,25 +450,7 @@ fn matches_filter(t: &DbTorrent, field: TorrentsPageFilter, value: &str) -> bool
 #[cfg(feature = "server")]
 fn convert_torrent_row(t: &DbTorrent) -> TorrentsRow {
     let flags = Flags::from_bitfield(t.meta.flags.map_or(0, |f| f.0));
-    let mut flag_values = Vec::new();
-    if flags.crude_language == Some(true) {
-        flag_values.push("language".to_string());
-    }
-    if flags.violence == Some(true) {
-        flag_values.push("violence".to_string());
-    }
-    if flags.some_explicit == Some(true) {
-        flag_values.push("some_explicit".to_string());
-    }
-    if flags.explicit == Some(true) {
-        flag_values.push("explicit".to_string());
-    }
-    if flags.abridged == Some(true) {
-        flag_values.push("abridged".to_string());
-    }
-    if flags.lgbt == Some(true) {
-        flag_values.push("lgbt".to_string());
-    }
+    let flag_values = crate::utils::flags_to_strings(&flags);
 
     let (cat_name, cat_id) = if let Some(cat) = &t.meta.cat {
         (cat.as_str().to_string(), Some(cat.as_id().to_string()))
@@ -755,7 +490,7 @@ fn convert_torrent_row(t: &DbTorrent) -> TorrentsRow {
                 .meta
                 .series
                 .iter()
-                .map(|series| TorrentsSeries {
+                .map(|series| crate::dto::Series {
                     name: series.name.clone(),
                     entries: series.entries.to_string(),
                 })
@@ -786,8 +521,3 @@ fn fuzzy_score(query: &str, target: &str) -> isize {
         .best_match()
         .map_or(0, |m: sublime_fuzzy::Match| m.score())
 }
-
-mod components;
-mod query;
-
-pub use components::TorrentsPage;
