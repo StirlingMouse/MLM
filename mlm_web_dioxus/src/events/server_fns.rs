@@ -1,8 +1,6 @@
-#![allow(clippy::too_many_arguments)]
-
-use super::types::EventData;
+use super::types::{EventData, EventsFilter};
 #[cfg(feature = "server")]
-use crate::dto::{Event, EventType, MetadataSource, TorrentMetaDiff, convert_torrent};
+use crate::dto::{Event, convert_event_type, convert_torrent};
 #[cfg(feature = "server")]
 use crate::error::IntoServerFnError;
 #[cfg(feature = "server")]
@@ -19,12 +17,7 @@ use super::types::EventWithTorrentData;
 
 #[server]
 pub async fn get_events_data(
-    show: Option<String>,
-    grabber: Option<String>,
-    linker: Option<String>,
-    category: Option<String>,
-    has_updates: Option<String>,
-    field: Option<String>,
+    filter: EventsFilter,
     from: Option<usize>,
     page_size: Option<usize>,
 ) -> Result<EventData, ServerFnError> {
@@ -40,52 +33,16 @@ pub async fn get_events_data(
         Event {
             id: db_event.id.0.to_string(),
             created_at: format_timestamp(&db_event.created_at),
-            event: match &db_event.event {
-                DbEventType::Grabbed {
-                    grabber,
-                    cost,
-                    wedged,
-                } => EventType::Grabbed {
-                    grabber: grabber.clone(),
-                    cost: cost.as_ref().map(|c| c.into()),
-                    wedged: *wedged,
-                },
-                DbEventType::Linked {
-                    linker,
-                    library_path,
-                } => EventType::Linked {
-                    linker: linker.clone(),
-                    library_path: library_path.clone(),
-                },
-                DbEventType::Cleaned {
-                    library_path,
-                    files,
-                } => EventType::Cleaned {
-                    library_path: library_path.clone(),
-                    files: files.clone(),
-                },
-                DbEventType::Updated { fields, source } => EventType::Updated {
-                    fields: fields
-                        .iter()
-                        .map(|f| TorrentMetaDiff {
-                            field: f.field.to_string(),
-                            from: f.from.clone(),
-                            to: f.to.clone(),
-                        })
-                        .collect(),
-                    source: (MetadataSource::from(&source.0), source.1.clone()),
-                },
-                DbEventType::RemovedFromTracker => EventType::RemovedFromTracker,
-            },
+            event: convert_event_type(&db_event.event),
         }
     };
 
-    let no_filters = show.is_none()
-        && grabber.is_none()
-        && linker.is_none()
-        && category.is_none()
-        && has_updates.is_none()
-        && field.is_none();
+    let no_filters = filter.show.is_none()
+        && filter.grabber.is_none()
+        && filter.linker.is_none()
+        && filter.category.is_none()
+        && filter.has_updates.is_none()
+        && filter.field.is_none();
 
     if no_filters {
         let total = r
@@ -150,14 +107,14 @@ pub async fn get_events_data(
     let mut result_events = Vec::new();
     let mut total_matching = 0;
 
-    let needs_torrent_for_filter = linker.is_some() || category.is_some();
+    let needs_torrent_for_filter = filter.linker.is_some() || filter.category.is_some();
 
     for event_res in events {
         let db_event = event_res.server_err()?;
 
         let mut event_matches = true;
 
-        if let Some(ref val) = show {
+        if let Some(ref val) = filter.show {
             match &db_event.event {
                 DbEventType::Grabbed { .. } => {
                     if val != "grabber" {
@@ -187,7 +144,7 @@ pub async fn get_events_data(
             }
         }
 
-        if event_matches && let Some(ref val) = grabber {
+        if event_matches && let Some(ref val) = filter.grabber {
             match &db_event.event {
                 DbEventType::Grabbed { grabber, .. } => {
                     if val.is_empty() {
@@ -204,7 +161,7 @@ pub async fn get_events_data(
             }
         }
 
-        if event_matches && has_updates.is_some() {
+        if event_matches && filter.has_updates.is_some() {
             match &db_event.event {
                 DbEventType::Updated { fields, .. } => {
                     if !fields.iter().any(|f| !f.from.is_empty()) {
@@ -217,7 +174,7 @@ pub async fn get_events_data(
             }
         }
 
-        if event_matches && let Some(ref val) = field {
+        if event_matches && let Some(ref val) = filter.field {
             match &db_event.event {
                 DbEventType::Updated { fields, .. } => {
                     if !fields.iter().any(|f| &f.field.to_string() == val) {
@@ -253,12 +210,12 @@ pub async fn get_events_data(
             };
 
             if let Some(ref t) = db_torrent {
-                if let Some(ref val) = linker
+                if let Some(ref val) = filter.linker
                     && t.linker.as_ref() != Some(val)
                 {
                     torrent_matches = false;
                 }
-                if let Some(ref val) = category {
+                if let Some(ref val) = filter.category {
                     let cat_matches = if val.is_empty() {
                         t.category.is_none()
                     } else {
