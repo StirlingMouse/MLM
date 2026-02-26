@@ -9,6 +9,7 @@ pub struct TorrentDetailData {
     pub replacement_torrent: Option<ReplacementTorrentInfo>,
     pub replacement_missing: bool,
     pub abs_item_url: Option<String>,
+    pub abs_cover_url: Option<String>,
     pub mam_torrent: Option<MamTorrentInfo>,
     pub mam_meta_diff: Vec<TorrentMetaDiff>,
 }
