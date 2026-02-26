@@ -150,6 +150,7 @@ fn TorrentDetailContent(
         replacement_torrent,
         replacement_missing,
         abs_item_url,
+        abs_cover_url,
         mam_torrent,
         mam_meta_diff,
     } = data;
@@ -193,6 +194,15 @@ fn TorrentDetailContent(
     rsx! {
         div { class: "torrent-detail-grid",
             div { class: "torrent-side",
+                if let Some(abs_cover_url) = abs_cover_url {
+                    div { class: "abs-cover",
+                        img {
+                            src: "{abs_cover_url}",
+                            alt: "ABS cover for {torrent.title}",
+                            loading: "lazy",
+                        }
+                    }
+                }
                 div { class: "pill", "{torrent.media_type}" }
 
                 if !torrent.categories.is_empty() {
