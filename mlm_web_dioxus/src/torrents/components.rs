@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 
 use crate::components::{
     ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, FilterLink,
-    PageSizeSelector, Pagination, SortHeader, TorrentGridTable, flag_icon,
+    PageSizeSelector, Pagination, SortHeader, StatusMessage, TorrentGridTable, flag_icon,
     set_location_query_string,
 };
 
@@ -52,44 +52,20 @@ const COLUMN_OPTIONS: &[(TorrentColumn, &str)] = &[
     (TorrentColumn::UploadedAt, "Uploaded At"),
 ];
 
-impl TorrentsPageColumns {
-    pub fn get(self, col: TorrentColumn) -> bool {
-        match col {
-            TorrentColumn::Category => self.category,
-            TorrentColumn::Categories => self.categories,
-            TorrentColumn::Flags => self.flags,
-            TorrentColumn::Edition => self.edition,
-            TorrentColumn::Authors => self.authors,
-            TorrentColumn::Narrators => self.narrators,
-            TorrentColumn::Series => self.series,
-            TorrentColumn::Language => self.language,
-            TorrentColumn::Size => self.size,
-            TorrentColumn::Filetypes => self.filetypes,
-            TorrentColumn::Linker => self.linker,
-            TorrentColumn::QbitCategory => self.qbit_category,
-            TorrentColumn::Path => self.path,
-            TorrentColumn::CreatedAt => self.created_at,
-            TorrentColumn::UploadedAt => self.uploaded_at,
-        }
-    }
+macro_rules! impl_torrents_columns {
+    ($( $variant:ident => $field:ident ),+ $(,)?) => {
+        impl TorrentsPageColumns {
+            fn get(self, col: TorrentColumn) -> bool {
+                match col {
+                    $(TorrentColumn::$variant => self.$field,)+
+                }
+            }
 
-    pub fn set(&mut self, col: TorrentColumn, enabled: bool) {
-        match col {
-            TorrentColumn::Category => self.category = enabled,
-            TorrentColumn::Categories => self.categories = enabled,
-            TorrentColumn::Flags => self.flags = enabled,
-            TorrentColumn::Edition => self.edition = enabled,
-            TorrentColumn::Authors => self.authors = enabled,
-            TorrentColumn::Narrators => self.narrators = enabled,
-            TorrentColumn::Series => self.series = enabled,
-            TorrentColumn::Language => self.language = enabled,
-            TorrentColumn::Size => self.size = enabled,
-            TorrentColumn::Filetypes => self.filetypes = enabled,
-            TorrentColumn::Linker => self.linker = enabled,
-            TorrentColumn::QbitCategory => self.qbit_category = enabled,
-            TorrentColumn::Path => self.path = enabled,
-            TorrentColumn::CreatedAt => self.created_at = enabled,
-            TorrentColumn::UploadedAt => self.uploaded_at = enabled,
+            fn set(&mut self, col: TorrentColumn, enabled: bool) {
+                match col {
+                    $(TorrentColumn::$variant => self.$field = enabled,)+
+                }
+            }
         }
     };
 }
@@ -168,7 +144,7 @@ pub fn TorrentsPage() -> Element {
     let show = use_signal(move || initial_show);
     let mut selected = use_signal(BTreeSet::<String>::new);
     let mut last_selected_idx = use_signal(|| None::<usize>);
-    let mut status_msg = use_signal(|| None::<(String, bool)>);
+    let status_msg = use_signal(|| None::<(String, bool)>);
     let mut cached = use_signal(|| None::<TorrentsData>);
     let loading_action = use_signal(|| false);
     let mut last_request_key = use_signal(move || initial_request_key.clone());
@@ -401,17 +377,7 @@ pub fn TorrentsPage() -> Element {
                 }
             }
 
-            if let Some((msg, is_error)) = status_msg.read().as_ref() {
-                p { class: if *is_error { "error" } else { "loading-indicator" },
-                    "{msg}"
-                    button {
-                        r#type: "button",
-                        style: "margin-left: 10px; cursor: pointer;",
-                        onclick: move |_| status_msg.set(None),
-                        "⨯"
-                    }
-                }
-            }
+            StatusMessage { status_msg }
 
             ActiveFilters { chips: active_chips, on_clear_all: clear_all }
 

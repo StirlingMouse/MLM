@@ -1,14 +1,14 @@
 body {
         font-family: Arial, sans-serif;
-        --color-1: #2a2438; 
-        --color-2: #352f44; 
-        --color-3: #5c5470; 
-        --color-4: #dbd8e3; 
+        --color-1: #2a2438;
+        --color-2: #352f44;
+        --color-3: #5c5470;
+        --color-4: #dbd8e3;
 
-        --background: var(--color-1); 
-        --above: var(--color-2); 
-        --text-faint: var(--color-3); 
-        --text: var(--color-4); 
+        --background: var(--color-1);
+        --above: var(--color-2);
+        --text-faint: var(--color-3);
+        --text: var(--color-4);
         --accent: hsl(331.8, 91.3%, 45%);
         --accent-above: hsl(331.8, 91.3%, 55%);
         --warn: #e08067;
@@ -30,7 +30,8 @@ a {
         &:hover {
                 text-decoration-color: currentColor;
         }
-        &:focus-ring {
+
+        &:focus-visible {
                 text-decoration-color: currentColor;
         }
 }
@@ -41,7 +42,7 @@ ul {
         padding-left: 1em;
 }
 
-nav > a {
+nav>a {
         padding: 4px;
         background: var(--above);
 }
@@ -101,7 +102,7 @@ button {
                 width: 28px;
                 height: 28px;
                 background: transparent;
-                
+
                 img {
                         width: 20px;
                         height: 20px;
@@ -111,13 +112,14 @@ button {
         &&:hover {
                 background: var(--color-3);
         }
-        &&:focus-ring {
+
+        &&:focus-visible {
                 background: var(--color-3);
         }
 }
 
 form {
-        
+
         textarea {
                 appearance: none;
                 padding: 4px 8px;
@@ -133,6 +135,7 @@ form {
                         outline: 2px solid var(--accent);
                 }
         }
+
         input[type=text] {
                 appearance: none;
                 padding: 4px 8px;
@@ -148,6 +151,7 @@ form {
                         outline: 2px solid var(--accent);
                 }
         }
+
         input[type=number] {
                 appearance: none;
                 padding: 4px 8px;
@@ -180,14 +184,15 @@ form {
                 cursor: pointer;
 
                 &::after {
-                  content: "⨯";
-                  transform: translateY(-2px);
+                        content: "⨯";
+                        transform: translateY(-2px);
                 }
 
                 &:hover {
                         background: var(--color-3);
                 }
-                &:focus-ring {
+
+                &:focus-visible {
                         background: var(--color-3);
                 }
         }
@@ -231,7 +236,7 @@ summary {
         display: flex;
         gap: 4px;
 
-        & > div {
+        &>div {
                 display: flex;
                 gap: 4px;
                 flex-wrap: wrap;
@@ -241,6 +246,7 @@ summary {
                 padding: 2px 4px;
                 background: var(--above);
                 border-radius: 2px;
+
                 &:has(:checked) {
                         background: var(--accent);
                 }
@@ -263,10 +269,11 @@ summary {
         border-top: 1px solid currentColor;
         background: var(--background);
 
-        > div {
+        >div {
                 display: flex;
                 gap: 4px;
         }
+
         a {
                 display: flex;
                 align-items: center;
@@ -281,21 +288,25 @@ summary {
                         text-decoration: none;
                         background: var(--color-3);
                 }
-                &:focus-ring {
+
+                &:focus-visible {
                         text-decoration: none;
                         background: var(--color-3);
                 }
         }
+
         .active {
                 background: var(--accent);
 
                 &:hover {
                         background: var(--accent-above);
                 }
-                &:focus-ring {
+
+                &:focus-visible {
                         background: var(--accent-above);
                 }
         }
+
         .disabled {
                 color: var(--color-3);
                 background: var(--above) !important;
@@ -307,12 +318,13 @@ summary {
         --alternate: var(--above);
         overflow-wrap: break-word;
 
-        & > .header, & > div {
+        &>.header,
+        &>div {
                 display: block;
                 padding: 4px;
         }
 
-        & > .header {
+        &>.header {
                 position: sticky;
                 top: 0;
                 font-weight: bold;
@@ -329,41 +341,46 @@ summary {
                 margin: 0 -8px;
         }
 
-        &.MaMTorrentsTable > div {
+        &.MaMTorrentsTable>div {
                 grid-template-columns: 72px 54px 1fr 32px 84px 130px 64px;
 
-                & > div {
+                &>div {
                         padding: 8px 4px;
                 }
-                & > div:nth-child(1n+4) {
+
+                &>div:nth-child(1n+4) {
                         text-align: center;
                 }
-                & > div:first-of-type {
+
+                &>div:first-of-type {
                         padding-left: 12px;
                 }
-                & > div:last-of-type {
+
+                &>div:last-of-type {
                         text-align: right;
                         padding-right: 12px;
                 }
         }
 
-        & > div {
+        &>div {
                 display: grid;
 
                 &&&:first-of-type {
                         align-items: end;
                         background: var(--background);
                 }
+
                 &:nth-child(even) {
                         background: var(--alternate);
                 }
 
-                & > .header, & > div {
+                &>.header,
+                &>div {
                         display: block;
                         padding: 4px;
                 }
 
-                & > .header {
+                &>.header {
                         position: sticky;
                         top: 0;
                         font-weight: bold;
@@ -372,7 +389,7 @@ summary {
                 }
         }
 
-        &:not(.nohover) > div:hover {
+        &:not(.nohover)>div:hover {
                 background: var(--color-3);
         }
 }
@@ -458,12 +475,15 @@ summary {
         img {
                 width: 64px;
         }
+
         h3 {
                 margin: 0;
         }
+
         p {
                 margin: 0.5em 0;
         }
+
         .author {
                 margin-top: 0;
                 font-style: italic;
@@ -477,9 +497,11 @@ summary {
 .faint {
         opacity: 0.8;
 }
+
 .missing {
         color: var(--warn);
 }
+
 .warn {
         color: var(--warn);
 }
@@ -490,12 +512,15 @@ summary {
         h3 {
                 margin-bottom: 0;
         }
+
         h4 {
                 margin-bottom: 0;
         }
+
         .string {
                 color: #b5bd68;
         }
+
         .num {
                 color: #de935f;
         }
@@ -519,7 +544,7 @@ summary {
         border-radius: 4px;
         background-color: #aa86b72e;
 
-        & + & {
+        &+& {
                 margin-left: 4px;
         }
 }
@@ -752,3 +777,23 @@ summary {
         }
 }
 
+
+.status-message {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        margin-bottom: 8px;
+        border-radius: 4px;
+        border: 1px solid transparent;
+}
+
+.status-message.error {
+        color: var(--warn);
+        border-color: var(--warn);
+}
+
+.status-message.success {
+        color: #6fba6f;
+        border-color: #6fba6f;
+}

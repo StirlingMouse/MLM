@@ -52,15 +52,7 @@ pub mod ssr {
         Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(10)))
     }
 
-    async fn dioxus_selected_updates(
-        Extension(context): Extension<Context>,
-    ) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
-        let stream =
-            WatchStream::new(context.stats.updates()).map(|_| Ok(Event::default().data("update")));
-        Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(10)))
-    }
-
-    async fn dioxus_errors_updates(
+    async fn dioxus_generic_updates(
         Extension(context): Extension<Context>,
     ) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
         let stream =
@@ -139,8 +131,8 @@ pub mod ssr {
         Router::new()
             .route("/dioxus-stats-updates", get(dioxus_stats_updates))
             .route("/dioxus-events-updates", get(dioxus_events_updates))
-            .route("/dioxus-selected-updates", get(dioxus_selected_updates))
-            .route("/dioxus-errors-updates", get(dioxus_errors_updates))
+            .route("/dioxus-selected-updates", get(dioxus_generic_updates))
+            .route("/dioxus-errors-updates", get(dioxus_generic_updates))
             .route("/dioxus-qbit-progress", get(dioxus_qbit_progress))
             .serve_api_application(ServeConfig::builder(), root)
             .layer(Extension(ctx))
