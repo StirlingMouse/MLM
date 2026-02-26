@@ -8,7 +8,10 @@ use crate::replaced::ReplacedPage;
 use crate::search::SearchPage;
 use crate::selected::SelectedPage;
 #[cfg(feature = "web")]
-use crate::sse::{trigger_errors_update, trigger_events_update, trigger_selected_update, trigger_stats_update, update_qbit_progress};
+use crate::sse::{
+    trigger_errors_update, trigger_events_update, trigger_selected_update, trigger_stats_update,
+    update_qbit_progress,
+};
 use crate::torrent_detail::TorrentDetailPage;
 use crate::torrent_edit::TorrentEditPage;
 use crate::torrents::TorrentsPage;
