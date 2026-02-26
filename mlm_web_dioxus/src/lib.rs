@@ -55,16 +55,16 @@ pub mod ssr {
     async fn dioxus_selected_updates(
         Extension(context): Extension<Context>,
     ) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
-        let stream = WatchStream::new(context.stats.updates())
-            .map(|_| Ok(Event::default().data("update")));
+        let stream =
+            WatchStream::new(context.stats.updates()).map(|_| Ok(Event::default().data("update")));
         Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(10)))
     }
 
     async fn dioxus_errors_updates(
         Extension(context): Extension<Context>,
     ) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
-        let stream = WatchStream::new(context.stats.updates())
-            .map(|_| Ok(Event::default().data("update")));
+        let stream =
+            WatchStream::new(context.stats.updates()).map(|_| Ok(Event::default().data("update")));
         Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(10)))
     }
 
@@ -77,8 +77,8 @@ pub mod ssr {
                 async move { fetch_qbit_progress(&context).await }
             });
         // Always send an event (empty Vec if no downloading torrents) so client can clear stale progress
-        let stream = stream
-            .map(|data| Ok(Event::default().data(data.unwrap_or_else(|| "[]".to_string()))));
+        let stream =
+            stream.map(|data| Ok(Event::default().data(data.unwrap_or_else(|| "[]".to_string()))));
         Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(10)))
     }
 
