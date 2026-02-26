@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 #[cfg(feature = "server")]
 use std::str::FromStr;
+use std::sync::Arc;
 
 #[cfg(feature = "server")]
 use crate::error::IntoServerFnError;
@@ -575,6 +576,7 @@ pub fn ReplacedPage() -> Element {
     let mut page_size = use_signal(move || initial_page_size);
     let show = use_signal(move || initial_show);
     let mut selected = use_signal(BTreeSet::<String>::new);
+    let mut last_selected_idx = use_signal(|| None::<usize>);
     let mut status_msg = use_signal(|| None::<(String, bool)>);
     let mut cached = use_signal(|| None::<ReplacedData>);
     let loading_action = use_signal(|| false);
@@ -718,11 +720,24 @@ pub fn ReplacedPage() -> Element {
         }))
     };
 
+    let all_row_ids = Arc::new(
+        data_to_show
+            .as_ref()
+            .map(|data| {
+                data.torrents
+                    .iter()
+                    .map(|p| p.torrent.id.clone())
+                    .collect::<Vec<String>>()
+            })
+            .unwrap_or_default(),
+    );
+
     rsx! {
         div { class: "replaced-page",
             div { class: "row",
                 h1 { "Replaced Torrents" }
                 div { class: "actions actions_torrent",
+                    style: if selected.read().is_empty() { "" } else { "display: flex" },
                     for action in [ReplacedBulkAction::Refresh, ReplacedBulkAction::RefreshRelink, ReplacedBulkAction::Remove] {
                         button {
                             r#type: "button",
@@ -859,26 +874,32 @@ pub fn ReplacedPage() -> Element {
                             }
                         }
 
-                        for pair in data.torrents.clone() {
+                        for (i, pair) in data.torrents.iter().enumerate() {
                             {
                                 let row_id = pair.torrent.id.clone();
                                 let row_selected = selected.read().contains(&row_id);
+                                let all_row_ids = all_row_ids.clone();
                                 rsx! {
                                     div { class: "torrents-grid-row", key: "{row_id}",
                                         div {
                                             input {
                                                 r#type: "checkbox",
                                                 checked: row_selected,
-                                                onchange: {
+                                                onclick: {
                                                     let row_id = row_id.clone();
-                                                    move |ev| {
+                                                    move |ev: MouseEvent| {
+                                                        let will_select = !selected.read().contains(&row_id);
                                                         let mut next = selected.read().clone();
-                                                        if ev.value() == "true" {
-                                                            next.insert(row_id.clone());
-                                                        } else {
-                                                            next.remove(&row_id);
-                                                        }
+                                                        if ev.modifiers().shift() {
+                                                            if let Some(last_idx) = *last_selected_idx.read() {
+                                                                let (start, end) = if last_idx <= i { (last_idx, i) } else { (i, last_idx) };
+                                                                for id in &all_row_ids[start..=end] {
+                                                                    if will_select { next.insert(id.clone()); } else { next.remove(id); }
+                                                                }
+                                                            } else if will_select { next.insert(row_id.clone()); } else { next.remove(&row_id); }
+                                                        } else if will_select { next.insert(row_id.clone()); } else { next.remove(&row_id); }
                                                         selected.set(next);
+                                                        last_selected_idx.set(Some(i));
                                                     }
                                                 },
                                             }
