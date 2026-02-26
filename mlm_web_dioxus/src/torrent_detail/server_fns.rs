@@ -2,7 +2,6 @@
 use crate::dto::{Event as DbEventDto, EventType, Series, TorrentMetaDiff};
 #[cfg(feature = "server")]
 use crate::error::{IntoServerFnError, OptionIntoServerFnError};
-#[cfg(feature = "server")]
 use crate::search::SearchTorrent;
 #[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
@@ -440,10 +439,6 @@ async fn get_downloaded_torrent_detail(
         None
     };
 
-    let other_torrents = other_torrents_data(context, &torrent.meta)
-        .await
-        .unwrap_or_default();
-
     Ok(super::types::TorrentDetailData {
         torrent: torrent_info,
         events: events_data,
@@ -460,7 +455,6 @@ async fn get_downloaded_torrent_detail(
         abs_item_url,
         mam_torrent: mam_torrent.as_ref().map(map_mam_torrent),
         mam_meta_diff,
-        other_torrents,
     })
 }
 
@@ -506,12 +500,10 @@ pub async fn get_torrent_detail(
             .server_err()?
             .ok_or_server_err("Torrent not found")?;
         let meta = mam_torrent.as_meta().server_err()?;
-        let other_torrents = other_torrents_data(&context, &meta).await?;
         return Ok(super::types::TorrentPageData::MamOnly(
             super::types::TorrentMamData {
                 mam_torrent: map_mam_torrent(&mam_torrent),
                 meta: torrent_info_from_meta(&meta, mam_id.to_string(), Some(mam_id)),
-                other_torrents,
             },
         ));
     }
@@ -724,6 +716,74 @@ pub async fn clear_replacement_action(id: String) -> Result<(), ServerFnError> {
 pub async fn get_metadata_providers() -> Result<Vec<String>, ServerFnError> {
     let context = crate::error::get_context()?;
     Ok(context.metadata().enabled_providers())
+}
+
+#[server]
+pub async fn get_other_torrents(id: String) -> Result<Vec<SearchTorrent>, ServerFnError> {
+    let context = crate::error::get_context()?;
+
+    if let Some(torrent) = context
+        .db()
+        .r_transaction()
+        .server_err()?
+        .get()
+        .primary::<DbTorrent>(id.clone())
+        .server_err()?
+    {
+        return other_torrents_data(&context, &torrent.meta).await;
+    }
+
+    if let Ok(mam_id) = id.parse::<u64>() {
+        if let Some(torrent) = context
+            .db()
+            .r_transaction()
+            .server_err()?
+            .get()
+            .secondary::<DbTorrent>(mlm_db::TorrentKey::mam_id, Some(mam_id))
+            .server_err()?
+        {
+            return other_torrents_data(&context, &torrent.meta).await;
+        }
+        if let Ok(mam) = context.mam()
+            && let Some(mam_torrent) = mam.get_torrent_info_by_id(mam_id).await.server_err()?
+        {
+            let meta = mam_torrent.as_meta().server_err()?;
+            return other_torrents_data(&context, &meta).await;
+        }
+    }
+
+    Ok(vec![])
+}
+
+#[server]
+pub async fn preview_match_metadata(
+    id: String,
+    provider: String,
+) -> Result<Vec<crate::dto::TorrentMetaDiff>, ServerFnError> {
+    let context = crate::error::get_context()?;
+    let Some(torrent) = context
+        .db()
+        .r_transaction()
+        .server_err()?
+        .get()
+        .primary::<DbTorrent>(id)
+        .server_err()?
+    else {
+        return Err(ServerFnError::new("Could not find torrent"));
+    };
+
+    let (_, _, fields) = match_meta(&context, &torrent.meta, &provider)
+        .await
+        .server_err()?;
+
+    Ok(fields
+        .into_iter()
+        .map(|f| crate::dto::TorrentMetaDiff {
+            field: f.field.to_string(),
+            from: f.from,
+            to: f.to,
+        })
+        .collect())
 }
 
 #[server]
