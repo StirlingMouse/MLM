@@ -1,5 +1,5 @@
 #[cfg(feature = "server")]
-use crate::dto::{Event as DbEventDto, Series, convert_event_type};
+use crate::dto::{Event as DbEventDto, Series, TorrentMetaDiff, convert_event_type};
 #[cfg(feature = "server")]
 use crate::error::{IntoServerFnError, OptionIntoServerFnError};
 use crate::search::SearchTorrent;
@@ -9,8 +9,8 @@ use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
 use mlm_core::{
-    Context, ContextExt, Event as DbEvent, EventKey,
-    Torrent as DbTorrent, metadata::mam_meta::match_meta,
+    Context, ContextExt, Event as DbEvent, EventKey, Torrent as DbTorrent,
+    metadata::mam_meta::match_meta,
 };
 #[cfg(feature = "server")]
 use mlm_db::DatabaseExt;
@@ -355,14 +355,21 @@ async fn get_downloaded_torrent_detail(
         .server_err()?;
     events_data.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
-    let abs_item_url = if let Some(abs_cfg) = config.audiobookshelf.as_ref() {
+    let (abs_item_url, abs_cover_url) = if let Some(abs_cfg) = config.audiobookshelf.as_ref() {
         let abs = Abs::new(abs_cfg).server_err()?;
-        abs.get_book(&torrent)
-            .await
-            .server_err()?
-            .map(|book| format!("{}/audiobookshelf/item/{}", abs_cfg.url, book.id))
+        if let Some(book) = abs.get_book(&torrent).await.server_err()? {
+            (
+                Some(format!("{}/audiobookshelf/item/{}", abs_cfg.url, book.id)),
+                Some(format!(
+                    "{}/audiobookshelf/api/items/{}/cover",
+                    abs_cfg.url, book.id
+                )),
+            )
+        } else {
+            (None, None)
+        }
     } else {
-        None
+        (None, None)
     };
 
     Ok(super::types::TorrentDetailData {
@@ -379,6 +386,7 @@ async fn get_downloaded_torrent_detail(
         }),
         replacement_missing,
         abs_item_url,
+        abs_cover_url,
         mam_torrent: mam_torrent.as_ref().map(map_mam_torrent),
         mam_meta_diff,
     })
