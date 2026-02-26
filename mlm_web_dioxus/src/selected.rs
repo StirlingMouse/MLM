@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 #[cfg(feature = "server")]
 use std::str::FromStr;
+use std::sync::Arc;
 
 use crate::components::{
     ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, FilterLink, PageColumns,
@@ -691,6 +692,7 @@ pub fn SelectedPage() -> Element {
     let filters = use_signal(move || initial_filters.clone());
     let show = use_signal(move || initial_show);
     let mut selected = use_signal(BTreeSet::<u64>::new);
+    let mut last_selected_idx = use_signal(|| None::<usize>);
     let mut unsats_input = use_signal(|| "1".to_string());
     let mut status_msg = use_signal(|| None::<(String, bool)>);
     let mut cached = use_signal(|| None::<SelectedData>);
@@ -826,11 +828,19 @@ pub fn SelectedPage() -> Element {
         }))
     };
 
+    let all_row_ids = Arc::new(
+        data_to_show
+            .as_ref()
+            .map(|data| data.torrents.iter().map(|t| t.mam_id).collect::<Vec<u64>>())
+            .unwrap_or_default(),
+    );
+
     rsx! {
         div { class: "selected-page",
             div { class: "row",
                 h1 { "Selected Torrents" }
                 div { class: "actions actions_torrent",
+                    style: if selected.read().is_empty() { "" } else { "display: flex" },
                     button {
                         r#type: "button",
                         disabled: *loading_action.read(),
@@ -1037,24 +1047,34 @@ pub fn SelectedPage() -> Element {
                             }
                         }
 
-                        for torrent in data.torrents {
+                        for (i, torrent) in data.torrents.into_iter().enumerate() {
                             {
                                 let row_id = torrent.mam_id;
                                 let row_selected = selected.read().contains(&row_id);
+                                let all_row_ids = all_row_ids.clone();
                                 rsx! {
                                     div { class: "torrents-grid-row", key: "{row_id}",
                                         div {
                                             input {
                                                 r#type: "checkbox",
                                                 checked: row_selected,
-                                                onchange: move |ev| {
+                                                onclick: move |ev| {
+                                                    let will_select = !selected.read().contains(&row_id);
                                                     let mut next = selected.read().clone();
-                                                    if ev.value() == "true" {
-                                                        next.insert(row_id);
+                                                    if ev.modifiers().shift() {
+                                                        if let Some(last_idx) = *last_selected_idx.read() {
+                                                            let (start, end) = if last_idx <= i { (last_idx, i) } else { (i, last_idx) };
+                                                            for id in &all_row_ids[start..=end] {
+                                                                if will_select { next.insert(*id); } else { next.remove(id); }
+                                                            }
+                                                        } else {
+                                                            if will_select { next.insert(row_id); } else { next.remove(&row_id); }
+                                                        }
                                                     } else {
-                                                        next.remove(&row_id);
+                                                        if will_select { next.insert(row_id); } else { next.remove(&row_id); }
                                                     }
                                                     selected.set(next);
+                                                    last_selected_idx.set(Some(i));
                                                 },
                                             }
                                         }
