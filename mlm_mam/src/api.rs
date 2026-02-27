@@ -3,6 +3,13 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+fn mam_base_url() -> String {
+    std::env::var("MLM_MAM_BASE_URL").unwrap_or_else(|_| "https://www.myanonamouse.net".to_string())
+}
+fn mam_cdn_base_url() -> String {
+    std::env::var("MLM_MAM_BASE_URL").unwrap_or_else(|_| "https://cdn.myanonamouse.net".to_string())
+}
+
 use anyhow::{Error, Result, bail};
 use bytes::Bytes;
 use cookie::Cookie;
@@ -73,7 +80,7 @@ pub struct MaM<'a> {
 impl<'a> MaM<'a> {
     pub async fn new(mam_id: &str, db: Arc<Database<'a>>) -> Result<MaM<'a>> {
         let jar: CookieStoreRwLock = Default::default();
-        let url = "https://www.myanonamouse.net/json".parse::<Url>().unwrap();
+        let url = format!("{}/json", mam_base_url()).parse::<Url>().unwrap();
 
         let stored_mam_id = db
             .r_transaction()
@@ -129,7 +136,7 @@ impl<'a> MaM<'a> {
     pub async fn check_mam_id(&self) -> Result<()> {
         let resp = self
             .client
-            .get("https://www.myanonamouse.net/json/checkCookie.php")
+            .get(format!("{}/json/checkCookie.php", mam_base_url()))
             .send()
             .await?;
 
@@ -158,7 +165,10 @@ impl<'a> MaM<'a> {
         }
         let resp: UserResponse = self
             .client
-            .get("https://www.myanonamouse.net/jsonLoad.php?snatch_summary=true")
+            .get(format!(
+                "{}/jsonLoad.php?snatch_summary=true",
+                mam_base_url()
+            ))
             .send()
             .await?
             .error_for_status()
@@ -187,9 +197,7 @@ impl<'a> MaM<'a> {
     pub async fn get_torrent_file(&self, dl_hash: &str) -> Result<Bytes> {
         let resp = self
             .client
-            .get(format!(
-                "https://www.myanonamouse.net/tor/download.php/{dl_hash}"
-            ))
+            .get(format!("{}/tor/download.php/{dl_hash}", mam_base_url()))
             .send()
             .await?
             .error_for_status()
@@ -246,7 +254,7 @@ impl<'a> MaM<'a> {
         debug!("search: {}", serde_json::to_string_pretty(query)?);
         let resp = self
             .client
-            .post("https://www.myanonamouse.net/tor/js/loadSearchJSONbasic.php")
+            .post(format!("{}/tor/js/loadSearchJSONbasic.php", mam_base_url()))
             .json(query)
             .send()
             .await?
@@ -282,7 +290,10 @@ impl<'a> MaM<'a> {
         let user = self.user_info().await?;
         let resp = self
             .client
-            .get("https://cdn.myanonamouse.net/json/loadUserDetailsTorrents.php")
+            .get(format!(
+                "{}/json/loadUserDetailsTorrents.php",
+                mam_cdn_base_url()
+            ))
             .query(&(
                 ("uid", user.uid.to_string()),
                 ("iteration", page.to_string()),
@@ -307,9 +318,7 @@ impl<'a> MaM<'a> {
         let timestamp = UtcDateTime::now().unix_timestamp() * 1000;
         let resp: BonusBuyResult = self
             .client
-            .get(format!(
-                "https://www.myanonamouse.net/json/bonusBuy.php/{timestamp}"
-            ))
+            .get(format!("{}/json/bonusBuy.php/{timestamp}", mam_base_url()))
             .query(&[
                 ("spendtype", "personalFL"),
                 ("torrentid", mam_id.to_string().as_str()),

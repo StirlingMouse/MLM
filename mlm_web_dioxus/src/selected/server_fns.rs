@@ -122,6 +122,21 @@ pub async fn get_selected_data(
     let queued = torrents.iter().filter(|t| t.started_at.is_none()).count();
     let downloading = torrents.iter().filter(|t| t.started_at.is_some()).count();
 
+    Ok(SelectedData {
+        torrents: torrents
+            .into_iter()
+            .map(|t| convert_selected_row(&t, config.unsat_buffer))
+            .collect(),
+        queued,
+        downloading,
+    })
+}
+
+#[server]
+pub async fn get_selected_user_info() -> Result<Option<SelectedUserInfo>, ServerFnError> {
+    let context = crate::error::get_context()?;
+    let config = context.config().await;
+
     let downloading_size: f64 = context
         .db()
         .r_transaction()
@@ -154,15 +169,7 @@ pub async fn get_selected_data(
         Err(_) => None,
     };
 
-    Ok(SelectedData {
-        torrents: torrents
-            .into_iter()
-            .map(|t| convert_selected_row(&t, config.unsat_buffer))
-            .collect(),
-        user_info,
-        queued,
-        downloading,
-    })
+    Ok(user_info)
 }
 
 #[server]

@@ -2,6 +2,11 @@
 node_modules
 docs/book
 config.toml
+!.cargo/config.toml
 data.db
 data.db.*
 server/assets/dioxus
+test/e2e.db
+/test-results
+/tests/e2e/test-dbs
+/.manifest.json
