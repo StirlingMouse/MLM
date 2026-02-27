@@ -27,7 +27,7 @@ openssl = { version = "0.10.73", features = ["vendored"] }
 qbit = { git = "https://github.com/StirlingMouse/qbittorrent-webui-api.git" }
 quick-xml = { version = "0.38.0", features = ["serialize"] }
 regex = "1.12.2"
-reqwest = { version = "0.12.20", default-features = false, features = ["json", "default-tls"] }
+reqwest = { version = "0.12.20", default-features = false, features = ["json", "rustls-tls"] }
 reqwest_cookie_store = "0.8.0"
 sanitize-filename = { git = "https://github.com/StirlingMouse/sanitize-filename.git" }
 scraper = "0.23.1"

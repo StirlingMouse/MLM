@@ -18,7 +18,7 @@ native_db = { git = "https://github.com/StirlingMouse/native_db.git", branch = "
 once_cell = "1.21.3"
 qbit = { git = "https://github.com/StirlingMouse/qbittorrent-webui-api.git" }
 regex = "1.12.2"
-reqwest = "0.12.20"
+reqwest = { version = "0.12.20", default-features = false, features = ["rustls-tls"] }
 serde = "1.0.136"
 serde_json = "1.0.140"
 sublime_fuzzy = "0.7.0"

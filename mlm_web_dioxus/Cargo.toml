@@ -15,7 +15,6 @@ dioxus = { version = "0.7", features = ["fullstack", "router"] }
 dioxus-fullstack = "0.7"
 lucide-dioxus = { version = "2.562.0", features = [
   "account",
-  "communication",
   "multimedia",
   "text",
 ] }

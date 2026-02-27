@@ -13,14 +13,33 @@ members = [
 
 # Faster dev builds for WASM
 [profile.dev.package."*"]
-opt-level = 1
+opt-level = 0
+debug = 0
 
-# Optimize only the WASM package in dev mode for smaller bundle size
+# Workspace crates should be opt-level = 0 for faster builds
+[profile.dev.package.mlm]
+opt-level = 0
+[profile.dev.package.mlm_core]
+opt-level = 0
+[profile.dev.package.mlm_db]
+opt-level = 0
+[profile.dev.package.mlm_mam]
+opt-level = 0
+[profile.dev.package.mlm_meta]
+opt-level = 0
+[profile.dev.package.mlm_parse]
+opt-level = 0
+[profile.dev.package.mlm_web_askama]
+opt-level = 0
+
+# Optimize only the WASM package slightly in dev mode for usable execution speed
+# Set to 0 for fastest rebuilds, 1 if execution is too slow
 [profile.dev.package.mlm_web_dioxus]
-opt-level = 2
+opt-level = 0
 
 # Keep debug builds fast for the server
 [profile.dev]
 opt-level = 0
-codegen-units = 256
+codegen-units = 32
 debug = 1
+split-debuginfo = "unpacked"
