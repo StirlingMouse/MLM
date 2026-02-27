@@ -9,7 +9,7 @@ use crate::sse::{QBIT_PROGRESS, SELECTED_UPDATE_TRIGGER};
 use dioxus::prelude::*;
 
 use super::query::{build_query_url, parse_query_state};
-use super::server_fns::{apply_selected_action, get_selected_data};
+use super::server_fns::{apply_selected_action, get_selected_data, get_selected_user_info};
 use super::types::{
     COLUMN_OPTIONS, SelectedBulkAction, SelectedData, SelectedPageFilter, SelectedPageSort,
     filter_name,
@@ -54,6 +54,9 @@ pub fn SelectedPage() -> Element {
         .await
     })
     .ok();
+
+    let user_info =
+        use_resource(move || async move { get_selected_user_info().await.ok().flatten() });
 
     let pending = selected_data
         .as_ref()
@@ -291,18 +294,18 @@ pub fn SelectedPage() -> Element {
                 }
             }
 
-            if let Some(data) = data_to_show.clone() {
-                if let Some(user_info) = &data.user_info {
-                    p {
-                        if let Some(buffer) = &user_info.remaining_buffer {
-                            "Buffer: {buffer}"
-                            br {}
-                        }
-                        "Unsats: {user_info.unsat_count} / {user_info.unsat_limit}"
+            if let Some(info) = user_info.read().as_ref().and_then(|info| info.as_ref()) {
+                p {
+                    if let Some(buffer) = &info.remaining_buffer {
+                        "Buffer: {buffer}"
                         br {}
-                        "Wedges: {user_info.wedges}"
-                        br {}
-                        "Bonus: {user_info.bonus}"
+                    }
+                    "Unsats: {info.unsat_count} / {info.unsat_limit}"
+                    br {}
+                    "Wedges: {info.wedges}"
+                    br {}
+                    "Bonus: {info.bonus}"
+                    if let Some(data) = data_to_show.clone() {
                         if !data.torrents.is_empty() {
                             br {}
                             "Queued Torrents: {data.queued}"
@@ -410,22 +413,14 @@ pub fn SelectedPage() -> Element {
                                                 r#type: "checkbox",
                                                 checked: row_selected,
                                                 onclick: move |ev| {
-                                                    let will_select = !selected.read().contains(&row_id);
-                                                    let mut next = selected.read().clone();
-                                                    if ev.modifiers().shift() {
-                                                        if let Some(last_idx) = *last_selected_idx.read() {
-                                                            let (start, end) = if last_idx <= i { (last_idx, i) } else { (i, last_idx) };
-                                                            for id in &all_row_ids[start..=end] {
-                                                                if will_select { next.insert(*id); } else { next.remove(id); }
-                                                            }
-                                                        } else {
-                                                            if will_select { next.insert(row_id); } else { next.remove(&row_id); }
-                                                        }
-                                                    } else {
-                                                        if will_select { next.insert(row_id); } else { next.remove(&row_id); }
-                                                    }
-                                                    selected.set(next);
-                                                    last_selected_idx.set(Some(i));
+                                                    update_row_selection(
+                                                        &ev,
+                                                        selected,
+                                                        last_selected_idx,
+                                                        all_row_ids.as_ref(),
+                                                        &row_id,
+                                                        i,
+                                                    );
                                                 },
                                             }
                                         }
@@ -587,10 +582,10 @@ pub fn SelectedPage() -> Element {
                 if let Some(Err(e)) = &*value.read() {
                     p { class: "error", "Error: {e}" }
                 } else {
-                    p { "Loading selected torrents..." }
+                    p { class: "loading-indicator", "Loading selected torrents..." }
                 }
             } else {
-                p { "Loading selected torrents..." }
+                p { class: "loading-indicator", "Loading selected torrents..." }
             }
         }
     }

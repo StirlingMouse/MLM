@@ -12,6 +12,7 @@ use crate::components::{
     search_filter_href,
 };
 use crate::events::EventListItem;
+use crate::search::SearchTorrent;
 use dioxus::prelude::*;
 
 fn spawn_action(
@@ -558,20 +559,27 @@ fn OtherTorrentsSection(
     mut status_msg: Signal<Option<(String, bool)>>,
     on_refresh: EventHandler<()>,
 ) -> Element {
-    let mut other_res = use_resource(move || {
+    let mut data: Signal<Option<Result<Vec<SearchTorrent>, ServerFnError>>> = use_signal(|| None);
+    let mut refresh_trigger = use_signal(|| 0u32);
+
+    use_effect(move || {
+        let _ = *refresh_trigger.read();
         let id = id.clone();
-        async move { get_other_torrents(id).await }
+        data.set(None);
+        spawn(async move {
+            data.set(Some(get_other_torrents(id).await));
+        });
     });
 
     let inner_refresh = move |_| {
-        other_res.restart();
+        *refresh_trigger.write() += 1;
         on_refresh.call(());
     };
 
     rsx! {
         div { style: "margin-top:1em;",
             h3 { "Other Torrents" }
-            match &*other_res.read() {
+            match data.read().clone() {
                 None => rsx! { p { class: "loading-indicator", "Loading other torrents..." } },
                 Some(Err(e)) => rsx! { p { class: "error", "Error loading other torrents: {e}" } },
                 Some(Ok(torrents)) if torrents.is_empty() => rsx! {
@@ -579,7 +587,7 @@ fn OtherTorrentsSection(
                 },
                 Some(Ok(torrents)) => rsx! {
                     div { class: "Torrents",
-                        for torrent in torrents.clone() {
+                        for torrent in torrents {
                             SearchTorrentRow {
                                 torrent,
                                 status_msg,
@@ -830,24 +838,31 @@ fn QbitSection(
     mut status_msg: Signal<Option<(String, bool)>>,
     on_refresh: EventHandler<()>,
 ) -> Element {
-    let qbit_id = torrent_id.clone();
-    let mut qbit_res = use_resource(move || {
-        let id = qbit_id.clone();
-        async move { get_qbit_data(id).await }
+    let mut data: Signal<Option<Result<Option<QbitData>, ServerFnError>>> = use_signal(|| None);
+    let mut refresh_trigger = use_signal(|| 0u32);
+    let id_for_effect = torrent_id.clone();
+
+    use_effect(move || {
+        let _ = *refresh_trigger.read();
+        let id = id_for_effect.clone();
+        data.set(None);
+        spawn(async move {
+            data.set(Some(get_qbit_data(id).await));
+        });
     });
 
     let on_qbit_refresh = move |_| {
-        qbit_res.restart();
+        *refresh_trigger.write() += 1;
         on_refresh.call(());
     };
 
-    match &*qbit_res.read() {
+    match data.read().clone() {
         None => rsx! { p { class: "loading-indicator", "Loading qBittorrent data..." } },
         Some(Err(_)) | Some(Ok(None)) => rsx! {},
         Some(Ok(Some(qbit))) => rsx! {
             QbitControls {
                 torrent_id,
-                qbit: qbit.clone(),
+                qbit,
                 status_msg,
                 on_refresh: on_qbit_refresh,
             }
