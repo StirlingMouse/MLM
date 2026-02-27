@@ -7,13 +7,14 @@ use super::server_fns::{
 };
 use super::types::*;
 use crate::components::{
-    Details, DownloadButtonMode, DownloadButtons, SearchMetadataFilterItem,
-    SearchMetadataFilterRow, SearchMetadataKind, SearchTorrentRow, StatusMessage, flag_icon,
-    search_filter_href,
+    CategoryPills, Details, DownloadButtonMode, DownloadButtons, SearchMetadataFilterItem,
+    SearchMetadataFilterRow, SearchMetadataKind, SearchTorrentRow, StatusMessage, TorrentIcons,
+    flag_icon, media_icon_src, search_filter_href,
 };
 use crate::events::EventListItem;
 use crate::search::SearchTorrent;
 use dioxus::prelude::*;
+use lucide_dioxus::Tag;
 
 fn spawn_action(
     name: String,
@@ -206,12 +207,26 @@ fn TorrentDetailContent(
                 }
                 div { class: "pill", "{torrent.media_type}" }
 
-                if !torrent.categories.is_empty() {
-                    div {
-                        h3 { "Categories" }
-                        for cat in &torrent.categories {
-                            span { class: "pill", "{cat}" }
+                div { class: "category-row",
+                    if let Some(src) = media_icon_src(torrent.mediatype_id, torrent.main_cat_id) {
+                        img {
+                            class: "media-icon",
+                            src: "{src}",
+                            alt: "{torrent.media_type}",
+                            title: "{torrent.media_type}",
                         }
+                    } else {
+                        span { class: "faint", "{torrent.media_type}" }
+                    }
+                    CategoryPills {
+                        categories: torrent.categories.clone(),
+                        old_category: torrent.old_category.clone(),
+                    }
+                    TorrentIcons {
+                        vip: mam_torrent.as_ref().is_some_and(|m| m.vip),
+                        personal_freeleech: mam_torrent.as_ref().is_some_and(|m| m.personal_freeleech),
+                        free: mam_torrent.as_ref().is_some_and(|m| m.free),
+                        flags: torrent.flags.clone(),
                     }
                 }
 
@@ -267,21 +282,6 @@ fn TorrentDetailContent(
                         dt { "Client Status" }
                         dd { "{status}" }
                     }
-                    if !torrent.flags.is_empty() {
-                        dt { "Flags" }
-                        dd {
-                            for flag in &torrent.flags {
-                                if let Some((src, title)) = flag_icon(flag) {
-                                    img {
-                                        class: "flag",
-                                        src: "{src}",
-                                        alt: "{title}",
-                                        title: "{title}",
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
 
@@ -305,6 +305,14 @@ fn TorrentDetailContent(
                     items: narrator_filters,
                 }
                 SearchMetadataFilterRow { kind: SearchMetadataKind::Series, items: series_filters }
+                if let Some(mam) = mam_torrent.clone() {
+                    if !mam.tags.is_empty() {
+                        p { class: "icon-row",
+                            span { title: "Tags", Tag {} }
+                            "{mam.tags}"
+                        }
+                    }
+                }
                 if !torrent.tags.is_empty() {
                     div {
                         strong { "Tags: " }
@@ -313,9 +321,7 @@ fn TorrentDetailContent(
                         }
                     }
                 }
-                div {
-                    class: "row",
-                    style: "display:flex; flex-wrap:wrap; gap:0.5em; margin:0.6em 0;",
+                div { style: "display:flex; flex-wrap:wrap; gap:0.5em; margin:0.6em 0;",
                     a {
                         class: "btn",
                         href: "/dioxus/torrents/{torrent.id}/edit",
@@ -361,9 +367,6 @@ fn TorrentDetailContent(
                 div { dangerous_inner_html: "{torrent.description}" }
 
                 if let Some(mam) = mam_torrent.clone() {
-                    if !mam.tags.is_empty() {
-                        p { "{mam.tags}" }
-                    }
                     if let Some(description) = mam.description {
                         Details { label: "MaM Description",
                             div { dangerous_inner_html: "{description}" }
@@ -419,11 +422,7 @@ fn TorrentDetailContent(
                     status_msg,
                     on_refresh,
                 }
-                OtherTorrentsSection {
-                    id: torrent.id.clone(),
-                    status_msg,
-                    on_refresh,
-                }
+                OtherTorrentsSection { id: torrent.id.clone(), status_msg, on_refresh }
             }
         }
     }
@@ -467,15 +466,50 @@ fn TorrentMamContent(
     rsx! {
         div { class: "torrent-detail-grid",
             div { class: "torrent-side",
-                div { class: "pill", "{torrent.media_type}" }
-                h3 { "Metadata" }
+                div { class: "category-row",
+                    if let Some(src) = media_icon_src(torrent.mediatype_id, torrent.main_cat_id) {
+                        img {
+                            class: "media-icon",
+                            src: "{src}",
+                            alt: "{torrent.media_type}",
+                            title: "{torrent.media_type}",
+                        }
+                    } else {
+                        span { class: "faint", "{torrent.media_type}" }
+                    }
+                    CategoryPills {
+                        categories: torrent.categories.clone(),
+                        old_category: torrent.old_category.clone(),
+                    }
+                    TorrentIcons {
+                        vip: mam.vip,
+                        personal_freeleech: mam.personal_freeleech,
+                        free: mam.free,
+                        flags: torrent.flags.clone(),
+                    }
+                }
                 dl { class: "metadata-table",
+                    if !torrent.flags.is_empty() {
+                        dt { "Flags" }
+                        dd {
+                            for flag in &torrent.flags {
+                                if let Some((src, title)) = flag_icon(flag) {
+                                    img {
+                                        class: "flag",
+                                        src: "{src}",
+                                        alt: "{title}",
+                                        title: "{title}",
+                                    }
+                                }
+                            }
+                        }
+                    }
                     dt { "MaM ID" }
                     dd {
                         a {
-                            href: "https://www.myanonamouse.net/t/{mam.id}",
+                            href: "https://www.myanonamouse.net/t/{mam.mam_id}",
                             target: "_blank",
-                            "{mam.id}"
+                            "{mam.mam_id}"
                         }
                     }
                     dt { "Uploader" }
@@ -503,6 +537,12 @@ fn TorrentMamContent(
                     items: narrator_filters,
                 }
                 SearchMetadataFilterRow { kind: SearchMetadataKind::Series, items: series_filters }
+                if !mam.tags.is_empty() {
+                    p { class: "icon-row",
+                        span { title: "Tags", Tag {} }
+                        "{mam.tags}"
+                    }
+                }
                 div {
                     class: "row",
                     style: "display:flex; flex-wrap:wrap; gap:0.5em; margin:0.6em 0;",
@@ -517,7 +557,7 @@ fn TorrentMamContent(
                 }
                 div { style: "margin-top:0.8em;",
                     DownloadButtons {
-                        mam_id: mam.id,
+                        mam_id: mam.mam_id,
                         is_vip: mam.vip,
                         is_free: mam.free,
                         is_personal_freeleech: mam.personal_freeleech,
@@ -534,20 +574,13 @@ fn TorrentMamContent(
                 }
             }
             div { class: "torrent-description",
-                if !mam.tags.is_empty() {
-                    p { "{mam.tags}" }
-                }
                 if let Some(description) = mam.description {
                     h3 { "Description" }
                     div { dangerous_inner_html: "{description}" }
                 }
             }
             div { class: "torrent-below",
-                OtherTorrentsSection {
-                    id: torrent.id.clone(),
-                    status_msg,
-                    on_refresh,
-                }
+                OtherTorrentsSection { id: torrent.id.clone(), status_msg, on_refresh }
             }
         }
     }
@@ -580,19 +613,21 @@ fn OtherTorrentsSection(
         div { style: "margin-top:1em;",
             h3 { "Other Torrents" }
             match data.read().clone() {
-                None => rsx! { p { class: "loading-indicator", "Loading other torrents..." } },
-                Some(Err(e)) => rsx! { p { class: "error", "Error loading other torrents: {e}" } },
+                None => rsx! {
+                    p { class: "loading-indicator", "Loading other torrents..." }
+                },
+                Some(Err(e)) => rsx! {
+                    p { class: "error", "Error loading other torrents: {e}" }
+                },
                 Some(Ok(torrents)) if torrents.is_empty() => rsx! {
-                    p { i { "No other torrents found for this book" } }
+                    p {
+                        i { "No other torrents found for this book" }
+                    }
                 },
                 Some(Ok(torrents)) => rsx! {
                     div { class: "Torrents",
                         for torrent in torrents {
-                            SearchTorrentRow {
-                                torrent,
-                                status_msg,
-                                on_refresh: inner_refresh,
-                            }
+                            SearchTorrentRow { torrent, status_msg, on_refresh: inner_refresh }
                         }
                     }
                 },
@@ -786,10 +821,16 @@ fn MatchDialog(
 
             div { class: "dialog-preview",
                 match &*preview.read() {
-                    None => rsx! { p { class: "loading-indicator", "Fetching preview..." } },
-                    Some(Err(e)) => rsx! { p { class: "error", "Preview failed: {e}" } },
+                    None => rsx! {
+                        p { class: "loading-indicator", "Fetching preview..." }
+                    },
+                    Some(Err(e)) => rsx! {
+                        p { class: "error", "Preview failed: {e}" }
+                    },
                     Some(Ok(diffs)) if diffs.is_empty() => rsx! {
-                        p { i { "No changes would be made." } }
+                        p {
+                            i { "No changes would be made." }
+                        }
                     },
                     Some(Ok(diffs)) => rsx! {
                         table { class: "match-diff-table",
@@ -819,7 +860,11 @@ fn MatchDialog(
                     class: "btn",
                     disabled: *loading.read() || preview.read().is_none(),
                     onclick: do_match,
-                    if *loading.read() { "Saving..." } else { "Save" }
+                    if *loading.read() {
+                        "Saving..."
+                    } else {
+                        "Save"
+                    }
                 }
                 button {
                     class: "btn",
@@ -857,7 +902,9 @@ fn QbitSection(
     };
 
     match data.read().clone() {
-        None => rsx! { p { class: "loading-indicator", "Loading qBittorrent data..." } },
+        None => rsx! {
+            p { class: "loading-indicator", "Loading qBittorrent data..." }
+        },
         Some(Err(_)) | Some(Ok(None)) => rsx! {},
         Some(Ok(Some(qbit))) => rsx! {
             QbitControls {
