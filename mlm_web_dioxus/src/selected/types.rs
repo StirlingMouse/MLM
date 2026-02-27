@@ -218,7 +218,6 @@ pub struct SelectedUserInfo {
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct SelectedData {
     pub torrents: Vec<SelectedRow>,
-    pub user_info: Option<SelectedUserInfo>,
     pub queued: usize,
     pub downloading: usize,
 }
