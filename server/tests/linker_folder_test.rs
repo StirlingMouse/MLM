@@ -322,3 +322,89 @@ async fn test_link_folders_to_library_nextory_raw_metadata() -> anyhow::Result<(
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_link_folders_to_library_libation_series_subtitle_does_not_overwrite_book_title()
+-> anyhow::Result<()> {
+    let test_db = TestDb::new()?;
+    let mock_fs = MockFs::new()?;
+    let config = Arc::new(mock_config(
+        mock_fs.rip_dir.clone(),
+        mock_fs.library_dir.clone(),
+    ));
+    let events = mlm_core::Events::new();
+
+    let cases = [
+        (
+            "B0D8LFR3R2",
+            "The Order: Kingdom of Fallen Ash",
+            "The Order Series, Book 1",
+            "Kingdom of Fallen Ash",
+            "1",
+        ),
+        (
+            "B0DSQW6S4W",
+            "The Order: Labyrinth of Twisted Games",
+            "The Order Series, Book 2",
+            "Labyrinth of Twisted Games",
+            "2",
+        ),
+        (
+            "B0FNYKHDXG",
+            "The Order: Rise of the New Empire",
+            "The Order Series, Book 4",
+            "Rise of the New Empire",
+            "4",
+        ),
+    ];
+
+    for (asin, title, subtitle, expected_title, expected_series_num) in cases {
+        let folder = mock_fs.rip_dir.join(format!("The Order [{asin}]"));
+        fs::create_dir_all(&folder)?;
+        let libation_meta = serde_json::json!({
+            "asin": asin,
+            "title": title,
+            "subtitle": subtitle,
+            "authors": [{"name": "Katerina St Clair"}],
+            "narrators": [{"name": "Isabelle Turner"}],
+            "series": [],
+            "language": "english",
+            "format_type": "unabridged",
+            "publisher_summary": "Test summary",
+            "merchandising_summary": "Test merchandising summary",
+            "category_ladders": [],
+            "is_adult_product": false,
+            "issue_date": "2025-01-01",
+            "publication_datetime": "2025-01-01T00:00:00Z",
+            "publication_name": "The Order Series",
+            "publisher_name": "Podium Audio",
+            "release_date": "2025-01-01",
+            "runtime_length_min": 60
+        });
+        fs::write(
+            folder.join(format!("The Order [{asin}].metadata.json")),
+            serde_json::to_string(&libation_meta)?,
+        )?;
+        fs::write(
+            folder.join(format!("The Order [{asin}].m4b")),
+            "fake audio data",
+        )?;
+
+        link_folders_to_library(config.clone(), test_db.db.clone(), &events).await?;
+
+        let r = test_db.db.r_transaction()?;
+        let torrent: Option<Torrent> = r.get().primary(asin.to_string())?;
+        assert!(torrent.is_some());
+        let torrent = torrent.unwrap();
+
+        assert_eq!(torrent.meta.title, expected_title);
+        assert_eq!(torrent.meta.series.len(), 1);
+        assert_eq!(torrent.meta.series[0].name, "The Order");
+        assert_eq!(
+            torrent.meta.series[0].entries.to_string(),
+            expected_series_num
+        );
+    }
+
+    Ok(())
+}

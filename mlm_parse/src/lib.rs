@@ -355,4 +355,28 @@ mod tests {
         assert_eq!(parsed_title, "Title");
         assert_eq!(parsed_edition, Some(("3rd Edition".to_string(), 3)));
     }
+
+    #[test]
+    fn test_parse_series_from_title_libation_order_pattern() {
+        let parsed =
+            parse_series_from_title("The Order: Kingdom of Fallen Ash: The Order Series, Book 1");
+        assert_eq!(
+            parsed,
+            Some(("Kingdom of Fallen Ash: The Order Series", Some(1.0)))
+        );
+
+        let parsed = parse_series_from_title(
+            "The Order: Labyrinth of Twisted Games: The Order Series, Book 2",
+        );
+        assert_eq!(
+            parsed,
+            Some(("Labyrinth of Twisted Games: The Order Series", Some(2.0)))
+        );
+    }
+
+    #[test]
+    fn test_parse_series_from_title_does_not_match_without_series_suffix() {
+        let parsed = parse_series_from_title("The Order: Kingdom of Fallen Ash");
+        assert_eq!(parsed, None);
+    }
 }

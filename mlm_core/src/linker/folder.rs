@@ -191,17 +191,44 @@ async fn build_libation_torrent(
     audio_files: &[DirEntry],
     ebook_files: &[DirEntry],
 ) -> Result<Torrent> {
-    let title = if libation_meta.subtitle.is_empty() {
-        libation_meta.title
+    let mut title = if libation_meta.subtitle.is_empty() {
+        libation_meta.title.clone()
     } else {
         format!("{}: {}", libation_meta.title, libation_meta.subtitle)
     };
+
+    let mut inferred_series = None;
+    if let Some((subtitle_series_name, subtitle_series_num)) =
+        parse_libation_series_subtitle(&libation_meta.subtitle)
+    {
+        if let Some((title_prefix, title_rest)) = libation_meta.title.split_once(": ")
+            && libation_series_name_matches(title_prefix, &subtitle_series_name)
+            && !title_rest.trim().is_empty()
+        {
+            title = title_rest.trim().to_string();
+            if let Ok(series) =
+                Series::try_from((title_prefix.trim().to_string(), subtitle_series_num))
+            {
+                inferred_series = Some(series);
+            }
+        } else {
+            title = libation_meta.title.clone();
+            if let Ok(series) = Series::try_from((subtitle_series_name, subtitle_series_num)) {
+                inferred_series = Some(series);
+            }
+        }
+    }
 
     let mut series = libation_meta
         .series
         .into_iter()
         .filter_map(|s| Series::try_from((s.title, s.sequence)).ok())
         .collect::<Vec<_>>();
+    if series.is_empty()
+        && let Some(inferred_series) = inferred_series
+    {
+        series.push(inferred_series);
+    }
     if series.is_empty()
         && let Some((name, num)) = parse_series_from_title(&title)
     {
@@ -491,6 +518,37 @@ fn parse_nextory_meta(json: &str) -> Option<NextoryRaw> {
         return Some(meta.raw);
     }
     serde_json::from_str::<NextoryRaw>(json).ok()
+}
+
+fn parse_libation_series_subtitle(subtitle: &str) -> Option<(String, String)> {
+    let subtitle = subtitle.trim();
+    if subtitle.is_empty() {
+        return None;
+    }
+    let subtitle_lower = subtitle.to_lowercase();
+
+    for marker in [", book ", ", vol. ", ", volume "] {
+        if let Some(index) = subtitle_lower.find(marker) {
+            let series_name = subtitle[..index].trim();
+            let sequence = subtitle[index + marker.len()..].trim();
+            if !series_name.is_empty() && !sequence.is_empty() {
+                return Some((series_name.to_string(), sequence.to_string()));
+            }
+        }
+    }
+    None
+}
+
+fn libation_series_name_matches(title_prefix: &str, subtitle_series_name: &str) -> bool {
+    let title_prefix = normalize_title(title_prefix);
+    let subtitle_series_name = normalize_title(
+        subtitle_series_name
+            .trim()
+            .strip_suffix(" Series")
+            .or_else(|| subtitle_series_name.trim().strip_suffix(" series"))
+            .unwrap_or(subtitle_series_name.trim()),
+    );
+    title_prefix == subtitle_series_name
 }
 
 fn nextory_torrent_id(nextory_id: u64) -> String {
