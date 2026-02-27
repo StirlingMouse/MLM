@@ -4,6 +4,8 @@ use crate::dto::{Event as DbEventDto, Series, TorrentMetaDiff, convert_event_typ
 use crate::error::{IntoServerFnError, OptionIntoServerFnError};
 use crate::search::SearchTorrent;
 #[cfg(feature = "server")]
+use crate::search::map_search_torrent as map_mam_torrent;
+#[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
 use dioxus::prelude::*;
 
@@ -82,12 +84,15 @@ fn torrent_info_from_meta(
         tags: meta.tags.clone(),
         description: clean_html(&meta.description),
         media_type: meta.media_type.to_string(),
+        mediatype_id: meta.media_type.as_id(),
         main_cat: meta.main_cat.map(|c| c.to_string()),
+        main_cat_id: meta.main_cat.map(|c| c.as_id()).unwrap_or(0),
         language: meta.language.as_ref().map(|l| l.to_string()),
         filetypes: meta.filetypes.iter().map(|f| f.to_string()).collect(),
         size: meta.size.to_string(),
         num_files: meta.num_files,
         categories: meta.categories.clone(),
+        old_category: meta.cat.as_ref().map(|c| c.to_string()),
         flags: flag_values,
         library_path: None,
         library_files: vec![],
@@ -100,19 +105,6 @@ fn torrent_info_from_meta(
         client_status: None,
         replaced_with: None,
         goodreads_id,
-    }
-}
-
-#[cfg(feature = "server")]
-fn map_mam_torrent(mam_torrent: &mlm_mam::search::MaMTorrent) -> super::types::MamTorrentInfo {
-    super::types::MamTorrentInfo {
-        id: mam_torrent.id,
-        owner_name: mam_torrent.owner_name.clone(),
-        tags: mam_torrent.tags.clone(),
-        description: mam_torrent.description.clone(),
-        vip: mam_torrent.vip,
-        personal_freeleech: mam_torrent.personal_freeleech,
-        free: mam_torrent.free,
     }
 }
 
@@ -216,6 +208,7 @@ async fn other_torrents_data(
                     })
                     .collect(),
                 tags: mam_torrent.tags,
+                description: mam_torrent.description,
                 categories: meta.categories.clone(),
                 flags: {
                     let flags = mlm_db::Flags::from_bitfield(meta.flags.map_or(0, |f| f.0));
@@ -372,6 +365,7 @@ async fn get_downloaded_torrent_detail(
         (None, None)
     };
 
+    let r = db.r_transaction().server_err()?;
     Ok(super::types::TorrentDetailData {
         torrent: torrent_info,
         events: events_data,
@@ -387,7 +381,20 @@ async fn get_downloaded_torrent_detail(
         replacement_missing,
         abs_item_url,
         abs_cover_url,
-        mam_torrent: mam_torrent.as_ref().map(map_mam_torrent),
+        mam_torrent: mam_torrent.as_ref().and_then(|mam_torrent| {
+            let meta = mam_torrent.as_meta().ok()?;
+            Some(map_mam_torrent(
+                mam_torrent.clone(),
+                &meta,
+                config.search.clone(),
+                true, // it's downloaded
+                r.get()
+                    .primary::<mlm_db::SelectedTorrent>(mam_torrent.id)
+                    .ok()
+                    .flatten()
+                    .is_some(),
+            ))
+        }),
         mam_meta_diff,
     })
 }
@@ -434,9 +441,19 @@ pub async fn get_torrent_detail(
             .server_err()?
             .ok_or_server_err("Torrent not found")?;
         let meta = mam_torrent.as_meta().server_err()?;
+        let search_config = context.config().await.search.clone();
+        let selected = context
+            .db()
+            .r_transaction()
+            .server_err()?
+            .get()
+            .primary::<mlm_db::SelectedTorrent>(mam_id)
+            .server_err()?
+            .is_some();
+
         return Ok(super::types::TorrentPageData::MamOnly(
             super::types::TorrentMamData {
-                mam_torrent: map_mam_torrent(&mam_torrent),
+                mam_torrent: map_mam_torrent(mam_torrent, &meta, search_config, false, selected),
                 meta: torrent_info_from_meta(&meta, mam_id.to_string(), Some(mam_id)),
             },
         ));
