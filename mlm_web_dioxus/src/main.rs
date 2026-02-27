@@ -13,6 +13,7 @@ fn main() {
 #[tokio::main]
 async fn server_main() {
     use anyhow::Result;
+    use axum::Router;
     use mlm_core::Context;
     use mlm_core::{SsrBackend, Stats, metadata::MetadataService};
     use mlm_mam::api::MaM;
@@ -20,6 +21,7 @@ async fn server_main() {
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::Mutex;
+    use tower_http::services::ServeDir;
 
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
@@ -117,7 +119,9 @@ async fn server_main() {
         triggers: mlm_core::Triggers::default(),
     };
 
-    let app = mlm_web_dioxus::ssr::router(ctx);
+    let app = Router::new()
+        .nest_service("/assets", ServeDir::new("../server/assets"))
+        .merge(mlm_web_dioxus::ssr::router(ctx));
 
     let addr: std::net::SocketAddr = "0.0.0.0:3002".parse().unwrap();
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();

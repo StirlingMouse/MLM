@@ -1,4 +1,7 @@
-use crate::dto::{Event, Series, TorrentMetaDiff};
+use crate::{
+    dto::{Event, Series, TorrentMetaDiff},
+    search::SearchTorrent,
+};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -10,7 +13,7 @@ pub struct TorrentDetailData {
     pub replacement_missing: bool,
     pub abs_item_url: Option<String>,
     pub abs_cover_url: Option<String>,
-    pub mam_torrent: Option<MamTorrentInfo>,
+    pub mam_torrent: Option<SearchTorrent>,
     pub mam_meta_diff: Vec<TorrentMetaDiff>,
 }
 
@@ -25,12 +28,15 @@ pub struct TorrentInfo {
     pub tags: Vec<String>,
     pub description: String,
     pub media_type: String,
+    pub mediatype_id: u8,
     pub main_cat: Option<String>,
+    pub main_cat_id: u8,
     pub language: Option<String>,
     pub filetypes: Vec<String>,
     pub size: String,
     pub num_files: u64,
     pub categories: Vec<String>,
+    pub old_category: Option<String>,
     pub flags: Vec<String>,
     pub library_path: Option<PathBuf>,
     pub library_files: Vec<PathBuf>,
@@ -53,7 +59,7 @@ pub enum TorrentPageData {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct TorrentMamData {
-    pub mam_torrent: MamTorrentInfo,
+    pub mam_torrent: SearchTorrent,
     pub meta: TorrentInfo,
 }
 
@@ -64,17 +70,6 @@ pub struct ReplacementTorrentInfo {
     pub size: String,
     pub filetypes: Vec<String>,
     pub library_path: Option<PathBuf>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct MamTorrentInfo {
-    pub id: u64,
-    pub owner_name: String,
-    pub tags: String,
-    pub description: Option<String>,
-    pub vip: bool,
-    pub personal_freeleech: bool,
-    pub free: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
