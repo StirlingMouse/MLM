@@ -35,6 +35,9 @@ pub fn trigger_errors_update() {
 }
 
 pub fn update_qbit_progress(progress: Vec<(u64, u32)>) {
+    #[cfg(feature = "server")]
+    let _ = progress;
+
     #[cfg(not(feature = "server"))]
     {
         *QBIT_PROGRESS.write() = progress;

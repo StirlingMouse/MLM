@@ -5,12 +5,85 @@ use crate::dto::Series;
 #[cfg(feature = "server")]
 use crate::error::IntoServerFnError;
 use dioxus::prelude::*;
+#[cfg(feature = "server")]
+use mlm_mam::search::MaMTorrent;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "server")]
 use mlm_core::{ContextExt, Torrent as DbTorrent, TorrentKey};
 #[cfg(feature = "server")]
 use mlm_db::Flags;
+
+#[cfg(feature = "server")]
+pub fn map_search_torrent(
+    mam_torrent: MaMTorrent,
+    meta: &mlm_db::TorrentMeta,
+    search_config: mlm_core::config::SearchConfig,
+    is_downloaded: bool,
+    is_selected: bool,
+) -> SearchTorrent {
+    let can_wedge = search_config
+        .wedge_over
+        .is_some_and(|wedge_over| meta.size >= wedge_over && !mam_torrent.is_free());
+    let media_duration = mam_torrent
+        .media_info
+        .as_ref()
+        .map(|m| m.general.duration.clone());
+    let media_format = mam_torrent
+        .media_info
+        .as_ref()
+        .map(|m| format!("{} {}", m.general.format, m.audio.format));
+    let audio_bitrate = mam_torrent
+        .media_info
+        .as_ref()
+        .map(|m| format!("{} {}", m.audio.bitrate, m.audio.mode));
+    let old_category = meta.cat.as_ref().map(|cat| cat.to_string());
+    let flags = Flags::from_bitfield(meta.flags.map_or(0, |f| f.0));
+    let flag_values = crate::utils::flags_to_strings(&flags);
+
+    SearchTorrent {
+        mam_id: mam_torrent.id,
+        mediatype_id: mam_torrent.mediatype,
+        main_cat_id: mam_torrent.main_cat,
+        lang_code: mam_torrent.lang_code,
+        title: meta.title.clone(),
+        edition: meta.edition.as_ref().map(|(ed, _)| ed.clone()),
+        authors: meta.authors.clone(),
+        narrators: meta.narrators.clone(),
+        series: meta
+            .series
+            .iter()
+            .map(|s| Series {
+                name: s.name.clone(),
+                entries: s.entries.to_string(),
+            })
+            .collect(),
+        tags: mam_torrent.tags,
+        description: mam_torrent.description,
+        categories: meta.categories.clone(),
+        flags: flag_values,
+        old_category,
+        media_type: meta.media_type.as_str().to_string(),
+        filetypes: meta.filetypes.clone(),
+        size: meta.size.to_string(),
+        num_files: mam_torrent.numfiles,
+        uploaded_at: mam_torrent.added,
+        owner_name: mam_torrent.owner_name,
+        seeders: mam_torrent.seeders,
+        leechers: mam_torrent.leechers,
+        snatches: mam_torrent.times_completed,
+        comments: mam_torrent.comments,
+        media_duration,
+        media_format,
+        audio_bitrate,
+        vip: mam_torrent.vip,
+        personal_freeleech: mam_torrent.personal_freeleech,
+        free: mam_torrent.free,
+        is_downloaded,
+        is_selected,
+        can_wedge,
+    }
+}
 
 fn search_state_from_params(params: &[(String, String)]) -> (String, String, String, Option<u64>) {
     let query = params
@@ -47,6 +120,7 @@ pub struct SearchTorrent {
     pub narrators: Vec<String>,
     pub series: Vec<Series>,
     pub tags: String,
+    pub description: Option<String>,
     pub categories: Vec<String>,
     pub flags: Vec<String>,
     pub old_category: Option<String>,
@@ -118,91 +192,29 @@ pub async fn get_search_data(
                 .primary::<mlm_db::SelectedTorrent>(mam_torrent.id)
                 .server_err()?;
 
-            let can_wedge = search_config
-                .wedge_over
-                .is_some_and(|wedge_over| meta.size >= wedge_over && !mam_torrent.is_free());
-            let media_duration = mam_torrent
-                .media_info
-                .as_ref()
-                .map(|m| m.general.duration.clone());
-            let media_format = mam_torrent
-                .media_info
-                .as_ref()
-                .map(|m| format!("{} {}", m.general.format, m.audio.format));
-            let audio_bitrate = mam_torrent
-                .media_info
-                .as_ref()
-                .map(|m| format!("{} {}", m.audio.bitrate, m.audio.mode));
-            let old_category = meta.cat.as_ref().map(|cat| cat.to_string());
-            let flags = Flags::from_bitfield(meta.flags.map_or(0, |f| f.0));
-            let flag_values = crate::utils::flags_to_strings(&flags);
-
-            Ok(SearchTorrent {
-                mam_id: mam_torrent.id,
-                mediatype_id: mam_torrent.mediatype,
-                main_cat_id: mam_torrent.main_cat,
-                lang_code: mam_torrent.lang_code,
-                title: meta.title,
-                edition: meta.edition.as_ref().map(|(ed, _)| ed.clone()),
-                authors: meta.authors,
-                narrators: meta.narrators,
-                series: meta
-                    .series
-                    .iter()
-                    .map(|s| Series {
-                        name: s.name.clone(),
-                        entries: s.entries.to_string(),
-                    })
-                    .collect(),
-                tags: mam_torrent.tags,
-                categories: meta.categories,
-                flags: flag_values,
-                old_category,
-                media_type: meta.media_type.as_str().to_string(),
-                filetypes: meta.filetypes,
-                size: meta.size.to_string(),
-                num_files: mam_torrent.numfiles,
-                uploaded_at: mam_torrent.added,
-                owner_name: mam_torrent.owner_name,
-                seeders: mam_torrent.seeders,
-                leechers: mam_torrent.leechers,
-                snatches: mam_torrent.times_completed,
-                comments: mam_torrent.comments,
-                media_duration,
-                media_format,
-                audio_bitrate,
-                vip: mam_torrent.vip,
-                personal_freeleech: mam_torrent.personal_freeleech,
-                free: mam_torrent.free,
-                is_downloaded: torrent.is_some(),
-                is_selected: selected_torrent.is_some(),
-                can_wedge,
-            })
+            Ok(map_search_torrent(
+                mam_torrent,
+                &meta,
+                search_config.clone(),
+                torrent.is_some(),
+                selected_torrent.is_some(),
+            ))
         })
         .collect::<Result<Vec<_>, _>>()?;
 
     if sort == "series" {
         torrents.sort_by(|a, b| {
-            let a_series = a
-                .series
+            a.series
                 .iter()
-                .map(|s| format!("{}|{}", s.name, s.entries))
-                .collect::<Vec<_>>()
-                .join(";");
-            let b_series = b
-                .series
-                .iter()
-                .map(|s| format!("{}|{}", s.name, s.entries))
-                .collect::<Vec<_>>()
-                .join(";");
-            a_series
-                .cmp(&b_series)
+                .map(|s| (s.name.as_str(), s.entries.as_str()))
+                .cmp(
+                    b.series
+                        .iter()
+                        .map(|s| (s.name.as_str(), s.entries.as_str())),
+                )
                 .then(a.media_type.cmp(&b.media_type))
         });
     }
-
-    let total = torrents.len();
-    Ok(SearchData { torrents, total })
 }
 
 #[component]
