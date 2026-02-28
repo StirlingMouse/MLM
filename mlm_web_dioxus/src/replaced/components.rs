@@ -1,7 +1,8 @@
 use crate::components::{
     ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, FilterLink, PageColumns,
-    PageSizeSelector, Pagination, SortHeader, TorrentGridTable, build_query_string,
-    encode_query_enum, parse_location_query_pairs, parse_query_enum, set_location_query_string,
+    PageSizeSelector, Pagination, SortHeader, TorrentGridTable, TorrentTitleLink,
+    build_query_string, encode_query_enum, parse_location_query_pairs, parse_query_enum,
+    set_location_query_string,
 };
 use dioxus::prelude::*;
 use std::collections::BTreeSet;
@@ -424,7 +425,6 @@ pub fn ReplacedPage() -> Element {
                                     }
                                     SortHeader { label: "Replaced", sort_key: ReplacedPageSort::Replaced, sort, asc, from }
                                     SortHeader { label: "Added At", sort_key: ReplacedPageSort::CreatedAt, sort, asc, from }
-                                    div { class: "header", "" }
                                 }
                             }
                         }
@@ -468,7 +468,8 @@ pub fn ReplacedPage() -> Element {
                                             }
                                         }
                                         div {
-                                            FilterLink {
+                                            TorrentTitleLink {
+                                                detail_id: pair.torrent.id.clone(),
                                                 field: ReplacedPageFilter::Title,
                                                 value: pair.torrent.meta.title.clone(),
                                                 reset_from: true,
@@ -542,19 +543,6 @@ pub fn ReplacedPage() -> Element {
                                         }
                                         div { "{pair.torrent.replaced_at.clone().unwrap_or_default()}" }
                                         div { "{pair.torrent.created_at}" }
-                                        div {
-                                            a { href: "/dioxus/torrents/{pair.torrent.id}", "open" }
-                                            if let Some(mam_id) = pair.torrent.mam_id {
-                                                a { href: "https://www.myanonamouse.net/t/{mam_id}", target: "_blank", "MaM" }
-                                            }
-                                            if let (Some(abs_url), Some(abs_id)) = (&data.abs_url, &pair.torrent.abs_id) {
-                                                a {
-                                                    href: "{abs_url}/audiobookshelf/item/{abs_id}",
-                                                    target: "_blank",
-                                                    "ABS"
-                                                }
-                                            }
-                                        }
 
                                         div {}
                                         div { class: "faint", "replaced with:" }
@@ -597,19 +585,6 @@ pub fn ReplacedPage() -> Element {
                                         }
                                         div { "{pair.replacement.replaced_at.clone().unwrap_or_default()}" }
                                         div { "{pair.replacement.created_at}" }
-                                        div {
-                                            a { href: "/dioxus/torrents/{pair.replacement.id}", "open" }
-                                            if let Some(mam_id) = pair.replacement.mam_id {
-                                                a { href: "https://www.myanonamouse.net/t/{mam_id}", target: "_blank", "MaM" }
-                                            }
-                                            if let (Some(abs_url), Some(abs_id)) = (&data.abs_url, &pair.replacement.abs_id) {
-                                                a {
-                                                    href: "{abs_url}/audiobookshelf/item/{abs_id}",
-                                                    target: "_blank",
-                                                    "ABS"
-                                                }
-                                            }
-                                        }
                                     }
                                 }
                             }

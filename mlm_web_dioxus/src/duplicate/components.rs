@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use crate::components::{
     ActiveFilterChip, ActiveFilters, FilterLink, PageSizeSelector, Pagination, SortHeader,
-    TorrentGridTable, build_query_string, encode_query_enum, parse_location_query_pairs,
-    parse_query_enum, set_location_query_string,
+    TorrentGridTable, TorrentTitleLink, build_query_string, encode_query_enum,
+    parse_location_query_pairs, parse_query_enum, set_location_query_string,
 };
 use dioxus::prelude::*;
 
@@ -334,7 +334,7 @@ pub fn DuplicatePage() -> Element {
                     }
                 } else {
                     TorrentGridTable {
-                        grid_template: "30px 110px 2fr 1fr 1fr 1fr 81px 100px 72px 157px 132px"
+                        grid_template: "30px 110px 2fr 1fr 1fr 1fr 81px 100px 72px 157px"
                             .to_string(),
                         extra_class: Some("DuplicateTable".to_string()),
                         pending: pending && cached.read().is_some(),
@@ -375,7 +375,6 @@ pub fn DuplicatePage() -> Element {
                                     div { class: "header", "Filetypes" }
                                     div { class: "header", "Linked" }
                                     SortHeader { label: "Added At", sort_key: DuplicatePageSort::CreatedAt, sort, asc, from }
-                                    div { class: "header", "" }
                                 }
                             }
                         }
@@ -416,7 +415,8 @@ pub fn DuplicatePage() -> Element {
                                             }
                                         }
                                         div {
-                                            FilterLink {
+                                            TorrentTitleLink {
+                                                detail_id: pair.torrent.mam_id.to_string(),
                                                 field: DuplicatePageFilter::Title,
                                                 value: pair.torrent.meta.title.clone(),
                                                 reset_from: true,
@@ -470,13 +470,6 @@ pub fn DuplicatePage() -> Element {
                                         }
                                         div {}
                                         div { "{pair.torrent.created_at}" }
-                                        div {
-                                            a {
-                                                href: "https://www.myanonamouse.net/t/{pair.torrent.mam_id}",
-                                                target: "_blank",
-                                                "MaM"
-                                            }
-                                        }
 
                                         div {}
                                         div { class: "faint", "duplicate of:" }
@@ -502,19 +495,6 @@ pub fn DuplicatePage() -> Element {
                                             }
                                         }
                                         div { "{pair.duplicate_of.created_at}" }
-                                        div {
-                                            a { href: "/dioxus/torrents/{pair.duplicate_of.id}", "open" }
-                                            if let Some(mam_id) = pair.duplicate_of.mam_id {
-                                                a { href: "https://www.myanonamouse.net/t/{mam_id}", target: "_blank", "MaM" }
-                                            }
-                                            if let (Some(abs_url), Some(abs_id)) = (&data.abs_url, &pair.duplicate_of.abs_id) {
-                                                a {
-                                                    href: "{abs_url}/audiobookshelf/item/{abs_id}",
-                                                    target: "_blank",
-                                                    "ABS"
-                                                }
-                                            }
-                                        }
                                     }
                                 }
                             }
