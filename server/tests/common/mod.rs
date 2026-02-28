@@ -1,0 +1,283 @@
+use anyhow::Result;
+use mlm_core::config::{Config, Library, LibraryByRipDir, LibraryLinkMethod, LibraryOptions};
+use mlm_db::{
+    Database, MODELS, MainCat, MediaType, MetadataSource, Size, Timestamp, Torrent, TorrentMeta,
+    migrate,
+};
+use native_db::Builder;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tempfile::TempDir;
+
+pub struct TestDb {
+    pub db: Arc<Database<'static>>,
+    #[allow(dead_code)]
+    temp_dir: TempDir,
+}
+
+impl TestDb {
+    pub fn new() -> Result<Self> {
+        let temp_dir = tempfile::tempdir()?;
+        let db_path = temp_dir.path().join("test.db");
+        let db = Builder::new().create(&MODELS, db_path)?;
+        migrate(&db)?;
+        Ok(Self {
+            db: Arc::new(db),
+            temp_dir,
+        })
+    }
+}
+
+#[allow(dead_code)]
+pub struct MockTorrentBuilder {
+    torrent: Torrent,
+}
+
+#[allow(dead_code)]
+impl MockTorrentBuilder {
+    pub fn new(id: &str, title: &str) -> Self {
+        Self {
+            torrent: Torrent {
+                id: id.to_string(),
+                id_is_hash: false,
+                mam_id: None,
+                library_path: None,
+                library_files: vec![],
+                linker: None,
+                category: None,
+                selected_audio_format: None,
+                selected_ebook_format: None,
+                title_search: mlm_parse::normalize_title(title),
+                meta: TorrentMeta {
+                    ids: Default::default(),
+                    vip_status: None,
+                    cat: None,
+                    media_type: MediaType::Audiobook,
+                    main_cat: Some(MainCat::Fiction),
+                    categories: vec![],
+                    tags: vec![],
+                    language: None,
+                    flags: None,
+                    filetypes: vec!["m4b".to_string()],
+                    num_files: 1,
+                    size: Size::from_bytes(0),
+                    title: title.to_string(),
+                    edition: None,
+                    description: "".to_string(),
+                    authors: vec![],
+                    narrators: vec![],
+                    series: vec![],
+                    source: MetadataSource::Mam,
+                    uploaded_at: Timestamp::now(),
+                },
+                created_at: Timestamp::now(),
+                replaced_with: None,
+                library_mismatch: None,
+                client_status: None,
+            },
+        }
+    }
+
+    pub fn with_library_path(mut self, path: PathBuf) -> Self {
+        self.torrent.library_path = Some(path);
+        self
+    }
+
+    pub fn with_mam_id(mut self, mam_id: u64) -> Self {
+        self.torrent.mam_id = Some(mam_id);
+        self.torrent
+            .meta
+            .ids
+            .insert(mlm_db::ids::MAM.to_string(), mam_id.to_string());
+        self
+    }
+
+    pub fn with_size(mut self, size_bytes: u64) -> Self {
+        self.torrent.meta.size = Size::from_bytes(size_bytes);
+        self
+    }
+
+    pub fn with_author(mut self, author: &str) -> Self {
+        self.torrent.meta.authors.push(author.to_string());
+        self
+    }
+
+    pub fn with_language(mut self, language: mlm_db::Language) -> Self {
+        self.torrent.meta.language = Some(language);
+        self
+    }
+
+    pub fn build(self) -> Torrent {
+        self.torrent
+    }
+}
+
+#[allow(dead_code)]
+pub struct MockFs {
+    #[allow(dead_code)]
+    pub root: TempDir,
+    pub rip_dir: PathBuf,
+    pub library_dir: PathBuf,
+}
+
+impl MockFs {
+    #[allow(dead_code)]
+    pub fn new() -> Result<Self> {
+        let root = tempfile::tempdir()?;
+        let rip_dir = root.path().join("rip");
+        let library_dir = root.path().join("library");
+        std::fs::create_dir_all(&rip_dir)?;
+        std::fs::create_dir_all(&library_dir)?;
+        Ok(Self {
+            root,
+            rip_dir,
+            library_dir,
+        })
+    }
+
+    #[allow(dead_code)]
+    pub fn create_libation_folder(
+        &self,
+        asin: &str,
+        title: &str,
+        authors: Vec<&str>,
+    ) -> Result<PathBuf> {
+        let folder_path = self.rip_dir.join(asin);
+        std::fs::create_dir_all(&folder_path)?;
+
+        let libation_meta = serde_json::json!({
+            "asin": asin,
+            "title": title,
+            "subtitle": "",
+            "authors": authors.into_iter().map(|a| serde_json::json!({"name": a})).collect::<Vec<_>>(),
+            "narrators": [],
+            "series": [],
+            "language": "English",
+            "format_type": "unabridged",
+            "publisher_summary": "Test summary",
+            "merchandising_summary": "Test merchandising summary",
+            "category_ladders": [],
+            "is_adult_product": false,
+            "issue_date": "2023-01-01",
+            "publication_datetime": "2023-01-01T00:00:00Z",
+            "publication_name": "Test Publisher",
+            "publisher_name": "Test Publisher",
+            "release_date": "2023-01-01",
+            "runtime_length_min": 60,
+        });
+
+        let meta_path = folder_path.join(format!("{}.json", asin));
+        std::fs::write(meta_path, serde_json::to_string(&libation_meta)?)?;
+
+        let audio_path = folder_path.join(format!("{}.m4b", asin));
+        std::fs::write(audio_path, "fake audio data")?;
+
+        Ok(folder_path)
+    }
+
+    #[allow(dead_code)]
+    pub fn create_nextory_folder(
+        &self,
+        folder_name: &str,
+        include_wrapped: bool,
+    ) -> Result<PathBuf> {
+        let folder_path = self.rip_dir.join(folder_name);
+        std::fs::create_dir_all(&folder_path)?;
+
+        let raw_meta = serde_json::json!({
+            "authors": [
+                {
+                    "id": 111,
+                    "name": "Fake Author",
+                    "visible": true
+                }
+            ],
+            "average_rating": 4.2,
+            "blurb": "Short fake blurb",
+            "description_full": "Long fake description for integration testing",
+            "formats": [
+                {
+                    "identifier": "FAKEAUDIO1",
+                    "isbn": "9780000000001",
+                    "type": "hls"
+                },
+                {
+                    "identifier": "FAKEEPUB1",
+                    "isbn": "9780000000002",
+                    "type": "epub"
+                }
+            ],
+            "id": 424242,
+            "language": "sv",
+            "media_type": "book",
+            "narrators": [
+                {
+                    "id": 222,
+                    "name": "Fake Narrator"
+                }
+            ],
+            "series": {
+                "id": 333,
+                "name": "Fake Series",
+                "vol": 0
+            },
+            "title": "Fake Dollar",
+            "volume": 2
+        });
+
+        if include_wrapped {
+            let wrapped_meta = serde_json::json!({
+                "raw": raw_meta,
+                "title": "Fake Dollar",
+                "authors": ["Fake Author"],
+                "narrators": ["Fake Narrator"],
+                "description": "Long fake description for integration testing",
+                "language": "sv",
+                "series": "Fake Series",
+                "series_order": 2.0,
+                "isbn": "9780000000001",
+                "publisher": "Fake Publisher",
+                "release_date": [2020, 1],
+                "genres": []
+            });
+            std::fs::write(
+                folder_path.join("metadata.json"),
+                serde_json::to_string(&wrapped_meta)?,
+            )?;
+        }
+
+        std::fs::write(
+            folder_path.join("metadata_raw.json"),
+            serde_json::to_string(&raw_meta)?,
+        )?;
+
+        let audio_path = folder_path.join("Fake Dollar - Fake Author.m4a");
+        std::fs::write(audio_path, "fake nextory audio data")?;
+
+        Ok(folder_path)
+    }
+}
+
+pub fn mock_config(rip_dir: PathBuf, library_dir: PathBuf) -> Config {
+    Config {
+        mam_id: "test".to_string(),
+        libraries: vec![Library::ByRipDir(LibraryByRipDir {
+            rip_dir,
+            options: LibraryOptions {
+                name: Some("test_library".to_string()),
+                library_dir,
+                method: LibraryLinkMethod::Hardlink,
+                audio_types: None,
+                ebook_types: None,
+            },
+            filter: Default::default(),
+        })],
+        metadata_providers: vec![mlm_core::config::ProviderConfig::RomanceIo(
+            mlm_core::config::RomanceIoConfig {
+                enabled: true,
+                timeout_secs: None,
+            },
+        )],
+        ..Default::default()
+    }
+}

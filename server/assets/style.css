@@ -17,6 +17,12 @@ body {
         color: var(--text);
 }
 
+#main > nav,
+.links.links {
+        display: flex;
+        gap: 4px;
+}
+
 a {
         color: currentColor;
         text-decoration-color: transparent;
@@ -69,6 +75,24 @@ button {
 
         &[data-prompt] {
                 color: var(--warn);
+        }
+
+        &.link {
+                diplay: inline;
+                padding: 0;
+                background: transparent;
+                text-align: left;
+
+                &&:hover {
+                        background: transparent;
+                        text-decoration: underline;
+                }
+
+                &:has(+ .link)::after {
+                        content: ", ";
+                        display: inline-block;
+                        padding-right: 4px;
+                }
         }
 
         &.icon,
@@ -227,6 +251,75 @@ summary {
         }
 }
 
+.column_selector {
+        position: relative;
+}
+
+.column_selector_dropdown {
+        position: relative;
+}
+
+.column_selector_trigger {
+        padding: 2px 8px;
+        border: none;
+        border-radius: 2px;
+        color: var(--text);
+        background: var(--above);
+        white-space: nowrap;
+}
+
+.column_selector_trigger:hover,
+.column_selector_trigger:focus-ring {
+        background: var(--color-3);
+}
+
+.column_selector_menu {
+        position: absolute;
+        z-index: 40;
+        top: calc(100% + 8px);
+        left: 0;
+        display: grid;
+        gap: 4px;
+        min-width: 230px;
+        max-height: min(55vh, 340px);
+        overflow: auto;
+        padding: 8px;
+        border: 1px solid var(--color-3);
+        border-radius: 6px;
+        background: var(--background);
+        box-shadow: 0 8px 20px color-mix(in srgb, black 32%, transparent);
+        transform-origin: top left;
+        animation: column-menu-in 150ms ease-out;
+}
+
+.column_selector_option {
+        display: grid;
+        grid-template-columns: min-content 1fr;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px;
+        border-radius: 4px;
+}
+
+.column_selector_option input {
+        display: block;
+}
+
+.column_selector_option:hover {
+        background: var(--color-3);
+}
+
+@keyframes column-menu-in {
+        from {
+                opacity: 0;
+                transform: translateY(-6px) scale(0.98);
+        }
+        to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+        }
+}
+
 .pagination {
         position: sticky;
         bottom: 0;
@@ -353,6 +446,59 @@ summary {
         }
 }
 
+.TorrentsTable > .torrents-grid-row {
+        grid-template-columns: var(--torrents-grid);
+}
+
+.TorrentsTable.is-refreshing {
+        position: relative;
+}
+
+.TorrentsTable.is-refreshing > .torrents-grid-row {
+        animation: stale-table-fade 500ms ease 500ms forwards;
+}
+
+.stale-refresh-overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        opacity: 0;
+        animation: stale-overlay-reveal 1ms linear 1000ms forwards;
+}
+
+.stale-refresh-spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid var(--color-3);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: stale-spinner-spin 900ms linear infinite;
+}
+
+@keyframes stale-table-fade {
+        from {
+                opacity: 1;
+        }
+        to {
+                opacity: 0;
+        }
+}
+
+@keyframes stale-overlay-reveal {
+        to {
+                opacity: 1;
+        }
+}
+
+@keyframes stale-spinner-spin {
+        to {
+                transform: rotate(360deg);
+        }
+}
+
 .list_item {
         display: grid;
         grid-template-columns: auto 1fr;
@@ -426,4 +572,257 @@ summary {
         & + & {
                 margin-left: 4px;
         }
+}
+
+.loading-indicator {
+        display: inline-block;
+        padding: 4px 8px;
+        margin-bottom: 8px;
+        font-style: italic;
+        color: var(--text-faint);
+        background: var(--above);
+        border-radius: 2px;
+}
+
+.torrent-detail-grid {
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        grid-template-areas:
+                "side main"
+                "side description"
+                "below below";
+        gap: 1em;
+}
+
+.torrent-side {
+        grid-area: side;
+}
+
+.torrent-main {
+        grid-area: main;
+}
+
+.torrent-description {
+        grid-area: description;
+}
+
+.torrent-below {
+        grid-area: below;
+}
+
+.metadata-table {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0.5em;
+}
+
+.metadata-table dt {
+        font-weight: bold;
+}
+
+.metadata-table dd {
+        margin: 0;
+}
+
+.pill {
+        display: inline-block;
+        padding: 0.2em 0.5em;
+        margin: 0.2em;
+        background: var(--above);
+        border-radius: 4px;
+}
+
+.torrent-detail-page .btn {
+        display: inline-block;
+        border: 1px solid var(--color-3);
+        text-decoration: none;
+}
+
+.torrent-detail-page .option_group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5em;
+        align-items: center;
+}
+
+.torrent-detail-page .option_group label {
+        display: flex;
+        align-items: center;
+        gap: 0.3em;
+}
+
+.torrent-detail-page .option_group input {
+        display: inline;
+}
+
+@media (max-width: 768px) {
+        .torrent-detail-grid {
+                grid-template-columns: 1fr;
+                grid-template-areas:
+                        "main"
+                        "side"
+                        "description"
+                        "below";
+        }
+}
+
+.search-page .search-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 8px;
+}
+
+.search-page .search-controls input[type="text"],
+.search-page .search-controls input[type="number"] {
+        width: max(220px, 20vw);
+}
+
+.Torrents {
+    --alternate: var(--above);
+    word-break: break-word;
+
+    &.Torrents {
+        margin: 0 -8px;
+    }
+
+    .TorrentRow {
+        grid-template-areas: "category icons main download files uploaded stats";
+        grid-template-columns: 64px 54px 1fr 32px 84px 130px 72px;
+        gap: 4px;
+        padding: 4px 8px;
+
+        @media (max-width: 750px) {
+            grid-template-areas: "category main main" "icons main main" "icons files stats" "icons uploaded uploaded";
+            grid-template-columns: 64px 1fr auto;
+            grid-template-rows: auto auto auto auto;
+        }
+
+        &>div {
+            padding: 4px;
+            overflow: hidden;
+        }
+
+        &>div:nth-child(n+2):nth-child(-n+7) {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        &>div:nth-child(n+4):nth-child(-n+7) {
+            @media (max-width: 750px) {
+                flex-direction: row;
+            }
+        }
+
+        &>div:nth-child(1n+4) {
+            text-align: center;
+        }
+
+        &>div:last-of-type {
+            .icon-row {
+                justify-content: end;
+            }
+        }
+
+        .media-icon {
+                width: 48px;
+        }
+    }
+
+    &>div {
+        display: grid;
+
+        &&&:first-of-type {
+            /* align-items: end; */
+            background: var(--background);
+        }
+
+        &:nth-child(even) {
+            background: var(--alternate);
+        }
+
+        &>.header,
+        &>div {
+            display: block;
+            padding: 4px;
+        }
+
+        &>.header {
+            position: sticky;
+            top: 0;
+            font-weight: bold;
+            border-bottom: 1px solid currentColor;
+            background: var(--background);
+        }
+    }
+
+    &:not(.nohover, .Torrents)>div:hover {
+        background: var(--color-3);
+    }
+}
+
+.media-icon {
+    width: 48px;
+    height: 48px;
+}
+
+.CategoryPills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.CategoryPill {
+    display: inline-block;
+    padding: 2px 4px;
+    border: 2px solid var(--color-3);
+    border-radius: 10px;
+
+    &.old {
+        background-color: var(--color-3);
+    }
+}
+
+.TorrentIcons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+
+    img {
+        width: 20px;
+        height: 20px;
+    }
+}
+
+.icon-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing, 4px);
+
+    &>span:has(svg) {
+        display: contents;
+    }
+}
+
+
+.status-message {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        margin-bottom: 8px;
+        border-radius: 4px;
+        border: 1px solid transparent;
+}
+
+.status-message.error {
+        color: var(--warn);
+        border-color: var(--warn);
+}
+
+.status-message.success {
+        color: #6fba6f;
+        border-color: #6fba6f;
 }

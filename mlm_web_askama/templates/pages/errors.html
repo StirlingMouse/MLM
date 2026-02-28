@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}MLM - Errors{% endblock %}
+
+{% block head %}
+{% endblock %}
+
+{% block content %}
+<h1>Torrent Errors</h1>
+<p>Errors encountered while either grabbing, linking or cleaning torrents</p>
+<form method=post>
+<div class="actions actions_error">
+  <button name=action value=remove data-prompt="Are you sure you want to remove the selected errors?">remove</button>
+</div>
+<div class="ErrorsTable table2">
+<div>
+  {{ table_header_all("error", 30) | safe }}
+  {{ table_header_s(Some(ErrorsPageSort::Step), "Step", 100) }}
+  {{ table_header_s(Some(ErrorsPageSort::Title), "Title", Flex(1, 170)) }}
+  {{ table_header_s(Some(ErrorsPageSort::Error), "Error", Flex(1, 170)) }}
+  {{ table_header_s(Some(ErrorsPageSort::CreatedAt), "When", 157) }}
+  {{ table_header_s(None, "", 88) }}
+</div>
+<style>
+  .ErrorsTable {
+    {{table2_styles() | safe}}
+  }
+</style>
+{% for error in errors %}
+<div>
+  <div><input type=checkbox name=error value="{{error.id | json}}"></div>
+  <div>{{ item(ErrorsPageFilter::Step, self::step(error.id)) }}</div>
+  <div>{{ item(ErrorsPageFilter::Title, error.title) }}</div>
+  <div>{{ error.error }}</div>
+  <div>{{ self::time(error.created_at) }}</div>
+  <div>
+  {% match error.meta %}
+    {% when Some(meta) %}
+      {% if let Some(mam_id) = meta.mam_id() %}
+        <a href="/torrents/{{ mam_id }}" target=_blank>open</a>
+        <a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>MaM</a>
+      {% endif %}
+    {% when None %}
+  {% endmatch %}
+  </div>
+</div>
+{% endfor %}
+{% if errors.is_empty() %}
+<p><i>There are currently no errors</i>
+{% endif %}
+</div>
+</form>
+{% endblock %}

@@ -1,4 +1,4 @@
-use super::{v01, v03, v05, v06, v07};
+use super::{v01, v03, v05, v06, v07, v18};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -287,6 +287,16 @@ impl From<v07::EventType> for EventType {
                 files,
             },
             v07::EventType::Updated { .. } => unimplemented!(),
+        }
+    }
+}
+
+impl From<v18::ListItemTorrent> for ListItemTorrent {
+    fn from(t: v18::ListItemTorrent) -> Self {
+        Self {
+            mam_id: t.mam_id.unwrap(),
+            status: t.status,
+            at: t.at,
         }
     }
 }

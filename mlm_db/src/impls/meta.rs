@@ -4,10 +4,14 @@ use itertools::Itertools as _;
 
 use crate::{
     Flags, MediaType, MetadataSource, OldCategory, TorrentMeta, TorrentMetaDiff, TorrentMetaField,
-    VipStatus, impls::format_serie,
+    VipStatus, ids, impls::format_serie,
 };
 
 impl TorrentMeta {
+    pub fn mam_id(&self) -> Option<u64> {
+        self.ids.get(ids::MAM).and_then(|id| id.parse().ok())
+    }
+
     pub fn matches(&self, other: &TorrentMeta) -> bool {
         self.media_type.matches(other.media_type)
             && self.language == other.language
@@ -35,11 +39,11 @@ impl TorrentMeta {
 
     pub fn diff(&self, other: &TorrentMeta) -> Vec<TorrentMetaDiff> {
         let mut diff = vec![];
-        if self.mam_id != other.mam_id {
+        if self.ids != other.ids {
             diff.push(TorrentMetaDiff {
-                field: TorrentMetaField::MamId,
-                from: self.mam_id.to_string(),
-                to: other.mam_id.to_string(),
+                field: TorrentMetaField::Ids,
+                from: format!("{:?}", self.ids),
+                to: format!("{:?}", other.ids),
             });
         }
         if self.vip_status != other.vip_status
@@ -96,16 +100,15 @@ impl TorrentMeta {
         if self.categories != other.categories {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Categories,
-                from: self
-                    .categories
-                    .iter()
-                    .map(|cat| cat.as_raw_str().to_string())
-                    .join(", "),
-                to: other
-                    .categories
-                    .iter()
-                    .map(|cat| cat.as_raw_str().to_string())
-                    .join(", "),
+                from: self.categories.join(", "),
+                to: other.categories.join(", "),
+            });
+        }
+        if self.tags != other.tags {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::Tags,
+                from: self.tags.join(", "),
+                to: other.tags.join(", "),
             });
         }
         if self.language != other.language {
@@ -218,12 +221,13 @@ impl MediaType {
 impl std::fmt::Display for TorrentMetaField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TorrentMetaField::MamId => write!(f, "mam_id"),
+            TorrentMetaField::Ids => write!(f, "ids"),
             TorrentMetaField::Vip => write!(f, "vip"),
             TorrentMetaField::Cat => write!(f, "cat"),
             TorrentMetaField::MediaType => write!(f, "media_type"),
             TorrentMetaField::MainCat => write!(f, "main_cat"),
             TorrentMetaField::Categories => write!(f, "categories"),
+            TorrentMetaField::Tags => write!(f, "tags"),
             TorrentMetaField::Language => write!(f, "language"),
             TorrentMetaField::Flags => write!(f, "flags"),
             TorrentMetaField::Filetypes => write!(f, "filetypes"),
@@ -243,6 +247,8 @@ impl fmt::Display for MetadataSource {
         match self {
             MetadataSource::Mam => write!(f, "MaM"),
             MetadataSource::Manual => write!(f, "Manual"),
+            MetadataSource::File => write!(f, "File"),
+            MetadataSource::Match => write!(f, "Match"),
         }
     }
 }

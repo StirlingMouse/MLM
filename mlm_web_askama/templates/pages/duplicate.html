@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}MLM - Duplicate Torrents{% endblock %}
+
+{% block head %}
+  <style>
+    .DuplicateTable {
+      {{self::table_styles_rows(11, 2) | safe}}
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<form method=post>
+<div class="row">
+  <h1>Duplicate Torrents</h1>
+  <div class="actions actions_torrent">
+    <button name=action value=replace>replace original</button>
+    <button name=action value=remove>remove dupliacte</button>
+  </div>
+</div>
+<p>Torrents that the autograbber did not select due to a pre-existing torrent in your library</p>
+<div class="DuplicateTable table">
+  {{ table_header_all_s("torrent") }}
+  {{ table_header(Some(DuplicatePageSort::Kind), "Type") }}
+  {{ table_header(Some(DuplicatePageSort::Title), "Title") }}
+  {{ table_header(Some(DuplicatePageSort::Authors), "Authors") }}
+  {{ table_header(Some(DuplicatePageSort::Narrators), "Narrators") }}
+  {{ table_header(Some(DuplicatePageSort::Series), "Series") }}
+  {{ table_header(Some(DuplicatePageSort::Size), "Size") }}
+  {{ table_header(None, "Filetypes") }}
+  {{ table_header(None, "Linked") }}
+  {{ table_header(Some(DuplicatePageSort::CreatedAt), "Added At") }}
+  {{ table_header(None, "") }}
+{% for (torrent, duplicate_of) in torrents %}
+  <div><input type=checkbox name=torrent value={{torrent.mam_id}}></div>
+  <div>{{ item(DuplicatePageFilter::Kind, torrent.meta.media_type.as_str()) }}</div>
+  <div>{{ item(DuplicatePageFilter::Title, torrent.meta.title) }}</div>
+  <div>{{ items(DuplicatePageFilter::Author, torrent.meta.authors) }}</div>
+  <div>{{ items(DuplicatePageFilter::Narrator, torrent.meta.narrators) }}</div>
+  <div>{{ series(DuplicatePageFilter::Series, torrent.meta.series) }}</div>
+  <div>{{ torrent.meta.size }}</div>
+  <div>{{ items(DuplicatePageFilter::Filetype, torrent.meta.filetypes) }}</div>
+  <div></div>
+  <div>{{ self::time(torrent.created_at) }}</div>
+  <div><a href="https://www.myanonamouse.net/t/{{ torrent.mam_id }}" target=_blank>MaM</a></div>
+  <div></div>
+  <div>duplicate of:</div>
+  <div>{{ item(DuplicatePageFilter::Title, duplicate_of.meta.title) }}</div>
+  <div>{{ items(DuplicatePageFilter::Author, duplicate_of.meta.authors) }}</div>
+  <div>{{ items(DuplicatePageFilter::Narrator, duplicate_of.meta.narrators) }}</div>
+  <div>{{ series(DuplicatePageFilter::Series, duplicate_of.meta.series) }}</div>
+  <div>{{ duplicate_of.meta.size }}</div>
+  <div>{{ items(DuplicatePageFilter::Filetype, duplicate_of.meta.filetypes) }}</div>
+  <div {% if let Some(path) = duplicate_of.library_path %}title="{{ path.to_string_lossy() }}"{% endif %}>
+    {{ duplicate_of.library_path.is_some().to_string() }}
+  </div>
+  <div>{{ self::time(duplicate_of.created_at) }}</div>
+  <div>
+    <a href="/torrents/{{ duplicate_of.id }}">open</a>
+    {% if let Some(mam_id) = duplicate_of.mam_id %}<a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>MaM</a>{% endif %}
+    {% if let (Some(abs_url), Some(abs_id)) = (abs_url.as_ref(), duplicate_of.meta.ids.get(ids::ABS)) %}
+      <a href="{{ abs_url }}/audiobookshelf/item/{{ abs_id }}" target=_blank>ABS</a>
+    {% endif %}
+  </div>
+{% endfor %}
+{% if torrents.is_empty() %}
+<p><i>There are currently no duplicate torrents</i>
+{% endif %}
+</div>
+</form>
+{% endblock %}

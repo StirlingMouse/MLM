@@ -140,8 +140,9 @@ pub struct TorrentMeta {
     pub series: Vec<(String, String)>,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Language {
+    #[default]
     English,
     Afrikaans,
     Arabic,
@@ -227,6 +228,12 @@ impl Timestamp {
     }
 }
 
+impl Default for Timestamp {
+    fn default() -> Self {
+        Self::now()
+    }
+}
+
 impl From<UtcDateTime> for Timestamp {
     fn from(value: UtcDateTime) -> Self {
         Self(value)
@@ -249,7 +256,7 @@ impl ToKey for Timestamp {
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, Hash)]
-pub struct Uuid(uuid::Uuid);
+pub struct Uuid(pub uuid::Uuid);
 impl Uuid {
     pub fn new() -> Self {
         Self(uuid::Uuid::new_v4())

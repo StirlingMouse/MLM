@@ -100,8 +100,9 @@ pub struct TorrentMeta {
     pub source: v10::MetadataSource,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MediaType {
+    #[default]
     Audiobook,
     Ebook,
     Musicology,

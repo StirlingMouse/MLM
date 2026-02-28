@@ -89,13 +89,13 @@ pub struct TorrentMeta {
     pub series: Vec<Series>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Series {
     pub name: String,
     pub entries: SeriesEntries,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct SeriesEntries(pub Vec<SeriesEntry>);
 
 impl SeriesEntries {

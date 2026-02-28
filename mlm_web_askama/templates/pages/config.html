@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}MLM - Config{% endblock %}
+
+{% block content %}
+<h1>Config</h1>
+
+<div class="infoboxes">
+  <div class="configbox">
+    <span class=key>unsat_buffer</span> = <span class=num>{{ config.unsat_buffer }}</span><br>
+    <span class=key>wedge_buffer</span> = <span class=num>{{ config.wedge_buffer }}</span><br>
+    {% if config.add_torrents_stopped %}
+    <span class=key>add_torrents_stopped</span> = <span class=num>{{ config.add_torrents_stopped }}</span><br>
+    {% endif %}
+    {% if config.exclude_narrator_in_library_dir %}
+    <span class=key>exclude_narrator_in_library_dir</span> = <span class=num>{{ config.exclude_narrator_in_library_dir }}</span><br>
+    {% endif %}
+    <span class=key>search_interval</span> = <span class=num>{{ config.search_interval }}</span><br>
+    <span class=key>link_interval</span> = <span class=num>{{ config.link_interval }}</span><br>
+    <span class=key>import_interval</span> = <span class=num>{{ config.import_interval }}</span><br>
+    {% if !config.ignore_torrents.is_empty() %}
+    <span class=key>ignore_torrents</span> = {{ self::yaml_nums(config.ignore_torrents) }}<br>
+    {% endif %}
+    <span class=key>audio_types</span> = {{ self::yaml_items(config.audio_types) }}<br>
+    <span class=key>ebook_types</span> = {{ self::yaml_items(config.ebook_types) }}<br>
+    <span class=key>music_types</span> = {{ self::yaml_items(config.music_types) }}<br>
+    <span class=key>radio_types</span> = {{ self::yaml_items(config.radio_types) }}<br>
+  </div>
+</div>
+
+{% for qbit in config.qbittorrent %}
+<div class="infoboxes">
+  <div class="configbox">
+    <div class=row>
+      <h3>[[qbittorrent]]</h3>
+    </div>
+    <span class=key>url</span> = <span class=string>{{ qbit.url | json }}</span><br>
+    {% if !qbit.username.is_empty() %}
+    <span class=key>username</span> = <span class=string>{{ qbit.username | json }}</span><br>
+    {% endif %}
+    {% if !qbit.password.is_empty() %}
+    <span class=key>password</span> = <span class=string>""</span> # hidden<br>
+    {% endif %}
+    {% if let Some(on_cleaned) = qbit.on_cleaned %}
+    <div class=row>
+      <h4>[qbittorrent.on_cleaned]</h4>
+    </div>
+    {% if let Some(category) = on_cleaned.category %}
+    <span class=key>category</span> = <span class=string>{{ category | json }}</span><br>
+    {% endif %}
+    {% if !on_cleaned.tags.is_empty() %}
+    <span class=key>tags</span> = {{ self::yaml_items(on_cleaned.tags) }}<br>
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+{% for autograb in config.autograbs %}
+<div class="infoboxes">
+  <div class="configbox">
+    <div class=row>
+      <h3>[[autograb]]</h3>
+      <a href="{{autograb.mam_search()}}" target=_blank>search on MaM</a>
+    </div>
+    {% if let Some(name) = autograb.filter.name %}
+    <span class=key>name</span> = <span class=string>{{ name | json }}</span><br>
+    {% endif %}
+    <span class=key>type</span> = <span class=string>{{ autograb.kind | json }}</span><br>
+    <span class=key>cost</span> = <span class=string>{{ autograb.cost | json }}</span><br>
+    {% if let Some(query) = autograb.query %}
+    <span class=key>query</span> = <span class=string>{{ query | json }}</span><br>
+    {% endif %}
+    {% if !autograb.search_in.is_empty() %}
+    <span class=key>search_in</span> = {{ self::yaml_items(autograb.search_in) }}<br>
+    {% endif %}
+    {% if let Some(sort_by) = autograb.sort_by %}
+    <span class=key>sort_by</span> = <span class=string>{{ sort_by | json }}</span><br>
+    {% endif %}
+    {{ self::filter(autograb.filter) }}
+    {% if let Some(search_interval) = autograb.search_interval %}
+    <span class=key>search_interval</span> = <span class=num>{{ search_interval }}</span><br>
+    {% endif %}
+    {% if let Some(unsat_buffer) = autograb.unsat_buffer %}
+    <span class=key>unsat_buffer</span> = <span class=num>{{ unsat_buffer }}</span><br>
+    {% endif %}
+    {% if let Some(max_active_downloads) = autograb.max_active_downloads %}
+    <span class=key>max_active_downloads</span> = <span class=num>{{ max_active_downloads }}</span><br>
+    {% endif %}
+    {% if let Some(wedge_buffer) = autograb.wedge_buffer %}
+    <span class=key>wedge_buffer</span> = <span class=num>{{ wedge_buffer }}</span><br>
+    {% endif %}
+    {% if autograb.dry_run %}
+    <span class=key>dry_run</span> = <span class=num>{{ autograb.dry_run }}</span><br>
+    {% endif %}
+    {% if let Some(category) = autograb.category %}
+    <span class=key>category</span> = <span class=string>{{ category | json }}</span><br>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+{% for list in config.goodreads_lists %}
+<div class="infoboxes">
+  <div class="configbox">
+    <div class=row>
+      <h3>[[goodreads_list]]</h3>
+    </div>
+    {% if let Some(name) = list.name %}
+    <span class=key>name</span> = <span class=string>{{ name | json }}</span><br>
+    {% endif %}
+    {% if let Some(search_interval) = list.search_interval %}
+    <span class=key>search_interval</span> = <span class=num>{{ search_interval }}</span><br>
+    {% endif %}
+    {% if let Some(unsat_buffer) = list.unsat_buffer %}
+    <span class=key>unsat_buffer</span> = <span class=num>{{ unsat_buffer }}</span><br>
+    {% endif %}
+    {% if let Some(wedge_buffer) = list.wedge_buffer %}
+    <span class=key>wedge_buffer</span> = <span class=num>{{ wedge_buffer }}</span><br>
+    {% endif %}
+    {% if list.dry_run %}
+    <span class=key>dry_run</span> = <span class=num>{{ list.dry_run }}</span><br>
+    {% endif %}
+    {% for grab in list.grab %}
+    <div class="infoboxes">
+      <div class="configbox">
+        <div class=row>
+          <h4>[[goodreads_list.grab]]</h4>
+        </div>
+        <span class=key>cost</span> = <span class=string>{{ grab.cost | json }}</span><br>
+        {{ self::filter(grab.filter) }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+
+{% for (i, tag) in config.tags.iter().enumerate() %}
+<div class="infoboxes">
+  <div class="configbox">
+    <div class=row>
+      <h3>[[tag]]</h3>
+      {% if show_apply_tags %}
+      <form method=post>
+        <label>Client: <input type=number name=qbit_index value=0></label>
+        <button name=action value=apply data-prompt="Are you sure you want to apply these tags to all existing torrents in selected torrent client?">apply to all</button>
+        <input type=hidden name=tag_filter value={{i}}>
+      </form>
+      {% endif %}
+    </div>
+    {% if let Some(name) = tag.filter.name %}
+    <span class=key>name</span> = <span class=string>{{ name | json }}</span><br>
+    {% endif %}
+    {{ self::filter(tag.filter) }}
+    {% if let Some(category) = tag.category %}
+    <span class=key>category</span> = <span class=string>{{ category | json }}</span><br>
+    {% endif %}
+    {% if !tag.tags.is_empty() %}
+    <span class=key>tags</span> = {{ self::yaml_items(tag.tags) }}<br>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+{% for library in config.libraries %}
+<div class="infoboxes">
+  <div class="configbox">
+    <div class=row>
+      <h3>[[library]]</h3>
+    </div>
+    {% if let Some(name) = library.options().name %}
+    <span class=key>name</span> = <span class=string>{{ name | json }}</span><br>
+    {% endif %}
+    {% match library %}
+    {% when Library::ByRipDir(library) %}
+    <span class=key>rip_dir</span> = <span class=string>{{ library.rip_dir | json }}</span><br>
+    {% when Library::ByDownloadDir(library) %}
+    <span class=key>download_dir</span> = <span class=string>{{ library.download_dir | json }}</span><br>
+    {% when Library::ByCategory(library) %}
+    <span class=key>category</span> = <span class=string>{{ library.category | json }}</span><br>
+    {% endmatch %}
+    <span class=key>library_dir</span> = <span class=string>{{ library.options().library_dir | json }}</span><br>
+    {% if !library.tag_filters().allow_tags.is_empty() %}
+    <span class=key>allow_tags</span> = {{ self::yaml_items(library.tag_filters().allow_tags) }}<br>
+    {% endif %}
+    {% if !library.tag_filters().deny_tags.is_empty() %}
+    <span class=key>deny_tags</span> = {{ self::yaml_items(library.tag_filters().deny_tags) }}<br>
+    {% endif %}
+    {% if library.options().method != Default::default() %}
+    <span class=key>method</span> = <span class=string>{{ library.options().method | json }}</span><br>
+    {% endif %}
+    {% if let Some(audio_types) = library.options().audio_types %}
+      {% if !audio_types.is_empty() %}
+      <span class=key>audio_types</span> = {{ self::yaml_items(audio_types) }}<br>
+      {% endif %}
+    {% endif %}
+    {% if let Some(ebook_types) = library.options().ebook_types %}
+      {% if !ebook_types.is_empty() %}
+      <span class=key>ebook_types</span> = {{ self::yaml_items(ebook_types) }}<br>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+
+{% endblock %}
