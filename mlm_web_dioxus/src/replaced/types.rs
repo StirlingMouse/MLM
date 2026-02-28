@@ -93,7 +93,6 @@ impl ReplacedPageColumns {
         }
         cols.push("157px");
         cols.push("157px");
-        cols.push("132px");
         cols.join(" ")
     }
 

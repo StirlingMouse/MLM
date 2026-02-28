@@ -5,7 +5,11 @@ use crate::components::{
 
 use super::{TorrentsPageColumns, TorrentsPageFilter, TorrentsPageSort};
 
-type ColumnKey = (&'static str, fn(&TorrentsPageColumns) -> bool, fn(&mut TorrentsPageColumns, bool));
+type ColumnKey = (
+    &'static str,
+    fn(&TorrentsPageColumns) -> bool,
+    fn(&mut TorrentsPageColumns, bool),
+);
 
 #[derive(Clone)]
 pub(super) struct PageQueryState {
@@ -35,28 +39,110 @@ impl Default for PageQueryState {
 /// Single source of truth mapping each column to its (query_key, getter, setter).
 /// Adding a new column requires only adding one entry here.
 const COLUMN_KEYS: &[ColumnKey] = &[
-    ("category", |c| c.category, |c, v| { c.category = v; }),
-    ("categories", |c| c.categories, |c, v| { c.categories = v; }),
-    ("flags", |c| c.flags, |c, v| { c.flags = v; }),
-    ("edition", |c| c.edition, |c, v| { c.edition = v; }),
-    ("author", |c| c.authors, |c, v| { c.authors = v; }),
-    ("narrator", |c| c.narrators, |c, v| { c.narrators = v; }),
-    ("series", |c| c.series, |c, v| { c.series = v; }),
-    ("language", |c| c.language, |c, v| { c.language = v; }),
-    ("size", |c| c.size, |c, v| { c.size = v; }),
-    ("filetype", |c| c.filetypes, |c, v| { c.filetypes = v; }),
-    ("linker", |c| c.linker, |c, v| { c.linker = v; }),
+    (
+        "category",
+        |c| c.category,
+        |c, v| {
+            c.category = v;
+        },
+    ),
+    (
+        "categories",
+        |c| c.categories,
+        |c, v| {
+            c.categories = v;
+        },
+    ),
+    (
+        "flags",
+        |c| c.flags,
+        |c, v| {
+            c.flags = v;
+        },
+    ),
+    (
+        "edition",
+        |c| c.edition,
+        |c, v| {
+            c.edition = v;
+        },
+    ),
+    (
+        "author",
+        |c| c.authors,
+        |c, v| {
+            c.authors = v;
+        },
+    ),
+    (
+        "narrator",
+        |c| c.narrators,
+        |c, v| {
+            c.narrators = v;
+        },
+    ),
+    (
+        "series",
+        |c| c.series,
+        |c, v| {
+            c.series = v;
+        },
+    ),
+    (
+        "language",
+        |c| c.language,
+        |c, v| {
+            c.language = v;
+        },
+    ),
+    (
+        "size",
+        |c| c.size,
+        |c, v| {
+            c.size = v;
+        },
+    ),
+    (
+        "filetype",
+        |c| c.filetypes,
+        |c, v| {
+            c.filetypes = v;
+        },
+    ),
+    (
+        "linker",
+        |c| c.linker,
+        |c, v| {
+            c.linker = v;
+        },
+    ),
     (
         "qbit_category",
         |c| c.qbit_category,
-        |c, v| { c.qbit_category = v; },
+        |c, v| {
+            c.qbit_category = v;
+        },
     ),
-    ("path", |c| c.path, |c, v| { c.path = v; }),
-    ("created_at", |c| c.created_at, |c, v| { c.created_at = v; }),
+    (
+        "path",
+        |c| c.path,
+        |c, v| {
+            c.path = v;
+        },
+    ),
+    (
+        "created_at",
+        |c| c.created_at,
+        |c, v| {
+            c.created_at = v;
+        },
+    ),
     (
         "uploaded_at",
         |c| c.uploaded_at,
-        |c, v| { c.uploaded_at = v; },
+        |c, v| {
+            c.uploaded_at = v;
+        },
     ),
 ];
 
