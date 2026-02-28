@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::components::{
     ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, FilterLink, SortHeader,
-    TorrentGridTable, flag_icon, set_location_query_string,
+    TorrentGridTable, TorrentTitleLink, flag_icon, set_location_query_string, update_row_selection,
 };
 use crate::sse::{QBIT_PROGRESS, SELECTED_UPDATE_TRIGGER};
 use dioxus::prelude::*;
@@ -396,7 +396,6 @@ pub fn SelectedPage() -> Element {
                                     if show.read().removed_at {
                                         div { class: "header", "Removed At" }
                                     }
-                                    div { class: "header", "" }
                                 }
                             }
                         }
@@ -462,7 +461,8 @@ pub fn SelectedPage() -> Element {
                                             }
                                         }
                                         div {
-                                            FilterLink {
+                                            TorrentTitleLink {
+                                                detail_id: torrent.mam_id.to_string(),
                                                 field: SelectedPageFilter::Title,
                                                 value: torrent.meta.title.clone(),
                                                 "{torrent.meta.title}"
@@ -564,13 +564,6 @@ pub fn SelectedPage() -> Element {
                                         }
                                         if show.read().removed_at {
                                             div { "{torrent.removed_at.clone().unwrap_or_default()}" }
-                                        }
-                                        div {
-                                            a {
-                                                href: "https://www.myanonamouse.net/t/{torrent.mam_id}",
-                                                target: "_blank",
-                                                "MaM"
-                                            }
                                         }
                                     }
                                 }

@@ -9,17 +9,40 @@ pub struct ColumnToggleOption {
 
 #[component]
 pub fn ColumnSelector(options: Vec<ColumnToggleOption>) -> Element {
+    let mut is_open = use_signal(|| false);
+    let selected_count = options.iter().filter(|option| option.checked).count();
+    let total_count = options.len();
+
     rsx! {
-        div { class: "option_group query",
-            "Columns:"
-            div {
-                for option in options {
-                    label {
-                        "{option.label}"
-                        input {
-                            r#type: "checkbox",
-                            checked: option.checked,
-                            onchange: move |ev| option.on_toggle.call(ev.value() == "true"),
+        div { class: "option_group query column_selector",
+            div { class: "column_selector_dropdown",
+                if *is_open.read() {
+                    div {
+                        class: "column_selector_backdrop",
+                        onclick: move |_| is_open.set(false),
+                    }
+                }
+                button {
+                    r#type: "button",
+                    class: "column_selector_trigger",
+                    "aria-expanded": if *is_open.read() { "true" } else { "false" },
+                    onclick: move |_| {
+                        let next = !*is_open.read();
+                        is_open.set(next);
+                    },
+                    "Columns ({selected_count}/{total_count})"
+                }
+                if *is_open.read() {
+                    div { class: "column_selector_menu",
+                        for option in options {
+                            label { class: "column_selector_option",
+                                input {
+                                    r#type: "checkbox",
+                                    checked: option.checked,
+                                    onchange: move |ev| option.on_toggle.call(ev.checked()),
+                                }
+                                span { "{option.label}" }
+                            }
                         }
                     }
                 }

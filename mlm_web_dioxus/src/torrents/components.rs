@@ -5,8 +5,8 @@ use dioxus::prelude::*;
 
 use crate::components::{
     ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, FilterLink,
-    PageSizeSelector, Pagination, SortHeader, StatusMessage, TorrentGridTable, flag_icon,
-    parse_location_query_pairs, set_location_query_string,
+    PageSizeSelector, Pagination, SortHeader, StatusMessage, TorrentGridTable, TorrentTitleLink,
+    flag_icon, parse_location_query_pairs, set_location_query_string, update_row_selection,
 };
 
 use super::query::{build_query_url, parse_query_state};
@@ -204,7 +204,6 @@ fn TorrentsTableHeader(
                     from,
                 }
             }
-            div { class: "header", "" }
         }
     }
 }
@@ -217,7 +216,6 @@ fn TorrentsTableHeader(
 fn TorrentRow(
     torrent: TorrentsRow,
     show: TorrentsPageColumns,
-    abs_url: Option<String>,
     i: usize,
     mut selected: Signal<BTreeSet<String>>,
     mut last_selected_idx: Signal<Option<usize>>,
@@ -300,7 +298,8 @@ fn TorrentRow(
                 }
             }
             div {
-                FilterLink {
+                TorrentTitleLink {
+                    detail_id: torrent.id.clone(),
                     field: TorrentsPageFilter::Title,
                     value: torrent.meta.title.clone(),
                     reset_from: true,
@@ -481,23 +480,6 @@ fn TorrentRow(
             }
             if show.uploaded_at {
                 div { "{torrent.uploaded_at}" }
-            }
-            div { class: "links",
-                a { href: "/dioxus/torrents/{torrent.id}", "open" }
-                if let Some(mam_id) = torrent.mam_id {
-                    a {
-                        href: "https://www.myanonamouse.net/t/{mam_id}",
-                        target: "_blank",
-                        "MaM"
-                    }
-                }
-                if let (Some(abs_url), Some(abs_id)) = (&abs_url, &torrent.abs_id) {
-                    a {
-                        href: "{abs_url}/audiobookshelf/item/{abs_id}",
-                        target: "_blank",
-                        "ABS"
-                    }
-                }
             }
         }
     }
@@ -696,7 +678,12 @@ pub fn TorrentsPage() -> Element {
     let all_row_ids = Arc::new(
         data_to_show
             .as_ref()
-            .map(|data| data.torrents.iter().map(|t| t.id.clone()).collect::<Vec<_>>())
+            .map(|data| {
+                data.torrents
+                    .iter()
+                    .map(|t| t.id.clone())
+                    .collect::<Vec<_>>()
+            })
             .unwrap_or_default(),
     );
 
@@ -839,7 +826,6 @@ pub fn TorrentsPage() -> Element {
                                 key: "{torrent.id}",
                                 torrent: torrent.clone(),
                                 show: show_snapshot,
-                                abs_url: data.abs_url.clone(),
                                 i,
                                 selected,
                                 last_selected_idx,
