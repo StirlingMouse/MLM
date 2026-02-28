@@ -56,6 +56,8 @@ pub fn TorrentDetailPage(id: String) -> Element {
     let mut data_res = use_server_future(move || {
         let id = id.clone();
         async move {
+            // tokio::join! isn't available in WASM, so we run the two fetches
+            // concurrently on the server and sequentially on the client.
             #[cfg(feature = "server")]
             {
                 tokio::join!(get_torrent_detail(id.clone()), get_metadata_providers())

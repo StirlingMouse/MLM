@@ -5,6 +5,8 @@ use crate::components::{
 
 use super::{TorrentsPageColumns, TorrentsPageFilter, TorrentsPageSort};
 
+type ColumnKey = (&'static str, fn(&TorrentsPageColumns) -> bool, fn(&mut TorrentsPageColumns, bool));
+
 #[derive(Clone)]
 pub(super) struct PageQueryState {
     pub(super) query: String,
@@ -30,59 +32,46 @@ impl Default for PageQueryState {
     }
 }
 
+/// Single source of truth mapping each column to its (query_key, getter, setter).
+/// Adding a new column requires only adding one entry here.
+const COLUMN_KEYS: &[ColumnKey] = &[
+    ("category", |c| c.category, |c, v| { c.category = v; }),
+    ("categories", |c| c.categories, |c, v| { c.categories = v; }),
+    ("flags", |c| c.flags, |c, v| { c.flags = v; }),
+    ("edition", |c| c.edition, |c, v| { c.edition = v; }),
+    ("author", |c| c.authors, |c, v| { c.authors = v; }),
+    ("narrator", |c| c.narrators, |c, v| { c.narrators = v; }),
+    ("series", |c| c.series, |c, v| { c.series = v; }),
+    ("language", |c| c.language, |c, v| { c.language = v; }),
+    ("size", |c| c.size, |c, v| { c.size = v; }),
+    ("filetype", |c| c.filetypes, |c, v| { c.filetypes = v; }),
+    ("linker", |c| c.linker, |c, v| { c.linker = v; }),
+    (
+        "qbit_category",
+        |c| c.qbit_category,
+        |c, v| { c.qbit_category = v; },
+    ),
+    ("path", |c| c.path, |c, v| { c.path = v; }),
+    ("created_at", |c| c.created_at, |c, v| { c.created_at = v; }),
+    (
+        "uploaded_at",
+        |c| c.uploaded_at,
+        |c, v| { c.uploaded_at = v; },
+    ),
+];
+
 impl PageColumns for TorrentsPageColumns {
     fn to_query_value(&self) -> String {
-        let mut values = Vec::new();
-        if self.category {
-            values.push("category");
-        }
-        if self.categories {
-            values.push("categories");
-        }
-        if self.flags {
-            values.push("flags");
-        }
-        if self.edition {
-            values.push("edition");
-        }
-        if self.authors {
-            values.push("author");
-        }
-        if self.narrators {
-            values.push("narrator");
-        }
-        if self.series {
-            values.push("series");
-        }
-        if self.language {
-            values.push("language");
-        }
-        if self.size {
-            values.push("size");
-        }
-        if self.filetypes {
-            values.push("filetype");
-        }
-        if self.linker {
-            values.push("linker");
-        }
-        if self.qbit_category {
-            values.push("qbit_category");
-        }
-        if self.path {
-            values.push("path");
-        }
-        if self.created_at {
-            values.push("created_at");
-        }
-        if self.uploaded_at {
-            values.push("uploaded_at");
-        }
-        values.join(",")
+        COLUMN_KEYS
+            .iter()
+            .filter(|(_, get, _)| get(self))
+            .map(|(key, _, _)| *key)
+            .collect::<Vec<_>>()
+            .join(",")
     }
 
     fn from_query_value(value: &str) -> Self {
-        let mut show = TorrentsPageColumns {
+        let mut cols = TorrentsPageColumns {
             category: false,
             categories: false,
             flags: false,
@@ -100,26 +89,11 @@ impl PageColumns for TorrentsPageColumns {
             uploaded_at: false,
         };
         for item in value.split(',') {
-            match item {
-                "category" => show.category = true,
-                "categories" => show.categories = true,
-                "flags" => show.flags = true,
-                "edition" => show.edition = true,
-                "author" => show.authors = true,
-                "narrator" => show.narrators = true,
-                "series" => show.series = true,
-                "language" => show.language = true,
-                "size" => show.size = true,
-                "filetype" => show.filetypes = true,
-                "linker" => show.linker = true,
-                "qbit_category" => show.qbit_category = true,
-                "path" => show.path = true,
-                "created_at" => show.created_at = true,
-                "uploaded_at" => show.uploaded_at = true,
-                _ => {}
+            if let Some((_, _, set)) = COLUMN_KEYS.iter().find(|(key, _, _)| *key == item) {
+                set(&mut cols, true);
             }
         }
-        show
+        cols
     }
 }
 

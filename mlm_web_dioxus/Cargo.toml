@@ -12,6 +12,8 @@ path = "src/main.rs"
 
 [dependencies]
 dioxus = { version = "0.7", features = ["fullstack", "router"] }
+# Explicit dep needed for `dioxus_fullstack::FullstackContext` path references;
+# transitive deps cannot be named directly without a Cargo.toml entry.
 dioxus-fullstack = "0.7"
 lucide-dioxus = { version = "2.562.0", features = [
   "account",

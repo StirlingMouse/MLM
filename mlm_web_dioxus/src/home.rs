@@ -101,6 +101,15 @@ pub async fn get_home_data() -> Result<HomeData, ServerFnError> {
         });
     }
 
+    let task_info = |run_at: Option<&time::OffsetDateTime>,
+                     result: Option<&Result<(), anyhow::Error>>|
+     -> Option<TaskInfo> {
+        run_at.map(|t| TaskInfo {
+            last_run: Some(format_datetime(t)),
+            result: result.map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+        })
+    };
+
     Ok(HomeData {
         username,
         mam_error: context.mam().err().map(|e| format!("{e}")),
@@ -108,41 +117,23 @@ pub async fn get_home_data() -> Result<HomeData, ServerFnError> {
         autograbbers,
         snatchlist_grabbers,
         lists,
-        torrent_linker: stats.torrent_linker_run_at.as_ref().map(|t| TaskInfo {
-            last_run: Some(format_datetime(t)),
-            result: stats
-                .torrent_linker_result
-                .as_ref()
-                .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
-        }),
-        folder_linker: stats.folder_linker_run_at.as_ref().map(|t| TaskInfo {
-            last_run: Some(format_datetime(t)),
-            result: stats
-                .folder_linker_result
-                .as_ref()
-                .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
-        }),
-        cleaner: stats.cleaner_run_at.as_ref().map(|t| TaskInfo {
-            last_run: Some(format_datetime(t)),
-            result: stats
-                .cleaner_result
-                .as_ref()
-                .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
-        }),
-        downloader: stats.downloader_run_at.as_ref().map(|t| TaskInfo {
-            last_run: Some(format_datetime(t)),
-            result: stats
-                .downloader_result
-                .as_ref()
-                .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
-        }),
-        audiobookshelf: stats.audiobookshelf_run_at.as_ref().map(|t| TaskInfo {
-            last_run: Some(format_datetime(t)),
-            result: stats
-                .audiobookshelf_result
-                .as_ref()
-                .map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
-        }),
+        torrent_linker: task_info(
+            stats.torrent_linker_run_at.as_ref(),
+            stats.torrent_linker_result.as_ref(),
+        ),
+        folder_linker: task_info(
+            stats.folder_linker_run_at.as_ref(),
+            stats.folder_linker_result.as_ref(),
+        ),
+        cleaner: task_info(stats.cleaner_run_at.as_ref(), stats.cleaner_result.as_ref()),
+        downloader: task_info(
+            stats.downloader_run_at.as_ref(),
+            stats.downloader_result.as_ref(),
+        ),
+        audiobookshelf: task_info(
+            stats.audiobookshelf_run_at.as_ref(),
+            stats.audiobookshelf_result.as_ref(),
+        ),
     })
 }
 
@@ -269,7 +260,7 @@ fn HomePageContent(data: HomeData) -> Element {
                 }
                 for grab in data.snatchlist_grabbers.clone() {
                     InfoTaskBox {
-                        title: format!("Autograbber: {}", grab.display_name),
+                        title: format!("Snatchlist: {}", grab.display_name),
                         last_run: grab.last_run.clone(),
                         result: grab.result.clone(),
                         on_run: Some(EventHandler::new(move |_| {
