@@ -1,5 +1,6 @@
 pub mod app;
 pub mod components;
+pub mod config;
 pub mod dto;
 pub mod duplicate;
 pub mod error;
