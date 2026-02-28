@@ -12,9 +12,12 @@ pub fn FilterLink<F: Copy + PartialEq + Serialize + 'static>(
     children: Element,
     #[props(default = false)] reset_from: bool,
     #[props(default = None)] title: Option<String>,
+    /// Pre-parsed query pairs from the parent. When provided, avoids a redundant
+    /// `parse_location_query_pairs()` call on every render (e.g. inside row loops).
+    #[props(default = None)] current_params: Option<Vec<(String, String)>>,
 ) -> Element {
     let href = if let Some(name) = encode_query_enum(field) {
-        let mut params = parse_location_query_pairs();
+        let mut params = current_params.unwrap_or_else(parse_location_query_pairs);
         params.retain(|(key, _)| key != &name && !(reset_from && key == "from"));
         params.push((name, value.clone()));
         let query_string = build_query_string(&params);

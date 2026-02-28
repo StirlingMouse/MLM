@@ -7,11 +7,6 @@ use crate::lists::ListsPage;
 use crate::replaced::ReplacedPage;
 use crate::search::SearchPage;
 use crate::selected::SelectedPage;
-#[cfg(feature = "web")]
-use crate::sse::{
-    trigger_errors_update, trigger_events_update, trigger_selected_update, trigger_stats_update,
-    update_qbit_progress,
-};
 use crate::torrent_detail::TorrentDetailPage;
 use crate::torrent_edit::TorrentEditPage;
 use crate::torrents::TorrentsPage;
@@ -75,7 +70,7 @@ pub fn root() -> Element {
 
 #[component]
 pub fn App() -> Element {
-    use_hook(setup_sse);
+    use_hook(crate::sse::setup_sse);
 
     rsx! {
         document::Title { "MLM - Dioxus" }
@@ -99,6 +94,11 @@ pub fn App() -> Element {
     }
 }
 
+// Dioxus's router requires a distinct path segment to differentiate routes, but these
+// pages read their filter state directly from the URL query string. These catch-all
+// variants absorb any trailing path segments so that query-string-only navigations
+// (e.g. `?kind=audiobook`) still land on the right page component.
+
 #[component]
 fn EventsWithQuery(segments: Vec<String>) -> Element {
     rsx! { EventsPage {} }
@@ -107,61 +107,4 @@ fn EventsWithQuery(segments: Vec<String>) -> Element {
 #[component]
 fn TorrentsWithQuery(segments: Vec<String>) -> Element {
     rsx! { TorrentsPage {} }
-}
-
-fn setup_sse() {
-    #[cfg(feature = "web")]
-    {
-        use wasm_bindgen::JsCast;
-        use wasm_bindgen::prelude::*;
-        use web_sys::EventSource;
-
-        fn connect_sse(url: &'static str, on_message: impl Fn() + 'static) {
-            spawn(async move {
-                match EventSource::new(url) {
-                    Ok(es) => {
-                        let callback =
-                            Closure::<dyn FnMut(_)>::new(move |_: web_sys::MessageEvent| {
-                                on_message();
-                            });
-                        es.set_onmessage(Some(callback.as_ref().unchecked_ref()));
-                        // Intentionally leak to keep SSE connection alive for app lifetime.
-                        // Browser cleans up on page unload.
-                        std::mem::forget(callback);
-                        std::mem::forget(es);
-                    }
-                    Err(e) => tracing::error!("Failed to create EventSource for {}: {:?}", url, e),
-                }
-            });
-        }
-
-        fn connect_sse_data(url: &'static str, on_message: impl Fn(String) + 'static) {
-            spawn(async move {
-                match EventSource::new(url) {
-                    Ok(es) => {
-                        let callback =
-                            Closure::<dyn FnMut(_)>::new(move |ev: web_sys::MessageEvent| {
-                                if let Some(data) = ev.data().as_string() {
-                                    on_message(data);
-                                }
-                            });
-                        es.set_onmessage(Some(callback.as_ref().unchecked_ref()));
-                        std::mem::forget(callback);
-                        std::mem::forget(es);
-                    }
-                    Err(e) => tracing::error!("Failed to create EventSource for {}: {:?}", url, e),
-                }
-            });
-        }
-
-        connect_sse("/dioxus-stats-updates", trigger_stats_update);
-        connect_sse("/dioxus-events-updates", trigger_events_update);
-        connect_sse("/dioxus-selected-updates", trigger_selected_update);
-        connect_sse("/dioxus-errors-updates", trigger_errors_update);
-        connect_sse_data("/dioxus-qbit-progress", |data| {
-            if let Ok(progress) = serde_json::from_str::<Vec<(u64, u32)>>(&data) {
-                update_qbit_progress(progress);
-            }
-        });
-    }
 }

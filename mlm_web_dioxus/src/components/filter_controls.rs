@@ -14,19 +14,12 @@ pub fn ColumnSelector(options: Vec<ColumnToggleOption>) -> Element {
             "Columns:"
             div {
                 for option in options {
-                    {
-                        let label = option.label;
-                        let checked = option.checked;
-                        let on_toggle = option.on_toggle;
-                        rsx! {
-                            label {
-                                "{label}"
-                                input {
-                                    r#type: "checkbox",
-                                    checked: checked,
-                                    onchange: move |ev| on_toggle.call(ev.value() == "true"),
-                                }
-                            }
+                    label {
+                        "{option.label}"
+                        input {
+                            r#type: "checkbox",
+                            checked: option.checked,
+                            onchange: move |ev| option.on_toggle.call(ev.value() == "true"),
                         }
                     }
                 }
@@ -81,19 +74,13 @@ pub fn ActiveFilters(
     rsx! {
         div { class: "option_group query",
             for chip in chips {
-                {
-                    let label = chip.label.clone();
-                    let on_remove = chip.on_remove;
-                    rsx! {
-                        span { class: "item",
-                            "{label}"
-                            button {
-                                r#type: "button",
-                                "aria-label": "Remove {label} filter",
-                                onclick: move |_| on_remove.call(()),
-                                " ×"
-                            }
-                        }
+                span { class: "item",
+                    "{chip.label}"
+                    button {
+                        r#type: "button",
+                        "aria-label": "Remove {chip.label} filter",
+                        onclick: move |_| chip.on_remove.call(()),
+                        " ×"
                     }
                 }
             }

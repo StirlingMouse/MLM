@@ -1,61 +1,53 @@
 #[cfg(feature = "server")]
 use time::UtcOffset;
+#[cfg(feature = "server")]
+use time::macros::format_description;
 
 #[cfg(feature = "server")]
-const DATETIME_FORMAT: &str = "[year]-[month]-[day] [hour]:[minute]:[second]";
+const DATETIME_FORMAT: &[time::format_description::BorrowedFormatItem<'static>] =
+    format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
 
 #[cfg(feature = "server")]
 pub fn format_timestamp(ts: &mlm_core::Timestamp) -> String {
-    let format = time::format_description::parse(DATETIME_FORMAT).expect("format is valid");
     ts.0.to_offset(UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC))
         .replace_nanosecond(0)
         .unwrap_or_else(|_| ts.0.into())
-        .format(&format)
+        .format(DATETIME_FORMAT)
         .unwrap_or_default()
 }
 
 #[cfg(feature = "server")]
 pub fn format_timestamp_db(ts: &mlm_db::Timestamp) -> String {
-    let format = time::format_description::parse(DATETIME_FORMAT).expect("format is valid");
     let dt: time::OffsetDateTime = ts.0.into();
     dt.replace_nanosecond(0)
         .unwrap_or(dt)
-        .format(&format)
+        .format(DATETIME_FORMAT)
         .unwrap_or_default()
 }
 
 #[cfg(feature = "server")]
 pub fn format_datetime(dt: &time::OffsetDateTime) -> String {
-    let format = time::format_description::parse(DATETIME_FORMAT).expect("format is valid");
     dt.to_offset(UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC))
         .replace_nanosecond(0)
         .unwrap_or(*dt)
-        .format(&format)
+        .format(DATETIME_FORMAT)
         .unwrap_or_default()
 }
 
 #[cfg(feature = "server")]
 pub fn flags_to_strings(flags: &mlm_db::Flags) -> Vec<String> {
-    let mut values = Vec::new();
-    if flags.crude_language == Some(true) {
-        values.push("language".to_string());
-    }
-    if flags.violence == Some(true) {
-        values.push("violence".to_string());
-    }
-    if flags.some_explicit == Some(true) {
-        values.push("some_explicit".to_string());
-    }
-    if flags.explicit == Some(true) {
-        values.push("explicit".to_string());
-    }
-    if flags.abridged == Some(true) {
-        values.push("abridged".to_string());
-    }
-    if flags.lgbt == Some(true) {
-        values.push("lgbt".to_string());
-    }
-    values
+    [
+        (flags.crude_language, "language"),
+        (flags.violence, "violence"),
+        (flags.some_explicit, "some_explicit"),
+        (flags.explicit, "explicit"),
+        (flags.abridged, "abridged"),
+        (flags.lgbt, "lgbt"),
+    ]
+    .into_iter()
+    .filter(|(val, _)| *val == Some(true))
+    .map(|(_, name)| name.to_string())
+    .collect()
 }
 
 pub fn format_size(bytes: u64) -> String {
