@@ -18,8 +18,8 @@ use tokio_stream::wrappers::{IntervalStream, WatchStream};
 async fn dioxus_stats_updates(
     Extension(context): Extension<Context>,
 ) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
-    let stream = WatchStream::new(context.stats.updates())
-        .map(|_time| Ok(Event::default().data("update")));
+    let stream =
+        WatchStream::new(context.stats.updates()).map(|_time| Ok(Event::default().data("update")));
     Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(10)))
 }
 

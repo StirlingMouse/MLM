@@ -18,7 +18,7 @@ pub use download_buttons::{DownloadButtonMode, DownloadButtons, SimpleDownloadBu
 pub use filter_controls::{
     ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, PageSizeSelector,
 };
-pub use filter_link::FilterLink;
+pub use filter_link::{FilterLink, TorrentTitleLink, filter_href};
 pub use icons::{CategoryPills, TorrentIcons, flag_icon, media_icon_src};
 pub use pagination::Pagination;
 pub use query_params::{

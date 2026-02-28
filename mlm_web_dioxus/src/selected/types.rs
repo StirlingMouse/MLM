@@ -140,7 +140,6 @@ impl SelectedPageColumns {
         if self.removed_at {
             cols.push("157px");
         }
-        cols.push("44px");
         cols.join(" ")
     }
 
