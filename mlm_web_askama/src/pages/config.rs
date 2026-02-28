@@ -1,3 +1,7 @@
+// TODO: Remove this temporary allow once the Askama config page is fully retired
+// after the Dioxus port has stabilized.
+#![allow(dead_code)]
+
 use std::{ops::Deref, sync::Arc};
 
 use anyhow::Result;

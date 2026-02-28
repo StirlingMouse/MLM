@@ -1,3 +1,4 @@
+use crate::config::ConfigPage;
 use crate::duplicate::DuplicatePage;
 use crate::errors::ErrorsPage;
 use crate::events::EventsPage;
@@ -60,6 +61,9 @@ pub enum Route {
 
     #[route("/dioxus/lists/:id")]
     ListPage { id: String },
+
+    #[route("/dioxus/config")]
+    ConfigPage {},
 }
 
 pub fn root() -> Element {
@@ -88,7 +92,7 @@ pub fn App() -> Element {
             Link { to: Route::SelectedPage {}, "Selected Torrents" }
             Link { to: Route::ReplacedPage {}, "Replaced Torrents" }
             Link { to: Route::DuplicatePage {}, "Duplicate Torrents" }
-            a { href: "/config", "Config" }
+            Link { to: Route::ConfigPage {}, "Config" }
         }
         main { Outlet::<Route> {} }
     }
