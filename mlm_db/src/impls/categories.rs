@@ -127,6 +127,284 @@ impl std::fmt::Display for MainCat {
 }
 
 impl Category {
+    pub fn from_old_category(category: OldCategory) -> Vec<Category> {
+        match category {
+            OldCategory::Audio(cat) => {
+                let mut mapped = vec![Category::Audiobook];
+                mapped.extend(match cat {
+                    crate::AudiobookCategory::ActionAdventure => vec![Category::ActionAdventure],
+                    crate::AudiobookCategory::Art => vec![Category::ArtPhotography],
+                    crate::AudiobookCategory::Biographical => vec![Category::Biography],
+                    crate::AudiobookCategory::Business => vec![Category::Business],
+                    crate::AudiobookCategory::ComputerInternet => vec![Category::ComputerScience],
+                    crate::AudiobookCategory::Crafts => vec![Category::CraftsDiy],
+                    crate::AudiobookCategory::CrimeThriller => {
+                        vec![Category::Crime, Category::Thriller]
+                    }
+                    crate::AudiobookCategory::Fantasy => vec![Category::Fantasy],
+                    crate::AudiobookCategory::Food => vec![Category::CookingFood],
+                    crate::AudiobookCategory::GeneralFiction => {
+                        vec![Category::ContemporaryRealist, Category::CharacterDriven]
+                    }
+                    crate::AudiobookCategory::GeneralNonFic => vec![Category::Reference],
+                    crate::AudiobookCategory::HistoricalFiction => vec![Category::Historical],
+                    crate::AudiobookCategory::History => vec![Category::History],
+                    crate::AudiobookCategory::HomeGarden => vec![Category::HomeGarden],
+                    crate::AudiobookCategory::Horror => vec![Category::Horror],
+                    crate::AudiobookCategory::Humor => vec![Category::Funny, Category::Humor],
+                    crate::AudiobookCategory::Instructional => vec![Category::GuideManual],
+                    crate::AudiobookCategory::Juvenile => vec![Category::Children],
+                    crate::AudiobookCategory::Language => vec![Category::LanguageLinguistics],
+                    crate::AudiobookCategory::LiteraryClassics => vec![Category::CharacterDriven],
+                    crate::AudiobookCategory::MathScienceTech => {
+                        vec![Category::Science, Category::Technology]
+                    }
+                    crate::AudiobookCategory::Medical => vec![Category::Medicine],
+                    crate::AudiobookCategory::Mystery => vec![Category::Mystery],
+                    crate::AudiobookCategory::Nature => vec![Category::NatureEnvironment],
+                    crate::AudiobookCategory::Philosophy => vec![Category::Philosophy],
+                    crate::AudiobookCategory::PolSocRelig => {
+                        vec![Category::PoliticsSociety, Category::ReligionSpirituality]
+                    }
+                    crate::AudiobookCategory::Recreation => vec![Category::SportsOutdoors],
+                    crate::AudiobookCategory::Romance => vec![Category::Romance],
+                    crate::AudiobookCategory::ScienceFiction => vec![Category::ScienceFiction],
+                    crate::AudiobookCategory::SelfHelp => vec![Category::SelfHelp],
+                    crate::AudiobookCategory::TravelAdventure => vec![Category::Travel],
+                    crate::AudiobookCategory::TrueCrime => vec![Category::Crime],
+                    crate::AudiobookCategory::UrbanFantasy => {
+                        vec![Category::Fantasy, Category::UrbanFantasy]
+                    }
+                    crate::AudiobookCategory::Western => vec![Category::Western],
+                    crate::AudiobookCategory::YoungAdult => vec![Category::YoungAdult],
+                });
+                mapped
+            }
+            OldCategory::Ebook(cat) => {
+                let mut mapped = vec![Category::Ebook];
+                mapped.extend(match cat {
+                    crate::EbookCategory::ActionAdventure => vec![Category::ActionAdventure],
+                    crate::EbookCategory::Art => vec![Category::ArtPhotography],
+                    crate::EbookCategory::Biographical => vec![Category::Biography],
+                    crate::EbookCategory::Business => vec![Category::Business],
+                    crate::EbookCategory::ComicsGraphicnovels => {
+                        vec![Category::GraphicNovelsComics]
+                    }
+                    crate::EbookCategory::ComputerInternet => vec![Category::ComputerScience],
+                    crate::EbookCategory::Crafts => vec![Category::CraftsDiy],
+                    crate::EbookCategory::CrimeThriller => {
+                        vec![Category::Crime, Category::Thriller]
+                    }
+                    crate::EbookCategory::Fantasy => vec![Category::Fantasy],
+                    crate::EbookCategory::Food => vec![Category::CookingFood],
+                    crate::EbookCategory::GeneralFiction => {
+                        vec![Category::ContemporaryRealist, Category::CharacterDriven]
+                    }
+                    crate::EbookCategory::GeneralNonFiction => vec![Category::Reference],
+                    crate::EbookCategory::HistoricalFiction => vec![Category::Historical],
+                    crate::EbookCategory::History => vec![Category::History],
+                    crate::EbookCategory::HomeGarden => vec![Category::HomeGarden],
+                    crate::EbookCategory::Horror => vec![Category::Horror],
+                    crate::EbookCategory::Humor => vec![Category::Funny, Category::Humor],
+                    crate::EbookCategory::IllusionMagic => vec![Category::MythologyFolklore],
+                    crate::EbookCategory::Instructional => vec![Category::GuideManual],
+                    crate::EbookCategory::Juvenile => vec![Category::Children],
+                    crate::EbookCategory::Language => vec![Category::LanguageLinguistics],
+                    crate::EbookCategory::LiteraryClassics => vec![Category::CharacterDriven],
+                    crate::EbookCategory::MagazinesNewspapers => vec![Category::Reference],
+                    crate::EbookCategory::MathScienceTech => {
+                        vec![Category::Science, Category::Technology]
+                    }
+                    crate::EbookCategory::Medical => vec![Category::Medicine],
+                    crate::EbookCategory::MixedCollections => vec![Category::Anthology],
+                    crate::EbookCategory::Mystery => vec![Category::Mystery],
+                    crate::EbookCategory::Nature => vec![Category::NatureEnvironment],
+                    crate::EbookCategory::Philosophy => vec![Category::Philosophy],
+                    crate::EbookCategory::PolSocRelig => {
+                        vec![Category::PoliticsSociety, Category::ReligionSpirituality]
+                    }
+                    crate::EbookCategory::Recreation => vec![Category::SportsOutdoors],
+                    crate::EbookCategory::Romance => vec![Category::Romance],
+                    crate::EbookCategory::ScienceFiction => vec![Category::ScienceFiction],
+                    crate::EbookCategory::SelfHelp => vec![Category::SelfHelp],
+                    crate::EbookCategory::TravelAdventure => vec![Category::Travel],
+                    crate::EbookCategory::TrueCrime => vec![Category::Crime],
+                    crate::EbookCategory::UrbanFantasy => {
+                        vec![Category::Fantasy, Category::UrbanFantasy]
+                    }
+                    crate::EbookCategory::Western => vec![Category::Western],
+                    crate::EbookCategory::YoungAdult => vec![Category::YoungAdult],
+                });
+                mapped
+            }
+            OldCategory::Musicology(cat) => match cat {
+                crate::MusicologyCategory::GuitarBassTabs
+                | crate::MusicologyCategory::IndividualSheet
+                | crate::MusicologyCategory::IndividualSheetMP3
+                | crate::MusicologyCategory::SheetCollection
+                | crate::MusicologyCategory::SheetCollectionMP3 => vec![Category::SheetMusicScores],
+                crate::MusicologyCategory::MusicCompleteEditions
+                | crate::MusicologyCategory::MusicBook
+                | crate::MusicologyCategory::MusicBookMP3 => vec![Category::Music],
+                crate::MusicologyCategory::InstructionalBookWithVideo
+                | crate::MusicologyCategory::InstructionalMediaMusic
+                | crate::MusicologyCategory::LickLibraryLTPJamWith
+                | crate::MusicologyCategory::LickLibraryTechniquesQL => vec![Category::GuideManual],
+            },
+            OldCategory::Radio(cat) => match cat {
+                crate::RadioCategory::Comedy => vec![Category::Funny],
+                crate::RadioCategory::Drama => vec![Category::CharacterDriven],
+                _ => vec![],
+            },
+        }
+    }
+
+    pub fn from_legacy_v15_id(id: u8) -> Option<Vec<Category>> {
+        let category = match id {
+            1 => crate::v15::Category::Action,
+            2 => crate::v15::Category::Art,
+            3 => crate::v15::Category::Biographical,
+            4 => crate::v15::Category::Business,
+            5 => crate::v15::Category::Comedy,
+            6 => crate::v15::Category::CompleteEditionsMusic,
+            7 => crate::v15::Category::Computer,
+            8 => crate::v15::Category::Crafts,
+            9 => crate::v15::Category::Crime,
+            10 => crate::v15::Category::Dramatization,
+            11 => crate::v15::Category::Education,
+            12 => crate::v15::Category::FactualNews,
+            13 => crate::v15::Category::Fantasy,
+            14 => crate::v15::Category::Food,
+            15 => crate::v15::Category::Guitar,
+            16 => crate::v15::Category::Health,
+            17 => crate::v15::Category::Historical,
+            18 => crate::v15::Category::Home,
+            19 => crate::v15::Category::Horror,
+            20 => crate::v15::Category::Humor,
+            21 => crate::v15::Category::IndividualSheet,
+            22 => crate::v15::Category::Instructional,
+            23 => crate::v15::Category::Juvenile,
+            24 => crate::v15::Category::Language,
+            25 => crate::v15::Category::Lgbt,
+            26 => crate::v15::Category::LickLibraryLTP,
+            27 => crate::v15::Category::LickLibraryTechniques,
+            28 => crate::v15::Category::LiteraryClassics,
+            29 => crate::v15::Category::LitRPG,
+            30 => crate::v15::Category::Math,
+            31 => crate::v15::Category::Medicine,
+            32 => crate::v15::Category::Music,
+            33 => crate::v15::Category::MusicBook,
+            34 => crate::v15::Category::Mystery,
+            35 => crate::v15::Category::Nature,
+            36 => crate::v15::Category::Paranormal,
+            37 => crate::v15::Category::Philosophy,
+            38 => crate::v15::Category::Poetry,
+            39 => crate::v15::Category::Politics,
+            40 => crate::v15::Category::Reference,
+            41 => crate::v15::Category::Religion,
+            42 => crate::v15::Category::Romance,
+            43 => crate::v15::Category::Rpg,
+            44 => crate::v15::Category::Science,
+            45 => crate::v15::Category::ScienceFiction,
+            46 => crate::v15::Category::SelfHelp,
+            47 => crate::v15::Category::SheetCollection,
+            48 => crate::v15::Category::SheetCollectionMP3,
+            49 => crate::v15::Category::Sports,
+            50 => crate::v15::Category::Technology,
+            51 => crate::v15::Category::Thriller,
+            52 => crate::v15::Category::Travel,
+            53 => crate::v15::Category::UrbanFantasy,
+            54 => crate::v15::Category::Western,
+            55 => crate::v15::Category::YoungAdult,
+            56 => crate::v15::Category::Superheroes,
+            57 => crate::v15::Category::LiteraryFiction,
+            58 => crate::v15::Category::ProgressionFantasy,
+            59 => crate::v15::Category::ContemporaryFiction,
+            60 => crate::v15::Category::DramaPlays,
+            61 => crate::v15::Category::Unknown(61),
+            62 => crate::v15::Category::Unknown(62),
+            _ => return None,
+        };
+        Some(Self::from_legacy_v15_category(category))
+    }
+
+    pub fn from_legacy_v15_category(category: crate::v15::Category) -> Vec<Category> {
+        match category {
+            crate::v15::Category::Action => vec![Category::ActionAdventure],
+            crate::v15::Category::Art => vec![Category::ArtPhotography],
+            crate::v15::Category::Biographical => vec![Category::Biography],
+            crate::v15::Category::Business => vec![Category::Business],
+            crate::v15::Category::Comedy | crate::v15::Category::Humor => {
+                vec![Category::Funny, Category::Humor]
+            }
+            crate::v15::Category::CompleteEditionsMusic
+            | crate::v15::Category::Music
+            | crate::v15::Category::MusicBook => vec![Category::Music],
+            crate::v15::Category::Computer => vec![Category::ComputerScience],
+            crate::v15::Category::Crafts => vec![Category::CraftsDiy],
+            crate::v15::Category::Crime => vec![Category::Crime],
+            crate::v15::Category::Dramatization => {
+                vec![Category::DramatizedAdaptation, Category::FullCast]
+            }
+            crate::v15::Category::Education => vec![Category::Textbook],
+            crate::v15::Category::FactualNews => vec![Category::PoliticsSociety],
+            crate::v15::Category::Fantasy => vec![Category::Fantasy],
+            crate::v15::Category::Food => vec![Category::CookingFood],
+            crate::v15::Category::Guitar
+            | crate::v15::Category::IndividualSheet
+            | crate::v15::Category::SheetCollection
+            | crate::v15::Category::SheetCollectionMP3 => vec![Category::SheetMusicScores],
+            crate::v15::Category::Health => vec![Category::HealthWellness],
+            crate::v15::Category::Historical => vec![Category::Historical],
+            crate::v15::Category::Home => vec![Category::HomeGarden],
+            crate::v15::Category::Horror => vec![Category::Horror],
+            crate::v15::Category::Lgbt => vec![Category::Lgbtqia],
+            crate::v15::Category::Instructional
+            | crate::v15::Category::LickLibraryLTP
+            | crate::v15::Category::LickLibraryTechniques => vec![Category::GuideManual],
+            crate::v15::Category::Juvenile => vec![Category::Children],
+            crate::v15::Category::Language => vec![Category::LanguageLinguistics],
+            crate::v15::Category::LiteraryClassics | crate::v15::Category::LiteraryFiction => {
+                vec![Category::CharacterDriven]
+            }
+            crate::v15::Category::LitRPG | crate::v15::Category::ProgressionFantasy => {
+                vec![Category::Fantasy, Category::ProgressionFantasy]
+            }
+            crate::v15::Category::Math => vec![Category::Mathematics],
+            crate::v15::Category::Medicine => vec![Category::Medicine],
+            crate::v15::Category::Mystery => vec![Category::Mystery],
+            crate::v15::Category::Nature => vec![Category::NatureEnvironment],
+            crate::v15::Category::Philosophy => vec![Category::Philosophy],
+            crate::v15::Category::Poetry => vec![Category::Poetry],
+            crate::v15::Category::Politics => vec![Category::PoliticsSociety],
+            crate::v15::Category::Reference => vec![Category::Reference],
+            crate::v15::Category::Religion => vec![Category::ReligionSpirituality],
+            crate::v15::Category::Romance => vec![Category::Romance],
+            crate::v15::Category::Rpg => vec![Category::Fantasy],
+            crate::v15::Category::Science => vec![Category::Science],
+            crate::v15::Category::ScienceFiction => vec![Category::ScienceFiction],
+            crate::v15::Category::SelfHelp => vec![Category::SelfHelp],
+            crate::v15::Category::Sports => vec![Category::SportsOutdoors],
+            crate::v15::Category::Technology => vec![Category::Technology],
+            crate::v15::Category::Thriller => vec![Category::Thriller],
+            crate::v15::Category::Travel => vec![Category::Travel],
+            crate::v15::Category::UrbanFantasy => vec![Category::Fantasy, Category::UrbanFantasy],
+            crate::v15::Category::Western => vec![Category::Western],
+            crate::v15::Category::YoungAdult => vec![Category::YoungAdult],
+            crate::v15::Category::Superheroes => vec![Category::ActionAdventure],
+            crate::v15::Category::ContemporaryFiction => vec![Category::ContemporaryRealist],
+            crate::v15::Category::DramaPlays => {
+                vec![Category::DramaPlays, Category::CharacterDriven]
+            }
+            crate::v15::Category::Paranormal => vec![Category::ParanormalHorror],
+            crate::v15::Category::Unknown(61) => vec![Category::OccultEsotericism],
+            crate::v15::Category::Unknown(62) => {
+                vec![Category::ContemporaryRealist, Category::CharacterDriven]
+            }
+            crate::v15::Category::Unknown(_) => vec![],
+        }
+    }
+
     pub fn from_id(id: u8) -> Option<Category> {
         if let Some(legacy) = Category::legacy_label_by_id(id)
             && let Some(mapped) = Category::from_legacy_label(legacy)
