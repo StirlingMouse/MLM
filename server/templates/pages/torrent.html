@@ -65,7 +65,9 @@
 {% if let Some(mam_torrent) = mam_torrent %}
   <p>Uploader: {{ mam_torrent.owner_name }}</p>
 {% endif %}
-<p>Uploaded At: {{ self::time(torrent.meta.uploaded_at) }}</p>
+{% if let Some(uploaded_at) = torrent.meta.uploaded_at %}
+<p>Uploaded At: {{ self::time(uploaded_at) }}</p>
+{% endif %}
 {% if let Some(library_path) = torrent.library_path %}
   <div class=row style="justify-content:flex-start">
     Linked Path: {{ library_path.to_string_lossy() }}

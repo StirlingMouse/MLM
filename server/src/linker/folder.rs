@@ -16,7 +16,6 @@ use mlm_mam::meta::clean_meta;
 use mlm_parse::{normalize_title, parse_series_from_title};
 use native_db::Database;
 use serde_derive::{Deserialize, Serialize};
-use time::UtcDateTime;
 use tokio::fs::{DirEntry, create_dir_all, read_dir, read_to_string};
 use tracing::{Level, instrument, span, trace, warn};
 
@@ -231,7 +230,7 @@ async fn build_libation_torrent(
             .collect(),
         series,
         source: MetadataSource::File,
-        uploaded_at: Timestamp::from(UtcDateTime::UNIX_EPOCH),
+        uploaded_at: None,
     };
     build_torrent(library, libation_meta.asin, clean_meta(meta, "")?)
 }
@@ -295,7 +294,7 @@ async fn build_nextory_torrent(
         narrators: nextory_meta.narrators.into_iter().map(|n| n.name).collect(),
         series,
         source: MetadataSource::File,
-        uploaded_at: Timestamp::from(UtcDateTime::UNIX_EPOCH),
+        uploaded_at: None,
     };
     build_torrent(
         library,

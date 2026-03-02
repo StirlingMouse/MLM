@@ -322,17 +322,22 @@ impl MaMTorrent {
                 ))
             })?;
         let main_cat = MainCat::from_id(self.maincat);
-        let categories = self
-            .categories
-            .iter()
-            .map(|id| {
-                Category::from_id(*id)
-                    .ok_or_else(|| MetaError::UnknownCat(*id))
-                    .map(|cat| cat.to_string())
-            })
-            .collect::<Result<Vec<_>, _>>()?;
         let cat = OldCategory::from_one_id(self.category)
             .ok_or_else(|| MetaError::UnknownOldCat(self.catname.clone(), self.category))?;
+        let mut categories = Category::from_old_category(cat.clone());
+        let mut tags = vec![];
+        for id in &self.categories {
+            if let Some((mapped_categories, mapped_tags)) = Category::from_legacy_v15_id(*id) {
+                categories.extend(mapped_categories);
+                tags.extend(mapped_tags);
+            } else {
+                return Err(MetaError::UnknownCat(*id));
+            }
+        }
+        categories.sort();
+        categories.dedup();
+        tags.sort();
+        tags.dedup();
 
         let language = Language::from_id(self.language)
             .ok_or_else(|| MetaError::UnknownLanguage(self.language, self.lang_code.clone()))?;
@@ -376,6 +381,7 @@ impl MaMTorrent {
                 media_type,
                 main_cat,
                 categories,
+                tags,
                 cat: Some(cat),
                 language: Some(language),
                 flags: Some(FlagBits::new(self.browseflags)),

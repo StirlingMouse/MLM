@@ -1,6 +1,6 @@
 use crate::ids;
 
-use super::{v01, v03, v04, v05, v08, v09, v10, v11, v12, v13, v16, v17};
+use super::{v01, v03, v04, v05, v06, v08, v09, v10, v11, v12, v13, v15, v16, v17};
 use mlm_parse::{normalize_title, parse_edition};
 use native_db::{native_db, ToKey};
 use native_model::{native_model, Model};
@@ -95,7 +95,7 @@ pub struct TorrentMeta {
     pub cat: Option<v16::OldCategory>,
     pub media_type: v13::MediaType,
     pub main_cat: Option<v12::MainCat>,
-    pub categories: Vec<String>,
+    pub categories: Vec<Category>,
     pub tags: Vec<String>,
     pub language: Option<v03::Language>,
     pub flags: Option<v08::FlagBits>,
@@ -110,6 +110,196 @@ pub struct TorrentMeta {
     pub series: Vec<v09::Series>,
     pub source: MetadataSource,
     pub uploaded_at: Option<v03::Timestamp>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Category {
+    // Fiction (Genres)
+    Fantasy,
+    ScienceFiction,
+    Romance,
+    Historical,
+    ContemporaryRealist,
+    Mystery,
+    Thriller,
+    Crime,
+    Horror,
+    ActionAdventure,
+    Dystopian,
+    PostApocalyptic,
+    MagicalRealism,
+    Western,
+    Military,
+
+    // SFF Subtypes
+    EpicFantasy,
+    UrbanFantasy,
+    SwordAndSorcery,
+    HardSciFi,
+    SpaceOpera,
+    Cyberpunk,
+    TimeTravel,
+    AlternateHistory,
+    ProgressionFantasy,
+
+    // Romance Subtypes
+    RomanticComedy,
+    RomanticSuspense,
+    ParanormalRomance,
+    DarkRomance,
+    WhyChoose,
+    Erotica,
+
+    // Crime & Mystery Subtypes
+    Detective,
+    Noir,
+    LegalThriller,
+    PsychologicalThriller,
+    CozyMystery,
+
+    // Horror Subtypes
+    BodyHorror,
+    GothicHorror,
+    CosmicHorror,
+    ParanormalHorror,
+
+    // Identity & Representation
+    Lgbtqia,
+    TransRepresentation,
+    DisabilityRepresentation,
+    NeurodivergentRepresentation,
+    PocRepresentation,
+
+    // Themes & Tropes
+    ComingOfAge,
+    FoundFamily,
+    EnemiesToLovers,
+    FriendsToLovers,
+    FakeDating,
+    SecondChance,
+    SlowBurn,
+    PoliticalIntrigue,
+    Revenge,
+    Redemption,
+    Survival,
+    Retelling,
+
+    // Setting & Time
+    Ancient,
+    Medieval,
+    EarlyModern,
+    NineteenthCentury,
+    TwentiethCentury,
+    Contemporary,
+    Future,
+    AlternateTimeline,
+    AlternateUniverse,
+    SmallTown,
+    Urban,
+    Rural,
+    AcademySchool,
+    Space,
+
+    // Region
+    Africa,
+    EastAsia,
+    SouthAsia,
+    SoutheastAsia,
+    MiddleEast,
+    Europe,
+    NorthAmerica,
+    LatinAmerica,
+    Caribbean,
+    Oceania,
+
+    // Tone & Vibe
+    Cozy,
+    Dark,
+    Gritty,
+    Wholesome,
+    Funny,
+    Satire,
+    Emotional,
+    CharacterDriven,
+
+    // Audience
+    Children,
+    MiddleGrade,
+    YoungAdult,
+    NewAdult,
+    Adult,
+
+    // Format
+    Audiobook,
+    Ebook,
+    GraphicNovelsComics,
+    Manga,
+    Novella,
+    LightNovel,
+    ShortStories,
+    Anthology,
+    Poetry,
+    Essays,
+    Epistolary,
+    DramaPlays,
+
+    // Audio & Performance
+    FullCast,
+    DualNarration,
+    DuetNarration,
+    DramatizedAdaptation,
+    AuthorNarrated,
+    Abridged,
+
+    // Non-Fiction (Subjects)
+    Biography,
+    Memoir,
+    History,
+    TrueCrime,
+    Philosophy,
+    ReligionSpirituality,
+    MythologyFolklore,
+    OccultEsotericism,
+    PoliticsSociety,
+    Business,
+    PersonalFinance,
+    ParentingFamily,
+    SelfHelp,
+    Psychology,
+    HealthWellness,
+    Science,
+    Technology,
+    Travel,
+
+    // STEM & Technical
+    Mathematics,
+    ComputerScience,
+    DataAi,
+    Medicine,
+    NatureEnvironment,
+    Engineering,
+
+    // Arts & Culture
+    ArtPhotography,
+    Music,
+    SheetMusicScores,
+    FilmTelevision,
+    PopCulture,
+    Humor,
+    LiteraryCriticism,
+
+    // Lifestyle & Hobbies
+    CookingFood,
+    HomeGarden,
+    CraftsDiy,
+    SportsOutdoors,
+
+    // Education & Reference
+    Textbook,
+    Reference,
+    Workbook,
+    GuideManual,
+    LanguageLinguistics,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
@@ -218,6 +408,81 @@ pub struct ListItemTorrent {
     pub at: v03::Timestamp,
 }
 
+fn push_unique<T: PartialEq>(values: &mut Vec<T>, value: T) {
+    if !values.iter().any(|existing| existing == &value) {
+        values.push(value);
+    }
+}
+
+fn add_mapped_category(categories: &mut Vec<Category>, category: Category) {
+    push_unique(categories, category);
+}
+
+fn add_freeform_tag(categories: &[Category], tags: &mut Vec<String>, tag: &str) {
+    let tag = tag.trim();
+    if tag.is_empty() || categories.iter().any(|category| category.as_str() == tag) {
+        return;
+    }
+    if !tags.iter().any(|existing| existing == tag) {
+        tags.push(tag.to_string());
+    }
+}
+
+fn add_categories(categories: &mut Vec<Category>, mapped: &[Category]) {
+    for category in mapped {
+        add_mapped_category(categories, *category);
+    }
+}
+
+fn legacy_old_category_tag(cat: &v16::OldCategory) -> Option<&str> {
+    match cat {
+        v16::OldCategory::Audio(v06::AudiobookCategory::GeneralNonFic) => None,
+        v16::OldCategory::Audio(other) => Some(other.to_str()),
+        v16::OldCategory::Ebook(v06::EbookCategory::GeneralNonFiction) => None,
+        v16::OldCategory::Ebook(v06::EbookCategory::MagazinesNewspapers) => None,
+        v16::OldCategory::Ebook(other) => Some(other.to_str()),
+        v16::OldCategory::Musicology(_) => None,
+        v16::OldCategory::Radio(v16::RadioCategory::Comedy | v16::RadioCategory::Drama) => None,
+        v16::OldCategory::Radio(other) => Some(other.to_str()),
+    }
+}
+
+fn migrate_old_category(
+    cat: &v16::OldCategory,
+    categories: &mut Vec<Category>,
+    tags: &mut Vec<String>,
+) {
+    add_categories(categories, &Category::from_old_category(cat.clone()));
+
+    if let Some(tag) = legacy_old_category_tag(cat) {
+        add_freeform_tag(categories, tags, tag);
+    }
+}
+
+fn migrate_legacy_categories(
+    cat: Option<&v16::OldCategory>,
+    legacy_categories: &[v15::Category],
+) -> (Vec<Category>, Vec<String>) {
+    let mut categories = Vec::new();
+    let mut tags = Vec::new();
+
+    if let Some(cat) = cat {
+        migrate_old_category(cat, &mut categories, &mut tags);
+    }
+
+    for legacy_category in legacy_categories {
+        let (mapped, freeform_tags) =
+            Category::from_legacy_v15_category(*legacy_category, legacy_categories, &categories);
+
+        add_categories(&mut categories, &mapped);
+        for tag in freeform_tags {
+            add_freeform_tag(&categories, &mut tags, &tag);
+        }
+    }
+
+    (categories, tags)
+}
+
 impl From<v17::Torrent> for Torrent {
     fn from(t: v17::Torrent) -> Self {
         let mut meta: TorrentMeta = t.meta.into();
@@ -315,6 +580,7 @@ impl From<v17::TorrentMeta> for TorrentMeta {
     fn from(t: v17::TorrentMeta) -> Self {
         let mut ids = BTreeMap::default();
         ids.insert(ids::MAM.to_string(), t.mam_id.to_string());
+        let (categories, tags) = migrate_legacy_categories(t.cat.as_ref(), &t.categories);
 
         Self {
             ids,
@@ -322,8 +588,8 @@ impl From<v17::TorrentMeta> for TorrentMeta {
             cat: t.cat,
             media_type: t.media_type,
             main_cat: t.main_cat,
-            categories: t.categories.iter().map(ToString::to_string).collect(),
-            tags: vec![],
+            categories,
+            tags,
             language: t.language,
             flags: t.flags,
             filetypes: t.filetypes,
