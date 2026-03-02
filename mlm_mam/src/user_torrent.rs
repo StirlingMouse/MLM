@@ -162,16 +162,17 @@ impl UserDetailsTorrent {
                     self.category
                 ))
             })?;
-        let mut categories = self
-            .categories
-            .iter()
-            .map(|c| {
-                Category::from_id(c.id as u8)
-                    .ok_or_else(|| MetaError::UnknownCat(c.id as u8))
-                    .map(|cat| cat.to_string())
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut categories = Category::from_old_category(cat.clone());
+        for category in &self.categories {
+            let id = category.id as u8;
+            if let Some(mapped) = Category::from_legacy_v15_id(id) {
+                categories.extend(mapped);
+            } else {
+                return Err(MetaError::UnknownCat(id));
+            }
+        }
         categories.sort();
+        categories.dedup();
 
         let filetypes = self
             .file_types

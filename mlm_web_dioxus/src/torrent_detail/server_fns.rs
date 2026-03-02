@@ -91,7 +91,11 @@ fn torrent_info_from_meta(
         filetypes: meta.filetypes.iter().map(|f| f.to_string()).collect(),
         size: meta.size.to_string(),
         num_files: meta.num_files,
-        categories: meta.categories.clone(),
+        categories: meta
+            .categories
+            .iter()
+            .map(|c| c.as_str().to_string())
+            .collect(),
         old_category: meta.cat.as_ref().map(|c| c.to_string()),
         flags: flag_values,
         library_path: None,
@@ -209,7 +213,11 @@ async fn other_torrents_data(
                     .collect(),
                 tags: mam_torrent.tags,
                 description: mam_torrent.description,
-                categories: meta.categories.clone(),
+                categories: meta
+                    .categories
+                    .iter()
+                    .map(|c| c.as_str().to_string())
+                    .collect(),
                 flags: {
                     let flags = mlm_db::Flags::from_bitfield(meta.flags.map_or(0, |f| f.0));
                     crate::utils::flags_to_strings(&flags)

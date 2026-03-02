@@ -8,7 +8,6 @@ use mlm_db::{Event, EventKey, EventType, TorrentMeta as MetadataQuery};
 
 use async_trait::async_trait;
 use common::{TestDb, mock_config};
-use mlm_core::metadata::MetadataService;
 use mlm_core::{Context, Events, SsrBackend, Stats, Triggers};
 use url::Url;
 
@@ -89,47 +88,6 @@ async fn test_metadata_fetch_and_persist_romanceio() -> Result<()> {
     let cfg = mock_config(rip, lib);
 
     let _default_timeout = StdDuration::from_secs(5);
-    let providers = cfg.metadata_providers.clone();
-    // convert provider config to server metadata provider settings
-    let provider_settings: Vec<mlm_core::metadata::ProviderSetting> = providers
-        .iter()
-        .map(|p| match p {
-            mlm_core::config::ProviderConfig::Hardcover(c) => {
-                mlm_core::metadata::ProviderSetting::Hardcover {
-                    enabled: c.enabled,
-                    timeout_secs: c.timeout_secs,
-                    api_key: c.api_key.clone(),
-                }
-            }
-            mlm_core::config::ProviderConfig::RomanceIo(c) => {
-                mlm_core::metadata::ProviderSetting::RomanceIo {
-                    enabled: c.enabled,
-                    timeout_secs: c.timeout_secs,
-                }
-            }
-            mlm_core::config::ProviderConfig::OpenLibrary(c) => {
-                mlm_core::metadata::ProviderSetting::OpenLibrary {
-                    enabled: c.enabled,
-                    timeout_secs: c.timeout_secs,
-                }
-            }
-        })
-        .collect();
-    let metadata =
-        MetadataService::from_settings(&provider_settings, std::time::Duration::from_secs(5));
-    let metadata = Arc::new(metadata);
-
-    let ctx = Context {
-        backend: Some(Arc::new(mlm_core::SsrBackend {
-            db: test_db.db.clone(),
-            mam: Arc::new(Err(anyhow::anyhow!("no mam"))),
-            metadata: metadata.clone(),
-        })),
-        config: Arc::new(tokio::sync::Mutex::new(Arc::new(cfg))),
-        stats: Stats::new(),
-        events: Events::new(),
-        triggers: Triggers::default(),
-    };
 
     // Use a title known to the plan/romanceio mock. Inject the test fetcher
     // implementation into the RomanceIo provider so we don't make network
@@ -151,7 +109,10 @@ async fn test_metadata_fetch_and_persist_romanceio() -> Result<()> {
             mam: Arc::new(Err(anyhow::anyhow!("no mam"))),
             metadata: metadata.clone(),
         })),
-        ..ctx
+        config: Arc::new(tokio::sync::Mutex::new(Arc::new(cfg))),
+        stats: Stats::new(),
+        events: Events::new(),
+        triggers: Triggers::default(),
     };
 
     // Use a title known to the plan/romanceio mock

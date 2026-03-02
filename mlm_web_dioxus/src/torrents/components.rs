@@ -597,10 +597,10 @@ pub fn TorrentsPage() -> Element {
         }
     }
 
-    if let Some(value) = &value {
-        if let Some(Ok(data)) = &*value.read() {
-            cached.set(Some(data.clone()));
-        }
+    if let Some(value) = &value
+        && let Some(Ok(data)) = &*value.read()
+    {
+        cached.set(Some(data.clone()));
     }
 
     let data_to_show = if let Some(value) = &value {

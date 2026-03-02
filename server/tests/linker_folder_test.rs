@@ -1,7 +1,7 @@
 mod common;
 
 use common::{MockFs, TestDb, mock_config};
-use mlm_core::linker::folder::link_folders_to_library;
+use mlm_core::{Events, linker::folder::link_folders_to_library};
 use mlm_db::{DatabaseExt, Torrent};
 use std::{fs, sync::Arc};
 
