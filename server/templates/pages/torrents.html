@@ -134,7 +134,11 @@
     {% endif %}
   </div>
   {% if show.categories %}
-  <div>{{ items(TorrentsPageFilter::Categories, torrent.meta.categories) }}</div>
+  <div>
+    {% for cat in torrent.meta.categories %}
+      {{ item(TorrentsPageFilter::Categories, cat.as_str()) }}{% if !loop.last %}, {% endif %}
+    {% endfor %}
+  </div>
   {% endif %}
   {% if show.flags %}
   <div>{{ self::flag_icons(torrent.meta) }}</div>
@@ -223,7 +227,7 @@
   <div>{{ self::time(torrent.created_at) }}</div>
   {% endif %}
   {% if show.uploaded_at %}
-  <div>{{ self::time(torrent.meta.uploaded_at) }}</div>
+  <div>{% if let Some(uploaded_at) = torrent.meta.uploaded_at %}{{ self::time(uploaded_at) }}{% endif %}</div>
   {% endif %}
   <div>
     <a href="/torrents/{{torrent.id}}">open</a>

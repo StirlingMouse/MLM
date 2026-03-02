@@ -58,7 +58,9 @@
 </p>
 </form>
 <p>Uploader: {{ mam_torrent.owner_name }}</p>
-<p>Uploaded At: {{ self::time(meta.uploaded_at) }}</p>
+{% if let Some(uploaded_at) = meta.uploaded_at %}
+<p>Uploaded At: {{ self::time(uploaded_at) }}</p>
+{% endif %}
 
 <p>{{ mam_torrent.tags }}</p>
 <details open>

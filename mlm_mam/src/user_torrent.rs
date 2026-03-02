@@ -162,16 +162,21 @@ impl UserDetailsTorrent {
                     self.category
                 ))
             })?;
-        let mut categories = self
-            .categories
-            .iter()
-            .map(|c| {
-                Category::from_id(c.id as u8)
-                    .ok_or_else(|| MetaError::UnknownCat(c.id as u8))
-                    .map(|cat| cat.to_string())
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut categories = Category::from_old_category(cat.clone());
+        let mut tags = vec![];
+        for category in &self.categories {
+            let id = category.id as u8;
+            if let Some((mapped_categories, mapped_tags)) = Category::from_legacy_v15_id(id) {
+                categories.extend(mapped_categories);
+                tags.extend(mapped_tags);
+            } else {
+                return Err(MetaError::UnknownCat(id));
+            }
+        }
         categories.sort();
+        categories.dedup();
+        tags.sort();
+        tags.dedup();
 
         let filetypes = self
             .file_types
@@ -203,7 +208,7 @@ impl UserDetailsTorrent {
                 // TODO: Currently main_cat isn't returned
                 main_cat: None,
                 categories,
-                tags: vec![],
+                tags,
                 cat: Some(cat),
                 // TODO: Currently language isn't returned
                 language: None,

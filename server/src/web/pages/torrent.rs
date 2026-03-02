@@ -187,7 +187,11 @@ async fn torrent_page_id(
     let mam_meta = mam_torrent.as_ref().map(|t| t.as_meta()).transpose()?;
 
     if let Some(mam_meta) = &mam_meta
-        && torrent.meta.uploaded_at.0 == UtcDateTime::UNIX_EPOCH
+        && torrent
+            .meta
+            .uploaded_at
+            .as_ref()
+            .is_none_or(|t| t.0 == UtcDateTime::UNIX_EPOCH)
     {
         let (_guard, rw) = context.db.rw_async().await?;
         torrent.meta.uploaded_at = mam_meta.uploaded_at;
