@@ -2,7 +2,7 @@ use std::{fs, io::ErrorKind, mem, ops::Deref, sync::Arc};
 
 use anyhow::Result;
 use mlm_db::{
-    self, DatabaseExt as _, ErroredTorrentId, Event, EventType, Timestamp, Torrent, TorrentKey,
+    self, DatabaseExt as _, ErroredTorrentId, Event, EventType, Timestamp, Torrent, TorrentKey, ids,
 };
 use native_db::Database;
 use tracing::{debug, info, instrument, trace, warn};
@@ -10,7 +10,7 @@ use tracing::{debug, info, instrument, trace, warn};
 use crate::{
     audiobookshelf::Abs,
     config::Config,
-    linker::file_size,
+    linker::rank_torrents,
     logging::{TorrentMetaError, update_errored_torrent, write_event},
     qbittorrent::ensure_category_exists,
 };
@@ -47,48 +47,12 @@ async fn process_batch(config: &Config, db: &Database<'_>, batch: Vec<Torrent>) 
     if batch.len() == 1 {
         return Ok(());
     };
-    let mut batch = batch
-        .into_iter()
-        .map(|torrent| {
-            let preferred_types = config.preferred_types(&torrent.meta.media_type);
-            let preference = preferred_types
-                .iter()
-                .position(|t| torrent.meta.filetypes.contains(t))
-                .unwrap_or(usize::MAX);
-            (torrent, preference)
-        })
-        .collect::<Vec<_>>();
-    batch.sort_by_key(|(_, preference)| *preference);
-    if batch[0].1 == batch[1].1 {
-        trace!(
-            "need to compare torrent \"{}\" and \"{}\" by size",
-            batch[0].0.meta.title, batch[1].0.meta.title
-        );
-        let mut new_batch = batch
-            .into_iter()
-            .map(|(torrent, preference)| {
-                let mut size = 0;
-                if let Some(library_path) = &torrent.library_path {
-                    for file in &torrent.library_files {
-                        let path = library_path.join(file);
-                        size += fs::metadata(path).map_or(0, |s| file_size(&s));
-                    }
-                }
-                (torrent, preference, size)
-            })
-            .collect::<Vec<_>>();
-        new_batch.sort_by(|a, b| a.1.cmp(&b.1).then(b.2.cmp(&a.2)));
-        trace!("new_batch {:?}", new_batch);
-        batch = new_batch
-            .into_iter()
-            .map(|(torrent, preference, _)| (torrent, preference))
-            .collect();
-    }
-    let (keep, _) = batch.remove(0);
-    for (mut remove, _) in batch {
+    let mut batch = rank_torrents(config, batch);
+    let keep = batch.remove(0);
+    for mut remove in batch {
         info!(
             "Replacing library torrent \"{}\" {} with {}",
-            remove.meta.title, remove.meta.mam_id, keep.meta.mam_id
+            remove.meta.title, remove.id, keep.id
         );
         remove.replaced_with = Some((keep.id.clone(), Timestamp::now()));
         let result = clean_torrent(
@@ -148,11 +112,11 @@ pub async fn clean_torrent(
     remove_library_files(config, &remove, delete_in_abs).await?;
 
     let id = remove.id.clone();
-    let mam_id = remove.meta.mam_id;
+    let mam_id = remove.meta.mam_id();
     let library_path = remove.library_path.take();
     let mut library_files = remove.library_files.clone();
     remove.library_mismatch = None;
-    remove.abs_id = None;
+    remove.meta.ids.remove(ids::ABS);
     library_files.sort();
     {
         let (_guard, rw) = db.rw_async().await?;
@@ -165,7 +129,7 @@ pub async fn clean_torrent(
             db,
             Event::new(
                 Some(id),
-                Some(mam_id),
+                mam_id,
                 EventType::Cleaned {
                     library_path,
                     files: library_files,
@@ -185,7 +149,8 @@ pub async fn remove_library_files(
     delete_in_abs: bool,
 ) -> Result<()> {
     if delete_in_abs
-        && let (Some(abs_id), Some(abs_config)) = (&remove.abs_id, &config.audiobookshelf)
+        && let (Some(abs_id), Some(abs_config)) =
+            (&remove.meta.ids.get(ids::ABS), &config.audiobookshelf)
     {
         let abs = Abs::new(abs_config)?;
         if let Err(err) = abs.delete_book(abs_id).await {
@@ -194,7 +159,7 @@ pub async fn remove_library_files(
     }
 
     if let Some(library_path) = &remove.library_path {
-        debug!("Removing library files for torrent {}", remove.meta.mam_id);
+        debug!("Removing library files for torrent {}", remove.id);
         for file in remove.library_files.iter() {
             let path = library_path.join(file);
             fs::remove_file(path).or_else(|err| {
@@ -206,7 +171,7 @@ pub async fn remove_library_files(
                 }
             })?;
             if let Some(sub_dir) = file.parent() {
-                fs::remove_dir(sub_dir).ok();
+                fs::remove_dir(library_path.join(sub_dir)).ok();
             }
         }
         let mut remove_files = true;

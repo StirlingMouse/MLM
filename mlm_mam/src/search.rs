@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 use mlm_db::{
     Category, FlagBits, Language, MainCat, MediaType, MetadataSource, OldCategory, Series,
-    SeriesEntries, Timestamp, TorrentMeta, VipStatus,
+    SeriesEntries, Timestamp, TorrentMeta, VipStatus, ids,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -325,7 +325,11 @@ impl MaMTorrent {
         let categories = self
             .categories
             .iter()
-            .map(|id| Category::from_id(*id).ok_or_else(|| MetaError::UnknownCat(*id)))
+            .map(|id| {
+                Category::from_id(*id)
+                    .ok_or_else(|| MetaError::UnknownCat(*id))
+                    .map(|cat| cat.to_string())
+            })
             .collect::<Result<Vec<_>, _>>()?;
         let cat = OldCategory::from_one_id(self.category)
             .ok_or_else(|| MetaError::UnknownOldCat(self.catname.clone(), self.category))?;
@@ -355,15 +359,25 @@ impl MaMTorrent {
                 return Err(MetaError::InvalidAdded(self.added.clone()));
             }
         };
+        let (isbn, asin) = parse_isbn(self);
+        let mut ids = BTreeMap::new();
+        ids.insert(ids::MAM.to_string(), self.id.to_string());
+        if let Some(isbn) = isbn {
+            ids.insert(ids::ISBN.to_string(), isbn.to_string());
+        }
+        if let Some(asin) = asin {
+            ids.insert(ids::ASIN.to_string(), asin.to_string());
+        }
 
         Ok(clean_meta(
             TorrentMeta {
-                mam_id: self.id,
+                ids,
                 vip_status: Some(vip_status),
                 media_type,
                 main_cat,
                 categories,
                 cat: Some(cat),
+                tags: vec![],
                 language: Some(language),
                 flags: Some(FlagBits::new(self.browseflags)),
                 filetypes,
@@ -371,6 +385,7 @@ impl MaMTorrent {
                 size,
                 title: self.title.clone(),
                 edition: None,
+                description: self.description.clone().unwrap_or_default(),
                 authors,
                 narrators,
                 series,
@@ -397,4 +412,16 @@ impl MaMTorrent {
             self.owner_name = name.to_owned();
         }
     }
+}
+
+fn parse_isbn(mam_torrent: &MaMTorrent) -> (Option<&str>, Option<&str>) {
+    let isbn_raw: &str = mam_torrent.isbn.as_deref().unwrap_or("");
+    let isbn = if isbn_raw.is_empty() || isbn_raw.starts_with("ASIN:") {
+        None
+    } else {
+        Some(isbn_raw.trim())
+    };
+    let asin = isbn_raw.strip_prefix("ASIN:").map(|s| s.trim());
+
+    (isbn, asin)
 }

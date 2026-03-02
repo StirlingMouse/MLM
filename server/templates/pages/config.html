@@ -169,32 +169,33 @@
     <div class=row>
       <h3>[[library]]</h3>
     </div>
-    {% if let Some(name) = library.tag_filters().name %}
+    {% if let Some(name) = library.options().name %}
     <span class=key>name</span> = <span class=string>{{ name | json }}</span><br>
     {% endif %}
     {% match library %}
-    {% when Library::ByDir(library) %}
+    {% when Library::ByRipDir(library) %}
+    <span class=key>rip_dir</span> = <span class=string>{{ library.rip_dir | json }}</span><br>
+    {% when Library::ByDownloadDir(library) %}
     <span class=key>download_dir</span> = <span class=string>{{ library.download_dir | json }}</span><br>
-    <span class=key>library_dir</span> = <span class=string>{{ library.library_dir | json }}</span><br>
     {% when Library::ByCategory(library) %}
     <span class=key>category</span> = <span class=string>{{ library.category | json }}</span><br>
-    <span class=key>library_dir</span> = <span class=string>{{ library.library_dir | json }}</span><br>
     {% endmatch %}
+    <span class=key>library_dir</span> = <span class=string>{{ library.options().library_dir | json }}</span><br>
     {% if !library.tag_filters().allow_tags.is_empty() %}
     <span class=key>allow_tags</span> = {{ self::yaml_items(library.tag_filters().allow_tags) }}<br>
     {% endif %}
     {% if !library.tag_filters().deny_tags.is_empty() %}
     <span class=key>deny_tags</span> = {{ self::yaml_items(library.tag_filters().deny_tags) }}<br>
     {% endif %}
-    {% if library.tag_filters().method != Default::default() %}
-    <span class=key>method</span> = <span class=string>{{ library.tag_filters().method | json }}</span><br>
+    {% if library.options().method != Default::default() %}
+    <span class=key>method</span> = <span class=string>{{ library.options().method | json }}</span><br>
     {% endif %}
-    {% if let Some(audio_types) = library.tag_filters().audio_types %}
+    {% if let Some(audio_types) = library.options().audio_types %}
       {% if !audio_types.is_empty() %}
       <span class=key>audio_types</span> = {{ self::yaml_items(audio_types) }}<br>
       {% endif %}
     {% endif %}
-    {% if let Some(ebook_types) = library.tag_filters().ebook_types %}
+    {% if let Some(ebook_types) = library.options().ebook_types %}
       {% if !ebook_types.is_empty() %}
       <span class=key>ebook_types</span> = {{ self::yaml_items(ebook_types) }}<br>
       {% endif %}

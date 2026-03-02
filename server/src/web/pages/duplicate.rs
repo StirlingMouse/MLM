@@ -6,7 +6,7 @@ use axum::{
 };
 use axum_extra::extract::Form;
 use mlm_db::{
-    DatabaseExt as _, DuplicateTorrent, SelectedTorrent, Timestamp, Torrent, TorrentCost,
+    DatabaseExt as _, DuplicateTorrent, SelectedTorrent, Timestamp, Torrent, TorrentCost, ids,
 };
 use mlm_parse::normalize_title;
 use serde::{Deserialize, Serialize};
@@ -154,7 +154,6 @@ pub async fn duplicate_torrents_page_post(
                     let (_guard, rw) = context.db.rw_async().await?;
                     rw.insert(SelectedTorrent {
                         mam_id: mam_torrent.id,
-                        goodreads_id: None,
                         hash: None,
                         dl_link: mam_torrent
                             .dl

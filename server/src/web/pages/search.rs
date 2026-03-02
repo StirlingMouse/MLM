@@ -47,7 +47,7 @@ pub async fn search_page(
             let meta = mam_torrent.as_meta()?;
             let torrent = r
                 .get()
-                .secondary::<Torrent>(TorrentKey::mam_id, meta.mam_id)?;
+                .secondary::<Torrent>(TorrentKey::mam_id, meta.mam_id())?;
             let selected_torrent = r.get().primary(mam_torrent.id)?;
 
             Ok((mam_torrent, meta, torrent, selected_torrent))
@@ -149,7 +149,6 @@ pub async fn select_torrent(context: &Context, mam_id: u64, wedge: bool) -> Resu
         let (_guard, rw) = context.db.rw_async().await?;
         rw.insert(SelectedTorrent {
             mam_id: torrent.id,
-            goodreads_id: None,
             hash: None,
             dl_link: torrent
                 .dl

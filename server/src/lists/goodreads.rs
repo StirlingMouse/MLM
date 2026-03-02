@@ -121,7 +121,7 @@ pub async fn run_goodreads_import(
                 db_item
             }
             None => {
-                let db_item = item.as_list_item(&list_id, &list);
+                let db_item = item.as_list_item(&list_id, list);
                 if !list.dry_run {
                     let (_guard, rw) = db.rw_async().await?;
                     rw.insert(db_item.clone())?;
@@ -131,7 +131,7 @@ pub async fn run_goodreads_import(
             }
         };
         trace!("Searching for book {} from Goodreads list", item.title);
-        search_item(&config, &db, &mam, &list, &item, db_item, max_torrents)
+        search_item(&config, &db, &mam, list, &item, db_item, max_torrents)
             .await
             .context("search goodreads book")?;
         sleep(Duration::from_millis(400)).await;
@@ -212,10 +212,11 @@ async fn search_item(
         && db_item
             .audio_torrent
             .as_ref()
-            .is_none_or(|t| !(t.status == TorrentStatus::Selected && t.mam_id == found.0.id))
+            .is_none_or(|t| !(t.status == TorrentStatus::Selected && t.mam_id == Some(found.0.id)))
     {
         db_item.audio_torrent = Some(ListItemTorrent {
-            mam_id: found.0.id,
+            torrent_id: None,
+            mam_id: Some(found.0.id),
             status: TorrentStatus::Selected,
             at: Timestamp::now(),
         });
@@ -225,10 +226,11 @@ async fn search_item(
         && db_item
             .ebook_torrent
             .as_ref()
-            .is_none_or(|t| !(t.status == TorrentStatus::Selected && t.mam_id == found.0.id))
+            .is_none_or(|t| !(t.status == TorrentStatus::Selected && t.mam_id == Some(found.0.id)))
     {
         db_item.ebook_torrent = Some(ListItemTorrent {
-            mam_id: found.0.id,
+            torrent_id: None,
+            mam_id: Some(found.0.id),
             status: TorrentStatus::Selected,
             at: Timestamp::now(),
         });
@@ -398,7 +400,8 @@ fn not_wanted(
     {
         debug!("Skipped {:?} torrent as is not wanted", found.1.main_cat);
         field.replace(ListItemTorrent {
-            mam_id: found.0.id,
+            torrent_id: None,
+            mam_id: Some(found.0.id),
             status: TorrentStatus::NotWanted,
             at: Timestamp::now(),
         });
@@ -418,10 +421,11 @@ fn check_cost(
         warn!("Skipped {:?} torrent as it is not free", found.1.main_cat);
         if field
             .as_ref()
-            .is_none_or(|t| !(t.status == TorrentStatus::Wanted && t.mam_id == found.0.id))
+            .is_none_or(|t| !(t.status == TorrentStatus::Wanted && t.mam_id == Some(found.0.id)))
         {
             field.replace(ListItemTorrent {
-                mam_id: found.0.id,
+                torrent_id: None,
+                mam_id: Some(found.0.id),
                 status: TorrentStatus::Wanted,
                 at: Timestamp::now(),
             });

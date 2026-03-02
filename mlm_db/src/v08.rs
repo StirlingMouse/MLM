@@ -1,4 +1,4 @@
-use super::{v01, v03, v04, v05, v06, v07, v09, v10, v11};
+use super::{v01, v03, v04, v05, v06, v07, v09, v10, v11, v18};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -453,6 +453,15 @@ impl From<v11::TorrentMetaField> for TorrentMetaField {
             v11::TorrentMetaField::Narrators => TorrentMetaField::Narrators,
             v11::TorrentMetaField::Series => TorrentMetaField::Series,
             v11::TorrentMetaField::Source => unimplemented!(),
+        }
+    }
+}
+
+impl From<v18::ClientStatus> for ClientStatus {
+    fn from(value: v18::ClientStatus) -> Self {
+        match value {
+            v18::ClientStatus::NotInClient => Self::NotInClient,
+            v18::ClientStatus::RemovedFromTracker => Self::RemovedFromMam,
         }
     }
 }

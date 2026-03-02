@@ -1,7 +1,7 @@
-{% if filter.categories.audio.is_some() || filter.categories.ebook.is_some() %}
-  <span class=key>categories</span> = 
+{% if filter.edition.categories.audio.is_some() || filter.edition.categories.ebook.is_some() %}
+  <span class=key>categories</span> =
   {<br>
-{% if let Some(cats) = filter.categories.audio %}
+{% if let Some(cats) = filter.edition.categories.audio %}
   {% if cats.is_empty() %}
   &nbsp;&nbsp;audio = <span class=num>false</span><br>
   {% elif cats == &AudiobookCategory::all() %}
@@ -12,7 +12,7 @@
 {% else %}
   &nbsp;&nbsp;audio = <span class=num>true</span><br>
 {% endif %}
-{% if let Some(cats) = filter.categories.ebook %}
+{% if let Some(cats) = filter.edition.categories.ebook %}
   {% if cats.is_empty() %}
   &nbsp;&nbsp;ebook = <span class=num>false</span><br>
   {% elif cats == &EbookCategory::all() %}
@@ -26,58 +26,58 @@
   }<br>
   {% else %}
 {% endif %}
-{% if !filter.languages.is_empty() %}
-<span class=key>languages</span> = {{ self::yaml_items(filter.languages) }}<br>
+{% if !filter.edition.languages.is_empty() %}
+<span class=key>languages</span> = {{ self::yaml_items(filter.edition.languages) }}<br>
 {% endif %}
-{% if filter.flags.as_bitfield() > 0 %}
+{% if filter.edition.flags.as_bitfield() > 0 %}
 <span class=key>flags</span> = {
-{% if filter.flags.as_search_bitfield().1.len() > 3 %}
+{% if filter.edition.flags.as_search_bitfield().1.len() > 3 %}
   <br>
-  {% if let Some(flag) = filter.flags.crude_language %}
+  {% if let Some(flag) = filter.edition.flags.crude_language %}
     &nbsp;&nbsp;crude_language = <span class=num>{{ flag }}</span><br>
   {% endif %}
-  {% if let Some(flag) = filter.flags.violence %}
+  {% if let Some(flag) = filter.edition.flags.violence %}
     &nbsp;&nbsp;violence = <span class=num>{{ flag }}</span><br>
   {% endif %}
-  {% if let Some(flag) = filter.flags.some_explicit %}
+  {% if let Some(flag) = filter.edition.flags.some_explicit %}
     &nbsp;&nbsp;some_explicit = <span class=num>{{ flag }}</span><br>
   {% endif %}
-  {% if let Some(flag) = filter.flags.explicit %}
+  {% if let Some(flag) = filter.edition.flags.explicit %}
     &nbsp;&nbsp;explicit = <span class=num>{{ flag }}</span><br>
   {% endif %}
-  {% if let Some(flag) = filter.flags.abridged %}
+  {% if let Some(flag) = filter.edition.flags.abridged %}
     &nbsp;&nbsp;abridged = <span class=num>{{ flag }}</span><br>
   {% endif %}
-  {% if let Some(flag) = filter.flags.lgbt %}
+  {% if let Some(flag) = filter.edition.flags.lgbt %}
     &nbsp;&nbsp;lgbt = <span class=num>{{ flag }}</span><br>
   {% endif %}
 {% else %}
-  {% if let Some(flag) = filter.flags.crude_language %}
+  {% if let Some(flag) = filter.edition.flags.crude_language %}
     crude_language = <span class=num>{{ flag }}</span>
   {% endif %}
-  {% if let Some(flag) = filter.flags.violence %}
+  {% if let Some(flag) = filter.edition.flags.violence %}
     violence = <span class=num>{{ flag }}</span>
   {% endif %}
-  {% if let Some(flag) = filter.flags.some_explicit %}
+  {% if let Some(flag) = filter.edition.flags.some_explicit %}
     some_explicit = <span class=num>{{ flag }}</span>
   {% endif %}
-  {% if let Some(flag) = filter.flags.explicit %}
+  {% if let Some(flag) = filter.edition.flags.explicit %}
     explicit = <span class=num>{{ flag }}</span>
   {% endif %}
-  {% if let Some(flag) = filter.flags.abridged %}
+  {% if let Some(flag) = filter.edition.flags.abridged %}
     abridged = <span class=num>{{ flag }}</span>
   {% endif %}
-  {% if let Some(flag) = filter.flags.lgbt %}
+  {% if let Some(flag) = filter.edition.flags.lgbt %}
     lgbt = <span class=num>{{ flag }}</span>
   {% endif %}
 {% endif %}
 }<br>
 {% endif %}
-{% if filter.min_size.bytes() > 0 %}
-<span class=key>min_size</span> = <span class=string>"{{ filter.min_size }}"</span><br>
+{% if filter.edition.min_size.bytes() > 0 %}
+<span class=key>min_size</span> = <span class=string>"{{ filter.edition.min_size }}"</span><br>
 {% endif %}
-{% if filter.max_size.bytes() > 0 %}
-<span class=key>max_size</span> = <span class=string>"{{ filter.max_size }}"</span><br>
+{% if filter.edition.max_size.bytes() > 0 %}
+<span class=key>max_size</span> = <span class=string>"{{ filter.edition.max_size }}"</span><br>
 {% endif %}
 {% if !filter.exclude_uploader.is_empty() %}
 <span class=key>exclude_uploader</span> = {{ self::yaml_items(filter.exclude_uploader) }}<br>

@@ -20,7 +20,7 @@
 {% endif %}
 <div class="row">
   <div>
-    id: {{ meta.mam_id }} {% if let Some(vip_status) = meta.vip_status %}{{ vip_status }}{% endif %}
+    id: {{ mam_torrent.id }} {% if let Some(vip_status) = meta.vip_status %}{{ vip_status }}{% endif %}
     <a href="https://www.myanonamouse.net/t/{{ mam_torrent.id }}" target=_blank class=btn>Open in MaM</a>
   </div>
   <form method=post>
