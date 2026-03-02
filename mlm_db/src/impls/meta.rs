@@ -104,6 +104,13 @@ impl TorrentMeta {
                 to: other.categories.join(", "),
             });
         }
+        if self.tags != other.tags {
+            diff.push(TorrentMetaDiff {
+                field: TorrentMetaField::Tags,
+                from: self.tags.join(", "),
+                to: other.tags.join(", "),
+            });
+        }
         if self.language != other.language {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Language,

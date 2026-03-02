@@ -1,0 +1,72 @@
+[package]
+name = "mlm_web_dioxus"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[[bin]]
+name = "mlm_web_dioxus"
+path = "src/main.rs"
+
+[dependencies]
+dioxus = { version = "0.7", features = ["fullstack", "router"] }
+# Explicit dep needed for `dioxus_fullstack::FullstackContext` path references;
+# transitive deps cannot be named directly without a Cargo.toml entry.
+dioxus-fullstack = "0.7"
+lucide-dioxus = { version = "2.562.0", features = [
+  "account",
+  "multimedia",
+  "text",
+] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = ["EventSource", "MessageEvent"] }
+urlencoding = "2.1"
+time = { version = "0.3.41", features = [
+  "formatting",
+  "local-offset",
+  "macros",
+  "serde",
+] }
+
+# Server-side dependencies
+axum = { version = "0.8", optional = true }
+tokio = { version = "1.45", features = ["full"], optional = true }
+tower-http = { version = "0.6", features = ["fs"], optional = true }
+tokio-stream = { version = "0.1", optional = true }
+mlm_core = { path = "../mlm_core", optional = true }
+mlm_db = { path = "../mlm_db", optional = true }
+mlm_mam = { path = "../mlm_mam", optional = true }
+mlm_parse = { path = "../mlm_parse", optional = true }
+itertools = { version = "0.14", optional = true }
+native_db = { git = "https://github.com/StirlingMouse/native_db.git", branch = "0.8.x", optional = true }
+sublime_fuzzy = { version = "0.7", optional = true }
+qbit = { git = "https://github.com/StirlingMouse/qbittorrent-webui-api.git", optional = true }
+figment = { version = "0.10", features = ["toml", "env"], optional = true }
+tracing-subscriber = { version = "0.3", optional = true }
+
+[features]
+server = [
+  "dioxus/server",
+  "dioxus/cli-config",
+  "dep:axum",
+  "dep:tokio",
+  "dep:tower-http",
+  "dep:tokio-stream",
+  "dep:mlm_core",
+  "dep:mlm_db",
+  "dep:mlm_mam",
+  "dep:mlm_parse",
+  "dep:itertools",
+  "dep:native_db",
+  "dep:sublime_fuzzy",
+  "dep:qbit",
+  "dep:figment",
+  "dep:tracing-subscriber",
+]
+web = ["dioxus/web"]
