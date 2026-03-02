@@ -100,8 +100,8 @@ impl TorrentMeta {
         if self.categories != other.categories {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Categories,
-                from: self.categories.join(", "),
-                to: other.categories.join(", "),
+                from: self.categories.iter().map(ToString::to_string).join(", "),
+                to: other.categories.iter().map(ToString::to_string).join(", "),
             });
         }
         if self.tags != other.tags {

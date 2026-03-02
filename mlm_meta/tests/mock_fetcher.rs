@@ -11,6 +11,7 @@ impl HttpClient for MockClient {
         if !u.host_str().is_some_and(|h| h.contains("romance.io")) {
             return Err(anyhow::anyhow!("unexpected host in test fetch"));
         }
+
         if u.path().starts_with("/json/search_books") {
             return Ok(r#"{
   "success": true,

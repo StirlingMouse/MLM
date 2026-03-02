@@ -180,7 +180,7 @@ pub type MusicologyCategory = v16::MusicologyCategory;
 pub type RadioCategory = v16::RadioCategory;
 pub type OldCategory = v16::OldCategory;
 pub type MediaType = v13::MediaType;
-pub type Category = v15::Category;
+pub type Category = v18::Category;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum OldMainCat {

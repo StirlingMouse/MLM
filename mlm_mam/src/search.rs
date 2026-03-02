@@ -325,11 +325,7 @@ impl MaMTorrent {
         let categories = self
             .categories
             .iter()
-            .map(|id| {
-                Category::from_id(*id)
-                    .ok_or_else(|| MetaError::UnknownCat(*id))
-                    .map(|cat| cat.to_string())
-            })
+            .map(|id| Category::from_id(*id).ok_or_else(|| MetaError::UnknownCat(*id)))
             .collect::<Result<Vec<_>, _>>()?;
         let cat = OldCategory::from_one_id(self.category)
             .ok_or_else(|| MetaError::UnknownOldCat(self.catname.clone(), self.category))?;

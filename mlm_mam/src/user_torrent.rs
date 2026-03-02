@@ -165,11 +165,7 @@ impl UserDetailsTorrent {
         let mut categories = self
             .categories
             .iter()
-            .map(|c| {
-                Category::from_id(c.id as u8)
-                    .ok_or_else(|| MetaError::UnknownCat(c.id as u8))
-                    .map(|cat| cat.to_string())
-            })
+            .map(|c| Category::from_id(c.id as u8).ok_or_else(|| MetaError::UnknownCat(c.id as u8)))
             .collect::<Result<Vec<_>, _>>()?;
         categories.sort();
 
