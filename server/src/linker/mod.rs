@@ -1,6 +1,7 @@
 pub mod common;
 pub mod duplicates;
 pub mod folder;
+pub mod libation_cats;
 pub mod torrent;
 
 pub use self::common::{copy, file_size, hard_link, library_dir, map_path, select_format, symlink};
