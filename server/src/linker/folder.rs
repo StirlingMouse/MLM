@@ -22,7 +22,8 @@ use tracing::{Level, instrument, span, trace, warn};
 use crate::audiobookshelf as abs;
 use crate::config::{Config, Library, LibraryLinkMethod};
 use crate::linker::{
-    copy, file_size, find_matches, hard_link, library_dir, rank_torrents, select_format, symlink,
+    copy, file_size, find_matches, hard_link, libation_cats, library_dir, rank_torrents,
+    select_format, symlink,
 };
 use crate::logging::{update_errored_torrent, write_event};
 
@@ -204,6 +205,7 @@ async fn build_libation_torrent(
     if libation_meta.format_type.starts_with("abridged") {
         flags.abridged = Some(true);
     }
+    let mapped_categories = libation_cats::map_category_ladders(&libation_meta.category_ladders);
     let (size, filetypes) = folder_file_stats(audio_files, ebook_files).await?;
 
     let meta = TorrentMeta {
@@ -212,8 +214,8 @@ async fn build_libation_torrent(
         cat: None,
         media_type: MediaType::Audiobook,
         main_cat: None,
-        categories: vec![],
-        tags: vec![],
+        categories: mapped_categories.categories,
+        tags: mapped_categories.freeform_tags,
         language: Language::from_str(&libation_meta.language).ok(),
         flags: Some(FlagBits::new(flags.as_bitfield())),
         filetypes,

@@ -2,7 +2,7 @@ mod common;
 
 use common::{MockFs, TestDb, mock_config};
 use mlm::linker::folder::link_folders_to_library;
-use mlm_db::{DatabaseExt, Torrent};
+use mlm_db::{Category, DatabaseExt, Torrent};
 use std::{fs, sync::Arc};
 
 #[tokio::test]
@@ -291,6 +291,75 @@ async fn test_link_folders_to_library_libation_missing_narrators() -> anyhow::Re
     let torrent = torrent.unwrap();
     assert_eq!(torrent.meta.title, "Fat Ham");
     assert_eq!(torrent.meta.narrators, Vec::<String>::new());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_link_folders_to_library_libation_maps_categories_and_tags() -> anyhow::Result<()> {
+    let test_db = TestDb::new()?;
+    let mock_fs = MockFs::new()?;
+    let config = Arc::new(mock_config(
+        mock_fs.rip_dir.clone(),
+        mock_fs.library_dir.clone(),
+    ));
+
+    let folder = mock_fs.rip_dir.join("B00CATS1");
+    fs::create_dir_all(&folder)?;
+    let libation_meta = serde_json::json!({
+        "asin": "B00CATS1",
+        "title": "Test Categories",
+        "subtitle": "",
+        "authors": [{"name": "Author 1"}],
+        "narrators": [],
+        "series": [],
+        "language": "english",
+        "format_type": "unabridged",
+        "publisher_summary": "Test summary",
+        "merchandising_summary": "Test merchandising summary",
+        "category_ladders": [
+            {
+                "root": "Genres",
+                "ladder": [
+                    {"id": "1", "name": "Literatura y ficción"},
+                    {"id": "2", "name": "Literatura de género"},
+                    {"id": "3", "name": "Coming of age"}
+                ]
+            },
+            {
+                "root": "Genres",
+                "ladder": [
+                    {"id": "4", "name": "Literatura y ficción"},
+                    {"id": "5", "name": "Clásicos"}
+                ]
+            }
+        ],
+        "is_adult_product": false,
+        "issue_date": "2024-01-01",
+        "publication_datetime": "2024-01-01T00:00:00Z",
+        "publication_name": "Test Publisher",
+        "publisher_name": "Test Publisher",
+        "release_date": "2024-01-01",
+        "runtime_length_min": 60
+    });
+    fs::write(
+        folder.join("Test Categories [B00CATS1].metadata.json"),
+        serde_json::to_string(&libation_meta)?,
+    )?;
+    fs::write(
+        folder.join("Test Categories [B00CATS1].m4b"),
+        "fake audio data",
+    )?;
+
+    link_folders_to_library(config.clone(), test_db.db.clone(), &Events::new()).await?;
+
+    let r = test_db.db.r_transaction()?;
+    let torrent: Option<Torrent> = r.get().primary("B00CATS1".to_string())?;
+    let torrent = torrent.expect("libation torrent should be linked");
+
+    assert!(torrent.meta.categories.contains(&Category::ComingOfAge));
+    assert!(torrent.meta.tags.contains(&"Genre Fiction".to_string()));
+    assert!(torrent.meta.tags.contains(&"Classics".to_string()));
 
     Ok(())
 }
