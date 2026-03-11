@@ -1,4 +1,4 @@
-use mlm_db::TorrentMeta;
+use mlm_db::{Category, TorrentMeta};
 use mlm_meta::Provider;
 use mlm_meta::http::HttpClient;
 use mlm_meta::providers::RomanceIo;
@@ -151,8 +151,12 @@ async fn parse_book_html_extracts_categories_and_tags() {
     );
 
     // categories should include contemporary and dark romance (derived from topics)
-    assert!(m.categories.iter().any(|c| c == "contemporary"));
-    assert!(m.categories.iter().any(|c| c == "dark romance"));
+    assert!(
+        m.categories
+            .iter()
+            .any(|c| c == &Category::ContemporaryRealist)
+    );
+    assert!(m.categories.iter().any(|c| c == &Category::DarkRomance));
 
     // tags should include some of the romance-specific tropes
     let tags = m.tags.join(",");
