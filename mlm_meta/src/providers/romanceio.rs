@@ -9,7 +9,7 @@ use url::Url;
 use crate::http::ReqwestClient;
 use crate::providers::{MetadataProvider, search_with_fallback};
 use crate::traits::Provider;
-use crate::{helpers, http::HttpClient};
+use crate::{helpers, http::HttpClient, map_tag_to_category};
 use mlm_db::TorrentMeta;
 
 pub struct RomanceIo {
@@ -97,9 +97,12 @@ impl RomanceIo {
             let mut categories = Vec::new();
             let mut tags = Vec::new();
             for t in topics {
-                if let Some(cat) = topic_to_category(&t) {
-                    if !categories.contains(&cat) {
-                        categories.push(cat);
+                let mapped = topic_to_category(&t);
+                if !mapped.is_empty() {
+                    for cat in mapped {
+                        if !categories.contains(&cat) {
+                            categories.push(cat);
+                        }
                     }
                 } else if !tags.contains(&t) {
                     tags.push(t);
@@ -251,15 +254,6 @@ impl Provider for RomanceIo {
     }
 }
 
-fn topic_to_category(topic: &str) -> Option<String> {
-    let t = topic.trim().to_lowercase();
-    match t.as_str() {
-        "contemporary" | "contemporary romance" => Some("contemporary".to_string()),
-        "romance" => Some("romance".to_string()),
-        "dark" | "dark romance" => Some("dark romance".to_string()),
-        "suspense" | "romantic suspense" => Some("suspense".to_string()),
-        "erotic" | "erotic romance" | "steam" | "explicit" => Some("erotic".to_string()),
-        "office" | "workplace" | "boss & employee" => Some("contemporary".to_string()),
-        _ => None,
-    }
+fn topic_to_category(topic: &str) -> Vec<mlm_db::Category> {
+    map_tag_to_category(topic)
 }

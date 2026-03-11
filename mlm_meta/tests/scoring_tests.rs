@@ -43,7 +43,6 @@ fn parse_book_html_smoke() {
 
     let provider = RomanceIo::with_client(Arc::new(DummyClient));
     let meta = provider.parse_book_html(SAMPLE_ROMANCE_HTML).unwrap();
-    assert!(!meta.title.is_empty());
 
     assert!(!meta.title.is_empty());
     assert!(!meta.authors.is_empty());
