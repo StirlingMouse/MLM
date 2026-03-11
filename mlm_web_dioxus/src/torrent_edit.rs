@@ -161,7 +161,12 @@ pub async fn get_torrent_meta_edit_data(id: String) -> Result<TorrentMetaEditFor
             .main_cat
             .map(|cat: mlm_db::MainCat| cat.as_id().to_string())
             .unwrap_or_default(),
-        categories_text: meta.categories.join("\n"),
+        categories_text: meta
+            .categories
+            .iter()
+            .map(|c| c.as_str())
+            .collect::<Vec<_>>()
+            .join("\n"),
         tags_text: meta.tags.join("\n"),
         language_id: meta
             .language
@@ -322,6 +327,14 @@ pub async fn update_torrent_meta_edit_data(form: TorrentMetaEditForm) -> Result<
         lgbt: Some(form.lgbt),
     };
 
+    let categories = split_list(&form.categories_text)
+        .into_iter()
+        .map(|raw| {
+            raw.parse::<mlm_db::Category>()
+                .map_err(|e| ServerFnError::new(format!("invalid category '{raw}': {e}")))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
     let meta =
         mlm_db::TorrentMeta {
             ids,
@@ -329,7 +342,7 @@ pub async fn update_torrent_meta_edit_data(form: TorrentMetaEditForm) -> Result<
             cat: category,
             media_type,
             main_cat,
-            categories: split_list(&form.categories_text),
+            categories,
             tags: split_list(&form.tags_text),
             language,
             flags: Some(mlm_db::FlagBits::new(flags.as_bitfield())),

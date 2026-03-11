@@ -482,7 +482,12 @@ fn convert_torrent_row(t: &DbTorrent) -> TorrentsRow {
             media_type: t.meta.media_type.as_str().to_string(),
             cat_name,
             cat_id,
-            categories: t.meta.categories.clone(),
+            categories: t
+                .meta
+                .categories
+                .iter()
+                .map(|c| c.as_str().to_string())
+                .collect(),
             flags: flag_values,
             edition: t.meta.edition.as_ref().map(|(edition, _)| edition.clone()),
             authors: t.meta.authors.clone(),

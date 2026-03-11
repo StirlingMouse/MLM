@@ -95,7 +95,11 @@ fn torrent_info_from_meta(
         filetypes: meta.filetypes.iter().map(|f| f.to_string()).collect(),
         size: meta.size.to_string(),
         num_files: meta.num_files,
-        categories: meta.categories.clone(),
+        categories: meta
+            .categories
+            .iter()
+            .map(|c| c.as_str().to_string())
+            .collect(),
         old_category: meta.cat.as_ref().map(|c| c.to_string()),
         flags: flag_values,
         library_path: None,
@@ -176,69 +180,13 @@ async fn other_torrents_data(
                 .get()
                 .primary::<mlm_db::SelectedTorrent>(mam_torrent.id)
                 .server_err()?;
-            let can_wedge = config
-                .search
-                .wedge_over
-                .is_some_and(|wedge_over| meta.size >= wedge_over && !mam_torrent.is_free());
-            let media_duration = mam_torrent
-                .media_info
-                .as_ref()
-                .map(|m| m.general.duration.clone());
-            let media_format = mam_torrent
-                .media_info
-                .as_ref()
-                .map(|m| format!("{} {}", m.general.format, m.audio.format));
-            let audio_bitrate = mam_torrent
-                .media_info
-                .as_ref()
-                .map(|m| format!("{} {}", m.audio.bitrate, m.audio.mode));
-            let old_category = meta.cat.as_ref().map(|cat| cat.to_string());
-
-            Ok(SearchTorrent {
-                mam_id: mam_torrent.id,
-                mediatype_id: mam_torrent.mediatype,
-                main_cat_id: mam_torrent.main_cat,
-                lang_code: mam_torrent.lang_code,
-                title: meta.title.clone(),
-                edition: meta.edition.as_ref().map(|(ed, _)| ed.clone()),
-                authors: meta.authors.clone(),
-                narrators: meta.narrators.clone(),
-                series: meta
-                    .series
-                    .iter()
-                    .map(|s| Series {
-                        name: s.name.clone(),
-                        entries: s.entries.to_string(),
-                    })
-                    .collect(),
-                tags: mam_torrent.tags,
-                description: mam_torrent.description,
-                categories: meta.categories.clone(),
-                flags: {
-                    let flags = mlm_db::Flags::from_bitfield(meta.flags.map_or(0, |f| f.0));
-                    crate::utils::flags_to_strings(&flags)
-                },
-                old_category,
-                media_type: meta.media_type.as_str().to_string(),
-                size: meta.size.to_string(),
-                filetypes: meta.filetypes.clone(),
-                num_files: mam_torrent.numfiles,
-                uploaded_at: mam_torrent.added,
-                owner_name: mam_torrent.owner_name,
-                seeders: mam_torrent.seeders,
-                leechers: mam_torrent.leechers,
-                snatches: mam_torrent.times_completed,
-                comments: mam_torrent.comments,
-                media_duration,
-                media_format,
-                audio_bitrate,
-                vip: mam_torrent.vip,
-                personal_freeleech: mam_torrent.personal_freeleech,
-                free: mam_torrent.free,
-                is_downloaded: torrent.is_some(),
-                is_selected: selected.is_some(),
-                can_wedge,
-            })
+            Ok(map_mam_torrent(
+                mam_torrent,
+                &meta,
+                config.search.clone(),
+                torrent.is_some(),
+                selected.is_some(),
+            ))
         })
         .collect()
 }
