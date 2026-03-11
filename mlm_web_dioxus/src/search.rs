@@ -60,7 +60,11 @@ pub fn map_search_torrent(
             .collect(),
         tags: mam_torrent.tags,
         description: mam_torrent.description,
-        categories: meta.categories.clone(),
+        categories: meta
+            .categories
+            .iter()
+            .map(|c| c.as_str().to_string())
+            .collect(),
         flags: flag_values,
         old_category,
         media_type: meta.media_type.as_str().to_string(),
