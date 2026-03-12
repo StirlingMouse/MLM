@@ -9,9 +9,10 @@ use askama::{Template, filters::HtmlSafe};
 use axum::{
     Router,
     body::Body,
+    extract::OriginalUri,
     http::{HeaderValue, Request, StatusCode},
     middleware::{self, Next},
-    response::{Html, IntoResponse, Response},
+    response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
 };
 use itertools::Itertools;
@@ -22,7 +23,6 @@ use mlm_db::{
 use mlm_mam::{api::MaM, meta::MetaError, search::MaMTorrent, serde::DATE_FORMAT};
 use once_cell::sync::Lazy;
 use pages::{
-    config::{config_page, config_page_post},
     duplicate::{duplicate_page, duplicate_torrents_page_post},
     errors::{errors_page, errors_page_post},
     events::event_page,
@@ -44,7 +44,7 @@ use time::{
 use tokio::sync::watch::error::SendError;
 use tower::ServiceBuilder;
 #[allow(unused)]
-use tower_http::services::{ServeDir, ServeFile};
+pub use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
     api::{
@@ -133,11 +133,8 @@ pub fn router(context: Context) -> Router {
             "/duplicate",
             post(duplicate_torrents_page_post).with_state(context.clone()),
         )
-        .route("/config", get(config_page).with_state(context.clone()))
-        .route(
-            "/config",
-            post(config_page_post).with_state(context.clone()),
-        )
+        .route("/config", get(config_redirect))
+        .route("/config", post(config_redirect))
         .route(
             "/api/search",
             get(search_api).with_state(Arc::new(context.mam())),
@@ -165,7 +162,29 @@ pub fn router(context: Context) -> Router {
             .service(ServeFile::new("server/assets/favicon_dev.png")),
     );
 
+    #[cfg(debug_assertions)]
+    let app = app.nest_service(
+        "/favicon.ico",
+        ServiceBuilder::new()
+            .layer(middleware::from_fn(set_static_cache_control))
+            .service(ServeFile::new("server/assets/favicon_dev.png")),
+    );
+
+    #[cfg(not(debug_assertions))]
+    let app = app.nest_service(
+        "/favicon.ico",
+        ServiceBuilder::new()
+            .layer(middleware::from_fn(set_static_cache_control))
+            .service(ServeFile::new("server/assets/favicon.png")),
+    );
+
     app
+}
+
+async fn config_redirect(uri: OriginalUri) -> Redirect {
+    let current = uri.path_and_query().map_or("/config", |pq| pq.as_str());
+    let target = current.replacen("/config", "/dioxus/config", 1);
+    Redirect::to(&target)
 }
 
 pub trait Page {
@@ -232,6 +251,7 @@ async fn set_static_cache_control(request: Request<Body>, next: Next) -> Respons
 /// [ {% for v in values %}<span class={{ class }}>{{ v | json }}</span>{% if !loop.last %}, {% endif %}{% endfor %} ]
 /// {% endif %}
 /// ```
+#[allow(dead_code)]
 #[derive(Template)]
 #[template(ext = "html", in_doc = true)]
 struct YamlItems<'a, V: Serialize> {
@@ -241,6 +261,7 @@ struct YamlItems<'a, V: Serialize> {
 
 impl<'a, V: Serialize> HtmlSafe for YamlItems<'a, V> {}
 
+#[allow(dead_code)]
 fn yaml_items<'a, V: Serialize>(values: &'a [V]) -> YamlItems<'a, V> {
     YamlItems {
         values,
@@ -248,6 +269,7 @@ fn yaml_items<'a, V: Serialize>(values: &'a [V]) -> YamlItems<'a, V> {
     }
 }
 
+#[allow(dead_code)]
 fn yaml_nums<'a, V: Serialize>(values: &'a [V]) -> YamlItems<'a, V> {
     YamlItems {
         values,
@@ -255,6 +277,7 @@ fn yaml_nums<'a, V: Serialize>(values: &'a [V]) -> YamlItems<'a, V> {
     }
 }
 
+#[allow(dead_code)]
 fn date(date: &Date) -> String {
     date.format(&DATE_FORMAT).unwrap_or_default()
 }
@@ -324,6 +347,7 @@ impl<'a, T: Key> SeriesTmpl<'a, T> {
 
 impl<'a, T: Key> HtmlSafe for SeriesTmpl<'a, T> {}
 
+#[allow(dead_code)]
 #[derive(Template)]
 #[template(path = "partials/filter.html")]
 struct FilterTemplate<'a> {
@@ -331,6 +355,7 @@ struct FilterTemplate<'a> {
 }
 impl<'a> HtmlSafe for FilterTemplate<'a> {}
 
+#[allow(dead_code)]
 fn filter<'a>(filter: &'a TorrentFilter) -> FilterTemplate<'a> {
     FilterTemplate { filter }
 }

@@ -767,13 +767,20 @@ pub fn queue_torrent_meta_update(
 
     let id = torrent.id.clone();
     let diff = torrent.meta.diff(&meta);
-    debug!(
-        "Updating meta for torrent {}, diff:\n{}",
-        id,
-        diff.iter()
-            .map(|field| format!("  {}: {} → {}", field.field, field.from, field.to))
-            .join("\n")
-    );
+    if diff.is_empty() {
+        debug!(
+            "Updating meta for torrent {}, old:\n{:?}\nnew:\n{:?}",
+            id, torrent.meta, meta
+        );
+    } else {
+        debug!(
+            "Updating meta for torrent {}, diff:\n{}",
+            id,
+            diff.iter()
+                .map(|field| format!("  {}: {} -> {}", field.field, field.from, field.to))
+                .join("\n")
+        );
+    }
     torrent.meta = meta.clone();
     torrent.title_search = normalize_title(&meta.title);
     rw.upsert(torrent.clone())?;
