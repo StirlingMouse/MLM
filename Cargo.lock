@@ -3504,6 +3504,7 @@ dependencies = [
  "mlm_mam",
  "mlm_meta",
  "mlm_parse",
+ "mlm_web_api",
  "mlm_web_askama",
  "mlm_web_dioxus",
  "native_db",
@@ -3515,6 +3516,7 @@ dependencies = [
  "tempfile",
  "time",
  "tokio",
+ "tower-http",
  "tracing",
  "tracing-appender",
  "tracing-panic",
@@ -3653,6 +3655,30 @@ dependencies = [
  "once_cell",
  "regex",
  "unidecode",
+]
+
+[[package]]
+name = "mlm_web_api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "axum-extra",
+ "mime_guess",
+ "mlm_core",
+ "mlm_db",
+ "mlm_mam",
+ "native_db",
+ "qbit",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "toml 0.8.23",
+ "tower",
+ "tower-http",
+ "tracing",
 ]
 
 [[package]]

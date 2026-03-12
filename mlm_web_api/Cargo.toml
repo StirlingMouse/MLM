@@ -1,0 +1,24 @@
+[package]
+name = "mlm_web_api"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+axum = { version = "0.8.4", features = ["query"] }
+axum-extra = { version = "0.10.1", features = ["form"] }
+mime_guess = "2.0.5"
+mlm_core = { path = "../mlm_core" }
+mlm_db = { path = "../mlm_db" }
+mlm_mam = { path = "../mlm_mam" }
+native_db = { git = "https://github.com/StirlingMouse/native_db.git", branch = "0.8.x" }
+qbit = { git = "https://github.com/StirlingMouse/qbittorrent-webui-api.git" }
+serde = "1.0.136"
+serde_json = "1.0.140"
+thiserror = "2.0.17"
+tokio = { version = "1.45.1", features = ["fs"] }
+tokio-util = "0.7"
+tower = "0.5.2"
+tower-http = { version = "0.6.6", features = ["fs"] }
+toml = "0.8.23"
+tracing = "0.1.41"

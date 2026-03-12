@@ -57,7 +57,7 @@
   </div>
   <div>{{ self::time(duplicate_of.created_at) }}</div>
   <div>
-    <a href="/torrents/{{ duplicate_of.id }}">open</a>
+    <a href="/old/torrents/{{ duplicate_of.id }}">open</a>
     {% if let Some(mam_id) = duplicate_of.mam_id %}<a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>MaM</a>{% endif %}
     {% if let (Some(abs_url), Some(abs_id)) = (abs_url.as_ref(), duplicate_of.meta.ids.get(ids::ABS)) %}
       <a href="{{ abs_url }}/audiobookshelf/item/{{ abs_id }}" target=_blank>ABS</a>

@@ -14,14 +14,14 @@
 {% block content %}
 <div class="row">
   <h1>{{ torrent.meta.title }}</h1>
-  <a href="/torrents/{{torrent.id}}/edit" class=btn>edit</a>
+  <a href="/old/torrents/{{torrent.id}}/edit" class=btn>edit</a>
 </div>
 {% if let Some((edition, _)) = torrent.meta.edition %}
   {{ edition }}
 {% endif %}
 {% if let Some(torrent) = replacement_torrent %}
   <div class="row">
-    <h2>Replaced with: <a href="/torrents/{{torrent.id}}">{{ torrent.meta.title }}</a></h2>
+    <h2>Replaced with: <a href="/old/torrents/{{torrent.id}}">{{ torrent.meta.title }}</a></h2>
   </div>
 {% else if torrent.replaced_with.is_some() %}
   <form method=post class="row warn" style="justify-content:flex-start">

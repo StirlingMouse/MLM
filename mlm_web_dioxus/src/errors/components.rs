@@ -294,7 +294,7 @@ pub fn ErrorsPage() -> Element {
                                         div { "{error.created_at}" }
                                         div {
                                             if let Some(mam_id) = error.mam_id {
-                                                a { href: "/dioxus/torrents/{mam_id}", "open" }
+                                                a { href: "/torrents/{mam_id}", "open" }
                                                 a {
                                                     href: "https://www.myanonamouse.net/t/{mam_id}",
                                                     target: "_blank",

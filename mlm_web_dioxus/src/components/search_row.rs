@@ -22,7 +22,7 @@ pub fn search_filter_href(prefix: &str, value: &str, sort: &str) -> String {
         .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
         .collect::<Vec<_>>()
         .join("&");
-    format!("/dioxus/search?{query}")
+    format!("/search?{query}")
 }
 
 #[derive(Clone, PartialEq)]

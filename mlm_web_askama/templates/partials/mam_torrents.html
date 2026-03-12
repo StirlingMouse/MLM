@@ -20,18 +20,18 @@
       {% if mam_torrent.lang_code != "ENG" %}
       <span class=faint>[{{ mam_torrent.lang_code }}]</span>
       {% endif %}
-      <a href="/torrents/{{ mam_torrent.id }}" class=title><b title="{{ mam_torrent.title }}">{{ meta.title }}</b></a>{% if let Some((edition, _)) = meta.edition %} <i class=faint>{{ edition }}</i>{% endif %}<br>
-        <i class=faint>by</i> {% for author in meta.authors %}<a href="/search?q={{ author  | fmt("@author \"{}\"")  | urlencode_strict }}">{{ author }}</a>{% if !loop.last %}, {% endif %}{% endfor %}<br>
+      <a href="/old/torrents/{{ mam_torrent.id }}" class=title><b title="{{ mam_torrent.title }}">{{ meta.title }}</b></a>{% if let Some((edition, _)) = meta.edition %} <i class=faint>{{ edition }}</i>{% endif %}<br>
+        <i class=faint>by</i> {% for author in meta.authors %}<a href="/old/search?q={{ author  | fmt("@author \"{}\"")  | urlencode_strict }}">{{ author }}</a>{% if !loop.last %}, {% endif %}{% endfor %}<br>
       {% if !meta.series.is_empty() %}
         <i class=faint>series</i>
         {% for series in meta.series %}
-          <a href="/search?q={{ series.name | fmt("@series \"{}\"") | urlencode_strict }}&sort=series" class=item>{{ series.name }}</a>
+          <a href="/old/search?q={{ series.name | fmt("@series \"{}\"") | urlencode_strict }}&sort=series" class=item>{{ series.name }}</a>
           {% if !series.entries.0.is_empty() %}#{{ series.entries }}{% endif %}
         {% endfor %}
         <br>
       {% endif %}
       {% if !meta.narrators.is_empty() %}
-        <i class=faint>narrated by</i> {% for narrator in meta.narrators %}<a href="/search?q={{ narrator  | fmt("@narrator \"{}\"")  | urlencode_strict }}">{{ narrator }}</a>{% if !loop.last %}, {% endif %}{% endfor %}<br>
+        <i class=faint>narrated by</i> {% for narrator in meta.narrators %}<a href="/old/search?q={{ narrator  | fmt("@narrator \"{}\"")  | urlencode_strict }}">{{ narrator }}</a>{% if !loop.last %}, {% endif %}{% endfor %}<br>
       {% endif %}
       <i>{{ mam_torrent.tags }}</i><br>
       <span class=faint>

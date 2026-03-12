@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "server",
+  "mlm_web_api",
   "mlm_db",
   "mlm_parse",
   "mlm_mam",
@@ -28,6 +29,8 @@ opt-level = 0
 [profile.dev.package.mlm_meta]
 opt-level = 0
 [profile.dev.package.mlm_parse]
+opt-level = 0
+[profile.dev.package.mlm_web_api]
 opt-level = 0
 [profile.dev.package.mlm_web_askama]
 opt-level = 0

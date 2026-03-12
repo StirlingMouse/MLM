@@ -1,17 +1,11 @@
-mod api;
 mod pages;
 mod tables;
 
-use std::sync::Arc;
-
-use anyhow::Result;
 use askama::{Template, filters::HtmlSafe};
 use axum::{
     Router,
-    body::Body,
     extract::OriginalUri,
-    http::{HeaderValue, Request, StatusCode},
-    middleware::{self, Next},
+    http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
 };
@@ -20,7 +14,7 @@ use mlm_db::{
     AudiobookCategory, EbookCategory, Flags, SelectedTorrent, Series, Timestamp, Torrent,
     TorrentMeta,
 };
-use mlm_mam::{api::MaM, meta::MetaError, search::MaMTorrent, serde::DATE_FORMAT};
+use mlm_mam::{meta::MetaError, search::MaMTorrent, serde::DATE_FORMAT};
 use once_cell::sync::Lazy;
 use pages::{
     duplicate::{duplicate_page, duplicate_torrents_page_post},
@@ -30,11 +24,10 @@ use pages::{
     lists::lists_page,
     replaced::{replaced_torrents_page, replaced_torrents_page_post},
     selected::{selected_page, selected_torrents_page_post},
-    torrent::{torrent_file, torrent_page, torrent_page_post},
+    torrent::{torrent_page, torrent_page_post},
     torrent_edit::{torrent_edit_page, torrent_edit_page_post},
     torrents::{torrents_page, torrents_page_post},
 };
-use reqwest::header;
 use serde::Serialize;
 use tables::{ItemFilter, ItemFilters, Key};
 use time::{
@@ -42,148 +35,88 @@ use time::{
     format_description::{self, OwnedFormatItem},
 };
 use tokio::sync::watch::error::SendError;
-use tower::ServiceBuilder;
-#[allow(unused)]
-pub use tower_http::services::{ServeDir, ServeFile};
-
-use crate::{
-    api::{
-        search::{search_api, search_api_post},
-        torrent::torrent_api,
-    },
-    pages::{
-        index::stats_updates,
-        search::{search_page, search_page_post},
-    },
+use crate::pages::{
+    index::stats_updates,
+    search::{search_page, search_page_post},
 };
 use mlm_core::config::{SearchConfig, TorrentFilter};
 use mlm_core::{Context, ContextExt};
 
-pub type MaMState = Arc<Result<Arc<MaM<'static>>>>;
-
 pub fn router(context: Context) -> Router {
-    let app = Router::new()
+    Router::new()
         .route(
-            "/stats-updates",
+            "/old/stats-updates",
             get(stats_updates).with_state(context.clone()),
         )
-        .route("/torrents", get(torrents_page).with_state(context.clone()))
+        .route("/old/torrents", get(torrents_page).with_state(context.clone()))
         .route(
-            "/torrents",
+            "/old/torrents",
             post(torrents_page_post).with_state(context.clone()),
         )
         .route(
-            "/torrents/{id}",
+            "/old/torrents/{id}",
             get(torrent_page).with_state(context.clone()),
         )
         .route(
-            "/torrents/{id}",
+            "/old/torrents/{id}",
             post(torrent_page_post).with_state(context.clone()),
         )
         .route(
-            "/torrents/{id}/edit",
+            "/old/torrents/{id}/edit",
             get(torrent_edit_page).with_state(context.db().clone()),
         )
         .route(
-            "/torrents/{id}/edit",
+            "/old/torrents/{id}/edit",
             post(torrent_edit_page_post).with_state(context.clone()),
         )
+        .route("/old/events", get(event_page).with_state(context.db().clone()))
+        .route("/old/search", get(search_page).with_state(context.clone()))
         .route(
-            "/torrents/{id}/{filename}",
-            get(torrent_file).with_state(context.clone()),
-        )
-        .route("/events", get(event_page).with_state(context.db().clone()))
-        .route("/search", get(search_page).with_state(context.clone()))
-        .route(
-            "/search",
+            "/old/search",
             post(search_page_post).with_state(context.clone()),
         )
-        .route("/lists", get(lists_page).with_state(context.clone()))
+        .route("/old/lists", get(lists_page).with_state(context.clone()))
         .route(
-            "/lists/{list_id}",
+            "/old/lists/{list_id}",
             get(list_page).with_state(context.db().clone()),
         )
         .route(
-            "/lists/{list_id}",
+            "/old/lists/{list_id}",
             post(list_page_post).with_state(context.db().clone()),
         )
-        .route("/errors", get(errors_page).with_state(context.db().clone()))
+        .route("/old/errors", get(errors_page).with_state(context.db().clone()))
         .route(
-            "/errors",
+            "/old/errors",
             post(errors_page_post).with_state(context.db().clone()),
         )
-        .route("/selected", get(selected_page).with_state(context.clone()))
+        .route("/old/selected", get(selected_page).with_state(context.clone()))
         .route(
-            "/selected",
+            "/old/selected",
             post(selected_torrents_page_post).with_state(context.db().clone()),
         )
         .route(
-            "/replaced",
+            "/old/replaced",
             get(replaced_torrents_page).with_state(context.clone()),
         )
         .route(
-            "/replaced",
+            "/old/replaced",
             post(replaced_torrents_page_post).with_state(context.clone()),
         )
         .route(
-            "/duplicate",
+            "/old/duplicate",
             get(duplicate_page).with_state(context.clone()),
         )
         .route(
-            "/duplicate",
+            "/old/duplicate",
             post(duplicate_torrents_page_post).with_state(context.clone()),
         )
-        .route("/config", get(config_redirect))
-        .route("/config", post(config_redirect))
-        .route(
-            "/api/search",
-            get(search_api).with_state(Arc::new(context.mam())),
-        )
-        .route(
-            "/api/search",
-            post(search_api_post).with_state(context.clone()),
-        )
-        .route(
-            "/api/torrents/{id}",
-            get(torrent_api).with_state(context.clone()),
-        )
-        .nest_service(
-            "/assets",
-            ServiceBuilder::new()
-                .layer(middleware::from_fn(set_static_cache_control))
-                .service(ServeDir::new("server/assets")),
-        );
-
-    #[cfg(debug_assertions)]
-    let app = app.nest_service(
-        "/assets/favicon.png",
-        ServiceBuilder::new()
-            .layer(middleware::from_fn(set_static_cache_control))
-            .service(ServeFile::new("server/assets/favicon_dev.png")),
-    );
-
-    #[cfg(debug_assertions)]
-    let app = app.nest_service(
-        "/favicon.ico",
-        ServiceBuilder::new()
-            .layer(middleware::from_fn(set_static_cache_control))
-            .service(ServeFile::new("server/assets/favicon_dev.png")),
-    );
-
-    #[cfg(not(debug_assertions))]
-    let app = app.nest_service(
-        "/favicon.ico",
-        ServiceBuilder::new()
-            .layer(middleware::from_fn(set_static_cache_control))
-            .service(ServeFile::new("server/assets/favicon.png")),
-    );
-
-    app
+        .route("/old/config", get(config_redirect))
+        .route("/old/config", post(config_redirect))
 }
 
 async fn config_redirect(uri: OriginalUri) -> Redirect {
-    let current = uri.path_and_query().map_or("/config", |pq| pq.as_str());
-    let target = current.replacen("/config", "/dioxus/config", 1);
+    let current = uri.path_and_query().map_or("/old/config", |pq| pq.as_str());
+    let target = current.replacen("/old/config", "/config", 1);
     Redirect::to(&target)
 }
 
@@ -229,15 +162,6 @@ pub trait Page {
             path: self.item_path(),
         }
     }
-}
-
-async fn set_static_cache_control(request: Request<Body>, next: Next) -> Response {
-    let mut response = next.run(request).await;
-    response.headers_mut().insert(
-        header::CACHE_CONTROL,
-        HeaderValue::from_static("must-revalidate"),
-    );
-    response
 }
 
 /// ```askama

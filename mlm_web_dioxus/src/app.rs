@@ -23,46 +23,46 @@ pub enum Route {
     #[route("/")]
     HomePage {},
 
-    #[route("/dioxus/events")]
+    #[route("/events")]
     EventsPage {},
 
-    #[route("/dioxus/events/:..segments")]
+    #[route("/events/:..segments")]
     EventsWithQuery { segments: Vec<String> },
 
-    #[route("/dioxus/errors")]
+    #[route("/errors")]
     ErrorsPage {},
 
-    #[route("/dioxus/selected")]
+    #[route("/selected")]
     SelectedPage {},
 
-    #[route("/dioxus/replaced")]
+    #[route("/replaced")]
     ReplacedPage {},
 
-    #[route("/dioxus/duplicate")]
+    #[route("/duplicate")]
     DuplicatePage {},
 
-    #[route("/dioxus/torrents")]
+    #[route("/torrents")]
     TorrentsPage {},
 
-    #[route("/dioxus/torrents/:id")]
+    #[route("/torrents/:id")]
     TorrentDetailPage { id: String },
 
-    #[route("/dioxus/torrents/:id/edit")]
+    #[route("/torrents/:id/edit")]
     TorrentEditPage { id: String },
 
-    #[route("/dioxus/torrents/:..segments")]
+    #[route("/torrents/:..segments")]
     TorrentsWithQuery { segments: Vec<String> },
 
-    #[route("/dioxus/search")]
+    #[route("/search")]
     SearchPage {},
 
-    #[route("/dioxus/lists")]
+    #[route("/lists")]
     ListsPage {},
 
-    #[route("/dioxus/lists/:id")]
+    #[route("/lists/:id")]
     ListPage { id: String },
 
-    #[route("/dioxus/config")]
+    #[route("/config")]
     ConfigPage {},
 }
 

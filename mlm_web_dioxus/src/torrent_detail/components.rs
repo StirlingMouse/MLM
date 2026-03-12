@@ -292,7 +292,7 @@ fn TorrentDetailContent(
                 if let Some(replacement) = replacement_torrent {
                     div { class: "warn",
                         strong { "Replaced with: " }
-                        a { href: "/dioxus/torrents/{replacement.id}", "{replacement.title}" }
+                        a { href: "/torrents/{replacement.id}", "{replacement.title}" }
                     }
                 }
                 if replacement_missing {
@@ -326,7 +326,7 @@ fn TorrentDetailContent(
                 div { style: "display:flex; flex-wrap:wrap; gap:0.5em; margin:0.6em 0;",
                     a {
                         class: "btn",
-                        href: "/dioxus/torrents/{torrent.id}/edit",
+                        href: "/torrents/{torrent.id}/edit",
                         "Edit Metadata"
                     }
                     if let Some(abs_url) = abs_item_url {
