@@ -1,6 +1,8 @@
 use crate::components::SearchTorrentRow;
 use crate::components::StatusMessage;
-use crate::components::{build_query_string, parse_location_query_pairs, set_location_query_string};
+use crate::components::{
+    build_query_string, parse_location_query_pairs, set_location_query_string,
+};
 use crate::dto::Series;
 #[cfg(feature = "server")]
 use crate::dto::sanitize_optional_html;
