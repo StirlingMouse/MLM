@@ -8,7 +8,7 @@ anyhow = "1.0.100"
 bytes = "1.11.0"
 cookie = "0.18.1"
 itertools = "0.14.0"
-mlm_db = { path = "../mlm_db" }
+mlm_db = { path = "../mlm_db", default-features = false }
 mlm_parse = { path = "../mlm_parse" }
 native_db = { git = "https://github.com/StirlingMouse/native_db.git", branch = "0.8.x" }
 native_model = "0.4.20"
@@ -29,5 +29,5 @@ time = { version = "0.3.41", features = [
   "macros",
   "serde",
 ] }
-tokio = { version = "1.45.1", features = ["full"] }
+tokio = { version = "1.45.1", features = ["sync"] }
 tracing = "0.1"
