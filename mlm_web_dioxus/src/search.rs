@@ -219,6 +219,11 @@ pub async fn get_search_data(
                 .then(a.media_type.cmp(&b.media_type))
         });
     }
+
+    Ok(SearchData {
+        torrents,
+        total: result.total,
+    })
 }
 
 #[component]
