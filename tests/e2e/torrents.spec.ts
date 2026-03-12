@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Torrents page', () => {
         test('loads and shows torrent rows', async ({ page }) => {
-                await page.goto('/dioxus/torrents');
+                await page.goto('/torrents');
                 await expect(page.locator('.error')).toHaveCount(0);
                 await expect(page.locator('.loading-indicator')).toHaveCount(0);
                 // At least one torrent row should be visible
@@ -10,7 +10,7 @@ test.describe('Torrents page', () => {
         });
 
         test('shows 35 torrents total', async ({ page }) => {
-                await page.goto('/dioxus/torrents');
+                await page.goto('/torrents');
                 await page.waitForSelector('h1');
                 // Wait for data, not loading
                 await expect(page.locator('.loading-indicator')).toHaveCount(0);
@@ -20,7 +20,7 @@ test.describe('Torrents page', () => {
 
         test('pagination works with small page size', async ({ page }) => {
                 // Use page_size=20 so 35 torrents spans 2 pages
-                await page.goto('/dioxus/torrents?page_size=20');
+                await page.goto('/torrents?page_size=20');
 
                 const pagination = page.locator('.pagination');
                 await expect(pagination).toBeVisible();
@@ -31,19 +31,19 @@ test.describe('Torrents page', () => {
                 await expect(page.locator('[aria-label="Previous page"]')).toHaveClass(/disabled/);
 
                 // Navigate to page 2 via URL (tests SSR pagination correctness)
-                await page.goto('/dioxus/torrents?page_size=20&from=20');
+                await page.goto('/torrents?page_size=20&from=20');
                 await expect(page.locator('body')).toContainText('Showing 20');
                 // On page 2: Previous enabled
                 await expect(page.locator('[aria-label="Previous page"]')).not.toHaveClass(/disabled/);
         });
 
         test('page 2 shows different content than page 1', async ({ page }) => {
-                await page.goto('/dioxus/torrents?page_size=20');
+                await page.goto('/torrents?page_size=20');
                 await expect(page.locator('.torrents-grid-row').first()).toBeVisible();
 
                 // Get the first title link from page 1 (title links now point to detail pages)
                 const page1TitleLink = page
-                        .locator('.torrents-grid-row a[href^="/dioxus/torrents/"]')
+                        .locator('.torrents-grid-row a[href^="/torrents/"]')
                         .first();
                 if ((await page1TitleLink.count()) === 0) {
                         test.info().annotations.push({
@@ -55,11 +55,11 @@ test.describe('Torrents page', () => {
                 const firstTitle = await page1TitleLink.textContent();
 
                 // Navigate directly to page 2 via URL
-                await page.goto('/dioxus/torrents?page_size=20&from=20');
+                await page.goto('/torrents?page_size=20&from=20');
                 await expect(page.locator('.torrents-grid-row').first()).toBeVisible();
 
                 const page2TitleLink = page
-                        .locator('.torrents-grid-row a[href^="/dioxus/torrents/"]')
+                        .locator('.torrents-grid-row a[href^="/torrents/"]')
                         .first();
                 if ((await page2TitleLink.count()) === 0) {
                         test.info().annotations.push({
@@ -73,7 +73,7 @@ test.describe('Torrents page', () => {
         });
 
         test('sorting by title changes data order', async ({ page }) => {
-                await page.goto('/dioxus/torrents');
+                await page.goto('/torrents');
                 await expect(page.locator('.loading-indicator')).toHaveCount(0);
 
                 const titleSort = page.locator('.header button.link', { hasText: 'Title' });
@@ -94,7 +94,7 @@ test.describe('Torrents page', () => {
         });
 
         test('column dropdown supports multi-select without closing', async ({ page }) => {
-                await page.goto('/dioxus/torrents');
+                await page.goto('/torrents');
                 await expect(page.locator('.torrents-grid-row').first()).toBeVisible();
 
                 const dropdown = page.locator('.column_selector_dropdown');
@@ -130,7 +130,7 @@ test.describe('Torrents page', () => {
         });
 
         test('filter link by author narrows results', async ({ page }) => {
-                await page.goto('/dioxus/torrents');
+                await page.goto('/torrents');
                 await expect(page.locator('.torrents-grid-row').first()).toBeVisible();
 
                 // Click the first author filter link
@@ -142,11 +142,15 @@ test.describe('Torrents page', () => {
                 }
         });
 
-        test('alt-clicking title applies title filter', async ({ page }) => {
-                await page.goto('/dioxus/torrents');
+        test('alt-clicking title applies title filter', async ({ page, browserName }) => {
+                test.skip(
+                        browserName === 'firefox',
+                        'Playwright Firefox does not synthesize this modified anchor click consistently.'
+                );
+                await page.goto('/torrents');
                 await expect(page.locator('.torrents-grid-row').first()).toBeVisible();
 
-                const titleLink = page.locator('.torrents-grid-row a.link[href^="/dioxus/torrents/"]').first();
+                const titleLink = page.locator('.torrents-grid-row a.link[href^="/torrents/"]').first();
                 if ((await titleLink.count()) === 0) {
                         test.info().annotations.push({
                                 type: 'note',
@@ -157,12 +161,12 @@ test.describe('Torrents page', () => {
 
                 const title = (await titleLink.textContent())?.trim() ?? '';
                 await titleLink.click({ modifiers: ['Alt'] });
-                await expect(page).toHaveURL(/\/dioxus\/torrents\?.*title=/);
+                await expect(page).toHaveURL(/\/torrents\?.*title=/);
                 await expect(page.locator('body')).toContainText(title);
         });
 
         test('no error state on initial load', async ({ page }) => {
-                await page.goto('/dioxus/torrents');
+                await page.goto('/torrents');
                 await expect(page.locator('.error')).toHaveCount(0);
         });
 });

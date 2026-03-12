@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const DETAIL_URL = '/dioxus/torrents/torrent-001';
+const DETAIL_URL = '/torrents/torrent-001';
 
 test.describe('Torrent detail page', () => {
         test('client fetches and renders qBittorrent data', async ({ page }) => {
@@ -91,7 +91,7 @@ test.describe('Torrent detail page', () => {
 
         test('replaced torrent detail loads', async ({ page }) => {
                 // torrent-005 is replaced by torrent-006 in our test data
-                await page.goto('/dioxus/torrents/torrent-005');
+                await page.goto('/torrents/torrent-005');
                 await expect(page.locator('.error')).toHaveCount(0);
                 await expect(page.locator('body')).toContainText('Test Book 005');
         });

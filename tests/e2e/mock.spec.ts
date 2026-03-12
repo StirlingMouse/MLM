@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const DETAIL_URL = '/dioxus/torrents/torrent-001';
+const DETAIL_URL = '/torrents/torrent-001';
 
 // Wait for a loading indicator to disappear, then assert something appeared.
 async function waitForLoad(page: import('@playwright/test').Page, indicator: string) {
@@ -13,7 +13,7 @@ async function waitForLoad(page: import('@playwright/test').Page, indicator: str
 
 test.describe('Search page with mock MaM', () => {
         test('submitting a search returns mock results', async ({ page }) => {
-                await page.goto('/dioxus/search');
+                await page.goto('/search');
                 await expect(page.locator('form')).toBeVisible();
 
                 // Fill and submit the search form
@@ -26,7 +26,7 @@ test.describe('Search page with mock MaM', () => {
         });
 
         test('search results contain mock torrent titles', async ({ page }) => {
-                await page.goto('/dioxus/search');
+                await page.goto('/search');
                 await page.locator('input[type="text"], input[type="search"]').first().fill('test');
                 await page.locator('form').locator('button[type="submit"]').click();
 
@@ -89,7 +89,7 @@ test.describe('Torrent detail other torrents section', () => {
 
 test.describe('Selected page user info from mock MaM', () => {
         test('shows bonus and unsat info from mock', async ({ page }) => {
-                await page.goto('/dioxus/selected');
+                await page.goto('/selected');
 
                 // Mock returns: bonus=50000, wedges=3, unsat count=2, limit=10
                 await expect(page.locator('body')).toContainText('50000', { timeout: 10_000 });
@@ -98,7 +98,7 @@ test.describe('Selected page user info from mock MaM', () => {
         });
 
         test('shows remaining buffer computed from mock user data', async ({ page }) => {
-                await page.goto('/dioxus/selected');
+                await page.goto('/selected');
 
                 // Buffer is derived from uploaded - downloaded; should be non-empty
                 await expect(page.locator('body')).toContainText('Buffer:', { timeout: 10_000 });

@@ -1,16 +1,16 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Config page', () => {
-        test('legacy /config route redirects to Dioxus config page', async ({ page }) => {
+        test('root /config route serves the Dioxus config page', async ({ page }) => {
                 await page.goto('/config');
-                await expect(page).toHaveURL(/\/dioxus\/config/);
+                await expect(page).toHaveURL(/\/config/);
                 await expect(page.locator('h1')).toContainText('Config');
                 await expect(page.locator('body')).toContainText('unsat_buffer');
                 await expect(page.locator('body')).toContainText('[[qbittorrent]]');
         });
 
         test('dioxus config page renders legacy config formatting', async ({ page }) => {
-                await page.goto('/dioxus/config');
+                await page.goto('/config');
 
                 await expect(page.locator('h1')).toContainText('Config');
                 await expect(page.locator('body')).toContainText('[[qbittorrent]]');
@@ -19,7 +19,7 @@ test.describe('Config page', () => {
         });
 
         test('show_apply_tags query enables apply controls when tag sections exist', async ({ page }) => {
-                await page.goto('/dioxus/config?show_apply_tags=true');
+                await page.goto('/config?show_apply_tags=true');
                 const applyBtn = page.locator('button', { hasText: 'apply to all' }).first();
                 if ((await applyBtn.count()) === 0) {
                         test.info().annotations.push({

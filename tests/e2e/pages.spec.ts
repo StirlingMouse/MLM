@@ -9,7 +9,7 @@ function noLoading(page: import('@playwright/test').Page) {
 
 test.describe('Events page', () => {
         test('loads and shows events', async ({ page }) => {
-                await page.goto('/dioxus/events');
+                await page.goto('/events');
                 await noError(page);
                 await noLoading(page);
                 // 10 events were inserted
@@ -17,21 +17,21 @@ test.describe('Events page', () => {
         });
 
         test('no loading indicator stuck', async ({ page }) => {
-                await page.goto('/dioxus/events');
+                await page.goto('/events');
                 await noLoading(page);
         });
 });
 
 test.describe('Errors page', () => {
         test('loads and shows errored torrents', async ({ page }) => {
-                await page.goto('/dioxus/errors');
+                await page.goto('/errors');
                 await noError(page);
                 await noLoading(page);
                 await expect(page.locator('body')).toContainText('Errored Book');
         });
 
         test('sort header is interactive', async ({ page }) => {
-                await page.goto('/dioxus/errors');
+                await page.goto('/errors');
                 await noLoading(page);
                 const sortBtn = page.locator('.header button.link').first();
                 await expect(sortBtn).toHaveCount(1);
@@ -43,7 +43,7 @@ test.describe('Errors page', () => {
 
 test.describe('Selected torrents page', () => {
         test('loads and shows selected torrents', async ({ page }) => {
-                await page.goto('/dioxus/selected');
+                await page.goto('/selected');
                 await noError(page);
                 await noLoading(page);
                 await expect(page.locator('body')).toContainText('Selected Book');
@@ -52,7 +52,7 @@ test.describe('Selected torrents page', () => {
 
 test.describe('Replaced torrents page', () => {
         test('loads and shows replaced torrents', async ({ page }) => {
-                await page.goto('/dioxus/replaced');
+                await page.goto('/replaced');
                 await noError(page);
                 await noLoading(page);
                 // torrent-005 is replaced
@@ -62,7 +62,7 @@ test.describe('Replaced torrents page', () => {
 
 test.describe('Duplicate torrents page', () => {
         test('loads and shows duplicate torrents', async ({ page }) => {
-                await page.goto('/dioxus/duplicate');
+                await page.goto('/duplicate');
                 await noError(page);
                 await noLoading(page);
                 await expect(page.locator('body')).toContainText('Duplicate Book');
@@ -71,21 +71,21 @@ test.describe('Duplicate torrents page', () => {
 
 test.describe('Search page', () => {
         test('loads', async ({ page }) => {
-                await page.goto('/dioxus/search');
+                await page.goto('/search');
                 await noLoading(page);
                 // Search form should be present (mam_id error on search result is expected in test env)
                 await expect(page.locator('form')).toBeVisible();
         });
 
         test('can search and shows results', async ({ page }) => {
-                await page.goto('/dioxus/search');
+                await page.goto('/search');
                 await expect(page.locator('form')).toBeVisible();
 
                 const input = page.locator('input[type="text"], input[type="search"]').first();
                 await expect(input).toHaveCount(1);
                 await input.fill('Test Book');
                 await Promise.all([
-                        page.waitForURL(url => url.toString().includes('/dioxus/search?'), {
+                        page.waitForURL(url => url.toString().includes('/search?'), {
                                 timeout: 5_000,
                         }),
                         input.press('Enter'),
@@ -96,7 +96,7 @@ test.describe('Search page', () => {
 
 test.describe('Lists page', () => {
         test('loads', async ({ page }) => {
-                await page.goto('/dioxus/lists');
+                await page.goto('/lists');
                 await noError(page);
                 await noLoading(page);
         });

@@ -1,6 +1,6 @@
 use crate::components::SearchTorrentRow;
 use crate::components::StatusMessage;
-use crate::components::parse_location_query_pairs;
+use crate::components::{build_query_string, parse_location_query_pairs, set_location_query_string};
 use crate::dto::Series;
 #[cfg(feature = "server")]
 use crate::dto::sanitize_optional_html;
@@ -106,6 +106,20 @@ fn search_state_from_params(params: &[(String, String)]) -> (String, String, Str
         .unwrap_or_default();
     let uploader = uploader_input.trim().parse::<u64>().ok();
     (query, sort, uploader_input, uploader)
+}
+
+fn search_query_string(query: &str, sort: &str, uploader_input: &str) -> String {
+    let mut params = Vec::new();
+    if !query.is_empty() {
+        params.push(("q".to_string(), query.to_string()));
+    }
+    if !sort.is_empty() {
+        params.push(("sort".to_string(), sort.to_string()));
+    }
+    if !uploader_input.trim().is_empty() {
+        params.push(("uploader".to_string(), uploader_input.trim().to_string()));
+    }
+    build_query_string(&params)
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
@@ -309,9 +323,24 @@ pub fn SearchPage() -> Element {
                 class: "row",
                 onsubmit: move |ev: Event<FormData>| {
                     ev.prevent_default();
-                    request_query.set(query_input.read().clone());
-                    request_sort.set(sort_input.read().clone());
-                    let uploader = uploader_input.read().trim().parse::<u64>().ok();
+                    let next_query = query_input.read().clone();
+                    let next_sort = sort_input.read().clone();
+                    let next_uploader_input = uploader_input.read().clone();
+                    let uploader = next_uploader_input.trim().parse::<u64>().ok();
+                    let next_route_state = (
+                        next_query.clone(),
+                        next_sort.clone(),
+                        next_uploader_input.clone(),
+                    );
+
+                    set_location_query_string(&search_query_string(
+                        &next_query,
+                        &next_sort,
+                        &next_uploader_input,
+                    ));
+                    last_route_state.set(next_route_state);
+                    request_query.set(next_query);
+                    request_sort.set(next_sort);
                     request_uploader.set(uploader);
                     data_res.restart();
                 },
