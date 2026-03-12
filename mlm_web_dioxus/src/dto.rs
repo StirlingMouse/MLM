@@ -117,6 +117,16 @@ impl From<&mlm_core::MetadataSource> for MetadataSource {
 }
 
 #[cfg(feature = "server")]
+pub fn sanitize_html(value: &str) -> String {
+    mlm_parse::clean_html(value)
+}
+
+#[cfg(feature = "server")]
+pub fn sanitize_optional_html(value: Option<String>) -> Option<String> {
+    value.map(|value| sanitize_html(&value))
+}
+
+#[cfg(feature = "server")]
 pub fn convert_torrent(db_torrent: &mlm_core::Torrent) -> Torrent {
     Torrent {
         id: db_torrent.id.clone(),

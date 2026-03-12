@@ -65,8 +65,6 @@ fn torrent_info_from_meta(
     id: String,
     mam_id: Option<u64>,
 ) -> super::types::TorrentInfo {
-    use mlm_parse::clean_html;
-
     let goodreads_id = meta.ids.get(ids::GOODREADS).cloned();
     let flags = mlm_db::Flags::from_bitfield(meta.flags.map_or(0, |f| f.0));
     let flag_values = crate::utils::flags_to_strings(&flags);
@@ -86,7 +84,7 @@ fn torrent_info_from_meta(
             })
             .collect(),
         tags: meta.tags.clone(),
-        description: clean_html(&meta.description),
+        description_html: crate::dto::sanitize_html(&meta.description),
         media_type: meta.media_type.to_string(),
         mediatype_id: meta.media_type.as_id(),
         main_cat: meta.main_cat.map(|c| c.to_string()),

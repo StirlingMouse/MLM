@@ -26,7 +26,7 @@ pub struct TorrentInfo {
     pub narrators: Vec<String>,
     pub series: Vec<Series>,
     pub tags: Vec<String>,
-    pub description: String,
+    pub description_html: String,
     pub media_type: String,
     pub mediatype_id: u8,
     pub main_cat: Option<String>,

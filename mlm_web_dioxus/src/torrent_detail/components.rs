@@ -15,7 +15,6 @@ use crate::events::EventListItem;
 use crate::search::SearchTorrent;
 use dioxus::prelude::*;
 use lucide_dioxus::Tag;
-use mlm_parse::clean_html;
 
 fn spawn_action(
     name: String,
@@ -367,12 +366,12 @@ fn TorrentDetailContent(
 
             div { class: "torrent-description",
                 h3 { "Description" }
-                div { dangerous_inner_html: "{torrent.description}" }
+                div { dangerous_inner_html: "{torrent.description_html}" }
 
                 if let Some(mam) = mam_torrent.clone() {
-                    if let Some(description) = mam.description {
+                    if let Some(description_html) = mam.description_html {
                         Details { label: "MaM Description",
-                            div { dangerous_inner_html: "{clean_html(&description)}" }
+                            div { dangerous_inner_html: "{description_html}" }
                         }
                     }
                 }
@@ -577,9 +576,9 @@ fn TorrentMamContent(
                 }
             }
             div { class: "torrent-description",
-                if let Some(description) = mam.description {
+                if let Some(description_html) = mam.description_html {
                     h3 { "Description" }
-                    div { dangerous_inner_html: "{clean_html(&description)}" }
+                    div { dangerous_inner_html: "{description_html}" }
                 }
             }
             div { class: "torrent-below",

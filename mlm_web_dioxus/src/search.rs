@@ -3,6 +3,8 @@ use crate::components::StatusMessage;
 use crate::components::parse_location_query_pairs;
 use crate::dto::Series;
 #[cfg(feature = "server")]
+use crate::dto::sanitize_optional_html;
+#[cfg(feature = "server")]
 use crate::error::IntoServerFnError;
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
@@ -59,7 +61,7 @@ pub fn map_search_torrent(
             })
             .collect(),
         tags: mam_torrent.tags,
-        description: mam_torrent.description,
+        description_html: sanitize_optional_html(mam_torrent.description),
         categories: meta
             .categories
             .iter()
@@ -124,7 +126,7 @@ pub struct SearchTorrent {
     pub narrators: Vec<String>,
     pub series: Vec<Series>,
     pub tags: String,
-    pub description: Option<String>,
+    pub description_html: Option<String>,
     pub categories: Vec<String>,
     pub flags: Vec<String>,
     pub old_category: Option<String>,
