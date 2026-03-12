@@ -20,7 +20,7 @@
 {% endif %}
 <div class="row">
   <div>
-    id: {{ meta.mam_id }} {% if let Some(vip_status) = meta.vip_status %}{{ vip_status }}{% endif %}
+    id: {{ mam_torrent.id }} {% if let Some(vip_status) = meta.vip_status %}{{ vip_status }}{% endif %}
     <a href="https://www.myanonamouse.net/t/{{ mam_torrent.id }}" target=_blank class=btn>Open in MaM</a>
   </div>
   <form method=post>
@@ -58,7 +58,9 @@
 </p>
 </form>
 <p>Uploader: {{ mam_torrent.owner_name }}</p>
-<p>Uploaded At: {{ self::time(meta.uploaded_at) }}</p>
+{% if let Some(uploaded_at) = meta.uploaded_at %}
+<p>Uploaded At: {{ self::time(uploaded_at) }}</p>
+{% endif %}
 
 <p>{{ mam_torrent.tags }}</p>
 <details open>

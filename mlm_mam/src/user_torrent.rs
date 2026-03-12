@@ -1,8 +1,10 @@
+use std::collections::BTreeMap;
+
 use anyhow::Result;
 use itertools::Itertools as _;
 use mlm_db::{
-    Category, FlagBits, MediaType, MetadataSource, OldCategory, Series, SeriesEntries, Timestamp,
-    TorrentMeta, VipStatus,
+    Category, FlagBits, MediaType, MetadataSource, OldCategory, Series, SeriesEntries, TorrentMeta,
+    VipStatus, ids,
 };
 use mlm_parse::clean_value;
 use serde::{Deserialize, Serialize};
@@ -160,12 +162,21 @@ impl UserDetailsTorrent {
                     self.category
                 ))
             })?;
-        let mut categories = self
-            .categories
-            .iter()
-            .map(|c| Category::from_id(c.id as u8).ok_or_else(|| MetaError::UnknownCat(c.id as u8)))
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut categories = Category::from_old_category(cat.clone());
+        let mut tags = vec![];
+        for category in &self.categories {
+            let id = category.id as u8;
+            if let Some((mapped_categories, mapped_tags)) = Category::from_legacy_v15_id(id) {
+                categories.extend(mapped_categories);
+                tags.extend(mapped_tags);
+            } else {
+                return Err(MetaError::UnknownCat(id));
+            }
+        }
         categories.sort();
+        categories.dedup();
+        tags.sort();
+        tags.dedup();
 
         let filetypes = self
             .file_types
@@ -186,14 +197,18 @@ impl UserDetailsTorrent {
             VipStatus::Permanent
         };
 
+        let mut ids = BTreeMap::new();
+        ids.insert(ids::MAM.to_string(), self.id.to_string());
+
         Ok(clean_meta(
             TorrentMeta {
-                mam_id: self.id,
+                ids,
                 vip_status: Some(vip_status),
                 media_type,
                 // TODO: Currently main_cat isn't returned
                 main_cat: None,
                 categories,
+                tags,
                 cat: Some(cat),
                 // TODO: Currently language isn't returned
                 language: None,
@@ -204,12 +219,14 @@ impl UserDetailsTorrent {
                 size,
                 title: clean_value(&self.title)?,
                 edition: None,
+                // TODO: Currently num_files isn't returned
+                description: String::new(),
                 authors,
                 narrators,
                 series,
                 source: MetadataSource::Mam,
                 // TODO: Currently added isn't returned
-                uploaded_at: Timestamp::from(UtcDateTime::UNIX_EPOCH),
+                uploaded_at: None,
             },
             &clean_value(&self.tags)?,
         )?)

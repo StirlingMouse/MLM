@@ -146,3 +146,180 @@ where
     v.map(|v| Date::parse(&v, &DATE_FORMAT).map_err(serde::de::Error::custom))
         .transpose()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct BoolWrap {
+        #[serde(deserialize_with = "bool_string_or_number")]
+        val: bool,
+    }
+
+    #[test]
+    fn test_bool_string_or_number_variants() {
+        assert!(
+            serde_json::from_str::<BoolWrap>(r#"{"val":"yes"}"#)
+                .unwrap()
+                .val
+        );
+        assert!(
+            serde_json::from_str::<BoolWrap>(r#"{"val":"1"}"#)
+                .unwrap()
+                .val
+        );
+        assert!(
+            serde_json::from_str::<BoolWrap>(r#"{"val":1}"#)
+                .unwrap()
+                .val
+        );
+        assert!(
+            !serde_json::from_str::<BoolWrap>(r#"{"val":"no"}"#)
+                .unwrap()
+                .val
+        );
+        assert!(
+            !serde_json::from_str::<BoolWrap>(r#"{"val":"0"}"#)
+                .unwrap()
+                .val
+        );
+        assert!(
+            !serde_json::from_str::<BoolWrap>(r#"{"val":0}"#)
+                .unwrap()
+                .val
+        );
+        // boolean true/false should be rejected by this deserializer
+        assert!(serde_json::from_str::<BoolWrap>(r#"{"val": true}"#).is_err());
+    }
+
+    #[derive(Deserialize)]
+    struct NumWrap {
+        #[serde(deserialize_with = "num_string_or_number")]
+        val: u32,
+    }
+
+    #[test]
+    fn test_num_string_or_number() {
+        assert_eq!(
+            serde_json::from_str::<NumWrap>(r#"{"val":"42"}"#)
+                .unwrap()
+                .val,
+            42
+        );
+        assert_eq!(
+            serde_json::from_str::<NumWrap>(r#"{"val":42}"#)
+                .unwrap()
+                .val,
+            42
+        );
+        assert!(serde_json::from_str::<NumWrap>(r#"{"val":"notanumber"}"#).is_err());
+    }
+
+    #[derive(Deserialize)]
+    struct OptNumWrap {
+        #[serde(deserialize_with = "opt_num_string_or_number")]
+        val: Option<u64>,
+    }
+
+    #[test]
+    fn test_opt_num_and_string_or_number() {
+        assert_eq!(
+            serde_json::from_str::<OptNumWrap>(r#"{"val":"100"}"#)
+                .unwrap()
+                .val,
+            Some(100)
+        );
+        assert_eq!(
+            serde_json::from_str::<OptNumWrap>(r#"{"val":100}"#)
+                .unwrap()
+                .val,
+            Some(100)
+        );
+        assert_eq!(
+            serde_json::from_str::<OptNumWrap>(r#"{"val":null}"#)
+                .unwrap()
+                .val,
+            None
+        );
+
+        #[derive(Deserialize)]
+        struct OptStrWrap {
+            #[serde(deserialize_with = "opt_string_or_number")]
+            val: Option<String>,
+        }
+
+        assert_eq!(
+            serde_json::from_str::<OptStrWrap>(r#"{"val":"abc"}"#)
+                .unwrap()
+                .val,
+            Some("abc".to_string())
+        );
+        assert_eq!(
+            serde_json::from_str::<OptStrWrap>(r#"{"val":123}"#)
+                .unwrap()
+                .val,
+            Some("123".to_string())
+        );
+        assert_eq!(
+            serde_json::from_str::<OptStrWrap>(r#"{"val":null}"#)
+                .unwrap()
+                .val,
+            None
+        );
+    }
+
+    #[derive(Deserialize)]
+    struct VecWrap {
+        #[serde(deserialize_with = "vec_string_or_number")]
+        val: Vec<String>,
+    }
+
+    #[test]
+    fn test_vec_string_or_number() {
+        let v: VecWrap = serde_json::from_str(r#"{"val":["1", 2, null]}"#).unwrap();
+        assert_eq!(v.val, vec!["1".to_string(), "2".to_string()]);
+        // invalid element type (object) should error
+        assert!(serde_json::from_str::<VecWrap>(r#"{"val":[{}]}"#).is_err());
+    }
+
+    #[derive(Deserialize)]
+    struct StrWrap {
+        #[serde(deserialize_with = "string_or_number")]
+        val: String,
+    }
+
+    #[test]
+    fn test_string_or_number() {
+        assert_eq!(
+            serde_json::from_str::<StrWrap>(r#"{"val":"abc"}"#)
+                .unwrap()
+                .val,
+            "abc"
+        );
+        assert_eq!(
+            serde_json::from_str::<StrWrap>(r#"{"val":123}"#)
+                .unwrap()
+                .val,
+            "123"
+        );
+        assert!(serde_json::from_str::<StrWrap>(r#"{"val": null}"#).is_err());
+    }
+
+    #[derive(Deserialize)]
+    struct DateWrap {
+        #[serde(deserialize_with = "parse_opt_date")]
+        d: Option<Date>,
+    }
+
+    #[test]
+    fn test_parse_opt_date() {
+        let ok = serde_json::from_str::<DateWrap>(r#"{"d":"2023-01-02"}"#).unwrap();
+        assert!(ok.d.is_some());
+        let none = serde_json::from_str::<DateWrap>(r#"{"d":null}"#).unwrap();
+        assert!(none.d.is_none());
+        // invalid date should error
+        assert!(serde_json::from_str::<DateWrap>(r#"{"d":"not-a-date"}"#).is_err());
+    }
+}

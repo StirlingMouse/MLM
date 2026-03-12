@@ -1,4 +1,4 @@
-use super::{v01, v03, v04, v06};
+use super::{v01, v03, v04, v06, v18};
 use native_db::{ToKey, native_db};
 use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
@@ -136,6 +136,28 @@ impl From<v06::Torrent> for Torrent {
             replaced_with: t.replaced_with,
             request_matadata_update: t.request_matadata_update,
             library_mismatch: t.library_mismatch,
+        }
+    }
+}
+
+impl From<v18::ListItem> for ListItem {
+    fn from(t: v18::ListItem) -> Self {
+        Self {
+            guid: t.guid,
+            list_id: t.list_id,
+            title: t.title,
+            authors: t.authors,
+            series: t.series,
+            cover_url: t.cover_url,
+            book_url: t.book_url,
+            isbn: t.isbn,
+            prefer_format: t.prefer_format,
+            allow_audio: t.allow_audio,
+            audio_torrent: t.audio_torrent.map(Into::into),
+            allow_ebook: t.allow_ebook,
+            ebook_torrent: t.ebook_torrent.map(Into::into),
+            created_at: t.created_at,
+            marked_done_at: t.marked_done_at,
         }
     }
 }

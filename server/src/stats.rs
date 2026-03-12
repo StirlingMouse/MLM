@@ -18,8 +18,10 @@ pub struct StatsValues {
     pub autograbber_result: BTreeMap<usize, Result<()>>,
     pub import_run_at: BTreeMap<usize, OffsetDateTime>,
     pub import_result: BTreeMap<usize, Result<()>>,
-    pub linker_run_at: Option<OffsetDateTime>,
-    pub linker_result: Option<Result<()>>,
+    pub folder_linker_run_at: Option<OffsetDateTime>,
+    pub folder_linker_result: Option<Result<()>>,
+    pub torrent_linker_run_at: Option<OffsetDateTime>,
+    pub torrent_linker_result: Option<Result<()>>,
     pub cleaner_run_at: Option<OffsetDateTime>,
     pub cleaner_result: Option<Result<()>>,
     pub downloader_run_at: Option<OffsetDateTime>,
@@ -62,7 +64,8 @@ pub struct Events {
 pub struct Triggers {
     pub search_tx: BTreeMap<usize, Sender<()>>,
     pub import_tx: BTreeMap<usize, Sender<()>>,
-    pub linker_tx: Sender<()>,
+    pub torrent_linker_tx: Sender<()>,
+    pub folder_linker_tx: Sender<()>,
     pub downloader_tx: Sender<()>,
     pub audiobookshelf_tx: Sender<()>,
 }

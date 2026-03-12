@@ -1,6 +1,9 @@
 use anyhow::{Error, Result};
-use mlm_db::{MediaType, OldCategory, TorrentMeta};
-use mlm_parse::{SERIES_CLEANUP, TITLE_CLEANUP, clean_name, clean_value, parse_edition};
+use mlm_db::{MediaType, TorrentMeta};
+use mlm_parse::{
+    NAME_ROLES, SERIES_CLEANUP, SERIES_NAME_CLEANUP, TITLE_CLEANUP, TITLE_SERIES, clean_name,
+    clean_value, parse_edition,
+};
 
 #[derive(thiserror::Error, Debug)]
 pub enum MetaError {
@@ -25,32 +28,41 @@ pub enum MetaError {
 }
 
 pub fn clean_meta(mut meta: TorrentMeta, tags: &str) -> Result<TorrentMeta> {
-    // A large amount of audiobook torrents have been incorrectly set to ebook
-    if meta.media_type == MediaType::Ebook
-        && let Some(OldCategory::Audio(_)) = meta.cat
-    {
-        meta.media_type = MediaType::Audiobook;
-    }
     for author in &mut meta.authors {
-        clean_name(author)?;
+        if NAME_ROLES.is_match(author) {
+            author.clear();
+        } else {
+            clean_name(author)?;
+        }
     }
+    meta.authors.retain(|a| !a.is_empty());
     for narrator in &mut meta.narrators {
-        clean_name(narrator)?;
+        if NAME_ROLES.is_match(narrator) {
+            narrator.clear()
+        } else {
+            clean_name(narrator)?;
+        }
     }
+    meta.narrators.retain(|a| !a.is_empty());
     for series in &mut meta.series {
-        series.name = SERIES_CLEANUP
-            .replace_all(&clean_value(&series.name)?, "")
-            .to_string();
+        if let Some(captures) = SERIES_NAME_CLEANUP.captures(&series.name)
+            && let Some(name) = captures.get(1)
+        {
+            series.name = name.as_str().to_string();
+        }
+
+        let (name, _) = parse_edition(&clean_value(&series.name)?, "");
+        series.name = SERIES_CLEANUP.replace_all(&name, "").to_string();
     }
 
-    let (title, edition) = parse_edition(&meta.title, tags);
+    let title = TITLE_SERIES.replace_all(&meta.title, "");
+    let (title, edition) = parse_edition(title.trim(), tags);
     meta.title = title;
     meta.edition = edition;
 
     // Apparently authors is getting removed from periodicals
     if meta.media_type != MediaType::PeriodicalEbook
         && meta.media_type != MediaType::PeriodicalAudiobook
-        && meta.authors.len() == 1
         && let Some(author) = meta.authors.first()
     {
         if let Some(title) = meta.title.strip_suffix(author) {
@@ -66,6 +78,12 @@ pub fn clean_meta(mut meta: TorrentMeta, tags: &str) -> Result<TorrentMeta> {
             meta.title = title.trim().to_string();
         }
     }
+    if let Some(series) = meta.series.first()
+        && let Some(title) = meta.title.strip_suffix(&series.name)
+        && let Some(title) = title.strip_suffix(": ")
+    {
+        meta.title = title.trim().to_string();
+    }
 
     meta.title = TITLE_CLEANUP
         .replace_all(&meta.title, "")
@@ -74,3 +92,70 @@ pub fn clean_meta(mut meta: TorrentMeta, tags: &str) -> Result<TorrentMeta> {
 
     Ok(meta)
 }
+
+// #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+// pub enum Category {
+//     Action,
+//     Art,
+//     Biographical,
+//     Business,
+//     Comedy,
+//     CompleteEditionsMusic,
+//     Computer,
+//     Crafts,
+//     Crime,
+//     Dramatization,
+//     Education,
+//     FactualNews,
+//     Fantasy,
+//     Food,
+//     Guitar,
+//     Health,
+//     Historical,
+//     Home,
+//     Horror,
+//     Humor,
+//     IndividualSheet,
+//     Instructional,
+//     Juvenile,
+//     Language,
+//     Lgbt,
+//     LickLibraryLTP,
+//     LickLibraryTechniques,
+//     LiteraryClassics,
+//     LitRPG,
+//     Math,
+//     Medicine,
+//     Music,
+//     MusicBook,
+//     Mystery,
+//     Nature,
+//     Paranormal,
+//     Philosophy,
+//     Poetry,
+//     Politics,
+//     Reference,
+//     Religion,
+//     Romance,
+//     Rpg,
+//     Science,
+//     ScienceFiction,
+//     SelfHelp,
+//     SheetCollection,
+//     SheetCollectionMP3,
+//     Sports,
+//     Technology,
+//     Thriller,
+//     Travel,
+//     UrbanFantasy,
+//     Western,
+//     YoungAdult,
+//     Superheroes,
+//     LiteraryFiction,
+//     ProgressionFantasy,
+//     ContemporaryFiction,
+//     DramaPlays,
+//     OccultMetaphysicalPractices,
+//     SliceOfLife,
+//     Unknown(u8),
+// }
