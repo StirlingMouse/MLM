@@ -14,8 +14,8 @@ use mlm_core::ContextExt;
 use mlm_db::{DatabaseExt as _, Flags, Language, OldCategory, SelectedTorrent, Timestamp};
 
 use super::types::{
-    SelectedBulkAction, SelectedData, SelectedMeta, SelectedPageColumns, SelectedPageFilter,
-    SelectedPageSort, SelectedRow, SelectedUserInfo,
+    SelectedBulkAction, SelectedData, SelectedPageColumns, SelectedPageFilter, SelectedPageSort,
+    SelectedUserInfo,
 };
 
 #[server]

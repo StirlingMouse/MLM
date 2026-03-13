@@ -75,9 +75,26 @@ pub fn root() -> Element {
 #[component]
 pub fn App() -> Element {
     use_hook(crate::sse::setup_sse);
+    let route: Route = use_route();
+
+    let page_title = match route {
+        Route::HomePage {} => "MLM",
+        Route::EventsPage {} | Route::EventsWithQuery { .. } => "MLM - Events",
+        Route::ErrorsPage {} => "MLM - Errors",
+        Route::SelectedPage {} => "MLM - Selected Torrents",
+        Route::ReplacedPage {} => "MLM - Replaced Torrents",
+        Route::DuplicatePage {} => "MLM - Duplicate Torrents",
+        Route::TorrentsPage {} | Route::TorrentsWithQuery { .. } => "MLM - Torrents",
+        Route::TorrentDetailPage { .. } => "MLM - Torrent",
+        Route::TorrentEditPage { .. } => "MLM - Edit Torrent",
+        Route::SearchPage {} => "MLM - Search",
+        Route::ListsPage {} => "MLM - Goodreads Lists",
+        Route::ListPage { .. } => "MLM - List",
+        Route::ConfigPage {} => "MLM - Config",
+    };
 
     rsx! {
-        document::Title { "MLM - Dioxus" }
+        document::Title { "{page_title}" }
         document::Meta { name: "viewport", content: "width=device-width, initial-scale=1" }
         document::Link { rel: "icon", r#type: "image/png", href: "/assets/favicon.png" }
         document::Style { "{GLOBAL_STYLE_CSS}" }
