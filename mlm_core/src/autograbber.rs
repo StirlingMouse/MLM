@@ -836,6 +836,8 @@ pub fn queue_torrent_meta_update(
     allow_non_mam: bool,
     linker_is_owner: bool,
 ) -> Result<PreparedTorrentMetaUpdate> {
+    torrent.meta.canonicalize();
+    meta.canonicalize();
     meta.ids.extend(torrent.meta.ids.clone());
     meta.tags = torrent.meta.tags.clone();
     if meta.description.is_empty() {
@@ -895,10 +897,7 @@ pub fn queue_torrent_meta_update(
     let id = torrent.id.clone();
     let diff = torrent.meta.diff(&meta);
     if diff.is_empty() {
-        debug!(
-            "Updating meta for torrent {}, old:\n{:?}\nnew:\n{:?}",
-            id, torrent.meta, meta
-        );
+        return Ok(PreparedTorrentMetaUpdate::Unchanged);
     } else {
         debug!(
             "Updating meta for torrent {}, diff:\n{}",
@@ -1025,11 +1024,15 @@ async fn update_selected_torrent_meta(
     (guard, rw): (MutexGuard<'_, ()>, RwTransaction<'_>),
     mam: &MaM<'_>,
     torrent: SelectedTorrent,
-    meta: TorrentMeta,
+    mut meta: TorrentMeta,
     events: &crate::stats::Events,
 ) -> Result<()> {
+    meta.canonicalize();
     let mam_id = torrent.mam_id;
     let diff = torrent.meta.diff(&meta);
+    if diff.is_empty() {
+        return Ok(());
+    }
     debug!(
         "Updating meta for selected torrent {}, diff:\n{}",
         mam_id,

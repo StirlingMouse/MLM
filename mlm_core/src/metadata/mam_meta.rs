@@ -103,6 +103,7 @@ fn merge_meta(orig: &TorrentMeta, incoming: &TorrentMeta) -> TorrentMeta {
 
     // Always set source to Match for provider-updated data
     out.source = mlm_db::MetadataSource::Match;
+    out.canonicalize();
 
     out
 }
