@@ -5,6 +5,8 @@
 
 FROM rust:1.91 AS build
 
+RUN cargo install dioxus-cli --version 0.7.3 --locked
+
 RUN <<EOF
   set -e
   cargo new --lib app/mlm_db
@@ -61,6 +63,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry <<EOF
   touch /app/mlm_web_dioxus/src/main.rs
   touch /app/server/src/main.rs
   cargo build --release
+  cd /app/mlm_web_dioxus
+  dx build --release --fullstack --skip-assets
 EOF
 
 CMD ["/app/target/release/mlm"]
@@ -70,7 +74,9 @@ FROM debian:trixie-slim AS app
 RUN apt update && apt install -y ca-certificates && apt clean
 COPY ./server/assets /server/assets
 COPY --from=build /app/target/release/mlm /mlm
+COPY --from=build /app/target/dx/mlm_web_dioxus/release/web/public /dioxus-public
 ENV MLM_LOG_DIR=""
 ENV MLM_CONFIG_FILE="/config/config.toml"
 ENV MLM_DB_FILE="/data/data.db"
+ENV DIOXUS_PUBLIC_PATH="/dioxus-public"
 CMD ["/mlm"]
