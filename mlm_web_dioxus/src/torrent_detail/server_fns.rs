@@ -580,6 +580,9 @@ pub async fn match_metadata_action(id: String, provider: String) -> Result<(), S
     let (new_meta, pid, fields) = match_meta(&context, &torrent.meta, &provider)
         .await
         .server_err()?;
+    if fields.is_empty() {
+        return Ok(());
+    }
 
     let (_guard, rw) = context.db().rw_async().await.server_err()?;
 

@@ -48,6 +48,18 @@ test.describe('Selected torrents page', () => {
                 await noLoading(page);
                 await expect(page.locator('body')).toContainText('Selected Book');
         });
+
+        test('shows the selected torrent stats above the table', async ({ page }) => {
+                await page.goto('/selected');
+                await noError(page);
+                await noLoading(page);
+                await expect(page.locator('body')).toContainText('Buffer:');
+                await expect(page.locator('body')).toContainText('Unsats: 2 / 10');
+                await expect(page.locator('body')).toContainText('Wedges: 3');
+                await expect(page.locator('body')).toContainText('Bonus: 50000');
+                await expect(page.locator('body')).toContainText('Queued Torrents: 5');
+                await expect(page.locator('body')).toContainText('Downloading Torrents: 0');
+        });
 });
 
 test.describe('Replaced torrents page', () => {
