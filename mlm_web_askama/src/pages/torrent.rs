@@ -3,9 +3,8 @@ use std::{collections::BTreeSet, ops::Deref, path::PathBuf};
 use anyhow::Result;
 use askama::Template;
 use axum::{
-    body::Body,
     extract::{OriginalUri, Path, State},
-    response::{Html, IntoResponse, Redirect},
+    response::{Html, Redirect},
 };
 use axum_extra::extract::Form;
 use itertools::Itertools;
@@ -24,10 +23,8 @@ use qbit::{
     parameters::TorrentState,
 };
 use regex::Regex;
-use reqwest::header;
 use serde::Deserialize;
 use time::UtcDateTime;
-use tokio_util::io::ReaderStream;
 
 use crate::{
     AppError, Conditional, MaMTorrentsTemplate, Page, TorrentLink, flag_icons,
@@ -42,58 +39,11 @@ use mlm_core::{
     audiobookshelf::{Abs, LibraryItemMinified},
     cleaner::clean_torrent,
     linker::{
-        find_library, library_dir, map_path, refresh_mam_metadata, refresh_metadata_relink, relink,
+        find_library, library_dir, refresh_mam_metadata, refresh_metadata_relink, relink,
     },
     qbittorrent::{self, ensure_category_exists},
 };
 use mlm_db::MetadataSource;
-
-pub async fn torrent_file(
-    State(context): State<Context>,
-    Path((id, filename)): Path<(String, String)>,
-) -> impl IntoResponse {
-    let config = context.config().await;
-    let Some(torrent) = context.db().r_transaction()?.get().primary::<Torrent>(id)? else {
-        return Err(AppError::NotFound);
-    };
-    let Some(path) = (if let (Some(library_path), Some(library_file)) = (
-        &torrent.library_path,
-        torrent
-            .library_files
-            .iter()
-            .find(|f| f.to_string_lossy() == filename),
-    ) {
-        Some(library_path.join(library_file))
-    } else if let Some((torrent, qbit, qbit_config)) =
-        qbittorrent::get_torrent(&config, &torrent.id).await?
-    {
-        qbit.files(&torrent.hash, None)
-            .await?
-            .into_iter()
-            .find(|f| f.name == filename)
-            .map(|file| map_path(&qbit_config.path_mapping, &torrent.save_path).join(&file.name))
-    } else {
-        None
-    }) else {
-        return Err(AppError::NotFound);
-    };
-    let file = match tokio::fs::File::open(path).await {
-        Ok(file) => file,
-        Err(_) => return Err(AppError::NotFound),
-    };
-    let stream = ReaderStream::new(file);
-    let body = Body::from_stream(stream);
-
-    let headers = [
-        (header::CONTENT_TYPE, "text/toml; charset=utf-8".to_string()),
-        (
-            header::CONTENT_DISPOSITION,
-            format!("attachment; filename=\"{}\"", filename),
-        ),
-    ];
-
-    Ok((headers, body))
-}
 
 pub async fn torrent_page(
     State(context): State<Context>,
@@ -535,7 +485,7 @@ impl TorrentPageTemplate {
 
 impl Page for TorrentPageTemplate {
     fn item_path(&self) -> &'static str {
-        "/torrents"
+        "/old/torrents"
     }
 }
 
@@ -549,7 +499,7 @@ struct TorrentMamPageTemplate {
 
 impl Page for TorrentMamPageTemplate {
     fn item_path(&self) -> &'static str {
-        "/torrents"
+        "/old/torrents"
     }
 }
 

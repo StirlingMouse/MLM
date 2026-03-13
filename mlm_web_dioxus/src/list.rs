@@ -71,7 +71,7 @@ fn matches_show_filter(item: &ListItemDto, show: Option<&str>) -> bool {
 
 fn render_list_torrent_link(torrent: &ListItemTorrentDto) -> Element {
     if let Some(id) = &torrent.id {
-        rsx! { a { href: "/dioxus/torrents/{id}", target: "_blank", rel: "noopener noreferrer", "torrent" } }
+        rsx! { a { href: "/torrents/{id}", target: "_blank", rel: "noopener noreferrer", "torrent" } }
     } else {
         rsx! { "torrent" }
     }

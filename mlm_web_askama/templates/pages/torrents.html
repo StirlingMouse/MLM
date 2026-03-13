@@ -230,7 +230,7 @@
   <div>{% if let Some(uploaded_at) = torrent.meta.uploaded_at %}{{ self::time(uploaded_at) }}{% endif %}</div>
   {% endif %}
   <div>
-    <a href="/torrents/{{torrent.id}}">open</a>
+    <a href="/old/torrents/{{torrent.id}}">open</a>
     {% if let Some(mam_id) = torrent.mam_id %}<a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>MaM</a>{% endif %}
     {% if let (Some(abs_url), Some(abs_id)) = (abs_url.as_ref(), torrent.meta.ids.get(ids::ABS)) %}
       <a href="{{ abs_url }}/audiobookshelf/item/{{ abs_id }}" target=_blank>ABS</a>

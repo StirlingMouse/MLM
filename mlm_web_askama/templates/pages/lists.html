@@ -8,7 +8,7 @@
 
 {% for (config, list) in lists %}
   <div>
-    <a href="/lists/{{ list.id }}"><h3>{{ config.name.as_deref().unwrap_or(list.title) }}</h3></a>
+    <a href="/old/lists/{{ list.id }}"><h3>{{ config.name.as_deref().unwrap_or(list.title) }}</h3></a>
     Last updated: {% if let Some(updated_at) = list.updated_at %}{{ self::time(updated_at) }}{% else %}<i>never</i>{% endif %}
   </div>
 {% endfor %}
@@ -17,7 +17,7 @@
 <p>Lists that have been removed from the config but are still in the database. They won't be refreshed or have books searched for at MaM.</p>
 {% for list in inactive_lists %}
   <div>
-    <a href="/lists/{{ list.id }}"><h3>{{ list.title }}</h3></a>
+    <a href="/old/lists/{{ list.id }}"><h3>{{ list.title }}</h3></a>
     Last updated: {% if let Some(updated_at) = list.updated_at %}{{ self::time(updated_at) }}{% else %}<i>never</i>{% endif %}
   </div>
 {% endfor %}

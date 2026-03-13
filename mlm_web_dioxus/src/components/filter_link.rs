@@ -36,7 +36,7 @@ pub fn TorrentTitleLink<F: Copy + PartialEq + Serialize + 'static>(
     rsx! {
         a {
             class: "link",
-            href: "/dioxus/torrents/{detail_id}",
+            href: "/torrents/{detail_id}",
             onclick: move |ev: MouseEvent| {
                 if ev.modifiers().alt() {
                     ev.prevent_default();

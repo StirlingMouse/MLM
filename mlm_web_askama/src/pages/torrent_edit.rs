@@ -113,7 +113,7 @@ pub async fn torrent_edit_page_post(
     )
     .await?;
 
-    Ok(Redirect::to(&format!("/torrents/{}", hash)))
+    Ok(Redirect::to(&format!("/old/torrents/{}", hash)))
 }
 
 #[derive(Debug, Deserialize)]
@@ -158,6 +158,6 @@ impl TorrentPageTemplate {
 
 impl Page for TorrentPageTemplate {
     fn item_path(&self) -> &'static str {
-        "/torrents"
+        "/old/torrents"
     }
 }

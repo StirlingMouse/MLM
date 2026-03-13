@@ -96,7 +96,7 @@
   </div>
   <div>{{ self::time(torrent.created_at) }}</div>
   <div>
-    <a href="/torrents/{{torrent.id}}">open</a>
+    <a href="/old/torrents/{{torrent.id}}">open</a>
     {% if let Some(mam_id) = torrent.mam_id %}<a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>MaM</a>{% endif %}
     {% if let (Some(abs_url), Some(abs_id)) = (abs_url.as_ref(), torrent.meta.ids.get(ids::ABS)) %}
       <a href="{{ abs_url }}/audiobookshelf/item/{{ abs_id }}" target=_blank>ABS</a>
@@ -129,7 +129,7 @@
   </div>
   <div>{{ self::time(replacement.created_at) }}</div>
   <div>
-    <a href="/torrents/{{ replacement.id }}">open</a>
+    <a href="/old/torrents/{{ replacement.id }}">open</a>
     {% if let Some(mam_id) = replacement.mam_id %}<a href="https://www.myanonamouse.net/t/{{ mam_id }}" target=_blank>MaM</a>{% endif %}
     {% if let (Some(abs_url), Some(abs_id)) = (abs_url.as_ref(), replacement.meta.ids.get(ids::ABS)) %}
       <a href="{{ abs_url }}/audiobookshelf/item/{{ abs_id }}" target=_blank>ABS</a>

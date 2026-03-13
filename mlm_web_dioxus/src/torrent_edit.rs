@@ -783,7 +783,7 @@ pub fn TorrentEditPage(id: String) -> Element {
 
                     div { class: "row",
                         button { r#type: "submit", class: "btn", "Save" }
-                        a { class: "btn", href: "/dioxus/torrents/{form.torrent_id}", "Back to Torrent" }
+                        a { class: "btn", href: "/torrents/{form.torrent_id}", "Back to Torrent" }
                     }
                 }
             } else if let Some(Err(e)) = &*data_res.value().read() {

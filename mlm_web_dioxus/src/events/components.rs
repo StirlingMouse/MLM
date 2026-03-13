@@ -318,7 +318,7 @@ pub fn EventContent(
 
     let render_torrent_link = |id: Option<String>, title: Option<String>| {
         if let (Some(id), Some(title)) = (id, title) {
-            rsx! { a { href: "/dioxus/torrents/{id}", "{title}" } }
+            rsx! { a { href: "/torrents/{id}", "{title}" } }
         } else {
             rsx! { "" }
         }

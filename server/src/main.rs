@@ -32,8 +32,10 @@ use axum::{
     response::Response,
 };
 use mlm_core::{Config, Stats, metadata::MetadataService};
-use mlm_web_askama::{ServeDir, router as askama_router};
+use mlm_web_api::router as api_router;
+use mlm_web_askama::router as askama_router;
 use mlm_web_dioxus::ssr::router as dioxus_router;
+use tower_http::services::ServeDir;
 
 #[cfg(target_family = "windows")]
 use mlm::windows;
@@ -245,6 +247,7 @@ async fn app_main() -> Result<()> {
 
     let app = wasm_router
         .merge(dioxus_router(context.clone()))
+        .merge(api_router(context.clone(), dioxus_public_path.clone()))
         .merge(askama_router(context.clone()));
 
     let listener = tokio::net::TcpListener::bind((web_host, web_port)).await?;

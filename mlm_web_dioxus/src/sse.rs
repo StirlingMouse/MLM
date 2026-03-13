@@ -78,11 +78,11 @@ pub fn setup_sse() {
             });
         }
 
-        connect_sse("/dioxus-stats-updates", trigger_stats_update);
-        connect_sse("/dioxus-events-updates", trigger_events_update);
-        connect_sse("/dioxus-selected-updates", trigger_selected_update);
-        connect_sse("/dioxus-errors-updates", trigger_errors_update);
-        connect_sse_data("/dioxus-qbit-progress", |data| {
+        connect_sse("/stats-updates", trigger_stats_update);
+        connect_sse("/events-updates", trigger_events_update);
+        connect_sse("/selected-updates", trigger_selected_update);
+        connect_sse("/errors-updates", trigger_errors_update);
+        connect_sse_data("/qbit-progress", |data| {
             if let Ok(progress) = serde_json::from_str::<Vec<(u64, u32)>>(&data) {
                 update_qbit_progress(progress);
             }

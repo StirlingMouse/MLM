@@ -124,11 +124,11 @@ async fn fetch_qbit_progress(context: &Context) -> Option<String> {
 
 pub fn router(ctx: Context) -> Router<()> {
     Router::new()
-        .route("/dioxus-stats-updates", get(dioxus_stats_updates))
-        .route("/dioxus-events-updates", get(dioxus_events_updates))
-        .route("/dioxus-selected-updates", get(dioxus_selected_updates))
-        .route("/dioxus-errors-updates", get(dioxus_errors_updates))
-        .route("/dioxus-qbit-progress", get(dioxus_qbit_progress))
+        .route("/stats-updates", get(dioxus_stats_updates))
+        .route("/events-updates", get(dioxus_events_updates))
+        .route("/selected-updates", get(dioxus_selected_updates))
+        .route("/errors-updates", get(dioxus_errors_updates))
+        .route("/qbit-progress", get(dioxus_qbit_progress))
         .serve_api_application(ServeConfig::builder(), root)
         .layer(Extension(ctx))
 }
