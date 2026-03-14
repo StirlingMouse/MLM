@@ -37,7 +37,13 @@ pub async fn get_selected_data(
         .server_err()?
         .all()
         .server_err()?
-        .filter_map(Result::ok)
+        .filter_map(|result| match result {
+            Ok(torrent) => Some(torrent),
+            Err(err) => {
+                error!("skipping selected torrent row after scan error: {err}");
+                None
+            }
+        })
         .filter(|t| show.removed_at || t.removed_at.is_none())
         .filter(|t| {
             filters.iter().all(|(field, value)| match field {
@@ -148,7 +154,13 @@ pub async fn get_selected_user_info() -> Result<Option<SelectedUserInfo>, Server
         .server_err()?
         .all()
         .server_err()?
-        .filter_map(Result::ok)
+        .filter_map(|result| match result {
+            Ok(torrent) => Some(torrent),
+            Err(err) => {
+                error!("skipping selected torrent row while computing user info: {err}");
+                None
+            }
+        })
         .filter(|t| t.removed_at.is_none() && t.started_at.is_some())
         .map(|t| t.meta.size.bytes() as f64)
         .sum();
