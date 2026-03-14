@@ -52,6 +52,46 @@ test.describe('Torrent detail page', () => {
                 await expect(page.locator('.torrent-description')).toContainText(updatedDescription);
         });
 
+        test('can edit identifiers and chip-based metadata fields', async ({ page }) => {
+                const updatedGoodreadsId = '7654321';
+                const addedCategory = 'Cozy Mystery';
+
+                await page.goto('/torrent-edit/torrent-001');
+                await expect(
+                        page.getByRole('heading', { name: 'Edit Torrent Metadata' })
+                ).toBeVisible();
+
+                const categoriesEditor = page.locator('.multi-value-editor', {
+                        has: page.getByRole('heading', { name: 'Categories' }),
+                });
+
+                await page.getByLabel('Goodreads ID').fill(updatedGoodreadsId);
+
+                await categoriesEditor.getByLabel('Add category').fill('cozy');
+                await categoriesEditor
+                        .locator('.editor-suggestions')
+                        .getByRole('button', { name: addedCategory })
+                        .click();
+                await expect(categoriesEditor.locator('.editor-selected')).toContainText(
+                        addedCategory
+                );
+
+                await page.getByRole('button', { name: 'Save' }).click();
+                await expect(page.locator('body')).toContainText('Metadata updated');
+
+                await page.reload();
+                await expect(page.getByLabel('Goodreads ID')).toHaveValue(updatedGoodreadsId);
+                await expect(categoriesEditor.locator('.editor-selected')).toContainText(
+                        addedCategory
+                );
+
+                await page.goto(DETAIL_URL);
+                await expect(page.getByRole('link', { name: 'Open in Goodreads' })).toHaveAttribute(
+                        'href',
+                        /7654321/
+                );
+        });
+
         test('client fetches and renders qBittorrent data', async ({ page }) => {
                 const qbitRequest = page.waitForRequest(
                         req => req.method() === 'POST' && req.url().includes('/api/get_qbit_data'),

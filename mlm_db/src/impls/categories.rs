@@ -3,6 +3,19 @@ use std::str::FromStr;
 use crate::{Category, MainCat, MediaType, OldCategory, OldMainCat};
 
 impl MediaType {
+    pub fn all() -> Vec<MediaType> {
+        vec![
+            MediaType::Audiobook,
+            MediaType::Ebook,
+            MediaType::Musicology,
+            MediaType::Radio,
+            MediaType::Manga,
+            MediaType::ComicBook,
+            MediaType::PeriodicalEbook,
+            MediaType::PeriodicalAudiobook,
+        ]
+    }
+
     pub fn from_id(id: u8) -> Option<MediaType> {
         match id {
             1 => Some(MediaType::Audiobook),
@@ -96,6 +109,10 @@ impl From<OldMainCat> for MediaType {
 }
 
 impl MainCat {
+    pub fn all() -> Vec<MainCat> {
+        vec![MainCat::Fiction, MainCat::Nonfiction]
+    }
+
     pub fn from_id(id: u8) -> Option<MainCat> {
         match id {
             1 => Some(MainCat::Fiction),
@@ -127,6 +144,162 @@ impl std::fmt::Display for MainCat {
 }
 
 impl Category {
+    pub fn all() -> Vec<Category> {
+        vec![
+            Category::Fantasy,
+            Category::ScienceFiction,
+            Category::Romance,
+            Category::Historical,
+            Category::ContemporaryRealist,
+            Category::Mystery,
+            Category::Thriller,
+            Category::Crime,
+            Category::Horror,
+            Category::ActionAdventure,
+            Category::Dystopian,
+            Category::PostApocalyptic,
+            Category::MagicalRealism,
+            Category::Western,
+            Category::Military,
+            Category::EpicFantasy,
+            Category::UrbanFantasy,
+            Category::SwordAndSorcery,
+            Category::HardSciFi,
+            Category::SpaceOpera,
+            Category::Cyberpunk,
+            Category::TimeTravel,
+            Category::AlternateHistory,
+            Category::ProgressionFantasy,
+            Category::RomanticComedy,
+            Category::RomanticSuspense,
+            Category::ParanormalRomance,
+            Category::DarkRomance,
+            Category::WhyChoose,
+            Category::Erotica,
+            Category::Detective,
+            Category::Noir,
+            Category::LegalThriller,
+            Category::PsychologicalThriller,
+            Category::CozyMystery,
+            Category::BodyHorror,
+            Category::GothicHorror,
+            Category::CosmicHorror,
+            Category::ParanormalHorror,
+            Category::Lgbtqia,
+            Category::TransRepresentation,
+            Category::DisabilityRepresentation,
+            Category::NeurodivergentRepresentation,
+            Category::PocRepresentation,
+            Category::ComingOfAge,
+            Category::FoundFamily,
+            Category::EnemiesToLovers,
+            Category::FriendsToLovers,
+            Category::FakeDating,
+            Category::SecondChance,
+            Category::SlowBurn,
+            Category::PoliticalIntrigue,
+            Category::Revenge,
+            Category::Redemption,
+            Category::Survival,
+            Category::Retelling,
+            Category::Ancient,
+            Category::Medieval,
+            Category::EarlyModern,
+            Category::NineteenthCentury,
+            Category::TwentiethCentury,
+            Category::Contemporary,
+            Category::Future,
+            Category::AlternateTimeline,
+            Category::AlternateUniverse,
+            Category::SmallTown,
+            Category::Urban,
+            Category::Rural,
+            Category::AcademySchool,
+            Category::Space,
+            Category::Africa,
+            Category::EastAsia,
+            Category::SouthAsia,
+            Category::SoutheastAsia,
+            Category::MiddleEast,
+            Category::Europe,
+            Category::NorthAmerica,
+            Category::LatinAmerica,
+            Category::Caribbean,
+            Category::Oceania,
+            Category::Cozy,
+            Category::Dark,
+            Category::Gritty,
+            Category::Wholesome,
+            Category::Funny,
+            Category::Satire,
+            Category::Emotional,
+            Category::CharacterDriven,
+            Category::Children,
+            Category::MiddleGrade,
+            Category::YoungAdult,
+            Category::NewAdult,
+            Category::Adult,
+            Category::Audiobook,
+            Category::Ebook,
+            Category::GraphicNovelsComics,
+            Category::Manga,
+            Category::Novella,
+            Category::LightNovel,
+            Category::ShortStories,
+            Category::Anthology,
+            Category::Poetry,
+            Category::Essays,
+            Category::Epistolary,
+            Category::DramaPlays,
+            Category::FullCast,
+            Category::DualNarration,
+            Category::DuetNarration,
+            Category::DramatizedAdaptation,
+            Category::AuthorNarrated,
+            Category::Abridged,
+            Category::Biography,
+            Category::Memoir,
+            Category::History,
+            Category::TrueCrime,
+            Category::Philosophy,
+            Category::ReligionSpirituality,
+            Category::MythologyFolklore,
+            Category::OccultEsotericism,
+            Category::PoliticsSociety,
+            Category::Business,
+            Category::PersonalFinance,
+            Category::ParentingFamily,
+            Category::SelfHelp,
+            Category::Psychology,
+            Category::HealthWellness,
+            Category::Science,
+            Category::Technology,
+            Category::Travel,
+            Category::Mathematics,
+            Category::ComputerScience,
+            Category::DataAi,
+            Category::Medicine,
+            Category::NatureEnvironment,
+            Category::Engineering,
+            Category::ArtPhotography,
+            Category::Music,
+            Category::SheetMusicScores,
+            Category::FilmTelevision,
+            Category::PopCulture,
+            Category::Humor,
+            Category::LiteraryCriticism,
+            Category::CookingFood,
+            Category::HomeGarden,
+            Category::CraftsDiy,
+            Category::SportsOutdoors,
+            Category::Textbook,
+            Category::Reference,
+            Category::Workbook,
+            Category::GuideManual,
+            Category::LanguageLinguistics,
+        ]
+    }
+
     pub fn from_old_category(category: OldCategory) -> Vec<Category> {
         match category {
             OldCategory::Audio(cat) => {
@@ -347,8 +520,11 @@ impl Category {
         let mut seen_categories = existing_categories.to_vec();
 
         for legacy_category in &legacy_categories {
-            let (new_categories, new_tags) =
-                Self::from_legacy_v15_category(*legacy_category, &legacy_categories, &seen_categories);
+            let (new_categories, new_tags) = Self::from_legacy_v15_category(
+                *legacy_category,
+                &legacy_categories,
+                &seen_categories,
+            );
             seen_categories.extend(new_categories.iter().copied());
             mapped.extend(new_categories);
             tags.extend(new_tags);
