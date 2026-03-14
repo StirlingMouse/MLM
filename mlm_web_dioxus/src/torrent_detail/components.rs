@@ -6,6 +6,7 @@ use super::server_fns::{
     torrent_start_action, torrent_stop_action,
 };
 use super::types::*;
+use crate::app::Route;
 use crate::components::{
     CategoryPills, Details, DownloadButtonMode, DownloadButtons, SearchMetadataFilterItem,
     SearchMetadataFilterRow, SearchMetadataKind, SearchTorrentRow, StatusMessage, TorrentIcons,
@@ -324,9 +325,11 @@ fn TorrentDetailContent(
                     }
                 }
                 div { style: "display:flex; flex-wrap:wrap; gap:0.5em; margin:0.6em 0;",
-                    a {
+                    Link {
                         class: "btn",
-                        href: "/torrents/{torrent.id}/edit",
+                        to: Route::TorrentEditPage {
+                            id: torrent.id.clone(),
+                        },
                         "Edit Metadata"
                     }
                     if let Some(abs_url) = abs_item_url {
@@ -409,7 +412,7 @@ fn TorrentDetailContent(
                             for file in &library_files {
                                 li {
                                     a {
-                                        href: "/torrents/{torrent.id}/{file.1}",
+                                        href: "/torrents/{torrent.id}/files/{file.1}",
                                         target: "_blank",
                                         "{file.0}"
                                     }
@@ -1101,7 +1104,7 @@ fn QbitControls(
                         for file in &qbit_files {
                             li {
                                 a {
-                                    href: "/torrents/{torrent_id}/{file.1}",
+                                    href: "/torrents/{torrent_id}/files/{file.1}",
                                     target: "_blank",
                                     "{file.0}"
                                 }

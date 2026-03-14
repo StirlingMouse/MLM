@@ -32,7 +32,7 @@ pub fn router(context: Context, dioxus_public_path: PathBuf) -> Router {
             get(torrent_api).with_state(context.clone()),
         )
         .route(
-            "/torrents/{id}/{filename}",
+            "/torrents/{id}/files/{*filename}",
             get(torrent_file).with_state(context.clone()),
         )
         .with_state(context.clone())

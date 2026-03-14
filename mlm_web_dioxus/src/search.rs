@@ -1,7 +1,7 @@
 use crate::components::SearchTorrentRow;
 use crate::components::StatusMessage;
 use crate::components::{
-    build_query_string, parse_location_query_pairs, set_location_query_string,
+    Pagination, build_query_string, parse_location_query_pairs, set_location_query_string,
 };
 use crate::dto::Series;
 #[cfg(feature = "server")]
@@ -93,7 +93,11 @@ pub fn map_search_torrent(
     }
 }
 
-fn search_state_from_params(params: &[(String, String)]) -> (String, String, String, Option<u64>) {
+const SEARCH_PAGE_SIZE: usize = 100;
+
+fn search_state_from_params(
+    params: &[(String, String)],
+) -> (String, String, String, Option<u64>, usize) {
     let query = params
         .iter()
         .find_map(|(k, v)| (k == "q").then_some(v.clone()))
@@ -107,10 +111,16 @@ fn search_state_from_params(params: &[(String, String)]) -> (String, String, Str
         .find_map(|(k, v)| (k == "uploader").then_some(v.clone()))
         .unwrap_or_default();
     let uploader = uploader_input.trim().parse::<u64>().ok();
-    (query, sort, uploader_input, uploader)
+    let page = params
+        .iter()
+        .find_map(|(k, v)| (k == "page").then_some(v.clone()))
+        .and_then(|page| page.parse::<usize>().ok())
+        .unwrap_or_default();
+    let from = page.saturating_sub(1) * SEARCH_PAGE_SIZE;
+    (query, sort, uploader_input, uploader, from)
 }
 
-fn search_query_string(query: &str, sort: &str, uploader_input: &str) -> String {
+fn search_query_string(query: &str, sort: &str, uploader_input: &str, from: usize) -> String {
     let mut params = Vec::new();
     if !query.is_empty() {
         params.push(("q".to_string(), query.to_string()));
@@ -121,13 +131,34 @@ fn search_query_string(query: &str, sort: &str, uploader_input: &str) -> String 
     if !uploader_input.trim().is_empty() {
         params.push(("uploader".to_string(), uploader_input.trim().to_string()));
     }
+    let page = from / SEARCH_PAGE_SIZE + 1;
+    if page > 1 {
+        params.push(("page".to_string(), page.to_string()));
+    }
     build_query_string(&params)
+}
+
+fn form_text_value(ev: &Event<FormData>, name: &str, fallback: &str) -> String {
+    match ev.data().get_first(name) {
+        Some(dioxus::html::FormValue::Text(value)) => value,
+        _ => fallback.to_string(),
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct SearchData {
     pub torrents: Vec<SearchTorrent>,
     pub total: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Props)]
+struct SearchResultsProps {
+    query: Signal<String>,
+    sort: Signal<String>,
+    uploader_input: Signal<String>,
+    uploader: Signal<Option<u64>>,
+    from: Signal<usize>,
+    status_msg: Signal<Option<(String, bool)>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -167,11 +198,94 @@ pub struct SearchTorrent {
     pub can_wedge: bool,
 }
 
+#[component]
+fn SearchResults(props: SearchResultsProps) -> Element {
+    let query = props.query;
+    let sort = props.sort;
+    let uploader_input = props.uploader_input;
+    let uploader = props.uploader;
+    let mut from = props.from;
+    let status_msg = props.status_msg;
+    let mut data_res = use_server_future(move || {
+        let query = query.read().clone();
+        let sort = sort.read().clone();
+        let uploader = *uploader.read();
+        let from = *from.read();
+        async move { get_search_data(query, sort, uploader, from).await }
+    })?;
+
+    let current_value = data_res.value();
+
+    rsx! {
+        if let Some(Ok(data)) = &*current_value.read() {
+            p { class: "faint", "Found {data.total} torrents" }
+            if data.torrents.is_empty() {
+                p {
+                    i { "No torrents found" }
+                }
+            } else {
+                {
+                    let total = data.total;
+                    let current_from = if total == 0 {
+                        0
+                    } else {
+                        (*from.read()).min(((total - 1) / SEARCH_PAGE_SIZE) * SEARCH_PAGE_SIZE)
+                    };
+                    let torrents = data.torrents.clone();
+
+                    rsx! {
+                        Pagination {
+                            total: total,
+                            from: current_from,
+                            page_size: SEARCH_PAGE_SIZE,
+                            on_change: move |next_from| {
+                                set_location_query_string(&search_query_string(
+                                    &query.read(),
+                                    &sort.read(),
+                                    &uploader_input.read(),
+                                    next_from,
+                                ));
+                                from.set(next_from);
+                            },
+                        }
+                        div { class: "Torrents",
+                            for torrent in torrents {
+                                SearchTorrentRow {
+                                    torrent,
+                                    status_msg,
+                                    on_refresh: move |_| data_res.restart(),
+                                }
+                            }
+                        }
+                        Pagination {
+                            total: total,
+                            from: current_from,
+                            page_size: SEARCH_PAGE_SIZE,
+                            on_change: move |next_from| {
+                                set_location_query_string(&search_query_string(
+                                    &query.read(),
+                                    &sort.read(),
+                                    &uploader_input.read(),
+                                    next_from,
+                                ));
+                                from.set(next_from);
+                            },
+                        }
+                    }
+                }
+            }
+        } else if let Some(Err(e)) = &*current_value.read() {
+            p { class: "error", "Error: {e}" }
+        }
+    }
+}
+
 #[server]
 pub async fn get_search_data(
     q: String,
     sort: String,
     uploader: Option<u64>,
+    from: usize,
 ) -> Result<SearchData, ServerFnError> {
     use mlm_mam::{
         enums::SearchTarget,
@@ -187,9 +301,11 @@ pub async fn get_search_data(
                 media_info: true,
                 ..Default::default()
             },
+            perpage: SEARCH_PAGE_SIZE as u64,
             tor: Tor {
                 target: uploader.map(SearchTarget::Uploader),
                 text: q,
+                start_number: from as u64,
                 ..Default::default()
             },
             ..Default::default()
@@ -199,6 +315,8 @@ pub async fn get_search_data(
 
     let search_config = context.config().await.search.clone();
     let r = context.db().r_transaction().server_err()?;
+
+    let page_len = result.data.len();
 
     let mut torrents = result
         .data
@@ -240,7 +358,10 @@ pub async fn get_search_data(
 
     Ok(SearchData {
         torrents,
-        total: result.total,
+        total: result
+            .found
+            .max(result.total)
+            .max(from.saturating_add(page_len)),
     })
 }
 
@@ -248,8 +369,13 @@ pub async fn get_search_data(
 pub fn SearchPage() -> Element {
     let _route: crate::app::Route = use_route();
     let params = parse_location_query_pairs();
-    let (initial_query, initial_sort, initial_uploader_input, initial_submitted_uploader) =
-        search_state_from_params(&params);
+    let (
+        initial_query,
+        initial_sort,
+        initial_uploader_input,
+        initial_submitted_uploader,
+        initial_from,
+    ) = search_state_from_params(&params);
 
     let query_input_initial = initial_query.clone();
     let sort_input_initial = initial_sort.clone();
@@ -259,6 +385,7 @@ pub fn SearchPage() -> Element {
         request_query_initial.clone(),
         request_sort_initial.clone(),
         initial_uploader_input.clone(),
+        initial_from,
     );
 
     let mut query_input = use_signal(move || query_input_initial.clone());
@@ -267,30 +394,19 @@ pub fn SearchPage() -> Element {
     let mut request_query = use_signal(move || request_query_initial.clone());
     let mut request_sort = use_signal(move || request_sort_initial.clone());
     let mut request_uploader = use_signal(move || initial_submitted_uploader);
+    let mut from = use_signal(move || initial_from);
     let mut last_route_state = use_signal(move || route_state_initial.clone());
     let status_msg = use_signal(|| None::<(String, bool)>);
-    let mut cached = use_signal(|| None::<SearchData>);
-
-    let mut data_res = use_server_future(move || async move {
-        get_search_data(
-            request_query.read().clone(),
-            request_sort.read().clone(),
-            *request_uploader.read(),
-        )
-        .await
-    })?;
-
-    let current_value = data_res.value();
-    let pending = data_res.pending();
 
     {
         let params = parse_location_query_pairs();
-        let (route_query, route_sort, route_uploader_input, route_uploader) =
+        let (route_query, route_sort, route_uploader_input, route_uploader, route_from) =
             search_state_from_params(&params);
         let next_route_state = (
             route_query.clone(),
             route_sort.clone(),
             route_uploader_input.clone(),
+            route_from,
         );
         if *last_route_state.read() != next_route_state {
             query_input.set(route_query.clone());
@@ -299,56 +415,47 @@ pub fn SearchPage() -> Element {
             request_query.set(route_query);
             request_sort.set(route_sort);
             request_uploader.set(route_uploader);
+            from.set(route_from);
             last_route_state.set(next_route_state);
-            data_res.restart();
         }
     }
-
-    use_effect(move || {
-        let value = current_value.read();
-        if let Some(Ok(data)) = &*value {
-            cached.set(Some(data.clone()));
-        }
-    });
-
-    let data_to_show = {
-        let value = current_value.read();
-        match &*value {
-            Some(Ok(data)) => Some(data.clone()),
-            _ => cached.read().clone(),
-        }
-    };
 
     rsx! {
         div { class: "search-page",
             form {
                 class: "row",
+                action: "/search",
+                method: "get",
                 onsubmit: move |ev: Event<FormData>| {
                     ev.prevent_default();
-                    let next_query = query_input.read().clone();
-                    let next_sort = sort_input.read().clone();
-                    let next_uploader_input = uploader_input.read().clone();
+                    let next_query = form_text_value(&ev, "q", &query_input.read());
+                    let next_sort = form_text_value(&ev, "sort", &sort_input.read());
+                    let next_uploader_input =
+                        form_text_value(&ev, "uploader", &uploader_input.read());
                     let uploader = next_uploader_input.trim().parse::<u64>().ok();
                     let next_route_state = (
                         next_query.clone(),
                         next_sort.clone(),
                         next_uploader_input.clone(),
+                        0,
                     );
 
                     set_location_query_string(&search_query_string(
                         &next_query,
                         &next_sort,
                         &next_uploader_input,
+                        0,
                     ));
                     last_route_state.set(next_route_state);
                     request_query.set(next_query);
                     request_sort.set(next_sort);
                     request_uploader.set(uploader);
-                    data_res.restart();
+                    from.set(0);
                 },
                 h1 { "MaM Search" }
                 input {
                     r#type: "text",
+                    name: "q",
                     value: "{query_input}",
                     placeholder: "Search torrents...",
                     oninput: move |ev| query_input.set(ev.value()),
@@ -358,31 +465,18 @@ pub fn SearchPage() -> Element {
 
             StatusMessage { status_msg }
 
-            if pending && cached.read().is_some() {
-                p { class: "loading-indicator", "Refreshing..." }
-            }
-
-            if let Some(data) = data_to_show {
-                p { class: "faint", "Showing {data.total} torrents" }
-                if data.torrents.is_empty() {
-                    p {
-                        i { "No torrents found" }
-                    }
-                } else {
-                    div { class: "Torrents",
-                        for torrent in data.torrents {
-                            SearchTorrentRow {
-                                torrent,
-                                status_msg,
-                                on_refresh: move |_| data_res.restart(),
-                            }
-                        }
-                    }
+            SuspenseBoundary {
+                fallback: |_| rsx! {
+                    p { class: "loading-indicator", "Loading search results..." }
+                },
+                SearchResults {
+                    query: request_query,
+                    sort: request_sort,
+                    uploader_input,
+                    uploader: request_uploader,
+                    from,
+                    status_msg,
                 }
-            } else if let Some(Err(e)) = &*current_value.read() {
-                p { class: "error", "Error: {e}" }
-            } else {
-                p { "Loading search results..." }
             }
         }
     }

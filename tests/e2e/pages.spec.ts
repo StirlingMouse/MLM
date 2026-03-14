@@ -94,15 +94,46 @@ test.describe('Search page', () => {
                 await expect(page.locator('form')).toBeVisible();
 
                 const input = page.locator('input[type="text"], input[type="search"]').first();
+                const submit = page.getByRole('button', { name: 'Search' });
                 await expect(input).toHaveCount(1);
                 await input.fill('Test Book');
                 await Promise.all([
                         page.waitForURL(url => url.toString().includes('/search?'), {
                                 timeout: 5_000,
                         }),
-                        input.press('Enter'),
+                        submit.click(),
                 ]);
                 await expect(page.locator('form')).toBeVisible();
+                await noLoading(page);
+                await expect(page.locator('body')).toContainText('Found 205 torrents');
+                await expect(page.locator('body')).toContainText('Mock Search Result 001');
+                await expect(page.locator('body')).not.toContainText('Mock Search Result 101');
+        });
+
+        test('server renders paged search results into html', async ({ request }) => {
+                const response = await request.get('/search?q=Test%20Book&page=2');
+                expect(response.ok()).toBeTruthy();
+
+                const html = await response.text();
+                expect(html).toContain('Found 205 torrents');
+                expect(html).toContain('Mock Search Result 101');
+                expect(html).not.toContain('Loading search results...');
+        });
+
+        test('pagination click updates the visible result page', async ({ page }) => {
+                await page.goto('/search?q=Test%20Book');
+                await noLoading(page);
+                await expect(page.locator('body')).toContainText('Mock Search Result 001');
+                await expect(page.locator('body')).not.toContainText('Mock Search Result 101');
+
+                await Promise.all([
+                        page.waitForURL(url => url.toString().includes('page=2'), { timeout: 5_000 }),
+                        page.getByRole('button', { name: '2' }).first().click(),
+                ]);
+
+                await noLoading(page);
+                await expect(page.locator('body')).toContainText('Mock Search Result 101');
+                await expect(page.locator('body')).not.toContainText('Mock Search Result 001');
         });
 });
 
