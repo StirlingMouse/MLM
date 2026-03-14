@@ -257,7 +257,7 @@ impl Category {
         }
     }
 
-    pub fn from_legacy_v15_id(id: u8) -> Option<(Vec<Category>, Vec<String>)> {
+    fn legacy_v15_category_from_id(id: u8) -> Option<crate::v15::Category> {
         let category = match id {
             1 => crate::v15::Category::Action,
             2 => crate::v15::Category::Art,
@@ -323,7 +323,43 @@ impl Category {
             62 => crate::v15::Category::Unknown(62),
             _ => return None,
         };
-        Some(Self::from_legacy_v15_category(category, &[], &[]))
+        Some(category)
+    }
+
+    pub fn from_legacy_v15_id(id: u8) -> Option<(Vec<Category>, Vec<String>)> {
+        Some(Self::from_legacy_v15_category(
+            Self::legacy_v15_category_from_id(id)?,
+            &[],
+            &[],
+        ))
+    }
+
+    pub fn from_legacy_v15_ids(
+        ids: &[u8],
+        existing_categories: &[Category],
+    ) -> Option<(Vec<Category>, Vec<String>)> {
+        let legacy_categories = ids
+            .iter()
+            .map(|id| Self::legacy_v15_category_from_id(*id))
+            .collect::<Option<Vec<_>>>()?;
+        let mut mapped = Vec::new();
+        let mut tags = Vec::new();
+        let mut seen_categories = existing_categories.to_vec();
+
+        for legacy_category in &legacy_categories {
+            let (new_categories, new_tags) =
+                Self::from_legacy_v15_category(*legacy_category, &legacy_categories, &seen_categories);
+            seen_categories.extend(new_categories.iter().copied());
+            mapped.extend(new_categories);
+            tags.extend(new_tags);
+        }
+
+        mapped.sort();
+        mapped.dedup();
+        tags.sort();
+        tags.dedup();
+
+        Some((mapped, tags))
     }
 
     pub fn from_legacy_v15_category(
@@ -1006,5 +1042,25 @@ impl FromStr for Category {
 impl std::fmt::Display for Category {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Category;
+
+    #[test]
+    fn legacy_v15_combo_mapping_uses_full_category_context() {
+        let (mapped, tags) = Category::from_legacy_v15_ids(&[59, 9, 20, 34, 42], &[])
+            .expect("legacy categories should map");
+
+        assert!(mapped.contains(&Category::ContemporaryRealist));
+        assert!(mapped.contains(&Category::Crime));
+        assert!(mapped.contains(&Category::Funny));
+        assert!(mapped.contains(&Category::Humor));
+        assert!(mapped.contains(&Category::Mystery));
+        assert!(mapped.contains(&Category::Romance));
+        assert!(mapped.contains(&Category::RomanticComedy));
+        assert!(tags.is_empty());
     }
 }

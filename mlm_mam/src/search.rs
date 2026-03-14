@@ -326,13 +326,18 @@ impl MaMTorrent {
             .ok_or_else(|| MetaError::UnknownOldCat(self.catname.clone(), self.category))?;
         let mut categories = Category::from_old_category(cat.clone());
         let mut tags = vec![];
-        for id in &self.categories {
-            if let Some((mapped_categories, mapped_tags)) = Category::from_legacy_v15_id(*id) {
-                categories.extend(mapped_categories);
-                tags.extend(mapped_tags);
-            } else {
-                return Err(MetaError::UnknownCat(*id));
-            }
+        if let Some((mapped_categories, mapped_tags)) =
+            Category::from_legacy_v15_ids(&self.categories, &categories)
+        {
+            categories.extend(mapped_categories);
+            tags.extend(mapped_tags);
+        } else if let Some(id) = self
+            .categories
+            .iter()
+            .copied()
+            .find(|id| Category::from_legacy_v15_id(*id).is_none())
+        {
+            return Err(MetaError::UnknownCat(id));
         }
         categories.sort();
         categories.dedup();
