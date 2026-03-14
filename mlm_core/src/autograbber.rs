@@ -1192,21 +1192,23 @@ mod tests {
 
     #[test]
     fn rejects_replacement_category_when_library_tag_filters_do_not_match() {
-        let mut config = Config::default();
-        config.libraries = vec![Library::ByCategory(LibraryByCategory {
-            category: "linked".to_string(),
-            options: LibraryOptions {
-                name: Some("linked".to_string()),
-                library_dir: PathBuf::from("/library"),
-                method: LibraryLinkMethod::Hardlink,
-                audio_types: None,
-                ebook_types: None,
-            },
-            tag_filters: LibraryTagFilters {
-                allow_tags: vec!["wanted".to_string()],
-                deny_tags: vec![],
-            },
-        })];
+        let config = Config {
+            libraries: vec![Library::ByCategory(LibraryByCategory {
+                category: "linked".to_string(),
+                options: LibraryOptions {
+                    name: Some("linked".to_string()),
+                    library_dir: PathBuf::from("/library"),
+                    method: LibraryLinkMethod::Hardlink,
+                    audio_types: None,
+                    ebook_types: None,
+                },
+                tag_filters: LibraryTagFilters {
+                    allow_tags: vec!["wanted".to_string()],
+                    deny_tags: vec![],
+                },
+            })],
+            ..Default::default()
+        };
 
         let qbit_torrent = QbitTorrent {
             category: "linked".to_string(),

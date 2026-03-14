@@ -431,7 +431,10 @@ pub fn DuplicatePage() -> Element {
                                             }
                                         }
                                         div {
-                                            for author in pair.torrent.meta.authors.clone() {
+                                            for (i, author) in pair.torrent.meta.authors.clone().into_iter().enumerate() {
+                                                if i > 0 {
+                                                    ", "
+                                                }
                                                 FilterLink {
                                                     field: DuplicatePageFilter::Author,
                                                     value: author.clone(),
@@ -441,7 +444,10 @@ pub fn DuplicatePage() -> Element {
                                             }
                                         }
                                         div {
-                                            for narrator in pair.torrent.meta.narrators.clone() {
+                                            for (i, narrator) in pair.torrent.meta.narrators.clone().into_iter().enumerate() {
+                                                if i > 0 {
+                                                    ", "
+                                                }
                                                 FilterLink {
                                                     field: DuplicatePageFilter::Narrator,
                                                     value: narrator.clone(),
@@ -451,7 +457,10 @@ pub fn DuplicatePage() -> Element {
                                             }
                                         }
                                         div {
-                                            for series in pair.torrent.meta.series.clone() {
+                                            for (i, series) in pair.torrent.meta.series.clone().into_iter().enumerate() {
+                                                if i > 0 {
+                                                    ", "
+                                                }
                                                 FilterLink {
                                                     field: DuplicatePageFilter::Series,
                                                     value: series.name.clone(),
@@ -466,7 +475,10 @@ pub fn DuplicatePage() -> Element {
                                         }
                                         div { "{pair.torrent.meta.size}" }
                                         div {
-                                            for filetype in pair.torrent.meta.filetypes.clone() {
+                                            for (i, filetype) in pair.torrent.meta.filetypes.clone().into_iter().enumerate() {
+                                                if i > 0 {
+                                                    ", "
+                                                }
                                                 FilterLink {
                                                     field: DuplicatePageFilter::Filetype,
                                                     value: filetype.clone(),
@@ -484,12 +496,15 @@ pub fn DuplicatePage() -> Element {
                                         div { "{pair.duplicate_of.meta.authors.join(\", \")}" }
                                         div { "{pair.duplicate_of.meta.narrators.join(\", \")}" }
                                         div {
-                                            for series in pair.duplicate_of.meta.series.clone() {
+                                            for (i, series) in pair.duplicate_of.meta.series.clone().into_iter().enumerate() {
+                                                if i > 0 {
+                                                    ", "
+                                                }
                                                 span {
                                                     if series.entries.is_empty() {
-                                                        "{series.name} "
+                                                        "{series.name}"
                                                     } else {
-                                                        "{series.name} #{series.entries} "
+                                                        "{series.name} #{series.entries}"
                                                     }
                                                 }
                                             }

@@ -259,5 +259,8 @@ fn meta_diff_ignores_category_order_only_changes() {
     };
 
     let diffs = a.diff(&b);
-    assert!(diffs.is_empty(), "category order-only changes should not produce diffs");
+    assert!(
+        diffs.is_empty(),
+        "category order-only changes should not produce diffs"
+    );
 }
