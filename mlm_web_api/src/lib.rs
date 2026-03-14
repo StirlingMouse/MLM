@@ -32,7 +32,7 @@ pub fn router(context: Context, dioxus_public_path: PathBuf) -> Router {
             get(torrent_api).with_state(context.clone()),
         )
         .route(
-            "/torrents/{id}/{filename}",
+            "/torrents/{id}/files/{*filename}",
             get(torrent_file).with_state(context.clone()),
         )
         .with_state(context.clone())
@@ -40,7 +40,9 @@ pub fn router(context: Context, dioxus_public_path: PathBuf) -> Router {
             "/assets",
             ServiceBuilder::new()
                 .layer(middleware::from_fn(set_static_cache_control))
-                .service(ServeDir::new(dioxus_assets_path).fallback(ServeDir::new("server/assets"))),
+                .service(
+                    ServeDir::new(dioxus_assets_path).fallback(ServeDir::new("server/assets")),
+                ),
         );
 
     #[cfg(debug_assertions)]

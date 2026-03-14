@@ -1,5 +1,7 @@
 use crate::sse::STATS_UPDATE_TRIGGER;
 #[cfg(feature = "server")]
+use crate::error::{IntoServerFnError, OptionIntoServerFnError};
+#[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -120,22 +122,28 @@ pub async fn get_list_data(list_id: String) -> Result<ListPageData, ServerFnErro
     let r = context
         .db()
         .r_transaction()
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .server_err_ctx("opening read transaction for list page")?;
 
     let list = r
         .get()
         .primary::<List>(list_id.as_str())
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .ok_or_else(|| ServerFnError::new("List not found"))?;
+        .server_err_ctx("loading list")?
+        .ok_or_server_err("List not found")?;
 
     let mut items = r
         .scan()
         .secondary::<ListItem>(ListItemKey::list_id)
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err_ctx("scanning list items")?
         .range(Some(list.id.clone())..=Some(list.id.clone()))
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .server_err_ctx("scoping list items to list id")?
+        .filter_map(|result| match result {
+            Ok(item) => Some(item),
+            Err(err) => {
+                tracing::error!("skipping list item row after scan error: {err}");
+                None
+            }
+        })
+        .collect::<Vec<_>>();
     items.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
     let items_dto = items
@@ -189,16 +197,15 @@ pub async fn mark_list_item_done(list_id: String, item_id: String) -> Result<(),
     let (_guard, rw) = db
         .rw_async()
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .server_err_ctx("opening write transaction for marking list item done")?;
     let mut item = rw
         .get()
         .primary::<ListItem>((list_id.as_str(), item_id.as_str()))
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .ok_or_else(|| ServerFnError::new("Could not find item"))?;
+        .server_err_ctx("loading list item")?
+        .ok_or_server_err("Could not find item")?;
     item.marked_done_at = Some(Timestamp::now());
-    rw.upsert(item)
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-    rw.commit().map_err(|e| ServerFnError::new(e.to_string()))?;
+    rw.upsert(item).server_err_ctx("upserting completed list item")?;
+    rw.commit().server_err_ctx("committing list item completion")?;
 
     Ok(())
 }

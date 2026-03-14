@@ -44,11 +44,11 @@ pub enum Route {
     #[route("/torrents")]
     TorrentsPage {},
 
+    #[route("/torrent-edit/:id")]
+    TorrentEditPage { id: String },
+
     #[route("/torrents/:id")]
     TorrentDetailPage { id: String },
-
-    #[route("/torrents/:id/edit")]
-    TorrentEditPage { id: String },
 
     #[route("/torrents/:..segments")]
     TorrentsWithQuery { segments: Vec<String> },
@@ -75,9 +75,26 @@ pub fn root() -> Element {
 #[component]
 pub fn App() -> Element {
     use_hook(crate::sse::setup_sse);
+    let route: Route = use_route();
+
+    let page_title = match route {
+        Route::HomePage {} => "MLM",
+        Route::EventsPage {} | Route::EventsWithQuery { .. } => "MLM - Events",
+        Route::ErrorsPage {} => "MLM - Errors",
+        Route::SelectedPage {} => "MLM - Selected Torrents",
+        Route::ReplacedPage {} => "MLM - Replaced Torrents",
+        Route::DuplicatePage {} => "MLM - Duplicate Torrents",
+        Route::TorrentsPage {} | Route::TorrentsWithQuery { .. } => "MLM - Torrents",
+        Route::TorrentDetailPage { .. } => "MLM - Torrent",
+        Route::TorrentEditPage { .. } => "MLM - Edit Torrent",
+        Route::SearchPage {} => "MLM - Search",
+        Route::ListsPage {} => "MLM - Goodreads Lists",
+        Route::ListPage { .. } => "MLM - List",
+        Route::ConfigPage {} => "MLM - Config",
+    };
 
     rsx! {
-        document::Title { "MLM - Dioxus" }
+        document::Title { "{page_title}" }
         document::Meta { name: "viewport", content: "width=device-width, initial-scale=1" }
         document::Link { rel: "icon", r#type: "image/png", href: "/assets/favicon.png" }
         document::Style { "{GLOBAL_STYLE_CSS}" }
@@ -113,4 +130,22 @@ fn EventsWithQuery(segments: Vec<String>) -> Element {
 fn TorrentsWithQuery(segments: Vec<String>) -> Element {
     let _ = segments;
     rsx! { TorrentsPage {} }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Route;
+    use std::str::FromStr;
+
+    #[test]
+    fn parses_torrent_edit_route() {
+        let route = Route::from_str("/torrent-edit/torrent-001").expect("route should parse");
+        assert_eq!(route.to_string(), "/torrent-edit/torrent-001");
+        assert_eq!(
+            route,
+            Route::TorrentEditPage {
+                id: "torrent-001".to_string(),
+            }
+        );
+    }
 }

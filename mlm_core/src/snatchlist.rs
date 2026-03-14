@@ -284,12 +284,19 @@ async fn update_torrent_meta(
         if let Some(mam_torrent) = mam_torrent {
             torrent.linker = Some(mam_torrent.uploader_name.clone());
         }
-    } else if meta == torrent.meta {
-        return Ok(());
+    } else {
+        torrent.meta.canonicalize();
+        meta.canonicalize();
+        if meta == torrent.meta {
+            return Ok(());
+        }
     }
 
     let id = torrent.id.clone();
     let diff = torrent.meta.diff(&meta);
+    if diff.is_empty() {
+        return Ok(());
+    }
     debug!(
         "Updating meta for torrent {}, diff:\n{}",
         id,

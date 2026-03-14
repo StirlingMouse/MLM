@@ -91,7 +91,13 @@ pub async fn get_replaced_data(
         .all()
         .server_err()?
         .rev()
-        .filter_map(Result::ok)
+        .filter_map(|result| match result {
+            Ok(torrent) => Some(torrent),
+            Err(err) => {
+                tracing::error!("skipping replaced torrent row after scan error: {err}");
+                None
+            }
+        })
         .filter(|t| t.replaced_with.is_some())
         .filter(|t| {
             filters

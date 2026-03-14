@@ -119,7 +119,7 @@ fn EventsHeader(
 ) -> Element {
     rsx! {
         div { class: "row",
-            h1 { "Events (Dioxus)" }
+            h1 { "Events" }
             div { class: "option_group query",
                 "Show: "
                 button {

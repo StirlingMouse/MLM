@@ -1,6 +1,8 @@
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use std::str::FromStr;
+#[cfg(feature = "server")]
+use tracing::error;
 
 #[cfg(feature = "server")]
 use crate::error::IntoServerFnError;
@@ -35,7 +37,13 @@ pub async fn get_selected_data(
         .server_err()?
         .all()
         .server_err()?
-        .filter_map(Result::ok)
+        .filter_map(|result| match result {
+            Ok(torrent) => Some(torrent),
+            Err(err) => {
+                error!("skipping selected torrent row after scan error: {err}");
+                None
+            }
+        })
         .filter(|t| show.removed_at || t.removed_at.is_none())
         .filter(|t| {
             filters.iter().all(|(field, value)| match field {
@@ -146,27 +154,42 @@ pub async fn get_selected_user_info() -> Result<Option<SelectedUserInfo>, Server
         .server_err()?
         .all()
         .server_err()?
-        .filter_map(Result::ok)
+        .filter_map(|result| match result {
+            Ok(torrent) => Some(torrent),
+            Err(err) => {
+                error!("skipping selected torrent row while computing user info: {err}");
+                None
+            }
+        })
         .filter(|t| t.removed_at.is_none() && t.started_at.is_some())
         .map(|t| t.meta.size.bytes() as f64)
         .sum();
 
     let user_info = match context.mam() {
-        Ok(mam) => mam.user_info().await.ok().map(|user_info| {
-            let remaining_buffer_bytes =
-                ((user_info.uploaded_bytes - user_info.downloaded_bytes - downloading_size)
-                    / config.min_ratio)
-                    .max(0.0) as u64;
-            let remaining_buffer = mlm_db::Size::from_bytes(remaining_buffer_bytes).to_string();
-            SelectedUserInfo {
-                unsat_count: user_info.unsat.count,
-                unsat_limit: user_info.unsat.limit,
-                wedges: user_info.wedges,
-                bonus: user_info.seedbonus,
-                remaining_buffer: Some(remaining_buffer),
+        Ok(mam) => match mam.user_info().await {
+            Ok(user_info) => Some({
+                let remaining_buffer_bytes =
+                    ((user_info.uploaded_bytes - user_info.downloaded_bytes - downloading_size)
+                        / config.min_ratio)
+                        .max(0.0) as u64;
+                let remaining_buffer = mlm_db::Size::from_bytes(remaining_buffer_bytes).to_string();
+                SelectedUserInfo {
+                    unsat_count: user_info.unsat.count,
+                    unsat_limit: user_info.unsat.limit,
+                    wedges: user_info.wedges,
+                    bonus: user_info.seedbonus,
+                    remaining_buffer: Some(remaining_buffer),
+                }
+            }),
+            Err(err) => {
+                error!("Failed to fetch MaM user info for selected torrents page: {err:#}");
+                None
             }
-        }),
-        Err(_) => None,
+        },
+        Err(err) => {
+            error!("Failed to create MaM client for selected torrents page: {err:#}");
+            None
+        }
     };
 
     Ok(user_info)

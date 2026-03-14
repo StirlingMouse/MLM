@@ -1,0 +1,4 @@
+mam_id = ""
+
+[[qbittorrent]]
+url = "http://localhost:3997"

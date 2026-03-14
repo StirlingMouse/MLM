@@ -1,6 +1,8 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
+use crate::error::IntoServerFnError;
+#[cfg(feature = "server")]
 use mlm_core::{
     ContextExt, Torrent as DbTorrent, TorrentKey,
     cleaner::clean_torrent,
@@ -45,20 +47,15 @@ pub async fn get_torrents_data(
     let mut from_val = from.unwrap_or(0);
     let page_size_val = page_size.unwrap_or(500);
 
-    let r = db
-        .r_transaction()
-        .context("r_transaction")
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    let r = db.r_transaction().server_err_ctx("opening read transaction")?;
     let torrents_iter = r
         .scan()
         .secondary::<DbTorrent>(TorrentKey::created_at)
-        .context("scan")
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .server_err_ctx("scanning torrents by created_at")?;
 
     let torrents = torrents_iter
         .all()
-        .context("all")
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err_ctx("reading torrent rows")?
         .rev();
 
     let query = filters
@@ -70,7 +67,7 @@ pub async fn get_torrents_data(
         let total = r
             .len()
             .secondary::<DbTorrent>(TorrentKey::created_at)
-            .map_err(|e| ServerFnError::new(e.to_string()))? as usize;
+            .server_err_ctx("counting torrents")? as usize;
         if page_size_val > 0 && from_val >= total && total > 0 {
             from_val = ((total - 1) / page_size_val) * page_size_val;
         }
@@ -82,9 +79,13 @@ pub async fn get_torrents_data(
             page_size_val
         };
         for torrent in torrents.skip(from_val).take(limit) {
-            let t = torrent
-                .context("torrent")
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            let t = match torrent {
+                Ok(torrent) => torrent,
+                Err(err) => {
+                    tracing::error!("skipping torrent row while loading torrents page: {err}");
+                    continue;
+                }
+            };
             rows.push(convert_torrent_row(&t));
         }
 
@@ -106,9 +107,13 @@ pub async fn get_torrents_data(
             page_size_val
         };
         for torrent in torrents {
-            let t = torrent
-                .context("torrent")
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            let t = match torrent {
+                Ok(torrent) => torrent,
+                Err(err) => {
+                    tracing::error!("skipping torrent row while filtering torrents page: {err}");
+                    continue;
+                }
+            };
             if filters
                 .iter()
                 .all(|(field, value)| matches_filter(&t, *field, value))
@@ -132,9 +137,13 @@ pub async fn get_torrents_data(
     let mut filtered_torrents = Vec::new();
 
     for torrent in torrents {
-        let t = torrent
-            .context("torrent")
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let t = match torrent {
+            Ok(torrent) => torrent,
+            Err(err) => {
+                tracing::error!("skipping torrent row while searching torrents page: {err}");
+                continue;
+            }
+        };
 
         let mut matches = true;
         for (field, value) in &filters {
@@ -256,38 +265,36 @@ pub async fn apply_torrents_action(
                 let Some(torrent) = context
                     .db()
                     .r_transaction()
-                    .map_err(|e| ServerFnError::new(e.to_string()))?
+                    .server_err_ctx("opening read transaction for clean action")?
                     .get()
                     .primary::<DbTorrent>(id)
-                    .map_err(|e| ServerFnError::new(e.to_string()))?
+                    .server_err_ctx("loading torrent for clean action")?
                 else {
                     return Err(ServerFnError::new("Could not find torrent"));
                 };
                 clean_torrent(&config, context.db(), torrent, true, &context.events)
                     .await
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                    .server_err_ctx("cleaning torrent")?;
             }
         }
         TorrentsBulkAction::Refresh => {
             let config = context.config().await;
-            let mam = context
-                .mam()
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            let mam = context.mam().server_err_ctx("creating MaM client for refresh")?;
             for id in torrent_ids {
                 refresh_mam_metadata(&config, context.db(), &mam, id, &context.events)
                     .await
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                    .server_err_ctx("refreshing torrent metadata")?;
             }
         }
         TorrentsBulkAction::RefreshRelink => {
             let config = context.config().await;
             let mam = context
                 .mam()
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+                .server_err_ctx("creating MaM client for refresh+relink")?;
             for id in torrent_ids {
                 refresh_metadata_relink(&config, context.db(), &mam, id, &context.events)
                     .await
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                    .server_err_ctx("refreshing torrent metadata and relinking")?;
             }
         }
         TorrentsBulkAction::Remove => {
@@ -295,19 +302,18 @@ pub async fn apply_torrents_action(
                 .db()
                 .rw_async()
                 .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+                .server_err_ctx("opening write transaction for torrent removal")?;
             for id in torrent_ids {
                 let Some(torrent) = rw
                     .get()
                     .primary::<DbTorrent>(id)
-                    .map_err(|e| ServerFnError::new(e.to_string()))?
+                    .server_err_ctx("loading torrent for removal")?
                 else {
                     return Err(ServerFnError::new("Could not find torrent"));
                 };
-                rw.remove(torrent)
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                rw.remove(torrent).server_err_ctx("removing torrent")?;
             }
-            rw.commit().map_err(|e| ServerFnError::new(e.to_string()))?;
+            rw.commit().server_err_ctx("committing torrent removals")?;
         }
     }
 

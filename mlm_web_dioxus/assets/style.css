@@ -681,6 +681,383 @@ details[open] > .details-summary {
         border-radius: 4px;
 }
 
+.sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+}
+
+.btn-secondary {
+        border: 1px solid var(--color-3);
+}
+
+.torrent-edit-page {
+        display: flex;
+        justify-content: center;
+        padding: 24px 16px 48px;
+}
+
+.torrent-edit-shell {
+        width: min(1120px, 100%);
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+}
+
+.torrent-edit-hero {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+        gap: 16px;
+        align-items: start;
+}
+
+.torrent-edit-kicker {
+        margin: 0 0 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-size: 0.75rem;
+        color: var(--text-faint);
+}
+
+.torrent-edit-hero h1 {
+        margin: 0;
+}
+
+.torrent-edit-intro {
+        margin: 8px 0 0;
+        max-width: 64ch;
+        color: var(--text-faint);
+}
+
+.torrent-edit-note {
+        padding: 14px 16px;
+        border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+        border-radius: 10px;
+        background:
+                linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent),
+                var(--above);
+}
+
+.torrent-edit-note strong {
+        display: block;
+        margin-bottom: 6px;
+}
+
+.torrent-edit-note p,
+.torrent-edit-banner {
+        margin: 0;
+}
+
+.torrent-edit-form {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+}
+
+.torrent-edit-section {
+        padding: 18px;
+        border: 1px solid var(--color-3);
+        border-radius: 14px;
+        background:
+                linear-gradient(180deg, color-mix(in srgb, var(--above) 65%, transparent), transparent 100px),
+                color-mix(in srgb, var(--color-2) 92%, black 8%);
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+}
+
+.torrent-edit-section-muted {
+        background: color-mix(in srgb, var(--color-2) 85%, black 15%);
+}
+
+.section-heading {
+        margin-bottom: 14px;
+}
+
+.section-heading h2 {
+        margin: 0 0 4px;
+        font-size: 1.1rem;
+}
+
+.section-heading p {
+        margin: 0;
+        color: var(--text-faint);
+}
+
+.torrent-edit-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+}
+
+.torrent-edit-grid-wide {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+}
+
+.field-span-2 {
+        grid-column: span 2;
+}
+
+.field-label {
+        font-weight: 600;
+}
+
+.torrent-edit-form input[type="text"],
+.torrent-edit-form textarea,
+.torrent-edit-form select {
+        width: 100%;
+        min-width: 0;
+}
+
+.torrent-edit-form textarea {
+        resize: vertical;
+        min-height: 120px;
+}
+
+.torrent-edit-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        margin-top: 16px;
+}
+
+.editor-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: start;
+        margin-bottom: 12px;
+}
+
+.editor-title {
+        margin: 0;
+        font-size: 1rem;
+}
+
+.editor-helper {
+        margin: 4px 0 0;
+        color: var(--text-faint);
+}
+
+.editor-selected,
+.readonly-chip-list,
+.editor-suggestion-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+}
+
+.editor-selected {
+        margin-bottom: 12px;
+}
+
+.editor-empty {
+        margin: 0;
+        color: var(--text-faint);
+}
+
+.editor-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--accent) 14%, var(--above));
+        border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.editor-chip-label {
+        min-width: 0;
+}
+
+.editor-chip-remove {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--text-faint);
+        cursor: pointer;
+}
+
+.editor-chip-remove:hover,
+.editor-chip-remove:focus-visible {
+        background: color-mix(in srgb, var(--accent) 16%, transparent);
+        color: var(--text-main);
+        outline: none;
+}
+
+.editor-icon-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 42px;
+        height: 42px;
+        border: 1px solid color-mix(in srgb, var(--color-3) 85%, transparent);
+        border-radius: 12px;
+        background: color-mix(in srgb, var(--above) 82%, transparent);
+        color: var(--text-faint);
+        cursor: pointer;
+}
+
+.editor-icon-button:hover,
+.editor-icon-button:focus-visible {
+        color: var(--text-main);
+        border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+        background: color-mix(in srgb, var(--accent) 12%, var(--above));
+        outline: none;
+}
+
+.editor-input-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+}
+
+.editor-input {
+        flex: 1;
+}
+
+.editor-suggestions {
+        margin-top: 12px;
+}
+
+.editor-suggestions-label {
+        margin: 0 0 8px;
+        font-size: 0.9rem;
+        color: var(--text-faint);
+}
+
+.editor-suggestion {
+        border: 1px solid color-mix(in srgb, var(--color-3) 80%, transparent);
+}
+
+.series-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+}
+
+.series-row {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+        padding: 12px;
+        border-radius: 12px;
+        background: color-mix(in srgb, var(--above) 75%, transparent);
+}
+
+.flag-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+}
+
+.flag-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: color-mix(in srgb, var(--above) 78%, transparent);
+        border: 1px solid var(--color-3);
+}
+
+.flag-card input {
+        margin: 0;
+}
+
+.flag-card-icon {
+        width: 18px;
+        height: 18px;
+        object-fit: contain;
+}
+
+.flag-card-label {
+        font-weight: 600;
+}
+
+.readonly-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+}
+
+.readonly-card {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 14px;
+        border-radius: 12px;
+        background: color-mix(in srgb, var(--above) 78%, transparent);
+}
+
+.readonly-card-wide {
+        grid-column: span 2;
+}
+
+.readonly-label {
+        color: var(--text-faint);
+        font-size: 0.9rem;
+}
+
+.torrent-edit-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 18px;
+        border: 1px solid var(--color-3);
+        border-radius: 14px;
+        background: color-mix(in srgb, var(--color-2) 94%, black 6%);
+        position: sticky;
+        bottom: 12px;
+}
+
+@media (max-width: 900px) {
+        .torrent-edit-hero,
+        .torrent-edit-grid,
+        .torrent-edit-grid-wide,
+        .flag-grid,
+        .readonly-grid,
+        .series-row {
+                grid-template-columns: 1fr;
+        }
+
+        .field-span-2,
+        .readonly-card-wide {
+                grid-column: auto;
+        }
+
+        .editor-header,
+        .editor-input-row,
+        .torrent-edit-actions {
+                flex-direction: column;
+                align-items: stretch;
+        }
+
+        .torrent-edit-actions {
+                position: static;
+        }
+}
+
 .torrent-detail-page .btn {
         display: inline-block;
         border: 1px solid var(--color-3);

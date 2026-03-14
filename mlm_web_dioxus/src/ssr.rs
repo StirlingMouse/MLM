@@ -67,16 +67,36 @@ async fn dioxus_qbit_progress(
 async fn fetch_qbit_progress(context: &Context) -> Option<String> {
     let config = context.config().await;
 
-    let downloading: Vec<(u64, String)> = context
-        .db()
-        .r_transaction()
-        .ok()?
-        .scan()
-        .primary::<SelectedTorrent>()
-        .ok()?
-        .all()
-        .ok()?
-        .filter_map(Result::ok)
+    let read_tx = match context.db().r_transaction() {
+        Ok(read_tx) => read_tx,
+        Err(err) => {
+            warn!("Failed opening read transaction for qBittorrent progress: {err}");
+            return None;
+        }
+    };
+    let selected_scan = match read_tx.scan().primary::<SelectedTorrent>() {
+        Ok(selected_scan) => selected_scan,
+        Err(err) => {
+            warn!("Failed scanning selected torrents for qBittorrent progress: {err}");
+            return None;
+        }
+    };
+    let selected_rows = match selected_scan.all() {
+        Ok(selected_rows) => selected_rows,
+        Err(err) => {
+            warn!("Failed reading selected torrents for qBittorrent progress: {err}");
+            return None;
+        }
+    };
+
+    let downloading: Vec<(u64, String)> = selected_rows
+        .filter_map(|result| match result {
+            Ok(torrent) => Some(torrent),
+            Err(err) => {
+                warn!("Skipping selected torrent row during qBittorrent progress poll: {err}");
+                None
+            }
+        })
         .filter(|t| t.started_at.is_some() && t.removed_at.is_none())
         .filter_map(|t| t.hash.map(|h| (t.mam_id, h)))
         .collect();

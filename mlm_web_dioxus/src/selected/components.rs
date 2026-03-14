@@ -470,7 +470,10 @@ pub fn SelectedPage() -> Element {
                                         }
                                         if show.read().authors {
                                             div {
-                                                for author in torrent.meta.authors.clone() {
+                                                for (i, author) in torrent.meta.authors.clone().into_iter().enumerate() {
+                                                    if i > 0 {
+                                                        ", "
+                                                    }
                                                     FilterLink {
                                                         field: SelectedPageFilter::Author,
                                                         value: author.clone(),
@@ -481,7 +484,10 @@ pub fn SelectedPage() -> Element {
                                         }
                                         if show.read().narrators {
                                             div {
-                                                for narrator in torrent.meta.narrators.clone() {
+                                                for (i, narrator) in torrent.meta.narrators.clone().into_iter().enumerate() {
+                                                    if i > 0 {
+                                                        ", "
+                                                    }
                                                     FilterLink {
                                                         field: SelectedPageFilter::Narrator,
                                                         value: narrator.clone(),
@@ -492,7 +498,10 @@ pub fn SelectedPage() -> Element {
                                         }
                                         if show.read().series {
                                             div {
-                                                for series in torrent.meta.series.clone() {
+                                                for (i, series) in torrent.meta.series.clone().into_iter().enumerate() {
+                                                    if i > 0 {
+                                                        ", "
+                                                    }
                                                     FilterLink {
                                                         field: SelectedPageFilter::Series,
                                                         value: series.name.clone(),
@@ -519,7 +528,10 @@ pub fn SelectedPage() -> Element {
                                         }
                                         if show.read().filetypes {
                                             div {
-                                                for filetype in torrent.meta.filetypes.clone() {
+                                                for (i, filetype) in torrent.meta.filetypes.clone().into_iter().enumerate() {
+                                                    if i > 0 {
+                                                        ", "
+                                                    }
                                                     FilterLink {
                                                         field: SelectedPageFilter::Filetype,
                                                         value: filetype.clone(),

@@ -1,6 +1,10 @@
 mod pages;
 mod tables;
 
+use crate::pages::{
+    index::stats_updates,
+    search::{search_page, search_page_post},
+};
 use askama::{Template, filters::HtmlSafe};
 use axum::{
     Router,
@@ -10,6 +14,8 @@ use axum::{
     routing::{get, post},
 };
 use itertools::Itertools;
+use mlm_core::config::{SearchConfig, TorrentFilter};
+use mlm_core::{Context, ContextExt};
 use mlm_db::{
     AudiobookCategory, EbookCategory, Flags, SelectedTorrent, Series, Timestamp, Torrent,
     TorrentMeta,
@@ -35,12 +41,6 @@ use time::{
     format_description::{self, OwnedFormatItem},
 };
 use tokio::sync::watch::error::SendError;
-use crate::pages::{
-    index::stats_updates,
-    search::{search_page, search_page_post},
-};
-use mlm_core::config::{SearchConfig, TorrentFilter};
-use mlm_core::{Context, ContextExt};
 
 pub fn router(context: Context) -> Router {
     Router::new()
@@ -48,7 +48,10 @@ pub fn router(context: Context) -> Router {
             "/old/stats-updates",
             get(stats_updates).with_state(context.clone()),
         )
-        .route("/old/torrents", get(torrents_page).with_state(context.clone()))
+        .route(
+            "/old/torrents",
+            get(torrents_page).with_state(context.clone()),
+        )
         .route(
             "/old/torrents",
             post(torrents_page_post).with_state(context.clone()),
@@ -69,7 +72,10 @@ pub fn router(context: Context) -> Router {
             "/old/torrents/{id}/edit",
             post(torrent_edit_page_post).with_state(context.clone()),
         )
-        .route("/old/events", get(event_page).with_state(context.db().clone()))
+        .route(
+            "/old/events",
+            get(event_page).with_state(context.db().clone()),
+        )
         .route("/old/search", get(search_page).with_state(context.clone()))
         .route(
             "/old/search",
@@ -84,12 +90,18 @@ pub fn router(context: Context) -> Router {
             "/old/lists/{list_id}",
             post(list_page_post).with_state(context.db().clone()),
         )
-        .route("/old/errors", get(errors_page).with_state(context.db().clone()))
+        .route(
+            "/old/errors",
+            get(errors_page).with_state(context.db().clone()),
+        )
         .route(
             "/old/errors",
             post(errors_page_post).with_state(context.db().clone()),
         )
-        .route("/old/selected", get(selected_page).with_state(context.clone()))
+        .route(
+            "/old/selected",
+            get(selected_page).with_state(context.clone()),
+        )
         .route(
             "/old/selected",
             post(selected_torrents_page_post).with_state(context.db().clone()),

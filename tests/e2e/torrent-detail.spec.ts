@@ -3,6 +3,95 @@ import { test, expect } from '@playwright/test';
 const DETAIL_URL = '/torrents/torrent-001';
 
 test.describe('Torrent detail page', () => {
+        test('server renders the edit page route', async ({ request }) => {
+                const response = await request.get('/torrent-edit/torrent-001');
+                expect(response.ok()).toBeTruthy();
+
+                const html = await response.text();
+                expect(html).toContain('Edit Torrent Metadata');
+                expect(html).not.toContain('Page Not Found');
+        });
+
+        test('edit metadata link loads the edit page', async ({ page }) => {
+                await page.goto(DETAIL_URL);
+
+                await Promise.all([
+                        page.waitForURL('/torrent-edit/torrent-001', { timeout: 10_000 }),
+                        page.getByRole('link', { name: 'Edit Metadata' }).click(),
+                ]);
+
+                await expect(
+                        page.getByRole('heading', { name: 'Edit Torrent Metadata' })
+                ).toBeVisible();
+                await expect(page.locator('input[type="text"]').first()).toBeVisible();
+        });
+
+        test('can edit torrent metadata and persist the change', async ({ page }) => {
+                const updatedDescription =
+                        'Description updated by Playwright to verify edit persistence.';
+
+                await page.goto('/torrent-edit/torrent-001');
+                await expect(
+                        page.getByRole('heading', { name: 'Edit Torrent Metadata' })
+                ).toBeVisible();
+
+                const description = page.getByLabel('Description');
+                await expect(description).toHaveValue('Description for Test Book 001');
+                await description.fill(updatedDescription);
+
+                await page.getByRole('button', { name: 'Save' }).click();
+                await expect(page.locator('body')).toContainText('Metadata updated');
+
+                await page.reload();
+                await expect(
+                        page.getByRole('heading', { name: 'Edit Torrent Metadata' })
+                ).toBeVisible();
+                await expect(page.getByLabel('Description')).toHaveValue(updatedDescription);
+
+                await page.goto(DETAIL_URL);
+                await expect(page.locator('.torrent-description')).toContainText(updatedDescription);
+        });
+
+        test('can edit identifiers and chip-based metadata fields', async ({ page }) => {
+                const updatedGoodreadsId = '7654321';
+                const addedCategory = 'Cozy Mystery';
+
+                await page.goto('/torrent-edit/torrent-001');
+                await expect(
+                        page.getByRole('heading', { name: 'Edit Torrent Metadata' })
+                ).toBeVisible();
+
+                const categoriesEditor = page.locator('.multi-value-editor', {
+                        has: page.getByRole('heading', { name: 'Categories' }),
+                });
+
+                await page.getByLabel('Goodreads ID').fill(updatedGoodreadsId);
+
+                await categoriesEditor.getByLabel('Add category').fill('cozy');
+                await categoriesEditor
+                        .locator('.editor-suggestions')
+                        .getByRole('button', { name: addedCategory })
+                        .click();
+                await expect(categoriesEditor.locator('.editor-selected')).toContainText(
+                        addedCategory
+                );
+
+                await page.getByRole('button', { name: 'Save' }).click();
+                await expect(page.locator('body')).toContainText('Metadata updated');
+
+                await page.reload();
+                await expect(page.getByLabel('Goodreads ID')).toHaveValue(updatedGoodreadsId);
+                await expect(categoriesEditor.locator('.editor-selected')).toContainText(
+                        addedCategory
+                );
+
+                await page.goto(DETAIL_URL);
+                await expect(page.getByRole('link', { name: 'Open in Goodreads' })).toHaveAttribute(
+                        'href',
+                        /7654321/
+                );
+        });
+
         test('client fetches and renders qBittorrent data', async ({ page }) => {
                 const qbitRequest = page.waitForRequest(
                         req => req.method() === 'POST' && req.url().includes('/api/get_qbit_data'),

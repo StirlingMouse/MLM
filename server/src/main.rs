@@ -224,17 +224,19 @@ async fn app_main() -> Result<()> {
 
     let context = mlm_core::runner::spawn_tasks(config, db, Arc::new(mam), stats, metadata_service);
 
-    let dioxus_public_path = {
-        let base = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        #[cfg(debug_assertions)]
-        {
-            base.join("target/dx/mlm_web_dioxus/debug/web/public")
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            base.join("target/dx/mlm_web_dioxus/release/web/public")
-        }
-    };
+    let dioxus_public_path = env::var("DIOXUS_PUBLIC_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let base = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            #[cfg(debug_assertions)]
+            {
+                base.join("target/dx/mlm_web_dioxus/debug/web/public")
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                base.join("target/dx/mlm_web_dioxus/release/web/public")
+            }
+        });
     unsafe {
         std::env::set_var("DIOXUS_PUBLIC_PATH", &dioxus_public_path);
     }

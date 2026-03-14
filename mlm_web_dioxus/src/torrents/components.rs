@@ -271,7 +271,10 @@ fn TorrentRow(
             }
             if show.categories {
                 div {
-                    for category in torrent.meta.categories.clone() {
+                    for (i, category) in torrent.meta.categories.clone().into_iter().enumerate() {
+                        if i > 0 {
+                            ", "
+                        }
                         FilterLink {
                             field: TorrentsPageFilter::Categories,
                             value: category.clone(),
@@ -336,7 +339,10 @@ fn TorrentRow(
             }
             if show.authors {
                 div {
-                    for author in torrent.meta.authors.clone() {
+                    for (i, author) in torrent.meta.authors.clone().into_iter().enumerate() {
+                        if i > 0 {
+                            ", "
+                        }
                         FilterLink {
                             field: TorrentsPageFilter::Author,
                             value: author.clone(),
@@ -349,7 +355,10 @@ fn TorrentRow(
             }
             if show.narrators {
                 div {
-                    for narrator in torrent.meta.narrators.clone() {
+                    for (i, narrator) in torrent.meta.narrators.clone().into_iter().enumerate() {
+                        if i > 0 {
+                            ", "
+                        }
                         FilterLink {
                             field: TorrentsPageFilter::Narrator,
                             value: narrator.clone(),
@@ -362,7 +371,10 @@ fn TorrentRow(
             }
             if show.series {
                 div {
-                    for series in torrent.meta.series.clone() {
+                    for (i, series) in torrent.meta.series.clone().into_iter().enumerate() {
+                        if i > 0 {
+                            ", "
+                        }
                         FilterLink {
                             field: TorrentsPageFilter::Series,
                             value: series.name.clone(),
@@ -393,7 +405,10 @@ fn TorrentRow(
             }
             if show.filetypes {
                 div {
-                    for filetype in torrent.meta.filetypes.clone() {
+                    for (i, filetype) in torrent.meta.filetypes.clone().into_iter().enumerate() {
+                        if i > 0 {
+                            ", "
+                        }
                         FilterLink {
                             field: TorrentsPageFilter::Filetype,
                             value: filetype.clone(),

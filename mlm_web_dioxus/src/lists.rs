@@ -1,5 +1,7 @@
 use crate::app::Route;
 #[cfg(feature = "server")]
+use crate::error::IntoServerFnError;
+#[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -39,16 +41,16 @@ pub async fn get_lists() -> Result<ListsData, ServerFnError> {
 
         let db_lists: Vec<List> = db
             .r_transaction()
-            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .server_err_ctx("opening read transaction for lists page")?
             .scan()
             .secondary::<List>(ListKey::title)
-            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .server_err_ctx("scanning lists by title")?
             .all()
-            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .server_err_ctx("reading lists")?
             .filter_map(|result| match result {
                 Ok(list) => Some(list),
                 Err(err) => {
-                    tracing::warn!("list scan error: {err}");
+                    tracing::error!("skipping list row after scan error: {err}");
                     None
                 }
             })

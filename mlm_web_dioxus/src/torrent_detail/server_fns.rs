@@ -200,7 +200,10 @@ async fn read_library_files(
     let mut entries = match fs::read_dir(path).await {
         Ok(entries) => entries,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(err) => return Err(ServerFnError::new(err.to_string())),
+        Err(err) => {
+            tracing::error!("failed to read library directory '{}': {err}", path.display());
+            return Err(ServerFnError::new(err.to_string()));
+        }
     };
 
     let mut files = Vec::new();
@@ -340,7 +343,16 @@ async fn get_downloaded_torrent_detail(
         abs_item_url,
         abs_cover_url,
         mam_torrent: mam_torrent.as_ref().and_then(|mam_torrent| {
-            let meta = mam_torrent.as_meta().ok()?;
+            let meta = match mam_torrent.as_meta() {
+                Ok(meta) => meta,
+                Err(err) => {
+                    tracing::error!(
+                        "failed to parse MaM metadata while building torrent detail '{}': {err}",
+                        torrent.id
+                    );
+                    return None;
+                }
+            };
             Some(map_mam_torrent(
                 mam_torrent.clone(),
                 &meta,
@@ -580,6 +592,9 @@ pub async fn match_metadata_action(id: String, provider: String) -> Result<(), S
     let (new_meta, pid, fields) = match_meta(&context, &torrent.meta, &provider)
         .await
         .server_err()?;
+    if fields.is_empty() {
+        return Ok(());
+    }
 
     let (_guard, rw) = context.db().rw_async().await.server_err()?;
 
