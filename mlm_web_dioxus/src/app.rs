@@ -14,8 +14,6 @@ use crate::torrents::TorrentsPage;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
-const GLOBAL_STYLE_CSS: &str = include_str!("../../server/assets/style.css");
-
 #[derive(Clone, Routable, PartialEq, Eq, Serialize, Deserialize, Debug)]
 #[rustfmt::skip]
 pub enum Route {
@@ -97,7 +95,7 @@ pub fn App() -> Element {
         document::Title { "{page_title}" }
         document::Meta { name: "viewport", content: "width=device-width, initial-scale=1" }
         document::Link { rel: "icon", r#type: "image/png", href: "/assets/favicon.png" }
-        document::Style { "{GLOBAL_STYLE_CSS}" }
+        document::Link { rel: "stylesheet", href: "/assets/style.css" }
 
         nav { "aria-label": "Main navigation",
             Link { to: Route::HomePage {}, "Home" }
