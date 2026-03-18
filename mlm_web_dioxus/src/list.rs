@@ -73,7 +73,14 @@ fn matches_show_filter(item: &ListItemDto, show: Option<&str>) -> bool {
 
 fn render_list_torrent_link(torrent: &ListItemTorrentDto) -> Element {
     if let Some(id) = &torrent.id {
-        rsx! { a { href: "/torrents/{id}", target: "_blank", rel: "noopener noreferrer", "torrent" } }
+        rsx! {
+            a {
+                href: "/torrents/{id}",
+                target: "_blank",
+                rel: "noopener noreferrer",
+                "torrent"
+            }
+        }
     } else {
         rsx! { "torrent" }
     }
@@ -134,7 +141,7 @@ pub async fn get_list_data(list_id: String) -> Result<ListPageData, ServerFnErro
         .scan()
         .secondary::<ListItem>(ListItemKey::list_id)
         .server_err_ctx("scanning list items")?
-        .range(Some(list.id.clone())..=Some(list.id.clone()))
+        .range(list.id.clone()..=list.id.clone())
         .server_err_ctx("scoping list items to list id")?
         .filter_map(|result| match result {
             Ok(item) => Some(item),
@@ -384,9 +391,19 @@ fn ListItemComponent(props: ListItemComponentProps) -> Element {
                 div { class: "row",
                     h3 { "{item.title}" }
                     div {
-                        a { href: "{mam_search_url(&item)}", target: "_blank", rel: "noopener noreferrer", "search on MaM" }
+                        a {
+                            href: "{mam_search_url(&item)}",
+                            target: "_blank",
+                            rel: "noopener noreferrer",
+                            "search on MaM"
+                        }
                         if let Some(url) = &item.book_url {
-                            a { href: "{url}", target: "_blank", rel: "noopener noreferrer", "goodreads" }
+                            a {
+                                href: "{url}",
+                                target: "_blank",
+                                rel: "noopener noreferrer",
+                                "goodreads"
+                            }
                         }
                     }
                 }
