@@ -2,6 +2,23 @@ import { test, expect } from '@playwright/test';
 
 const DETAIL_URL = '/torrents/torrent-001';
 
+function browserOffset(projectName: string): number {
+        switch (projectName) {
+                case 'chromium':
+                        return 0;
+                case 'firefox':
+                        return 1;
+                case 'webkit':
+                        return 2;
+                default:
+                        return 0;
+        }
+}
+
+function torrentIdFor(index: number): string {
+        return `torrent-${String(index).padStart(3, '0')}`;
+}
+
 test.describe('Torrent detail page', () => {
         test('server renders the edit page route', async ({ request }) => {
                 const response = await request.get('/torrent-edit/torrent-001');
@@ -26,17 +43,18 @@ test.describe('Torrent detail page', () => {
                 await expect(page.locator('input[type="text"]').first()).toBeVisible();
         });
 
-        test('can edit torrent metadata and persist the change', async ({ page }) => {
+        test('can edit torrent metadata and persist the change', async ({ page }, testInfo) => {
+                const torrentIndex = 11 + browserOffset(testInfo.project.name);
+                const torrentId = torrentIdFor(torrentIndex);
                 const updatedDescription =
-                        'Description updated by Playwright to verify edit persistence.';
+                        `Description updated by Playwright for ${testInfo.project.name}.`;
 
-                await page.goto('/torrent-edit/torrent-001');
+                await page.goto(`/torrent-edit/${torrentId}`);
                 await expect(
                         page.getByRole('heading', { name: 'Edit Torrent Metadata' })
                 ).toBeVisible();
 
                 const description = page.getByLabel('Description');
-                await expect(description).toHaveValue('Description for Test Book 001');
                 await description.fill(updatedDescription);
 
                 await page.getByRole('button', { name: 'Save' }).click();
@@ -48,15 +66,17 @@ test.describe('Torrent detail page', () => {
                 ).toBeVisible();
                 await expect(page.getByLabel('Description')).toHaveValue(updatedDescription);
 
-                await page.goto(DETAIL_URL);
+                await page.goto(`/torrents/${torrentId}`);
                 await expect(page.locator('.torrent-description')).toContainText(updatedDescription);
         });
 
-        test('can edit identifiers and chip-based metadata fields', async ({ page }) => {
+        test('can edit identifiers and chip-based metadata fields', async ({ page }, testInfo) => {
+                const torrentIndex = 14 + browserOffset(testInfo.project.name);
+                const torrentId = torrentIdFor(torrentIndex);
                 const updatedGoodreadsId = '7654321';
                 const addedCategory = 'Cozy Mystery';
 
-                await page.goto('/torrent-edit/torrent-001');
+                await page.goto(`/torrent-edit/${torrentId}`);
                 await expect(
                         page.getByRole('heading', { name: 'Edit Torrent Metadata' })
                 ).toBeVisible();
@@ -85,7 +105,7 @@ test.describe('Torrent detail page', () => {
                         addedCategory
                 );
 
-                await page.goto(DETAIL_URL);
+                await page.goto(`/torrents/${torrentId}`);
                 await expect(page.getByRole('link', { name: 'Open in Goodreads' })).toHaveAttribute(
                         'href',
                         /7654321/
@@ -140,9 +160,12 @@ test.describe('Torrent detail page', () => {
                 await expect(page.locator('h3', { hasText: 'Other Torrents' })).toBeVisible({
                         timeout: 20_000,
                 });
-                await expect(page.locator('body')).toContainText('Mock Search: Way of Kings', {
-                        timeout: 20_000,
-                });
+                await expect(page.locator('.detail-related-card')).toContainText(
+                        'Mock Search Result 001',
+                        {
+                                timeout: 20_000,
+                        }
+                );
         });
 
         test('loads and shows torrent info', async ({ page }) => {
@@ -150,6 +173,43 @@ test.describe('Torrent detail page', () => {
                 await expect(page.locator('.error')).toHaveCount(0);
                 // Should show the torrent title
                 await expect(page.locator('body')).toContainText('Test Book 001');
+        });
+
+        test('uses grouped actions and shared section toggles', async ({ page }) => {
+                await page.goto(DETAIL_URL);
+
+                const descriptionSection = page
+                        .locator('details')
+                        .filter({ has: page.locator('summary', { hasText: 'Description' }) })
+                        .first();
+                await expect(descriptionSection).toHaveJSProperty('open', true);
+                await expect(descriptionSection).toContainText('Description for Test Book 001');
+
+                const historySection = page
+                        .locator('details')
+                        .filter({ has: page.locator('summary', { hasText: 'Event History' }) })
+                        .first();
+                await expect(historySection).toHaveJSProperty('open', false);
+                await historySection.locator('summary').click();
+                await expect(historySection).toHaveJSProperty('open', true);
+
+                const sidebarMetadata = page.locator('.torrent-side .detail-metadata-table');
+                await expect(sidebarMetadata).not.toContainText('Library Path');
+
+                const libraryCard = page.locator('.torrent-main .detail-library-card');
+                await expect(libraryCard).toContainText('Library');
+                await expect(libraryCard).toContainText('/library/books/Test Book 001');
+                await expect(libraryCard).toContainText('Relink');
+                await expect(libraryCard).toContainText('Refresh & Relink');
+                await expect(libraryCard).toContainText('Clean');
+                await expect(libraryCard).toContainText('Remove');
+
+                const metadataActions = page.locator('.detail-action-group').filter({
+                        hasText: 'Metadata',
+                });
+                await expect(metadataActions).toContainText('Edit Metadata');
+                await expect(metadataActions).toContainText('Match Metadata');
+                await expect(metadataActions).toContainText('Refresh from MaM');
         });
 
         test('other torrents section resolves (not stuck loading)', async ({ page }) => {
