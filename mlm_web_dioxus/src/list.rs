@@ -1,6 +1,6 @@
-use crate::sse::STATS_UPDATE_TRIGGER;
 #[cfg(feature = "server")]
 use crate::error::{IntoServerFnError, OptionIntoServerFnError};
+use crate::sse::STATS_UPDATE_TRIGGER;
 #[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
 use dioxus::prelude::*;
@@ -204,8 +204,10 @@ pub async fn mark_list_item_done(list_id: String, item_id: String) -> Result<(),
         .server_err_ctx("loading list item")?
         .ok_or_server_err("Could not find item")?;
     item.marked_done_at = Some(Timestamp::now());
-    rw.upsert(item).server_err_ctx("upserting completed list item")?;
-    rw.commit().server_err_ctx("committing list item completion")?;
+    rw.upsert(item)
+        .server_err_ctx("upserting completed list item")?;
+    rw.commit()
+        .server_err_ctx("committing list item completion")?;
 
     Ok(())
 }

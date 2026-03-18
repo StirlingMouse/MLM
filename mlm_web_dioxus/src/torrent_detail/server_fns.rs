@@ -201,7 +201,10 @@ async fn read_library_files(
         Ok(entries) => entries,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(err) => {
-            tracing::error!("failed to read library directory '{}': {err}", path.display());
+            tracing::error!(
+                "failed to read library directory '{}': {err}",
+                path.display()
+            );
             return Err(ServerFnError::new(err.to_string()));
         }
     };

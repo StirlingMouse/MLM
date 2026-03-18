@@ -47,7 +47,9 @@ pub async fn get_torrents_data(
     let mut from_val = from.unwrap_or(0);
     let page_size_val = page_size.unwrap_or(500);
 
-    let r = db.r_transaction().server_err_ctx("opening read transaction")?;
+    let r = db
+        .r_transaction()
+        .server_err_ctx("opening read transaction")?;
     let torrents_iter = r
         .scan()
         .secondary::<DbTorrent>(TorrentKey::created_at)
@@ -279,7 +281,9 @@ pub async fn apply_torrents_action(
         }
         TorrentsBulkAction::Refresh => {
             let config = context.config().await;
-            let mam = context.mam().server_err_ctx("creating MaM client for refresh")?;
+            let mam = context
+                .mam()
+                .server_err_ctx("creating MaM client for refresh")?;
             for id in torrent_ids {
                 refresh_mam_metadata(&config, context.db(), &mam, id, &context.events)
                     .await

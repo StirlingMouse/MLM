@@ -304,7 +304,8 @@ pub async fn apply_tag_filter_action(
         .server_err_ctx("opening read transaction for tag filter action")?
         .len()
         .primary::<Torrent>()
-        .server_err_ctx("counting torrents for tag filter action")? as usize;
+        .server_err_ctx("counting torrents for tag filter action")?
+        as usize;
     tracing::info!("Processing {} torrents for tag filter", total_torrents);
 
     let mam_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_MAM_REQUESTS));
@@ -318,7 +319,9 @@ pub async fn apply_tag_filter_action(
         .scan()
         .primary::<Torrent>()
         .server_err_ctx("scanning torrents for tag filter action")?;
-    let torrent_iter = scan.all().server_err_ctx("reading torrents for tag filter action")?;
+    let torrent_iter = scan
+        .all()
+        .server_err_ctx("reading torrents for tag filter action")?;
 
     let mut batch = Vec::with_capacity(BATCH_SIZE);
     let mut batch_idx = 0usize;

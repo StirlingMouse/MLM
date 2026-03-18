@@ -1197,8 +1197,8 @@ details[open] > .details-summary {
 
 .search-page .TorrentRow {
         display: grid;
-        grid-template-columns: 56px 56px 1fr 80px 130px 80px;
-        grid-template-areas: "category icons main files uploaded stats";
+        grid-template-columns: 56px 56px 1fr 32px 80px 130px 80px;
+        grid-template-areas: "category icons main download files uploaded stats";
         gap: 8px;
         padding: 8px;
         border-radius: 4px;
@@ -1217,6 +1217,17 @@ details[open] > .details-summary {
 
 .search-page .TorrentRow .stats {
         align-items: flex-end;
+}
+
+.search-page .TorrentRow .download {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+}
+
+.search-page .TorrentRow .download img {
+        width: 18px;
+        height: 18px;
 }
 
 .search-page .TorrentRow .icon-row {
@@ -1270,10 +1281,10 @@ details[open] > .details-summary {
 
 @media (max-width: 960px) {
         .search-page .TorrentRow {
-                grid-template-columns: 56px 1fr 80px;
+                grid-template-columns: 56px 1fr 80px 32px;
                 grid-template-areas:
-                        "category main main"
-                        "icons main main"
-                        "files uploaded stats";
+                        "category main main download"
+                        "icons main main download"
+                        "files uploaded stats stats";
         }
 }
