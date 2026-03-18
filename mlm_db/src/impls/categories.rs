@@ -494,6 +494,13 @@ impl Category {
             60 => crate::v15::Category::DramaPlays,
             61 => crate::v15::Category::Unknown(61),
             62 => crate::v15::Category::Unknown(62),
+            63 => crate::v15::Category::Unknown(63),
+            64 => crate::v15::Category::Unknown(64),
+            65 => crate::v15::Category::Unknown(65),
+            66 => crate::v15::Category::Unknown(66),
+            67 => crate::v15::Category::Unknown(67),
+            68 => crate::v15::Category::Unknown(68),
+            69 => crate::v15::Category::Unknown(69),
             _ => return None,
         };
         Some(category)
@@ -652,6 +659,9 @@ impl Category {
             }
             crate::v15::Category::Unknown(62) => {
                 mapped.extend([Category::ContemporaryRealist, Category::CharacterDriven]);
+            }
+            crate::v15::Category::Unknown(63) => {
+                mapped.extend([Category::Military]);
             }
             _ => tags.push(Self::legacy_v15_label(category)),
         }
@@ -1042,6 +1052,7 @@ impl Category {
             crate::v15::Category::DramaPlays => "Drama/Plays".to_string(),
             crate::v15::Category::Unknown(61) => "Occult / Metaphysical Practices".to_string(),
             crate::v15::Category::Unknown(62) => "Slice of Life".to_string(),
+            crate::v15::Category::Unknown(63) => "Military/War".to_string(),
             crate::v15::Category::Unknown(id) => format!("Unknown Category (id: {id})"),
         }
     }
