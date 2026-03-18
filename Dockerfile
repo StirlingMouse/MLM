@@ -1,80 +1,39 @@
-# syntax=docker/dockerfile:1.3-labs
+# syntax=docker/dockerfile:1.7-labs
 
-# The above line is so we can use can use heredocs in Dockerfiles. No more && and \!
-# https://www.docker.com/blog/introduction-to-heredocs-in-dockerfiles/
-
-FROM rust:1.91 AS build
-
-RUN cargo install dioxus-cli --version 0.7.3 --locked
-
-RUN <<EOF
-  set -e
-  cargo new --lib app/mlm_db
-  cargo new --lib app/mlm_mam
-  cargo new --lib app/mlm_parse
-  cargo new --lib app/mlm_meta
-  cargo new --lib app/mlm_core
-  cargo new --lib app/mlm_web_askama
-  cargo new --bin app/mlm_web_dioxus
-  cargo new --bin app/server
-  touch /app/mlm_web_dioxus/src/lib.rs
-EOF
-
-# Capture dependencies
-COPY Cargo.toml Cargo.lock /app/
-COPY mlm_db/Cargo.toml /app/mlm_db/
-COPY mlm_mam/Cargo.toml /app/mlm_mam/
-COPY mlm_parse/Cargo.toml /app/mlm_parse/
-COPY mlm_meta/Cargo.toml /app/mlm_meta/
-COPY mlm_core/Cargo.toml /app/mlm_core/
-COPY mlm_web_askama/Cargo.toml /app/mlm_web_askama/
-COPY mlm_web_dioxus/Cargo.toml /app/mlm_web_dioxus/
-COPY server/Cargo.toml /app/server/
-
-# This step compiles only our dependencies and saves them in a layer. This is the most impactful time savings
-# Note the use of --mount=type=cache. On subsequent runs, we'll have the crates already downloaded
+FROM rust:1.91 AS chef
+RUN apt update && apt install -y clang mold pkg-config && apt clean
+RUN cargo install cargo-chef --locked
 WORKDIR /app
-RUN --mount=type=cache,target=/usr/local/cargo/registry cargo build --release
 
-# Copy our sources
-COPY ./mlm_db /app/mlm_db
-COPY ./mlm_mam /app/mlm_mam
-COPY ./mlm_parse /app/mlm_parse
-COPY ./mlm_meta /app/mlm_meta
-COPY ./mlm_core /app/mlm_core
-COPY ./mlm_web_askama /app/mlm_web_askama
-COPY ./mlm_web_dioxus /app/mlm_web_dioxus
-COPY ./server /app/server
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
-# A bit of magic here!
-# * We're mounting that cache again to use during the build, otherwise it's not present and we'll have to download those again - bad!
-# * EOF syntax is neat but not without its drawbacks. We need to `set -e`, otherwise a failing command is going to continue on
-# * Rust here is a bit fiddly, so we'll touch the files (even though we copied over them) to force a new build
-RUN --mount=type=cache,target=/usr/local/cargo/registry <<EOF
-  set -e
-  # update timestamps to force a new build
-  touch /app/mlm_db/src/lib.rs
-  touch /app/mlm_mam/src/lib.rs
-  touch /app/mlm_parse/src/lib.rs
-  touch /app/mlm_meta/src/lib.rs
-  touch /app/mlm_core/src/lib.rs
-  touch /app/mlm_web_askama/src/lib.rs
-  touch /app/mlm_web_dioxus/src/lib.rs
-  touch /app/mlm_web_dioxus/src/main.rs
-  touch /app/server/src/main.rs
-  cargo build --release
-  cd /app/mlm_web_dioxus
-  dx build --release --fullstack --skip-assets
-EOF
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cargo chef cook --release --recipe-path recipe.json
 
-CMD ["/app/target/release/mlm"]
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cargo build --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    cargo install dioxus-cli --version 0.7.3 --locked
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cd /app/mlm_web_dioxus && dx build --release --fullstack --skip-assets
 
-# Again, our final image is the same - a slim base and just our app
 FROM debian:trixie-slim AS app
 RUN apt update && apt install -y ca-certificates && apt clean
 COPY ./server/assets /server/assets
-COPY --from=build /app/target/release/mlm /mlm
-COPY --from=build /app/target/dx/mlm_web_dioxus/release/web/public /dioxus-public
+COPY --from=builder /app/target/release/mlm /mlm
+COPY --from=builder /app/target/dx/mlm_web_dioxus/release/web/public /dioxus-public
 ENV MLM_LOG_DIR=""
 ENV MLM_CONFIG_FILE="/config/config.toml"
 ENV MLM_DB_FILE="/data/data.db"
