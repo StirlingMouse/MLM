@@ -119,13 +119,34 @@ fn decode_query_value(value: &str) -> String {
 
 #[cfg(feature = "web")]
 fn location_pathname() -> String {
+    use std::cell::RefCell;
+    thread_local! {
+        static PATHNAME_CACHE: RefCell<Option<(u32, String)>> = const { RefCell::new(None) };
+    }
+
     let Some(window) = web_sys::window() else {
         return "/".to_string();
     };
-    window
-        .location()
-        .pathname()
-        .unwrap_or_else(|_| "/".to_string())
+
+    // We use a simple timestamp (in seconds) to cache the pathname for a short duration.
+    // In a Dioxus app, this is usually safe enough between renders.
+    let now = (window.performance().map(|p| p.now()).unwrap_or(0.0) / 1000.0) as u32;
+
+    PATHNAME_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some((time, ref path)) = *cache
+            && time == now
+        {
+            return path.clone();
+        }
+
+        let path = window
+            .location()
+            .pathname()
+            .unwrap_or_else(|_| "/".to_string());
+        *cache = Some((now, path.clone()));
+        path
+    })
 }
 
 #[cfg(not(feature = "web"))]

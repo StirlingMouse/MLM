@@ -55,11 +55,6 @@ pub async fn get_torrents_data(
         .secondary::<DbTorrent>(TorrentKey::created_at)
         .server_err_ctx("scanning torrents by created_at")?;
 
-    let torrents = torrents_iter
-        .all()
-        .server_err_ctx("reading torrent rows")?
-        .rev();
-
     let query = filters
         .iter()
         .find(|(field, value)| *field == TorrentsPageFilter::Query && !value.is_empty())
@@ -80,6 +75,13 @@ pub async fn get_torrents_data(
         } else {
             page_size_val
         };
+
+        // We still have to collect for newest-first order.
+        let torrents = torrents_iter
+            .all()
+            .server_err_ctx("reading torrent rows")?
+            .rev();
+
         for torrent in torrents.skip(from_val).take(limit) {
             let t = match torrent {
                 Ok(torrent) => torrent,
@@ -99,6 +101,12 @@ pub async fn get_torrents_data(
             abs_url,
         });
     }
+
+    // Reuse collected results for other filtered/sorted branches.
+    let torrents = torrents_iter
+        .all()
+        .server_err_ctx("reading torrent rows")?
+        .rev();
 
     if sort.is_none() && query.is_none() {
         let mut rows = Vec::new();
@@ -227,18 +235,18 @@ pub async fn get_torrents_data(
         from_val = ((total - 1) / page_size_val) * page_size_val;
     }
 
-    let mut rows: Vec<TorrentsRow> = filtered_torrents
-        .into_iter()
-        .map(|(t, _)| convert_torrent_row(&t))
-        .collect();
-
-    if page_size_val > 0 {
-        rows = rows
-            .into_iter()
+    let filtered_torrents_iter = filtered_torrents.into_iter();
+    let rows: Vec<TorrentsRow> = if page_size_val > 0 {
+        filtered_torrents_iter
             .skip(from_val)
             .take(page_size_val)
-            .collect();
-    }
+            .map(|(t, _)| convert_torrent_row(&t))
+            .collect()
+    } else {
+        filtered_torrents_iter
+            .map(|(t, _)| convert_torrent_row(&t))
+            .collect()
+    };
 
     Ok(TorrentsData {
         torrents: rows,

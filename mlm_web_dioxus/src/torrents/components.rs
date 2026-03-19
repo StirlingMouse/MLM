@@ -217,13 +217,11 @@ fn TorrentRow(
     torrent: TorrentsRow,
     show: TorrentsPageColumns,
     i: usize,
-    mut selected: Signal<BTreeSet<String>>,
-    mut last_selected_idx: Signal<Option<usize>>,
-    all_row_ids: Arc<Vec<String>>,
+    row_selected: bool,
+    on_select: EventHandler<MouseEvent>,
+    current_params: Vec<(String, String)>,
 ) -> Element {
-    let row_id = torrent.id.clone();
-    let row_selected = selected.read().contains(&row_id);
-    let current_params = parse_location_query_pairs();
+    let row_id = &torrent.id;
 
     rsx! {
         div { class: "torrents-grid-row", key: "{row_id}",
@@ -231,18 +229,8 @@ fn TorrentRow(
                 input {
                     r#type: "checkbox",
                     checked: row_selected,
-                    onclick: {
-                        let row_id = row_id.clone();
-                        move |ev: MouseEvent| {
-                            update_row_selection(
-                                &ev,
-                                selected,
-                                last_selected_idx,
-                                all_row_ids.as_ref(),
-                                &row_id,
-                                i,
-                            );
-                        }
+                    onclick: move |ev: MouseEvent| {
+                        on_select.call(ev);
                     },
                 }
             }
@@ -271,7 +259,7 @@ fn TorrentRow(
             }
             if show.categories {
                 div {
-                    for (i, category) in torrent.meta.categories.clone().into_iter().enumerate() {
+                    for (i, category) in torrent.meta.categories.iter().enumerate() {
                         if i > 0 {
                             ", "
                         }
@@ -287,8 +275,8 @@ fn TorrentRow(
             }
             if show.flags {
                 div {
-                    for flag in torrent.meta.flags.clone() {
-                        if let Some((src, title)) = flag_icon(&flag) {
+                    for flag in torrent.meta.flags.iter() {
+                        if let Some((src, title)) = flag_icon(flag) {
                             FilterLink {
                                 field: TorrentsPageFilter::Flags,
                                 value: flag.clone(),
@@ -339,7 +327,7 @@ fn TorrentRow(
             }
             if show.authors {
                 div {
-                    for (i, author) in torrent.meta.authors.clone().into_iter().enumerate() {
+                    for (i, author) in torrent.meta.authors.iter().enumerate() {
                         if i > 0 {
                             ", "
                         }
@@ -355,7 +343,7 @@ fn TorrentRow(
             }
             if show.narrators {
                 div {
-                    for (i, narrator) in torrent.meta.narrators.clone().into_iter().enumerate() {
+                    for (i, narrator) in torrent.meta.narrators.iter().enumerate() {
                         if i > 0 {
                             ", "
                         }
@@ -371,7 +359,7 @@ fn TorrentRow(
             }
             if show.series {
                 div {
-                    for (i, series) in torrent.meta.series.clone().into_iter().enumerate() {
+                    for (i, series) in torrent.meta.series.iter().enumerate() {
                         if i > 0 {
                             ", "
                         }
@@ -405,7 +393,7 @@ fn TorrentRow(
             }
             if show.filetypes {
                 div {
-                    for (i, filetype) in torrent.meta.filetypes.clone().into_iter().enumerate() {
+                    for (i, filetype) in torrent.meta.filetypes.iter().enumerate() {
                         if i > 0 {
                             ", "
                         }
@@ -530,6 +518,8 @@ pub fn TorrentsPage() -> Element {
     let loading_action = use_signal(|| false);
     let mut last_request_key = use_signal(move || initial_request_key);
 
+    let current_params = use_memo(parse_location_query_pairs);
+
     let mut torrents_data = use_server_future(move || async move {
         let mut server_filters = filters.read().clone();
         let query = submitted_query.read().trim().to_string();
@@ -554,8 +544,7 @@ pub fn TorrentsPage() -> Element {
         .unwrap_or(true);
     let value = torrents_data.as_ref().map(|resource| resource.value());
 
-    // Sync signals from the current URL when the browser navigates (back/forward).
-    {
+    use_effect(move || {
         let route_state = parse_query_state();
         let route_request_key = build_query_url(
             &route_state.query,
@@ -571,6 +560,8 @@ pub fn TorrentsPage() -> Element {
             let mut asc = asc;
             let mut filters_signal = filters;
             let mut show = show;
+            let mut from = from;
+            let mut page_size = page_size;
             query_input.set(route_state.query.clone());
             submitted_query.set(route_state.query);
             sort.set(route_state.sort);
@@ -584,7 +575,7 @@ pub fn TorrentsPage() -> Element {
                 resource.restart();
             }
         }
-    }
+    });
 
     if let Some(value) = &value
         && let Some(Ok(data)) = &*value.read()
@@ -837,14 +828,30 @@ pub fn TorrentsPage() -> Element {
                             selected,
                         }
                         for (i, torrent) in data.torrents.iter().enumerate() {
-                            TorrentRow {
-                                key: "{torrent.id}",
-                                torrent: torrent.clone(),
-                                show: show_snapshot,
-                                i,
-                                selected,
-                                last_selected_idx,
-                                all_row_ids: all_row_ids.clone(),
+                            {
+                                let row_id = torrent.id.clone();
+                                let is_row_selected = selected.read().contains(&row_id);
+                                let all_row_ids = all_row_ids.clone();
+                                rsx! {
+                                    TorrentRow {
+                                        key: "{row_id}",
+                                        torrent: torrent.clone(),
+                                        show: show_snapshot,
+                                        i,
+                                        row_selected: is_row_selected,
+                                        on_select: move |ev| {
+                                            update_row_selection(
+                                                &ev,
+                                                selected,
+                                                last_selected_idx,
+                                                all_row_ids.as_ref(),
+                                                &row_id,
+                                                i,
+                                            );
+                                        },
+                                        current_params: current_params.read().clone(),
+                                    }
+                                }
                             }
                         }
                     }
