@@ -22,9 +22,11 @@ use sublime_fuzzy::FuzzySearch;
 use crate::utils::format_timestamp_db;
 
 use super::types::{
-    TorrentLibraryMismatch, TorrentsBulkAction, TorrentsData, TorrentsMeta, TorrentsPageColumns,
-    TorrentsPageFilter, TorrentsPageSort, TorrentsRow,
+    TorrentsBulkAction, TorrentsData, TorrentsPageColumns, TorrentsPageFilter, TorrentsPageSort,
 };
+#[cfg(feature = "server")]
+#[allow(unused_imports)]
+use super::types::{TorrentLibraryMismatch, TorrentsMeta, TorrentsRow};
 
 #[server]
 pub async fn get_torrents_data(

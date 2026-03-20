@@ -14,9 +14,12 @@ use mlm_core::ContextExt;
 use mlm_db::{DatabaseExt as _, Flags, Language, OldCategory, SelectedTorrent, Timestamp};
 
 use super::types::{
-    SelectedBulkAction, SelectedData, SelectedMeta, SelectedPageColumns, SelectedPageFilter,
-    SelectedPageSort, SelectedRow, SelectedUserInfo,
+    SelectedBulkAction, SelectedData, SelectedPageColumns, SelectedPageFilter, SelectedPageSort,
+    SelectedUserInfo,
 };
+#[cfg(feature = "server")]
+#[allow(unused_imports)]
+use super::types::{SelectedMeta, SelectedRow};
 
 #[server]
 pub async fn get_selected_data(

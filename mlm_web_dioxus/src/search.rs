@@ -308,7 +308,6 @@ pub async fn get_search_data(
                 start_number: from as u64,
                 ..Default::default()
             },
-            ..Default::default()
         })
         .await
         .server_err()?;
