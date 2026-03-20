@@ -407,9 +407,9 @@ fn TorrentDetailContent(
                         main_cat_id: torrent.main_cat_id,
                         categories: torrent.categories.clone(),
                         old_category: torrent.old_category.clone(),
-                        vip: mam_torrent.as_ref().is_some_and(|m| m.vip),
-                        personal_freeleech: mam_torrent.as_ref().is_some_and(|m| m.personal_freeleech),
-                        free: mam_torrent.as_ref().is_some_and(|m| m.free),
+                        vip: false,
+                        personal_freeleech: false,
+                        free: false,
                         flags: torrent.flags.clone(),
                     }
 

@@ -221,7 +221,6 @@ async fn get_downloaded_torrent_detail(
     context: &Context,
     torrent_id: String,
 ) -> Result<super::types::TorrentDetailData, ServerFnError> {
-    use mlm_core::audiobookshelf::Abs;
     use time::UtcDateTime;
 
     let config = context.config().await;
@@ -312,22 +311,19 @@ async fn get_downloaded_torrent_detail(
         .server_err()?;
     events_data.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
-    let (abs_item_url, abs_cover_url) = if let Some(abs_cfg) = config.audiobookshelf.as_ref() {
-        let abs = Abs::new(abs_cfg).server_err()?;
-        if let Some(book) = abs.get_book(&torrent).await.server_err()? {
-            (
-                Some(format!("{}/audiobookshelf/item/{}", abs_cfg.url, book.id)),
-                Some(format!(
-                    "{}/audiobookshelf/api/items/{}/cover",
-                    abs_cfg.url, book.id
-                )),
-            )
-        } else {
-            (None, None)
-        }
-    } else {
-        (None, None)
-    };
+    // ABS ID is stored in DB - construct URLs directly without API call
+    let abs_item_url = torrent
+        .meta
+        .ids
+        .get(ids::ABS)
+        .map(|id| format!("{}/audiobookshelf/item/{}", config.audiobookshelf.as_ref().map(|c| &c.url).unwrap_or(&"".to_string()), id));
+
+    // Cover fetched via /torrents/{id}/cover endpoint (redirects to ABS)
+    let abs_cover_url = torrent
+        .meta
+        .ids
+        .get(ids::ABS)
+        .map(|_| format!("/torrents/{}/cover", torrent.id));
 
     let r = db.r_transaction().server_err()?;
     Ok(super::types::TorrentDetailData {
