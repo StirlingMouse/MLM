@@ -1,5 +1,5 @@
 #[cfg(feature = "server")]
-use crate::dto::{Event as DbEventDto, Series, TorrentMetaDiff, convert_event_type};
+use crate::dto::{Event as DbEventDto, Series, convert_event_type};
 #[cfg(feature = "server")]
 use crate::error::{IntoServerFnError, OptionIntoServerFnError};
 use crate::search::SearchTorrent;
@@ -221,11 +221,9 @@ async fn get_downloaded_torrent_detail(
     context: &Context,
     torrent_id: String,
 ) -> Result<super::types::TorrentDetailData, ServerFnError> {
-    use time::UtcDateTime;
-
     let config = context.config().await;
     let db = context.db();
-    let mut torrent = db
+    let torrent = db
         .r_transaction()
         .server_err()?
         .get()
@@ -246,43 +244,6 @@ async fn get_downloaded_torrent_detail(
         .transpose()?
         .flatten();
     let replacement_missing = replacement_torrent.is_none() && torrent.replaced_with.is_some();
-
-    let mut mam_torrent = None;
-    let mut mam_meta_diff = vec![];
-    if let Some(mam_id) = torrent.mam_id
-        && let Ok(mam) = context.mam()
-    {
-        mam_torrent = mam.get_torrent_info_by_id(mam_id).await.server_err()?;
-        if let Some(ref mam_torrent_data) = mam_torrent {
-            let mut mam_meta = mam_torrent_data.as_meta().server_err()?;
-            let mut ids = torrent.meta.ids.clone();
-            ids.append(&mut mam_meta.ids);
-            mam_meta.ids = ids;
-
-            if match torrent.meta.uploaded_at.as_ref() {
-                None => true,
-                Some(uploaded_at) => uploaded_at.0 == UtcDateTime::UNIX_EPOCH,
-            } {
-                let (_guard, rw) = db.rw_async().await.server_err()?;
-                torrent.meta.uploaded_at = mam_meta.uploaded_at;
-                rw.upsert(torrent.clone()).server_err()?;
-                rw.commit().server_err()?;
-            }
-
-            if torrent.meta != mam_meta {
-                mam_meta_diff = torrent
-                    .meta
-                    .diff(&mam_meta)
-                    .into_iter()
-                    .map(|f| TorrentMetaDiff {
-                        field: f.field.to_string(),
-                        from: f.from,
-                        to: f.to,
-                    })
-                    .collect();
-            }
-        }
-    }
 
     let library_files = read_library_files(torrent.library_path.as_deref()).await?;
 
@@ -325,7 +286,6 @@ async fn get_downloaded_torrent_detail(
         .get(ids::ABS)
         .map(|_| format!("/torrents/{}/cover", torrent.id));
 
-    let r = db.r_transaction().server_err()?;
     Ok(super::types::TorrentDetailData {
         torrent: torrent_info,
         events: events_data,
@@ -341,31 +301,6 @@ async fn get_downloaded_torrent_detail(
         replacement_missing,
         abs_item_url,
         abs_cover_url,
-        mam_torrent: mam_torrent.as_ref().and_then(|mam_torrent| {
-            let meta = match mam_torrent.as_meta() {
-                Ok(meta) => meta,
-                Err(err) => {
-                    tracing::error!(
-                        "failed to parse MaM metadata while building torrent detail '{}': {err}",
-                        torrent.id
-                    );
-                    return None;
-                }
-            };
-            Some(map_mam_torrent(
-                mam_torrent.clone(),
-                &meta,
-                config.search.clone(),
-                true, // it's downloaded
-                r.get()
-                    .primary::<mlm_db::SelectedTorrent>(mam_torrent.id)
-                    .server_err()
-                    .ok()
-                    .flatten()
-                    .is_some(),
-            ))
-        }),
-        mam_meta_diff,
     })
 }
 
@@ -621,6 +556,47 @@ pub async fn match_metadata_action(id: String, provider: String) -> Result<(), S
     .await;
 
     Ok(())
+}
+
+#[server]
+pub async fn preview_mam_metadata(
+    id: String,
+) -> Result<Vec<crate::dto::TorrentMetaDiff>, ServerFnError> {
+    use mlm_core::ContextExt;
+    use mlm_core::linker::refresh_mam_metadata;
+
+    let context = crate::error::get_context()?;
+    let config = context.config().await;
+    let db = context.db();
+    let mam = context.mam().server_err()?;
+
+    let torrent = db
+        .r_transaction()
+        .server_err()?
+        .get()
+        .primary::<DbTorrent>(id.clone())
+        .server_err()?
+        .ok_or_server_err("Torrent not found")?;
+
+    // Use refresh_mam_metadata which returns (torrent, mam_torrent)
+    // We discard the saved changes and just return the diff
+    let (_, mam_torrent) =
+        refresh_mam_metadata(&config, db, &mam, id, &context.events)
+            .await
+            .server_err()?;
+
+    // Compute diff using existing diff feature
+    let meta = mam_torrent.as_meta().server_err()?;
+    let diff = torrent.meta.diff(&meta);
+
+    Ok(diff
+        .into_iter()
+        .map(|f| crate::dto::TorrentMetaDiff {
+            field: f.field.to_string(),
+            from: f.from,
+            to: f.to,
+        })
+        .collect())
 }
 
 #[server]

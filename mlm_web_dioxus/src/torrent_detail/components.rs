@@ -1,9 +1,9 @@
 use super::server_fns::{
     clean_torrent_action, clear_replacement_action, get_metadata_providers, get_other_torrents,
-    get_qbit_data, get_torrent_detail, match_metadata_action, preview_match_metadata,
-    refresh_and_relink_action, refresh_metadata_action, relink_torrent_action,
-    remove_seeding_files_action, remove_torrent_action, set_qbit_category_tags_action,
-    torrent_start_action, torrent_stop_action,
+    get_qbit_data, get_torrent_detail, match_metadata_action, preview_mam_metadata,
+    preview_match_metadata, refresh_and_relink_action, refresh_metadata_action,
+    relink_torrent_action, remove_seeding_files_action, remove_torrent_action,
+    set_qbit_category_tags_action, torrent_start_action, torrent_stop_action,
 };
 use super::types::*;
 use crate::app::Route;
@@ -15,7 +15,8 @@ use crate::components::{
 use crate::events::EventListItem;
 use crate::search::SearchTorrent;
 use dioxus::prelude::*;
-use lucide_dioxus::Tag;
+use std::pin::Pin;
+
 
 fn spawn_action(
     name: String,
@@ -99,7 +100,6 @@ fn DetailMetadataRows(
     author_filters: Vec<SearchMetadataFilterItem>,
     narrator_filters: Vec<SearchMetadataFilterItem>,
     series_filters: Vec<SearchMetadataFilterItem>,
-    mam_tags: Option<String>,
     local_tags: Vec<String>,
 ) -> Element {
     rsx! {
@@ -128,14 +128,6 @@ fn DetailMetadataRows(
                     }
                 }
             }
-            if let Some(tags) = mam_tags.filter(|tags| !tags.is_empty()) {
-                p { class: "detail-tags-row icon-row",
-                    span { title: "MaM Tags",
-                        Tag { size: 14 }
-                    }
-                    span { "{tags}" }
-                }
-            }
             if !local_tags.is_empty() {
                 div { class: "detail-local-tags",
                     strong { "MLM Tags" }
@@ -151,7 +143,7 @@ fn DetailMetadataRows(
 }
 
 #[component]
-fn DescriptionSection(description_html: String, mam_description_html: Option<String>) -> Element {
+fn DescriptionSection(description_html: String) -> Element {
     rsx! {
         div { class: "torrent-description detail-section",
             Details {
@@ -161,11 +153,7 @@ fn DescriptionSection(description_html: String, mam_description_html: Option<Str
                     div { class: "detail-description-block",
                         div { dangerous_inner_html: "{description_html}" }
                     }
-                    if let Some(mam_description_html) = mam_description_html {
-                        div { class: "detail-description-subsection",
-                            div { dangerous_inner_html: "{mam_description_html}" }
-                        }
-                    }
+
                 }
             }
         }
@@ -307,8 +295,6 @@ fn TorrentDetailContent(
         replacement_missing,
         abs_item_url,
         abs_cover_url,
-        mam_torrent,
-        mam_meta_diff,
     } = data;
 
     let library_files = torrent
@@ -346,13 +332,6 @@ fn TorrentDetailContent(
             href: search_filter_href("series", &series.name, "series"),
         })
         .collect::<Vec<_>>();
-    let mam_tags = mam_torrent
-        .as_ref()
-        .map(|mam| mam.tags.clone())
-        .filter(|tags| !tags.is_empty());
-    let mam_description_html = mam_torrent
-        .as_ref()
-        .and_then(|mam| mam.description_html.clone());
     let library_path = torrent
         .library_path
         .as_ref()
@@ -498,7 +477,6 @@ fn TorrentDetailContent(
                         author_filters,
                         narrator_filters,
                         series_filters,
-                        mam_tags,
                         local_tags: torrent.tags.clone(),
                     }
 
@@ -516,23 +494,8 @@ fn TorrentDetailContent(
                         on_refresh,
                     }
 
-                    if !mam_meta_diff.is_empty() {
-                        div { class: "detail-sync-card",
-                            p { class: "detail-action-label", "Metadata drift" }
-                            ul {
-                                for field in mam_meta_diff {
-                                    li {
-                                        strong { "{field.field}" }
-                                        ": {field.to}"
-                                    }
-                                }
-                            }
-                        }
-                    }
-
                     DescriptionSection {
                         description_html: torrent.description_html.clone(),
-                        mam_description_html,
                     }
 
                     EventHistorySection { events }
@@ -674,7 +637,6 @@ fn TorrentMamContent(
                         author_filters,
                         narrator_filters,
                         series_filters,
-                        mam_tags: Some(mam.tags.clone()),
                         local_tags: torrent.tags.clone(),
                     }
                     div { class: "detail-action-stack",
@@ -720,7 +682,6 @@ fn TorrentMamContent(
                     }
                     DescriptionSection {
                         description_html,
-                        mam_description_html: None,
                     }
                 }
             }
@@ -822,21 +783,6 @@ fn TorrentActions(
                         disabled: *loading.read(),
                         onclick: move |_| dialog_open.set(true),
                         "Match Metadata"
-                    }
-                    button {
-                        class: "btn",
-                        disabled: *loading.read(),
-                        onclick: {
-                            let torrent_id = torrent_id.clone();
-                            move |_| {
-                                let id = torrent_id.clone();
-                                handle_action(
-                                    "Refresh from MaM".to_string(),
-                                    Box::pin(refresh_metadata_action(id)),
-                                );
-                            }
-                        },
-                        "Refresh from MaM"
                     }
                 }
             }
@@ -1009,18 +955,34 @@ fn TorrentActions(
 fn MatchDialog(
     torrent_id: String,
     providers: Vec<String>,
+    mam_id: Option<u64>,
     mut status_msg: Signal<Option<(String, bool)>>,
     on_close: EventHandler<()>,
     on_refresh: EventHandler<()>,
 ) -> Element {
-    let mut selected_provider = use_signal(|| providers.first().cloned().unwrap_or_default());
+    // Add MaM as first option if mam_id is Some
+    let available_providers = if mam_id.is_some() {
+        let mut p = vec!["MaM".to_string()];
+        p.extend(providers.clone());
+        p
+    } else {
+        providers.clone()
+    };
+    let default_provider = available_providers.first().cloned().unwrap_or_default();
+    let mut selected_provider = use_signal(|| default_provider);
     let loading = use_signal(|| false);
 
     let preview_id = torrent_id.clone();
     let preview = use_resource(move || {
         let id = preview_id.clone();
         let provider = selected_provider.read().clone();
-        async move { preview_match_metadata(id, provider).await }
+        async move {
+            if provider == "MaM" {
+                preview_mam_metadata(id).await
+            } else {
+                preview_match_metadata(id, provider).await
+            }
+        }
     });
 
     let do_match = {
@@ -1028,6 +990,11 @@ fn MatchDialog(
         move |_| {
             let id = torrent_id.clone();
             let provider = selected_provider.read().clone();
+            let action: Pin<Box<dyn Future<Output = Result<(), ServerFnError>>>> = if provider == "MaM" {
+                Box::pin(refresh_metadata_action(id))
+            } else {
+                Box::pin(match_metadata_action(id, provider))
+            };
             spawn_action(
                 "Match Metadata".to_string(),
                 loading,
@@ -1036,7 +1003,7 @@ fn MatchDialog(
                     on_close.call(());
                     on_refresh.call(());
                 }),
-                Box::pin(match_metadata_action(id, provider)),
+                action,
             );
         }
     };
@@ -1058,8 +1025,8 @@ fn MatchDialog(
                 select {
                     disabled: *loading.read(),
                     onchange: move |ev| selected_provider.set(ev.value()),
-                    for p in providers {
-                        option { value: "{p}", "{p}" }
+                    for p in available_providers {
+                        option { value: "{p}", selected: p == *selected_provider.read(), "{p}" }
                     }
                 }
             }

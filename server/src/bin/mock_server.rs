@@ -199,13 +199,14 @@ struct MockMaMSearchRequest {
 #[derive(Debug, Default, Deserialize)]
 struct MockMaMSearchTor {
     #[serde(default)]
+    id: u64,
+    #[serde(default)]
     text: String,
     #[serde(rename = "startNumber", default)]
     start_number: usize,
 }
 
-fn mock_search_result(index: usize) -> serde_json::Value {
-    let id = 99_000u64 + index as u64;
+fn mock_search_result(id: u64, index: usize) -> serde_json::Value {
     let month = (index % 12) + 1;
     let day = (index % 28) + 1;
     let seeders = 15u64 + (index % 10) as u64;
@@ -253,6 +254,47 @@ fn mock_search_result(index: usize) -> serde_json::Value {
     })
 }
 
+/// Returns a mock torrent with metadata that differs from the base "Test Book" to show a diff
+fn mock_mam_torrent_result(id: u64) -> serde_json::Value {
+    json!({
+        "id": id,
+        "added": "2024-03-15 14:30:00",
+        "author_info": r#"{"1":"Updated Author Name"}"#,
+        "browseflags": 0u8,
+        "main_cat": 13u8,
+        "category": 39u64,
+        "mediatype": 1u8,
+        "maincat": 1u8,
+        "categories": "[]",
+        "catname": "Audiobook - Fantasy",
+        "cat": "audiobook",
+        "comments": 5u64,
+        "filetype": "m4b",
+        "fl_vip": 0,
+        "free": 0,
+        "lang_code": "en",
+        "language": 1u8,
+        "leechers": 2u64,
+        "my_snatched": 0,
+        "narrator_info": r#"{"1":"Updated Narrator Name"}"#,
+        "numfiles": 1u64,
+        "owner": 12345u64,
+        "owner_name": "uploader",
+        "ownership": "[]",
+        "personal_freeleech": 0,
+        "seeders": 25u64,
+        "series_info": r#"{"1":{"name":"Updated Series","position":"3"}}"#,
+        "size": "350.50 MiB",
+        "tags": "updated fantasy epic",
+        "times_completed": 150u64,
+        "thumbnail": null,
+        "title": "Updated Mock Search Result Title",
+        "vip": 0,
+        "vip_expire": 0u64,
+        "w": 0u64
+    })
+}
+
 async fn mam_search(payload: Option<Json<MockMaMSearchRequest>>) -> impl IntoResponse {
     let payload = payload
         .map(|Json(payload)| payload)
@@ -260,6 +302,18 @@ async fn mam_search(payload: Option<Json<MockMaMSearchRequest>>) -> impl IntoRes
             perpage: Some(100),
             tor: MockMaMSearchTor::default(),
         });
+
+    // If tor.id is non-zero, return a mock torrent with that specific ID (for preview/diff)
+    if payload.tor.id != 0 {
+        return Json(json!({
+            "total": 1,
+            "perpage": 1,
+            "start": 0,
+            "found": 1,
+            "data": [mock_mam_torrent_result(payload.tor.id)]
+        }));
+    }
+
     let query = payload.tor.text.trim().to_lowercase();
     let total = if query.is_empty() {
         0
@@ -272,7 +326,7 @@ async fn mam_search(payload: Option<Json<MockMaMSearchRequest>>) -> impl IntoRes
     let start = payload.tor.start_number.min(total);
     let end = (start + perpage).min(total);
     let data = (start + 1..=end)
-        .map(mock_search_result)
+        .map(|i| mock_search_result(99_000u64 + i as u64, i))
         .collect::<Vec<_>>();
 
     Json(json!({

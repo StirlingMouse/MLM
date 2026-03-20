@@ -209,7 +209,6 @@ test.describe('Torrent detail page', () => {
                 });
                 await expect(metadataActions).toContainText('Edit Metadata');
                 await expect(metadataActions).toContainText('Match Metadata');
-                await expect(metadataActions).toContainText('Refresh from MaM');
         });
 
         test('other torrents section resolves (not stuck loading)', async ({ page }) => {
@@ -243,5 +242,72 @@ test.describe('Torrent detail page', () => {
                 await page.goto('/torrents/torrent-005');
                 await expect(page.locator('.error')).toHaveCount(0);
                 await expect(page.locator('body')).toContainText('Test Book 005');
+        });
+
+        test('match metadata dialog opens when clicking Match Metadata button', async ({ page }) => {
+                await page.goto(DETAIL_URL);
+
+                // Click the Match Metadata button
+                await page.getByRole('button', { name: 'Match Metadata' }).click();
+
+                // Verify dialog appears with the title
+                await expect(page.locator('.dialog-box h3', { hasText: 'Match Metadata' })).toBeVisible();
+
+                // Verify provider dropdown is present
+                await expect(page.locator('.dialog-field select')).toBeVisible();
+
+                // Verify Cancel button is present
+                await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+        });
+
+        test('match metadata dialog shows MaM as first provider option', async ({ page }) => {
+                await page.goto(DETAIL_URL);
+
+                // Click the Match Metadata button
+                await page.getByRole('button', { name: 'Match Metadata' }).click();
+
+                // Verify dialog is open
+                await expect(page.locator('.dialog-box h3', { hasText: 'Match Metadata' })).toBeVisible();
+
+                // Get the first option in the provider dropdown (should be MaM)
+                const firstOption = page.locator('.dialog-field select option').first();
+                await expect(firstOption).toContainText('MaM');
+        });
+
+        test('match metadata preview loads when MaM is selected', async ({ page }) => {
+                await page.goto(DETAIL_URL);
+
+                // Click the Match Metadata button
+                await page.getByRole('button', { name: 'Match Metadata' }).click();
+
+                // Verify dialog is open
+                await expect(page.locator('.dialog-box h3', { hasText: 'Match Metadata' })).toBeVisible();
+
+                // Select MaM from the dropdown (it should already be selected by default)
+                await page.locator('.dialog-field select').selectOption('MaM');
+
+                // Wait for preview to load (the dialog-preview section should show results)
+                await expect(page.locator('.dialog-preview')).toBeVisible({ timeout: 10_000 });
+        });
+
+        test('match metadata diff table appears with field rows', async ({ page }) => {
+                await page.goto(DETAIL_URL);
+
+                // Click the Match Metadata button
+                await page.getByRole('button', { name: 'Match Metadata' }).click();
+
+                // Verify dialog is open
+                await expect(page.locator('.dialog-box h3', { hasText: 'Match Metadata' })).toBeVisible();
+
+                // Select MaM from the dropdown
+                await page.locator('.dialog-field select').selectOption('MaM');
+
+                // Wait for preview to load and diff table to appear
+                await expect(page.locator('.dialog-preview')).toBeVisible({ timeout: 10_000 });
+
+                // The diff table should contain rows with field names
+                // We expect to see fields like title, author, narrator, etc. that differ
+                const previewContent = page.locator('.dialog-preview');
+                await expect(previewContent).toContainText(/Title|Author|Narrator|Series/);
         });
 });
