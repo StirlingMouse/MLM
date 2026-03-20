@@ -27,6 +27,8 @@ pub async fn get_selected_data(
     asc: bool,
     filters: Vec<(SelectedPageFilter, String)>,
     show: SelectedPageColumns,
+    from: Option<usize>,
+    page_size: Option<usize>,
 ) -> Result<SelectedData, ServerFnError> {
     let context = crate::error::get_context()?;
     let config = context.config().await;
@@ -130,16 +132,34 @@ pub async fn get_selected_data(
         });
     }
 
+    let total = torrents.len();
     let queued = torrents.iter().filter(|t| t.started_at.is_none()).count();
     let downloading = torrents.iter().filter(|t| t.started_at.is_some()).count();
 
+    let from_val = from.unwrap_or(0);
+    let page_size_val = page_size.unwrap_or(500);
+
+    // Clamp from_val to valid range
+    let from_val = if page_size_val > 0 && from_val >= total && total > 0 {
+        ((total - 1) / page_size_val) * page_size_val
+    } else {
+        from_val
+    };
+
+    let torrents_for_page = torrents
+        .into_iter()
+        .skip(from_val)
+        .take(page_size_val)
+        .map(|t| convert_selected_row(&t, config.unsat_buffer))
+        .collect();
+
     Ok(SelectedData {
-        torrents: torrents
-            .into_iter()
-            .map(|t| convert_selected_row(&t, config.unsat_buffer))
-            .collect(),
+        torrents: torrents_for_page,
         queued,
         downloading,
+        total,
+        from: from_val,
+        page_size: page_size_val,
     })
 }
 

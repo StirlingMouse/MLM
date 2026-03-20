@@ -2,8 +2,9 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use crate::components::{
-    ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, FilterLink, SortHeader,
-    TorrentGridTable, TorrentTitleLink, flag_icon, set_location_query_string, update_row_selection,
+    ActiveFilterChip, ActiveFilters, ColumnSelector, ColumnToggleOption, FilterLink, Pagination,
+    SortHeader, TorrentGridTable, TorrentTitleLink, flag_icon, set_location_query_string,
+    update_row_selection,
 };
 use crate::sse::{QBIT_PROGRESS, SELECTED_UPDATE_TRIGGER};
 use dioxus::prelude::*;
@@ -32,7 +33,7 @@ pub fn SelectedPage() -> Element {
 
     let sort = use_signal(move || initial_sort);
     let asc = use_signal(move || initial_asc);
-    let from = use_signal(|| 0usize);
+    let mut from = use_signal(|| 0usize);
     let filters = use_signal(move || initial_filters.clone());
     let show = use_signal(move || initial_show);
     let mut selected = use_signal(BTreeSet::<u64>::new);
@@ -50,6 +51,8 @@ pub fn SelectedPage() -> Element {
             *asc.read(),
             filters.read().clone(),
             *show.read(),
+            Some(*from.read()),
+            Some(500),
         )
         .await
     })
@@ -131,6 +134,7 @@ pub fn SelectedPage() -> Element {
         if should_restart {
             last_request_key.set(query_string.clone());
             set_location_query_string(&query_string);
+            from.set(0); // Reset to first page on query change
             if let Some(resource) = selected_data.as_mut() {
                 resource.restart();
             }
@@ -321,7 +325,7 @@ pub fn SelectedPage() -> Element {
                 on_clear_all: clear_all,
             }
 
-            if let Some(data) = data_to_show {
+            if let Some(ref data) = data_to_show {
                 if data.torrents.is_empty() {
                     p {
                         i { "There are currently no torrents selected for downloading" }
@@ -400,7 +404,7 @@ pub fn SelectedPage() -> Element {
                             }
                         }
 
-                        for (i, torrent) in data.torrents.into_iter().enumerate() {
+                        for (i, torrent) in data.torrents.iter().cloned().enumerate() {
                             {
                                 let row_id = torrent.mam_id;
                                 let row_selected = selected.read().contains(&row_id);
@@ -580,6 +584,20 @@ pub fn SelectedPage() -> Element {
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    if data.total > data.page_size {
+                        Pagination {
+                            total: data.total,
+                            from: data.from,
+                            page_size: data.page_size,
+                            on_change: Callback::new(move |new_from| {
+                                from.set(new_from);
+                                if let Some(resource) = selected_data.as_mut() {
+                                    resource.restart();
+                                }
+                            }),
                         }
                     }
                 }

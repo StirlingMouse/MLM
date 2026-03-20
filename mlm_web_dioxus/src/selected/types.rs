@@ -219,6 +219,9 @@ pub struct SelectedData {
     pub torrents: Vec<SelectedRow>,
     pub queued: usize,
     pub downloading: usize,
+    pub total: usize,
+    pub from: usize,
+    pub page_size: usize,
 }
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Debug)]

@@ -145,6 +145,24 @@ test.describe('Lists page', () => {
         });
 });
 
+test.describe('List page', () => {
+        test('loads list items', async ({ page }) => {
+                await page.goto('/lists/test-list-001');
+                await noError(page);
+                await noLoading(page);
+                // Verify list items are displayed
+                await expect(page.locator('body')).toContainText('List Book');
+        });
+
+        test('show filter UI is present', async ({ page }) => {
+                await page.goto('/lists/test-list-001');
+                await noError(page);
+                await noLoading(page);
+                // Verify filter UI is present
+                await expect(page.locator('input[type="radio"][name="show"]')).toHaveCount(4);
+        });
+});
+
 test.describe('Home page', () => {
         test('loads', async ({ page }) => {
                 await page.goto('/');
