@@ -211,7 +211,7 @@ async fn app_main() -> Result<()> {
         })
         .collect();
     let metadata_service = MetadataService::from_settings(&provider_settings, default_timeout);
-    let metadata_service = Arc::new(metadata_service);
+    let metadata_service = Arc::new(tokio::sync::Mutex::new(metadata_service));
 
     let mam = if config.mam_id.is_empty() {
         Err(anyhow::Error::msg("No mam_id set"))
@@ -219,22 +219,35 @@ async fn app_main() -> Result<()> {
         MaM::new(&config.mam_id, db.clone()).await.map(Arc::new)
     };
 
+    // Register MaM provider if available
+    if let Ok(mam_api) = mam.as_ref() {
+        metadata_service
+            .lock()
+            .await
+            .register_mam(mam_api.clone(), default_timeout);
+    }
+
     let web_port = config.web_port;
     let web_host = config.web_host.clone();
 
     let context = mlm_core::runner::spawn_tasks(config, db, Arc::new(mam), stats, metadata_service);
 
-    let dioxus_public_path = {
-        let base = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        #[cfg(debug_assertions)]
-        {
-            base.join("target/dx/mlm_web_dioxus/debug/web/public")
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            base.join("target/dx/mlm_web_dioxus/release/web/public")
-        }
-    };
+    let dioxus_public_path = env::var("DIOXUS_PUBLIC_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let base = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            #[cfg(debug_assertions)]
+            {
+                base.join("target/dx/mlm_web_dioxus/debug/web/public")
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                base.join("target/dx/mlm_web_dioxus/release/web/public")
+            }
+        });
+    // SAFETY: This is safe because we're setting an environment variable that
+    // Dioxus reads once at startup before any concurrent access can occur.
+    // The path is derived from canonical filesystem operations on known quantities.
     unsafe {
         std::env::set_var("DIOXUS_PUBLIC_PATH", &dioxus_public_path);
     }

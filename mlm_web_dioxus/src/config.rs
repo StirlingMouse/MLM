@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::components::parse_location_query_pairs;
 #[cfg(feature = "server")]
+use crate::error::IntoServerFnError;
+#[cfg(feature = "server")]
 use mlm_core::ContextExt as _;
 #[cfg(feature = "server")]
 use mlm_core::autograbber::{
@@ -294,15 +296,16 @@ pub async fn apply_tag_filter_action(
         &qbit_conf.password,
     )
     .await
-    .map_err(|e| ServerFnError::new(e.to_string()))?;
+    .server_err_ctx("creating qBittorrent client for tag filter action")?;
 
     let total_torrents = context
         .db()
         .r_transaction()
-        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .server_err_ctx("opening read transaction for tag filter action")?
         .len()
         .primary::<Torrent>()
-        .map_err(|e| ServerFnError::new(e.to_string()))? as usize;
+        .server_err_ctx("counting torrents for tag filter action")?
+        as usize;
     tracing::info!("Processing {} torrents for tag filter", total_torrents);
 
     let mam_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_MAM_REQUESTS));
@@ -311,19 +314,28 @@ pub async fn apply_tag_filter_action(
     let read_tx = context
         .db()
         .r_transaction()
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .server_err_ctx("opening read transaction for tag filter scan")?;
     let scan = read_tx
         .scan()
         .primary::<Torrent>()
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-    let torrent_iter = scan.all().map_err(|e| ServerFnError::new(e.to_string()))?;
+        .server_err_ctx("scanning torrents for tag filter action")?;
+    let torrent_iter = scan
+        .all()
+        .server_err_ctx("reading torrents for tag filter action")?;
 
     let mut batch = Vec::with_capacity(BATCH_SIZE);
     let mut batch_idx = 0usize;
     let mut seen_count = 0usize;
 
     for torrent in torrent_iter {
-        batch.push(torrent.map_err(|e| ServerFnError::new(e.to_string()))?);
+        let torrent = match torrent {
+            Ok(torrent) => torrent,
+            Err(err) => {
+                tracing::error!("skipping torrent row during tag filter action: {err}");
+                continue;
+            }
+        };
+        batch.push(torrent);
         if batch.len() < BATCH_SIZE {
             continue;
         }
@@ -419,14 +431,14 @@ async fn process_tag_filter_batch(
                     .clone()
                     .acquire_owned()
                     .await
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                    .server_err_ctx("acquiring MaM request permit for tag filter batch")?;
                 let mam = context
                     .mam()
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                    .server_err_ctx("creating MaM client for tag filter batch")?;
                 let Some(mam_torrent) = mam
                     .get_torrent_info_by_id(mam_id)
                     .await
-                    .map_err(|e| ServerFnError::new(e.to_string()))?
+                    .server_err_ctx("fetching MaM torrent while evaluating tag filter batch")?
                 else {
                     drop(permit);
                     continue;
@@ -435,7 +447,7 @@ async fn process_tag_filter_batch(
 
                 let new_meta = mam_torrent
                     .as_meta()
-                    .map_err(|e| ServerFnError::new(e.to_string()))?;
+                    .server_err_ctx("parsing MaM metadata for tag filter batch")?;
                 if new_meta != torrent.meta {
                     meta_updates.push((torrent.clone(), mam_torrent.clone(), new_meta));
                 }
@@ -452,7 +464,7 @@ async fn process_tag_filter_batch(
             .db()
             .rw_async()
             .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+            .server_err_ctx("opening write transaction for queued metadata updates")?;
         let mut pending_updates = Vec::new();
         let mut wrote_changes = false;
 
@@ -465,7 +477,7 @@ async fn process_tag_filter_batch(
                 false,
                 false,
             )
-            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .server_err_ctx("queueing metadata update from tag filter action")?
             {
                 PreparedTorrentMetaUpdate::Unchanged => {}
                 PreparedTorrentMetaUpdate::Silent => {
@@ -479,7 +491,8 @@ async fn process_tag_filter_batch(
         }
 
         if wrote_changes {
-            rw.commit().map_err(|e| ServerFnError::new(e.to_string()))?;
+            rw.commit()
+                .server_err_ctx("committing metadata updates from tag filter action")?;
         } else {
             drop(rw);
         }
@@ -488,7 +501,7 @@ async fn process_tag_filter_batch(
         for pending in pending_updates {
             finalize_torrent_meta_update(config, context.db(), *pending, &context.events)
                 .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+                .server_err_ctx("finalizing metadata update from tag filter action")?;
         }
     }
 
@@ -504,10 +517,10 @@ async fn process_tag_filter_batch(
         if let Some(category) = &tag_filter.category {
             ensure_category_exists(qbit, &qbit_conf.url, category)
                 .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+                .server_err_ctx("ensuring qBittorrent category exists")?;
             qbit.set_category(Some(hashes.clone()), category)
                 .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+                .server_err_ctx("setting qBittorrent category for matched torrents")?;
             tracing::info!("Set category '{}' for {} torrents", category, matched_count);
         }
 
@@ -515,7 +528,7 @@ async fn process_tag_filter_batch(
             let tags: Vec<&str> = tag_filter.tags.iter().map(Deref::deref).collect();
             qbit.add_tags(Some(hashes), tags)
                 .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+                .server_err_ctx("adding qBittorrent tags for matched torrents")?;
             tracing::info!(
                 "Added tags {:?} to {} torrents",
                 tag_filter.tags,

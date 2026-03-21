@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs::File,
     io::{BufWriter, Write as _},
     ops::RangeInclusive,
@@ -22,6 +23,7 @@ use mlm_mam::{
 };
 use mlm_parse::normalize_title;
 use native_db::{Database, db_type, transaction::RwTransaction};
+use qbit::models::Torrent as QbitTorrent;
 use tokio::{
     fs,
     sync::{MutexGuard, watch::Sender},
@@ -34,6 +36,7 @@ use crate::{
     audiobookshelf::{self as abs, Abs},
     config::{Config, Cost, SortBy, TorrentFilter, TorrentSearch, Type},
     logging::write_event,
+    qbittorrent::{ensure_category_exists, get_torrent},
     torrent_downloader::get_mam_torrent_file,
 };
 
@@ -700,6 +703,130 @@ pub struct PendingTorrentMetaUpdate {
     mam_id: Option<u64>,
 }
 
+fn linked_library_categories(config: &Config) -> HashSet<&str> {
+    config
+        .libraries
+        .iter()
+        .filter_map(|library| match library {
+            crate::config::Library::ByCategory(category) => Some(category.category.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn matching_tag_categories<'a>(config: &'a Config, meta: &TorrentMeta) -> Vec<&'a str> {
+    config
+        .tags
+        .iter()
+        .filter(|tag| tag.filter.matches_meta(meta).is_ok_and(|matches| matches))
+        .filter_map(|tag| tag.category.as_deref())
+        .collect()
+}
+
+fn replacement_category_for_ignored_torrent<'a>(
+    config: &'a Config,
+    meta: &TorrentMeta,
+    current_category: Option<&str>,
+) -> Option<&'a str> {
+    let linked_categories = linked_library_categories(config);
+    let matching_categories = matching_tag_categories(config, meta);
+    let target_category = matching_categories
+        .iter()
+        .copied()
+        .find(|category| linked_categories.contains(category))?;
+
+    let Some(current_category) = current_category.filter(|category| !category.is_empty()) else {
+        return Some(target_category);
+    };
+
+    if linked_categories.contains(current_category)
+        || matching_categories.contains(&current_category)
+        || current_category == target_category
+    {
+        return None;
+    }
+
+    Some(target_category)
+}
+
+fn category_library_accepts_torrent(
+    config: &Config,
+    torrent: &QbitTorrent,
+    category: &str,
+) -> bool {
+    config.libraries.iter().any(|library| {
+        let crate::config::Library::ByCategory(library) = library else {
+            return false;
+        };
+        if library.category != category {
+            return false;
+        }
+
+        let filters = &library.tag_filters;
+        if filters
+            .deny_tags
+            .iter()
+            .any(|tag| torrent.tags.split(",").any(|t| t.trim() == tag.as_str()))
+        {
+            return false;
+        }
+        if filters.allow_tags.is_empty() {
+            return true;
+        }
+        filters
+            .allow_tags
+            .iter()
+            .any(|tag| torrent.tags.split(",").any(|t| t.trim() == tag.as_str()))
+    })
+}
+
+async fn update_ignored_qbit_category(
+    config: &Config,
+    db: &Database<'_>,
+    torrent: &mlm_db::Torrent,
+    meta: &TorrentMeta,
+) -> Result<()> {
+    if !torrent.id_is_hash {
+        return Ok(());
+    }
+
+    let Some((qbit_torrent, qbit, qbit_conf)) = get_torrent(config, &torrent.id).await? else {
+        return Ok(());
+    };
+
+    let new_category = replacement_category_for_ignored_torrent(
+        config,
+        meta,
+        Some(qbit_torrent.category.as_str()),
+    );
+    let Some(new_category) = new_category else {
+        return Ok(());
+    };
+    let mut replacement_torrent = qbit_torrent.clone();
+    replacement_torrent.category = new_category.to_string();
+    if !category_library_accepts_torrent(config, &replacement_torrent, new_category) {
+        warn!(
+            "Skipping qBittorrent category update for torrent {} ({}): category '{}' is linked but rejected by library tag filters for tags '{}'",
+            torrent.id, meta.title, new_category, qbit_torrent.tags
+        );
+        return Ok(());
+    }
+
+    ensure_category_exists(&qbit, &qbit_conf.url, new_category).await?;
+    qbit.set_category(Some(vec![torrent.id.as_str()]), new_category)
+        .await?;
+
+    let (_guard, rw) = db.rw_async().await?;
+    let Some(mut updated_torrent) = rw.get().primary::<mlm_db::Torrent>(torrent.id.clone())? else {
+        return Ok(());
+    };
+    updated_torrent.category = Some(new_category.to_string());
+    rw.upsert(updated_torrent)?;
+    rw.commit()?;
+
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn queue_torrent_meta_update(
     rw: &RwTransaction<'_>,
@@ -709,8 +836,12 @@ pub fn queue_torrent_meta_update(
     allow_non_mam: bool,
     linker_is_owner: bool,
 ) -> Result<PreparedTorrentMetaUpdate> {
+    torrent.meta.canonicalize();
+    meta.canonicalize();
     meta.ids.extend(torrent.meta.ids.clone());
-    meta.tags = torrent.meta.tags.clone();
+    if meta.tags.is_empty() {
+        meta.tags = torrent.meta.tags.clone();
+    }
     if meta.description.is_empty() {
         meta.description = torrent.meta.description.clone();
     }
@@ -768,10 +899,7 @@ pub fn queue_torrent_meta_update(
     let id = torrent.id.clone();
     let diff = torrent.meta.diff(&meta);
     if diff.is_empty() {
-        debug!(
-            "Updating meta for torrent {}, old:\n{:?}\nnew:\n{:?}",
-            id, torrent.meta, meta
-        );
+        return Ok(PreparedTorrentMetaUpdate::Unchanged);
     } else {
         debug!(
             "Updating meta for torrent {}, diff:\n{}",
@@ -807,6 +935,13 @@ pub async fn finalize_torrent_meta_update(
         mam_id,
     } = pending;
     let id = torrent.id.clone();
+
+    if let Err(err) = update_ignored_qbit_category(config, db, &torrent, &meta).await {
+        warn!(
+            "Failed updating qBittorrent category for torrent {} ({} ) after metadata commit: {err}",
+            torrent.id, meta.title
+        );
+    }
 
     if let Some(library_path) = &torrent.library_path
         && let serde_json::Value::Object(new) = abs::create_metadata(&meta)
@@ -891,11 +1026,15 @@ async fn update_selected_torrent_meta(
     (guard, rw): (MutexGuard<'_, ()>, RwTransaction<'_>),
     mam: &MaM<'_>,
     torrent: SelectedTorrent,
-    meta: TorrentMeta,
+    mut meta: TorrentMeta,
     events: &crate::stats::Events,
 ) -> Result<()> {
+    meta.canonicalize();
     let mam_id = torrent.mam_id;
     let diff = torrent.meta.diff(&meta);
+    if diff.is_empty() {
+        return Ok(());
+    }
     debug!(
         "Updating meta for selected torrent {}, diff:\n{}",
         mam_id,
@@ -950,4 +1089,139 @@ fn add_duplicate_torrent(
         duplicate_of,
     })?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{category_library_accepts_torrent, replacement_category_for_ignored_torrent};
+    use crate::config::{
+        Config, Library, LibraryByCategory, LibraryLinkMethod, LibraryOptions, LibraryTagFilters,
+    };
+    use mlm_db::{MediaType, TorrentMeta};
+    use qbit::models::Torrent as QbitTorrent;
+    use std::path::PathBuf;
+
+    fn test_config() -> Config {
+        let mut config = Config::default();
+        config.tags = vec![
+            crate::config::TagFilter {
+                filter: crate::config::TorrentFilter {
+                    edition: crate::config::EditionFilter {
+                        media_type: vec![MediaType::Audiobook],
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                category: Some("linked".to_string()),
+                tags: vec![],
+            },
+            crate::config::TagFilter {
+                filter: crate::config::TorrentFilter {
+                    edition: crate::config::EditionFilter {
+                        media_type: vec![MediaType::Audiobook],
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                category: Some("ignored-but-still-matching".to_string()),
+                tags: vec![],
+            },
+        ];
+        config.libraries = vec![Library::ByCategory(LibraryByCategory {
+            category: "linked".to_string(),
+            options: LibraryOptions {
+                name: Some("linked".to_string()),
+                library_dir: PathBuf::from("/library"),
+                method: LibraryLinkMethod::Hardlink,
+                audio_types: None,
+                ebook_types: None,
+            },
+            tag_filters: Default::default(),
+        })];
+        config
+    }
+
+    fn audiobook_meta() -> TorrentMeta {
+        TorrentMeta {
+            media_type: MediaType::Audiobook,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn replaces_empty_category_with_linked_category() {
+        let config = test_config();
+        assert_eq!(
+            replacement_category_for_ignored_torrent(&config, &audiobook_meta(), None),
+            Some("linked")
+        );
+    }
+
+    #[test]
+    fn replaces_unlinked_ignored_category_with_linked_category() {
+        let config = test_config();
+        assert_eq!(
+            replacement_category_for_ignored_torrent(
+                &config,
+                &audiobook_meta(),
+                Some("completely-ignored")
+            ),
+            Some("linked")
+        );
+    }
+
+    #[test]
+    fn keeps_already_linked_category() {
+        let config = test_config();
+        assert_eq!(
+            replacement_category_for_ignored_torrent(&config, &audiobook_meta(), Some("linked")),
+            None
+        );
+    }
+
+    #[test]
+    fn keeps_category_that_still_matches_a_tag_rule() {
+        let config = test_config();
+        assert_eq!(
+            replacement_category_for_ignored_torrent(
+                &config,
+                &audiobook_meta(),
+                Some("ignored-but-still-matching")
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn rejects_replacement_category_when_library_tag_filters_do_not_match() {
+        let config = Config {
+            libraries: vec![Library::ByCategory(LibraryByCategory {
+                category: "linked".to_string(),
+                options: LibraryOptions {
+                    name: Some("linked".to_string()),
+                    library_dir: PathBuf::from("/library"),
+                    method: LibraryLinkMethod::Hardlink,
+                    audio_types: None,
+                    ebook_types: None,
+                },
+                tag_filters: LibraryTagFilters {
+                    allow_tags: vec!["wanted".to_string()],
+                    deny_tags: vec![],
+                },
+            })],
+            ..Default::default()
+        };
+
+        let qbit_torrent = QbitTorrent {
+            category: "linked".to_string(),
+            tags: "other-tag".to_string(),
+            ..Default::default()
+        };
+
+        assert!(!category_library_accepts_torrent(
+            &config,
+            &qbit_torrent,
+            "linked"
+        ));
+    }
 }

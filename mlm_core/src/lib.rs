@@ -28,7 +28,7 @@ pub use mlm_db::{
 pub struct SsrBackend {
     pub db: std::sync::Arc<native_db::Database<'static>>,
     pub mam: std::sync::Arc<anyhow::Result<std::sync::Arc<mlm_mam::api::MaM<'static>>>>,
-    pub metadata: std::sync::Arc<metadata::MetadataService>,
+    pub metadata: std::sync::Arc<tokio::sync::Mutex<metadata::MetadataService>>,
 }
 
 impl Backend for SsrBackend {
@@ -41,7 +41,7 @@ pub trait ContextExt {
     fn ssr(&self) -> &SsrBackend;
     fn db(&self) -> &std::sync::Arc<native_db::Database<'static>>;
     fn mam(&self) -> anyhow::Result<std::sync::Arc<mlm_mam::api::MaM<'static>>>;
-    fn metadata(&self) -> &std::sync::Arc<metadata::MetadataService>;
+    fn metadata(&self) -> &std::sync::Arc<tokio::sync::Mutex<metadata::MetadataService>>;
 }
 
 impl ContextExt for Context {
@@ -66,7 +66,7 @@ impl ContextExt for Context {
         }
     }
 
-    fn metadata(&self) -> &std::sync::Arc<metadata::MetadataService> {
+    fn metadata(&self) -> &std::sync::Arc<tokio::sync::Mutex<metadata::MetadataService>> {
         &self.ssr().metadata
     }
 }

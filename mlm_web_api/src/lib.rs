@@ -20,7 +20,7 @@ use tower_http::services::{ServeDir, ServeFile};
 use crate::{
     download::torrent_file,
     search::{search_api, search_api_post},
-    torrent::torrent_api,
+    torrent::{torrent_api, torrent_cover_redirect},
 };
 
 pub fn router(context: Context, dioxus_public_path: PathBuf) -> Router {
@@ -32,15 +32,21 @@ pub fn router(context: Context, dioxus_public_path: PathBuf) -> Router {
             get(torrent_api).with_state(context.clone()),
         )
         .route(
-            "/torrents/{id}/{filename}",
+            "/torrents/{id}/files/{*filename}",
             get(torrent_file).with_state(context.clone()),
+        )
+        .route(
+            "/torrents/{id}/cover",
+            get(torrent_cover_redirect).with_state(context.clone()),
         )
         .with_state(context.clone())
         .nest_service(
             "/assets",
             ServiceBuilder::new()
                 .layer(middleware::from_fn(set_static_cache_control))
-                .service(ServeDir::new(dioxus_assets_path).fallback(ServeDir::new("server/assets"))),
+                .service(
+                    ServeDir::new(dioxus_assets_path).fallback(ServeDir::new("server/assets")),
+                ),
         );
 
     #[cfg(debug_assertions)]

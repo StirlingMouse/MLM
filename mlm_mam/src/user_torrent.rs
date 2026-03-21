@@ -164,14 +164,21 @@ impl UserDetailsTorrent {
             })?;
         let mut categories = Category::from_old_category(cat.clone());
         let mut tags = vec![];
-        for category in &self.categories {
-            let id = category.id as u8;
-            if let Some((mapped_categories, mapped_tags)) = Category::from_legacy_v15_id(id) {
-                categories.extend(mapped_categories);
-                tags.extend(mapped_tags);
-            } else {
-                return Err(MetaError::UnknownCat(id));
-            }
+        let legacy_category_ids = self
+            .categories
+            .iter()
+            .map(|category| category.id as u8)
+            .collect::<Vec<_>>();
+        if let Some((mapped_categories, mapped_tags)) =
+            Category::from_legacy_v15_ids(&legacy_category_ids, &categories)
+        {
+            categories.extend(mapped_categories);
+            tags.extend(mapped_tags);
+        } else if let Some(id) = legacy_category_ids
+            .into_iter()
+            .find(|id| Category::from_legacy_v15_id(*id).is_none())
+        {
+            return Err(MetaError::UnknownCat(id));
         }
         categories.sort();
         categories.dedup();

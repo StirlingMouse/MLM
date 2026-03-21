@@ -102,7 +102,7 @@
   <summary>Files</summary>
   <ul>
   {% for file in torrent.library_files.iter().flatten() %}
-    <li><a href="/torrents/{{torrent.id}}/{{file.to_string_lossy() | urlencode_strict}}" target=_blank>{{ file.to_string_lossy() }}</a></li>
+    <li><a href="/torrents/{{torrent.id}}/files/{{file.to_string_lossy() | urlencode_strict}}" target=_blank>{{ file.to_string_lossy() }}</a></li>
   {% endfor %}
   </ul>
 </details>
@@ -182,7 +182,7 @@
     <summary>Files</summary>
     <ul>
     {% for file in qbit_files.iter() %}
-      <li><a href="/torrents/{{torrent.id}}/{{file.name | urlencode_strict}}" target=_blank>{{ file.name }}</a></li>
+      <li><a href="/torrents/{{torrent.id}}/files/{{file.name | urlencode_strict}}" target=_blank>{{ file.name }}</a></li>
     {% endfor %}
     </ul>
   </details>

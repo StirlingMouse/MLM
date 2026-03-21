@@ -224,3 +224,43 @@ fn vip_expiry() {
         "vip diff should be suppressed when going from expired temp -> NotVip"
     );
 }
+
+#[test]
+fn meta_diff_ignores_category_order_only_changes() {
+    let mut ids = BTreeMap::new();
+    ids.insert(ids::MAM.to_string(), "1".to_string());
+
+    let a = TorrentMeta {
+        ids: ids.clone(),
+        vip_status: None,
+        cat: None,
+        media_type: MediaType::Audiobook,
+        main_cat: Some(MainCat::Fiction),
+        categories: vec![Category::Audiobook, Category::Historical],
+        tags: vec![],
+        language: Some(Language::English),
+        flags: Some(FlagBits::new(0)),
+        filetypes: vec!["m4b".to_string()],
+        num_files: 1,
+        size: Size::from_bytes(1024),
+        title: "Title".to_string(),
+        edition: None,
+        description: String::new(),
+        authors: vec!["Author".to_string()],
+        narrators: vec![],
+        series: vec![],
+        source: MetadataSource::Mam,
+        uploaded_at: Some(Timestamp::now()),
+    };
+
+    let b = TorrentMeta {
+        categories: vec![Category::Historical, Category::Audiobook],
+        ..a.clone()
+    };
+
+    let diffs = a.diff(&b);
+    assert!(
+        diffs.is_empty(),
+        "category order-only changes should not produce diffs"
+    );
+}

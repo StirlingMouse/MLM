@@ -2,7 +2,116 @@ import { test, expect } from '@playwright/test';
 
 const DETAIL_URL = '/torrents/torrent-001';
 
+function browserOffset(projectName: string): number {
+        switch (projectName) {
+                case 'chromium':
+                        return 0;
+                case 'firefox':
+                        return 1;
+                case 'webkit':
+                        return 2;
+                default:
+                        return 0;
+        }
+}
+
+function torrentIdFor(index: number): string {
+        return `torrent-${String(index).padStart(3, '0')}`;
+}
+
 test.describe('Torrent detail page', () => {
+        test('server renders the edit page route', async ({ request }) => {
+                const response = await request.get('/torrent-edit/torrent-001');
+                expect(response.ok()).toBeTruthy();
+
+                const html = await response.text();
+                expect(html).toContain('Edit Torrent Metadata');
+                expect(html).not.toContain('Page Not Found');
+        });
+
+        test('edit metadata link loads the edit page', async ({ page }) => {
+                await page.goto(DETAIL_URL);
+
+                await Promise.all([
+                        page.waitForURL('/torrent-edit/torrent-001', { timeout: 10_000 }),
+                        page.getByRole('link', { name: 'Edit Metadata' }).click(),
+                ]);
+
+                await expect(
+                        page.getByRole('heading', { name: 'Edit Torrent Metadata' })
+                ).toBeVisible();
+                await expect(page.locator('input[type="text"]').first()).toBeVisible();
+        });
+
+        test('can edit torrent metadata and persist the change', async ({ page }, testInfo) => {
+                const torrentIndex = 11 + browserOffset(testInfo.project.name);
+                const torrentId = torrentIdFor(torrentIndex);
+                const updatedDescription =
+                        `Description updated by Playwright for ${testInfo.project.name} at ${Date.now()}.`;
+
+                await page.goto(`/torrent-edit/${torrentId}`);
+                await expect(
+                        page.getByRole('heading', { name: 'Edit Torrent Metadata' })
+                ).toBeVisible();
+
+                const description = page.getByLabel('Description');
+                await description.fill(updatedDescription);
+
+                await page.getByRole('button', { name: 'Save' }).click();
+                await expect(page.locator('body')).toContainText('Metadata updated');
+
+                await page.reload();
+                await expect(
+                        page.getByRole('heading', { name: 'Edit Torrent Metadata' })
+                ).toBeVisible();
+                await expect(page.getByLabel('Description')).toHaveValue(updatedDescription);
+
+                await page.goto(`/torrents/${torrentId}`);
+                await expect(page.locator('.torrent-description')).toContainText(updatedDescription);
+        });
+
+        test('can edit identifiers and chip-based metadata fields', async ({ page }, testInfo) => {
+                const torrentIndex = 14 + browserOffset(testInfo.project.name);
+                const torrentId = torrentIdFor(torrentIndex);
+                const updatedGoodreadsId = '7654321';
+                const addedCategory = 'Cozy Mystery';
+
+                await page.goto(`/torrent-edit/${torrentId}`);
+                await expect(
+                        page.getByRole('heading', { name: 'Edit Torrent Metadata' })
+                ).toBeVisible();
+
+                const categoriesEditor = page.locator('.multi-value-editor', {
+                        has: page.getByRole('heading', { name: 'Categories' }),
+                });
+
+                await page.getByLabel('Goodreads ID').fill(updatedGoodreadsId);
+
+                await categoriesEditor.getByLabel('Add category').fill('cozy');
+                await categoriesEditor
+                        .locator('.editor-suggestions')
+                        .getByRole('button', { name: addedCategory })
+                        .click();
+                await expect(categoriesEditor.locator('.editor-selected')).toContainText(
+                        addedCategory
+                );
+
+                await page.getByRole('button', { name: 'Save' }).click();
+                await expect(page.locator('body')).toContainText('Metadata updated');
+
+                await page.reload();
+                await expect(page.getByLabel('Goodreads ID')).toHaveValue(updatedGoodreadsId);
+                await expect(categoriesEditor.locator('.editor-selected')).toContainText(
+                        addedCategory
+                );
+
+                await page.goto(`/torrents/${torrentId}`);
+                await expect(page.getByRole('link', { name: 'Open in Goodreads' })).toHaveAttribute(
+                        'href',
+                        /7654321/
+                );
+        });
+
         test('client fetches and renders qBittorrent data', async ({ page }) => {
                 const qbitRequest = page.waitForRequest(
                         req => req.method() === 'POST' && req.url().includes('/api/get_qbit_data'),
@@ -51,9 +160,12 @@ test.describe('Torrent detail page', () => {
                 await expect(page.locator('h3', { hasText: 'Other Torrents' })).toBeVisible({
                         timeout: 20_000,
                 });
-                await expect(page.locator('body')).toContainText('Mock Search: Way of Kings', {
-                        timeout: 20_000,
-                });
+                await expect(page.locator('.detail-related-card')).toContainText(
+                        'Mock Search Result 001',
+                        {
+                                timeout: 20_000,
+                        }
+                );
         });
 
         test('loads and shows torrent info', async ({ page }) => {
@@ -61,6 +173,42 @@ test.describe('Torrent detail page', () => {
                 await expect(page.locator('.error')).toHaveCount(0);
                 // Should show the torrent title
                 await expect(page.locator('body')).toContainText('Test Book 001');
+        });
+
+        test('uses grouped actions and shared section toggles', async ({ page }) => {
+                await page.goto(DETAIL_URL);
+
+                const descriptionSection = page
+                        .locator('details')
+                        .filter({ has: page.locator('summary', { hasText: 'Description' }) })
+                        .first();
+                await expect(descriptionSection).toHaveJSProperty('open', true);
+                await expect(descriptionSection).toContainText('Description for Test Book 001');
+
+                const historySection = page
+                        .locator('details')
+                        .filter({ has: page.locator('summary', { hasText: 'Event History' }) })
+                        .first();
+                await expect(historySection).toHaveJSProperty('open', false);
+                await historySection.locator('summary').click();
+                await expect(historySection).toHaveJSProperty('open', true);
+
+                const sidebarMetadata = page.locator('.torrent-side .detail-metadata-table');
+                await expect(sidebarMetadata).not.toContainText('Library Path');
+
+                const libraryCard = page.locator('.torrent-main .detail-library-card');
+                await expect(libraryCard).toContainText('Library');
+                await expect(libraryCard).toContainText('/library/books/Test Book 001');
+                await expect(libraryCard).toContainText('Relink');
+                await expect(libraryCard).toContainText('Refresh & Relink');
+                await expect(libraryCard).toContainText('Clean');
+                await expect(libraryCard).toContainText('Remove');
+
+                const metadataActions = page.locator('.detail-action-group').filter({
+                        hasText: 'Metadata',
+                });
+                await expect(metadataActions).toContainText('Edit Metadata');
+                await expect(metadataActions).toContainText('Match Metadata');
         });
 
         test('other torrents section resolves (not stuck loading)', async ({ page }) => {
@@ -94,5 +242,72 @@ test.describe('Torrent detail page', () => {
                 await page.goto('/torrents/torrent-005');
                 await expect(page.locator('.error')).toHaveCount(0);
                 await expect(page.locator('body')).toContainText('Test Book 005');
+        });
+
+        test('match metadata dialog opens when clicking Match Metadata button', async ({ page }) => {
+                await page.goto(DETAIL_URL);
+
+                // Click the Match Metadata button
+                await page.getByRole('button', { name: 'Match Metadata' }).click();
+
+                // Verify dialog appears with the title
+                await expect(page.locator('.dialog-box h3', { hasText: 'Match Metadata' })).toBeVisible();
+
+                // Verify provider dropdown is present
+                await expect(page.locator('.dialog-field select')).toBeVisible();
+
+                // Verify Cancel button is present
+                await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+        });
+
+        test('match metadata dialog shows MaM as first provider option', async ({ page }) => {
+                await page.goto(DETAIL_URL);
+
+                // Click the Match Metadata button
+                await page.getByRole('button', { name: 'Match Metadata' }).click();
+
+                // Verify dialog is open
+                await expect(page.locator('.dialog-box h3', { hasText: 'Match Metadata' })).toBeVisible();
+
+                // Get the first option in the provider dropdown (should be MaM)
+                const firstOption = page.locator('.dialog-field select option').first();
+                await expect(firstOption).toContainText('MaM');
+        });
+
+        test('match metadata preview loads when MaM is selected', async ({ page }) => {
+                await page.goto(DETAIL_URL);
+
+                // Click the Match Metadata button
+                await page.getByRole('button', { name: 'Match Metadata' }).click();
+
+                // Verify dialog is open
+                await expect(page.locator('.dialog-box h3', { hasText: 'Match Metadata' })).toBeVisible();
+
+                // Select MaM from the dropdown (it should already be selected by default)
+                await page.locator('.dialog-field select').selectOption('MaM');
+
+                // Wait for preview to load (the dialog-preview section should show results)
+                await expect(page.locator('.dialog-preview')).toBeVisible({ timeout: 10_000 });
+        });
+
+        test('match metadata diff table appears with field rows', async ({ page }) => {
+                await page.goto(DETAIL_URL);
+
+                // Click the Match Metadata button
+                await page.getByRole('button', { name: 'Match Metadata' }).click();
+
+                // Verify dialog is open
+                await expect(page.locator('.dialog-box h3', { hasText: 'Match Metadata' })).toBeVisible();
+
+                // Select MaM from the dropdown
+                await page.locator('.dialog-field select').selectOption('MaM');
+
+                // Wait for preview to load and diff table to appear
+                await expect(page.locator('.dialog-preview')).toBeVisible({ timeout: 10_000 });
+
+                // The diff table should contain rows with field names
+                // We expect to see fields like title, author, narrator, etc. that differ
+                const previewContent = page.locator('.dialog-preview');
+                await expect(previewContent).toContainText(/Title|Author|Narrator|Series/);
         });
 });

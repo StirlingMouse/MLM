@@ -1,6 +1,7 @@
 use crate::{Context, ContextExt};
 use anyhow::Result;
 use mlm_db::TorrentMeta;
+use tokio::time::timeout;
 
 /// Match metadata for a given original `TorrentMeta` using the selected
 /// provider id. This function does NOT persist changes to the database; it
@@ -26,11 +27,19 @@ pub async fn match_meta(
     // centralized MetadataService attached to the Context. This keeps
     // provider configuration in one place and avoids duplicating instantiation
     // logic here.
-    let fetched = ctx
+    //
+    // Get provider info while holding the lock, then release the lock before
+    // the async fetch to avoid serializing all metadata access.
+    let (provider, timeout_dur) = ctx
         .ssr()
         .metadata
-        .fetch_provider(ctx, query, provider_id)
-        .await?;
+        .lock()
+        .await
+        .get_provider(provider_id)
+        .ok_or_else(|| anyhow::anyhow!("unknown provider id: {}", provider_id))?;
+
+    // Now call fetch outside the lock to avoid blocking other metadata operations
+    let fetched = timeout(timeout_dur, provider.fetch(&query)).await??;
 
     // Merge fetched metadata into original meta: only overwrite fields when
     // the provider supplied non-empty / non-default values. This preserves
@@ -103,6 +112,7 @@ fn merge_meta(orig: &TorrentMeta, incoming: &TorrentMeta) -> TorrentMeta {
 
     // Always set source to Match for provider-updated data
     out.source = mlm_db::MetadataSource::Match;
+    out.canonicalize();
 
     out
 }

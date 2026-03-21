@@ -8,6 +8,11 @@ use crate::{
 };
 
 impl TorrentMeta {
+    pub fn canonicalize(&mut self) {
+        self.categories.sort_unstable();
+        self.categories.dedup();
+    }
+
     pub fn mam_id(&self) -> Option<u64> {
         self.ids.get(ids::MAM).and_then(|id| id.parse().ok())
     }
@@ -38,8 +43,13 @@ impl TorrentMeta {
     }
 
     pub fn diff(&self, other: &TorrentMeta) -> Vec<TorrentMetaDiff> {
+        let mut this = self.clone();
+        this.canonicalize();
+        let mut other = other.clone();
+        other.canonicalize();
+
         let mut diff = vec![];
-        if self.ids != other.ids {
+        if this.ids != other.ids {
             let format_ids = |ids: &std::collections::BTreeMap<String, String>| {
                 ids.iter()
                     .map(|(key, value)| format!("{key}: {value}"))
@@ -47,13 +57,13 @@ impl TorrentMeta {
             };
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Ids,
-                from: format_ids(&self.ids),
+                from: format_ids(&this.ids),
                 to: format_ids(&other.ids),
             });
         }
-        if self.vip_status != other.vip_status
+        if this.vip_status != other.vip_status
         // If we go from exired temp vip to not vip, do not write a diff
-            && !(self
+            && !(this
                 .vip_status
                 .as_ref()
                 .is_some_and(|s| !s.is_vip())
@@ -61,7 +71,7 @@ impl TorrentMeta {
         {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Vip,
-                from: self
+                from: this
                     .vip_status
                     .as_ref()
                     .map(|vip_status| vip_status.to_string())
@@ -73,10 +83,10 @@ impl TorrentMeta {
                     .unwrap_or_default(),
             });
         }
-        if self.cat != other.cat {
+        if this.cat != other.cat {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Cat,
-                from: self
+                from: this
                     .cat
                     .as_ref()
                     .map(|cat| cat.to_string())
@@ -88,38 +98,38 @@ impl TorrentMeta {
                     .unwrap_or_default(),
             });
         }
-        if self.media_type != other.media_type {
+        if this.media_type != other.media_type {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::MediaType,
-                from: self.media_type.to_string(),
+                from: this.media_type.to_string(),
                 to: other.media_type.to_string(),
             });
         }
-        if self.main_cat != other.main_cat {
+        if this.main_cat != other.main_cat {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::MainCat,
-                from: self.main_cat.map(|c| c.to_string()).unwrap_or_default(),
+                from: this.main_cat.map(|c| c.to_string()).unwrap_or_default(),
                 to: other.main_cat.map(|c| c.to_string()).unwrap_or_default(),
             });
         }
-        if self.categories != other.categories {
+        if this.categories != other.categories {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Categories,
-                from: self.categories.iter().map(ToString::to_string).join(", "),
+                from: this.categories.iter().map(ToString::to_string).join(", "),
                 to: other.categories.iter().map(ToString::to_string).join(", "),
             });
         }
-        if self.tags != other.tags {
+        if this.tags != other.tags {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Tags,
-                from: self.tags.join(", "),
+                from: this.tags.join(", "),
                 to: other.tags.join(", "),
             });
         }
-        if self.language != other.language {
+        if this.language != other.language {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Language,
-                from: self
+                from: this
                     .language
                     .map(|language| language.to_str().to_string())
                     .unwrap_or_default(),
@@ -129,10 +139,10 @@ impl TorrentMeta {
                     .unwrap_or_default(),
             });
         }
-        if self.flags != other.flags {
+        if this.flags != other.flags {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Flags,
-                from: self
+                from: this
                     .flags
                     .map(|flags| format!("{}", Flags::from(flags)))
                     .unwrap_or_default(),
@@ -142,31 +152,31 @@ impl TorrentMeta {
                     .unwrap_or_default(),
             });
         }
-        if self.filetypes != other.filetypes {
+        if this.filetypes != other.filetypes {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Filetypes,
-                from: self.filetypes.join(", ").to_string(),
+                from: this.filetypes.join(", ").to_string(),
                 to: other.filetypes.join(", ").to_string(),
             });
         }
-        if self.size != other.size {
+        if this.size != other.size {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Size,
-                from: self.size.to_string(),
+                from: this.size.to_string(),
                 to: other.size.to_string(),
             });
         }
-        if self.title != other.title {
+        if this.title != other.title {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Title,
-                from: self.title.to_string(),
+                from: this.title.to_string(),
                 to: other.title.to_string(),
             });
         }
-        if self.edition != other.edition {
+        if this.edition != other.edition {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Edition,
-                from: self
+                from: this
                     .edition
                     .as_ref()
                     .map(|e| e.0.to_string())
@@ -178,31 +188,31 @@ impl TorrentMeta {
                     .unwrap_or_default(),
             });
         }
-        if self.authors != other.authors {
+        if this.authors != other.authors {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Authors,
-                from: self.authors.join(", ").to_string(),
+                from: this.authors.join(", ").to_string(),
                 to: other.authors.join(", ").to_string(),
             });
         }
-        if self.narrators != other.narrators {
+        if this.narrators != other.narrators {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Narrators,
-                from: self.narrators.join(", ").to_string(),
+                from: this.narrators.join(", ").to_string(),
                 to: other.narrators.join(", ").to_string(),
             });
         }
-        if self.series != other.series {
+        if this.series != other.series {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Series,
-                from: self.series.iter().map(format_serie).join(", ").to_string(),
+                from: this.series.iter().map(format_serie).join(", ").to_string(),
                 to: other.series.iter().map(format_serie).join(", ").to_string(),
             });
         }
-        if self.source != other.source {
+        if this.source != other.source {
             diff.push(TorrentMetaDiff {
                 field: TorrentMetaField::Source,
-                from: self.source.to_string(),
+                from: this.source.to_string(),
                 to: other.source.to_string(),
             });
         }

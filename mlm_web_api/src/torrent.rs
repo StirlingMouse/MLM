@@ -1,8 +1,10 @@
 use axum::{
     Json,
+    body::Body,
     extract::{Path, State},
+    response::Response,
 };
-use mlm_db::{Torrent, TorrentKey};
+use mlm_db::{Torrent, TorrentKey, ids};
 use serde_json::json;
 
 use crate::error::AppError;
@@ -87,4 +89,31 @@ async fn torrent_api_id(
         "qbit_torrent": qbit_torrent,
         "qbit_files": qbit_files,
     })))
+}
+
+pub async fn torrent_cover_redirect(
+    State(context): State<Context>,
+    Path(id): Path<String>,
+) -> Result<Response, AppError> {
+    let config = context.config().await;
+    let abs_cfg = config.audiobookshelf.as_ref().ok_or(AppError::NotFound)?;
+
+    let torrent = context
+        .db()
+        .r_transaction()?
+        .get()
+        .primary::<Torrent>(id)?
+        .ok_or(AppError::NotFound)?;
+
+    let abs_id = torrent.meta.ids.get(ids::ABS).ok_or(AppError::NotFound)?;
+
+    let cover_url = format!("{}/api/items/{}/cover", abs_cfg.url, abs_id);
+
+    // Return 302 redirect to ABS cover URL
+    let response = Response::builder()
+        .status(302)
+        .header(axum::http::header::LOCATION, cover_url)
+        .body(Body::empty())
+        .map_err(|e| AppError::Generic(anyhow::anyhow!("Failed to build response: {}", e)))?;
+    Ok(response)
 }

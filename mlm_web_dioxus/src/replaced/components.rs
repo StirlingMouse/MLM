@@ -484,7 +484,10 @@ pub fn ReplacedPage() -> Element {
                                         }
                                         if show.read().authors {
                                             div {
-                                                for author in pair.torrent.meta.authors.clone() {
+                                                for (i, author) in pair.torrent.meta.authors.iter().enumerate() {
+                                                    if i > 0 {
+                                                        ", "
+                                                    }
                                                     FilterLink {
                                                         field: ReplacedPageFilter::Author,
                                                         value: author.clone(),
@@ -496,7 +499,10 @@ pub fn ReplacedPage() -> Element {
                                         }
                                         if show.read().narrators {
                                             div {
-                                                for narrator in pair.torrent.meta.narrators.clone() {
+                                                for (i, narrator) in pair.torrent.meta.narrators.iter().enumerate() {
+                                                    if i > 0 {
+                                                        ", "
+                                                    }
                                                     FilterLink {
                                                         field: ReplacedPageFilter::Narrator,
                                                         value: narrator.clone(),
@@ -508,7 +514,10 @@ pub fn ReplacedPage() -> Element {
                                         }
                                         if show.read().series {
                                             div {
-                                                for series in pair.torrent.meta.series.clone() {
+                                                for (i, series) in pair.torrent.meta.series.iter().enumerate() {
+                                                    if i > 0 {
+                                                        ", "
+                                                    }
                                                     FilterLink {
                                                         field: ReplacedPageFilter::Series,
                                                         value: series.name.clone(),
@@ -537,7 +546,10 @@ pub fn ReplacedPage() -> Element {
                                         }
                                         if show.read().filetypes {
                                             div {
-                                                for filetype in pair.torrent.meta.filetypes.clone() {
+                                                for (i, filetype) in pair.torrent.meta.filetypes.clone().into_iter().enumerate() {
+                                                    if i > 0 {
+                                                        ", "
+                                                    }
                                                     FilterLink {
                                                         field: ReplacedPageFilter::Filetype,
                                                         value: filetype.clone(),
@@ -555,26 +567,35 @@ pub fn ReplacedPage() -> Element {
                                         div { "{pair.replacement.meta.title}" }
                                         if show.read().authors {
                                             div {
-                                                for author in pair.replacement.meta.authors.clone() {
-                                                    span { "{author} " }
+                                                for (i, author) in pair.replacement.meta.authors.iter().enumerate() {
+                                                    if i > 0 {
+                                                        ", "
+                                                    }
+                                                    span { "{author}" }
                                                 }
                                             }
                                         }
                                         if show.read().narrators {
                                             div {
-                                                for narrator in pair.replacement.meta.narrators.clone() {
-                                                    span { "{narrator} " }
+                                                for (i, narrator) in pair.replacement.meta.narrators.iter().enumerate() {
+                                                    if i > 0 {
+                                                        ", "
+                                                    }
+                                                    span { "{narrator}" }
                                                 }
                                             }
                                         }
                                         if show.read().series {
                                             div {
-                                                for series in pair.replacement.meta.series.clone() {
+                                                for (i, series) in pair.replacement.meta.series.iter().enumerate() {
+                                                    if i > 0 {
+                                                        ", "
+                                                    }
                                                     span {
                                                         if series.entries.is_empty() {
-                                                            "{series.name} "
+                                                            "{series.name}"
                                                         } else {
-                                                            "{series.name} #{series.entries} "
+                                                            "{series.name} #{series.entries}"
                                                         }
                                                     }
                                                 }

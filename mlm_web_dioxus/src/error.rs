@@ -11,11 +11,19 @@ pub trait IntoServerFnError<T> {
 
 impl<T, E: std::fmt::Display> IntoServerFnError<T> for Result<T, E> {
     fn server_err(self) -> Result<T, ServerFnError> {
-        self.map_err(|e| ServerFnError::new(e.to_string()))
+        self.map_err(|e| {
+            #[cfg(feature = "server")]
+            tracing::error!("server function error: {e}");
+            ServerFnError::new(e.to_string())
+        })
     }
 
     fn server_err_ctx(self, msg: &str) -> Result<T, ServerFnError> {
-        self.map_err(|e| ServerFnError::new(format!("{}: {}", msg, e)))
+        self.map_err(|e| {
+            #[cfg(feature = "server")]
+            tracing::error!("{msg}: {e}");
+            ServerFnError::new(format!("{}: {}", msg, e))
+        })
     }
 }
 
@@ -27,7 +35,11 @@ pub trait OptionIntoServerFnError<T> {
 
 impl<T> OptionIntoServerFnError<T> for Option<T> {
     fn ok_or_server_err(self, msg: &str) -> Result<T, ServerFnError> {
-        self.ok_or_else(|| ServerFnError::new(msg.to_string()))
+        self.ok_or_else(|| {
+            #[cfg(feature = "server")]
+            tracing::error!("server function error: {msg}");
+            ServerFnError::new(msg.to_string())
+        })
     }
 }
 
