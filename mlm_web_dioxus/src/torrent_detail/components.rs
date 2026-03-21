@@ -1,9 +1,10 @@
 use super::server_fns::{
-    clean_torrent_action, clear_replacement_action, get_metadata_providers, get_other_torrents,
-    get_qbit_data, get_torrent_detail, match_metadata_action, preview_mam_metadata,
-    preview_match_metadata, refresh_and_relink_action, refresh_metadata_action,
-    relink_torrent_action, remove_seeding_files_action, remove_torrent_action,
-    set_qbit_category_tags_action, torrent_start_action, torrent_stop_action,
+    apply_match_metadata_action, clean_torrent_action, clear_replacement_action,
+    get_metadata_providers, get_other_torrents, get_qbit_data, get_torrent_detail,
+    match_metadata_action, preview_mam_metadata, preview_match_metadata,
+    refresh_and_relink_action, refresh_metadata_action, relink_torrent_action,
+    remove_seeding_files_action, remove_torrent_action, set_qbit_category_tags_action,
+    torrent_start_action, torrent_stop_action,
 };
 use super::types::*;
 use crate::app::Route;
@@ -990,11 +991,24 @@ fn MatchDialog(
         move |_| {
             let id = torrent_id.clone();
             let provider = selected_provider.read().clone();
-            let action: Pin<Box<dyn Future<Output = Result<(), ServerFnError>>>> = if provider == "MaM" {
-                Box::pin(refresh_metadata_action(id))
-            } else {
-                Box::pin(match_metadata_action(id, provider))
-            };
+            
+            // Try to get preview data first - if available, use apply_match_metadata_action
+            // Otherwise fall back to the legacy re-fetch approach
+            let preview_result = preview.read();
+            let action: Pin<Box<dyn Future<Output = Result<(), ServerFnError>>>> = 
+                if let Some(Ok(result)) = preview_result.as_ref() {
+                    // Use pre-computed metadata from preview - no re-fetch needed
+                    let merged_meta = result.merged_meta.clone();
+                    let diffs = result.diffs.clone();
+                    Box::pin(apply_match_metadata_action(id, merged_meta, diffs))
+                } else {
+                    // Fall back to legacy behavior - re-fetches from provider
+                    if provider == "MaM" {
+                        Box::pin(refresh_metadata_action(id))
+                    } else {
+                        Box::pin(match_metadata_action(id, provider))
+                    }
+                };
             spawn_action(
                 "Match Metadata".to_string(),
                 loading,
@@ -1039,12 +1053,12 @@ fn MatchDialog(
                     Some(Err(e)) => rsx! {
                         p { class: "error", "Preview failed: {e}" }
                     },
-                    Some(Ok(diffs)) if diffs.is_empty() => rsx! {
+                    Some(Ok(result)) if result.diffs.is_empty() => rsx! {
                         p {
                             i { "No changes would be made." }
                         }
                     },
-                    Some(Ok(diffs)) => rsx! {
+                    Some(Ok(result)) => rsx! {
                         table { class: "match-diff-table",
                             thead {
                                 tr {
@@ -1054,7 +1068,7 @@ fn MatchDialog(
                                 }
                             }
                             tbody {
-                                for diff in diffs.clone() {
+                                for diff in result.diffs.clone() {
                                     tr {
                                         td { "{diff.field}" }
                                         td { class: "diff-from", "{diff.from}" }
