@@ -21,12 +21,12 @@ use sublime_fuzzy::FuzzySearch;
 #[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
 
-use super::types::{
-    TorrentsBulkAction, TorrentsData, TorrentsPageColumns, TorrentsPageFilter, TorrentsPageSort,
-};
 #[cfg(feature = "server")]
 #[allow(unused_imports)]
 use super::types::{TorrentLibraryMismatch, TorrentsMeta, TorrentsRow};
+use super::types::{
+    TorrentsBulkAction, TorrentsData, TorrentsPageColumns, TorrentsPageFilter, TorrentsPageSort,
+};
 
 #[server]
 pub async fn get_torrents_data(

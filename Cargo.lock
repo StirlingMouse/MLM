@@ -3632,6 +3632,7 @@ dependencies = [
  "async-trait",
  "httpmock",
  "mlm_db",
+ "mlm_mam",
  "mlm_parse",
  "reqwest",
  "scraper 0.14.0",

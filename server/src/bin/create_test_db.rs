@@ -1,9 +1,10 @@
 /// Creates a test database with fake data for e2e Playwright tests.
 /// Usage: create_test_db <output_path>
 use mlm_db::{
-    migrate, DuplicateTorrent, ErroredTorrent, ErroredTorrentId, Event, EventType, List, ListItem,
-    ListItemTorrent, MainCat, MediaType, MetadataSource, SelectedTorrent, Series, SeriesEntries,
-    SeriesEntry, Size, Timestamp, Torrent, TorrentCost, TorrentMeta, TorrentStatus, Uuid, MODELS,
+    DuplicateTorrent, ErroredTorrent, ErroredTorrentId, Event, EventType, List, ListItem,
+    ListItemTorrent, MODELS, MainCat, MediaType, MetadataSource, SelectedTorrent, Series,
+    SeriesEntries, SeriesEntry, Size, Timestamp, Torrent, TorrentCost, TorrentMeta, TorrentStatus,
+    Uuid, migrate,
 };
 use native_db::Builder;
 use std::collections::BTreeMap;

@@ -29,6 +29,8 @@ pub async fn match_meta(
     let fetched = ctx
         .ssr()
         .metadata
+        .lock()
+        .await
         .fetch_provider(ctx, query, provider_id)
         .await?;
 

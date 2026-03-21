@@ -1,9 +1,9 @@
+use crate::components::Pagination;
 #[cfg(feature = "server")]
 use crate::error::{IntoServerFnError, OptionIntoServerFnError};
 use crate::sse::STATS_UPDATE_TRIGGER;
 #[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
-use crate::components::Pagination;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 

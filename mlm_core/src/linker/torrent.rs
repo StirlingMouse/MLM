@@ -519,28 +519,29 @@ pub async fn get_mam_metadata_preview<M>(
 where
     M: MaMApi + ?Sized,
 {
-    let torrent: Torrent = db.r_transaction()?
+    let torrent: Torrent = db
+        .r_transaction()?
         .get()
         .primary(id)?
         .ok_or_else(|| anyhow::anyhow!("Could not find torrent id"))?;
-    
+
     let Some(mam_id) = torrent.meta.mam_id() else {
         bail!("Could not find mam id");
     };
-    
+
     let mam_torrent = mam
         .get_torrent_info_by_id(mam_id)
         .await
         .context("get_mam_info")?
         .ok_or_else(|| anyhow::anyhow!("Could not find torrent on mam"))?;
-    
+
     let mut meta = mam_torrent.as_meta().context("as_meta")?;
-    
+
     // Merge ids from original torrent (same as refresh_mam_metadata)
     let mut ids = torrent.meta.ids.clone();
     ids.append(&mut meta.ids);
     meta.ids = ids;
-    
+
     Ok((meta, mam_torrent))
 }
 

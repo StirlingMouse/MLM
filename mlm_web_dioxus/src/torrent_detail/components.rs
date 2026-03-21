@@ -1,10 +1,10 @@
 use super::server_fns::{
     apply_match_metadata_action, clean_torrent_action, clear_replacement_action,
     get_metadata_providers, get_other_torrents, get_qbit_data, get_torrent_detail,
-    match_metadata_action, preview_mam_metadata, preview_match_metadata,
-    refresh_and_relink_action, refresh_metadata_action, relink_torrent_action,
-    remove_seeding_files_action, remove_torrent_action, set_qbit_category_tags_action,
-    torrent_start_action, torrent_stop_action,
+    match_metadata_action, preview_mam_metadata, preview_match_metadata, refresh_and_relink_action,
+    refresh_metadata_action, relink_torrent_action, remove_seeding_files_action,
+    remove_torrent_action, set_qbit_category_tags_action, torrent_start_action,
+    torrent_stop_action,
 };
 use super::types::*;
 use crate::app::Route;
@@ -17,7 +17,6 @@ use crate::events::EventListItem;
 use crate::search::SearchTorrent;
 use dioxus::prelude::*;
 use std::pin::Pin;
-
 
 fn spawn_action(
     name: String,
@@ -991,11 +990,11 @@ fn MatchDialog(
         move |_| {
             let id = torrent_id.clone();
             let provider = selected_provider.read().clone();
-            
+
             // Try to get preview data first - if available, use apply_match_metadata_action
             // Otherwise fall back to the legacy re-fetch approach
             let preview_result = preview.read();
-            let action: Pin<Box<dyn Future<Output = Result<(), ServerFnError>>>> = 
+            let action: Pin<Box<dyn Future<Output = Result<(), ServerFnError>>>> =
                 if let Some(Ok(result)) = preview_result.as_ref() {
                     // Use pre-computed metadata from preview - no re-fetch needed
                     let merged_meta = result.merged_meta.clone();

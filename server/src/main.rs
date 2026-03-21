@@ -211,13 +211,21 @@ async fn app_main() -> Result<()> {
         })
         .collect();
     let metadata_service = MetadataService::from_settings(&provider_settings, default_timeout);
-    let metadata_service = Arc::new(metadata_service);
+    let metadata_service = Arc::new(tokio::sync::Mutex::new(metadata_service));
 
     let mam = if config.mam_id.is_empty() {
         Err(anyhow::Error::msg("No mam_id set"))
     } else {
         MaM::new(&config.mam_id, db.clone()).await.map(Arc::new)
     };
+
+    // Register MaM provider if available
+    if let Ok(mam_api) = mam.as_ref() {
+        metadata_service
+            .lock()
+            .await
+            .register_mam(mam_api.clone(), default_timeout);
+    }
 
     let web_port = config.web_port;
     let web_host = config.web_host.clone();

@@ -2,7 +2,7 @@ use crate::{Context, ContextExt};
 use anyhow::Result;
 use mlm_db::DatabaseExt as _;
 use mlm_db::{Event, EventType, MetadataSource, TorrentMeta};
-use mlm_meta::providers::{Hardcover, OpenLibrary, RomanceIo};
+use mlm_meta::providers::{Hardcover, MamProvider, OpenLibrary, RomanceIo};
 use mlm_meta::traits::Provider;
 use std::sync::Arc;
 use tokio::time::{Duration, timeout};
@@ -93,6 +93,18 @@ impl MetadataService {
             .iter()
             .map(|(p, _)| p.id().to_string())
             .collect()
+    }
+
+    /// Register the MaM provider with the given API and timeout.
+    /// This is called after construction because the MaM API is created
+    /// separately from the MetadataService.
+    pub fn register_mam(
+        &mut self,
+        mam: std::sync::Arc<mlm_mam::api::MaM<'static>>,
+        timeout: Duration,
+    ) {
+        let mam_provider = MamProvider::new(mam);
+        self.providers.push((Arc::new(mam_provider), timeout));
     }
 
     #[instrument(skip(self, ctx))]

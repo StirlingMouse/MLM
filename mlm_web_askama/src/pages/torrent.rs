@@ -221,7 +221,7 @@ async fn torrent_page_id(
         wanted_path,
         qbit_files,
         other_torrents,
-        metadata_providers: context.metadata().enabled_providers(),
+        metadata_providers: context.metadata().lock().await.enabled_providers(),
     };
     Ok::<_, AppError>(Html(template.to_string()))
 }

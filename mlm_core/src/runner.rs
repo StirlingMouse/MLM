@@ -31,7 +31,7 @@ pub fn spawn_tasks(
     db: Arc<mlm_db::Database<'static>>,
     mam: Arc<Result<Arc<MaM<'static>>>>,
     stats: Stats,
-    metadata: Arc<crate::metadata::MetadataService>,
+    metadata: Arc<tokio::sync::Mutex<crate::metadata::MetadataService>>,
 ) -> Context {
     let events = Events::new();
     let (mut search_tx, mut search_rx) = (BTreeMap::new(), BTreeMap::new());
