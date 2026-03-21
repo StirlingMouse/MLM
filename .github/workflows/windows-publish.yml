@@ -37,6 +37,9 @@ jobs:
           perl-version: "5.32"
           distribution: strawberry
 
+      - name: Test
+        run: cargo test -p mlm
+
       - name: Build
         run: |
           cargo install cargo-packager
