@@ -2,7 +2,7 @@ mod api;
 mod pages;
 mod tables;
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::Result;
 use askama::{Template, filters::HtmlSafe};
@@ -161,7 +161,9 @@ pub async fn start_webserver(context: Context) -> Result<()> {
             "/assets",
             ServiceBuilder::new()
                 .layer(middleware::from_fn(set_static_cache_control))
-                .service(ServeDir::new("server/assets")),
+                .service(ServeDir::new(
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("server/assets"),
+                )),
         );
 
     #[cfg(debug_assertions)]
@@ -169,7 +171,9 @@ pub async fn start_webserver(context: Context) -> Result<()> {
         "/assets/favicon.png",
         ServiceBuilder::new()
             .layer(middleware::from_fn(set_static_cache_control))
-            .service(ServeFile::new("server/assets/favicon_dev.png")),
+            .service(ServeFile::new(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("server/assets/favicon_dev.png"),
+            )),
     );
 
     let listener =
