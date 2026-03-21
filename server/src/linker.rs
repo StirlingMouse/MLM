@@ -11,7 +11,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use file_id::get_file_id;
 use log::error;
 use mlm_db::{
@@ -700,7 +700,9 @@ fn select_format(
 #[instrument(skip_all)]
 fn hard_link(download_path: &Path, library_path: &Path, file_path: &Path) -> Result<()> {
     debug!("linking: {:?} -> {:?}", download_path, library_path);
-    fs::hard_link(download_path, library_path).or_else(|err| {
+    fs::hard_link(download_path, library_path)
+        .map_err(|err| link_not_found_diagnostics(err, "hardlink", download_path, library_path))
+        .or_else(|err| {
             if err.kind() == ErrorKind::AlreadyExists {
                 trace!("AlreadyExists: {}", err);
                 let download_id = get_file_id(download_path);
@@ -731,7 +733,8 @@ fn hard_link(download_path: &Path, library_path: &Path, file_path: &Path) -> Res
 #[instrument(skip_all)]
 fn copy(download_path: &Path, library_path: &Path) -> Result<()> {
     debug!("copying: {:?} -> {:?}", download_path, library_path);
-    fs::copy(download_path, library_path)?;
+    fs::copy(download_path, library_path)
+        .map_err(|err| link_not_found_diagnostics(err, "copy", download_path, library_path))?;
     Ok(())
 }
 
@@ -739,11 +742,74 @@ fn copy(download_path: &Path, library_path: &Path) -> Result<()> {
 fn symlink(download_path: &Path, library_path: &Path) -> Result<()> {
     debug!("symlinking: {:?} -> {:?}", download_path, library_path);
     #[cfg(target_family = "unix")]
-    std::os::unix::fs::symlink(download_path, library_path)?;
+    std::os::unix::fs::symlink(download_path, library_path)
+        .map_err(|err| link_not_found_diagnostics(err, "symlink", download_path, library_path))?;
     #[cfg(target_family = "windows")]
     bail!("symlink is not supported on Windows");
     #[allow(unreachable_code)]
     Ok(())
+}
+
+fn link_not_found_diagnostics(
+    err: std::io::Error,
+    operation: &str,
+    download_path: &Path,
+    library_path: &Path,
+) -> std::io::Error {
+    let is_not_found = err.kind() == ErrorKind::NotFound
+        || matches!(err.raw_os_error(), Some(2) | Some(3));
+    if !is_not_found {
+        return err;
+    }
+
+    let details = [
+        format!(
+            "{operation} failed with not-found error while linking files: {err}"
+        ),
+        probe_path("download_path", Some(download_path)),
+        probe_path("download_parent", download_path.parent()),
+        probe_path("library_path", Some(library_path)),
+        probe_path("library_parent", library_path.parent()),
+    ]
+    .join(" | ");
+
+    warn!("{details}");
+    std::io::Error::new(err.kind(), anyhow!(details))
+}
+
+fn probe_path(label: &str, path: Option<&Path>) -> String {
+    let Some(path) = path else {
+        return format!("{label}=<none>");
+    };
+
+    let symlink_meta = fs::symlink_metadata(path);
+    let exists = symlink_meta.is_ok();
+    let meta_state = match symlink_meta {
+        Ok(meta) if meta.is_dir() => "dir",
+        Ok(meta) if meta.is_file() => "file",
+        Ok(meta) if meta.file_type().is_symlink() => "symlink",
+        Ok(_) => "other",
+        Err(_) => "missing",
+    };
+    let first_missing = first_missing_component(path)
+        .map(|p| format!(", first_missing={}", p.display()))
+        .unwrap_or_default();
+
+    format!(
+        "{label}={} (exists={exists}, type={meta_state}{first_missing})",
+        path.display()
+    )
+}
+
+fn first_missing_component(path: &Path) -> Option<PathBuf> {
+    let mut current = PathBuf::new();
+    for component in path.components() {
+        current.push(component.as_os_str());
+        if fs::symlink_metadata(&current).is_err() {
+            return Some(current);
+        }
+    }
+    None
 }
 
 pub fn file_size(m: &Metadata) -> u64 {
