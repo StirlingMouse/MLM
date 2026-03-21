@@ -280,8 +280,8 @@ pub async fn get_torrent_meta_edit_data(id: String) -> Result<TorrentMetaEditFor
             })
             .collect(),
         media_type_options: mlm_db::MediaType::all()
-            .into_iter()
-            .map(|media_type: mlm_db::MediaType| SelectOptionData {
+            .iter()
+            .map(|media_type| SelectOptionData {
                 value: media_type.as_id().to_string(),
                 label: media_type.as_str().to_string(),
             })
@@ -713,7 +713,7 @@ pub fn TorrentEditPage(id: String) -> Element {
                 }
 
                 if let Some((msg, is_error)) = status_msg.read().as_ref() {
-                    p { class: if *is_error { "torrent-edit-banner error" } else { "torrent-edit-banner loading-indicator" },
+                    p { class: if *is_error { "torrent-edit-banner error" } else { "torrent-edit-banner" },
                         "{msg}"
                     }
                 }

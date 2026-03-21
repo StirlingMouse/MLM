@@ -839,7 +839,9 @@ pub fn queue_torrent_meta_update(
     torrent.meta.canonicalize();
     meta.canonicalize();
     meta.ids.extend(torrent.meta.ids.clone());
-    meta.tags = torrent.meta.tags.clone();
+    if meta.tags.is_empty() {
+        meta.tags = torrent.meta.tags.clone();
+    }
     if meta.description.is_empty() {
         meta.description = torrent.meta.description.clone();
     }

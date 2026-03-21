@@ -51,6 +51,10 @@ qbit = { git = "https://github.com/StirlingMouse/qbittorrent-webui-api.git", opt
 figment = { version = "0.10", features = ["toml", "env"], optional = true }
 tracing-subscriber = { version = "0.3", optional = true }
 
+[dev-dependencies]
+dioxus-ssr = "0.7"
+pretty_assertions = "1.4"
+
 [features]
 server = [
   "dioxus/server",

@@ -42,7 +42,9 @@ impl TryFrom<String> for OldDbMainCat {
 
 impl Category {
     pub fn all() -> Vec<Category> {
-        let mut categories = Vec::new();
+        // Reserve capacity to avoid multiple reallocations
+        // AudiobookCategory has 26 variants, EbookCategory has 21, MusicologyCategory has 5, RadioCategory has 4
+        let mut categories = Vec::with_capacity(60);
         categories.extend(AudiobookCategory::all().into_iter().map(Category::Audio));
         categories.extend(EbookCategory::all().into_iter().map(Category::Ebook));
         categories.extend(

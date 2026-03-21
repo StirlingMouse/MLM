@@ -107,6 +107,17 @@ impl MetadataService {
         self.providers.push((Arc::new(mam_provider), timeout));
     }
 
+    /// Get a provider by ID, returning the provider and its timeout.
+    /// This allows the caller to release the lock before making the async fetch call.
+    pub fn get_provider(&self, provider_id: &str) -> Option<(Arc<dyn Provider>, Duration)> {
+        for (p, to) in &self.providers {
+            if p.id() == provider_id {
+                return Some((p.clone(), *to));
+            }
+        }
+        None
+    }
+
     #[instrument(skip(self, ctx))]
     pub async fn fetch_and_persist(
         &self,

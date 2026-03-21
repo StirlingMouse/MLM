@@ -3,8 +3,8 @@ use std::str::FromStr;
 use crate::{Category, MainCat, MediaType, OldCategory, OldMainCat};
 
 impl MediaType {
-    pub fn all() -> Vec<MediaType> {
-        vec![
+    pub fn all() -> &'static [MediaType] {
+        &[
             MediaType::Audiobook,
             MediaType::Ebook,
             MediaType::Musicology,

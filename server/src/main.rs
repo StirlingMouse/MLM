@@ -245,6 +245,9 @@ async fn app_main() -> Result<()> {
                 base.join("target/dx/mlm_web_dioxus/release/web/public")
             }
         });
+    // SAFETY: This is safe because we're setting an environment variable that
+    // Dioxus reads once at startup before any concurrent access can occur.
+    // The path is derived from canonical filesystem operations on known quantities.
     unsafe {
         std::env::set_var("DIOXUS_PUBLIC_PATH", &dioxus_public_path);
     }

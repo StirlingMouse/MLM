@@ -556,20 +556,20 @@ pub fn TorrentsPage() -> Element {
             route_state.show,
         );
         if *last_request_key.read() != route_request_key {
-            let mut sort = sort;
-            let mut asc = asc;
-            let mut filters_signal = filters;
-            let mut show = show;
-            let mut from = from;
-            let mut page_size = page_size;
+            let mut sort_val = sort;
+            let mut asc_val = asc;
+            let mut filters_signal_val = filters;
+            let mut show_val = show;
+            let mut from_val = from;
+            let mut page_size_val = page_size;
             query_input.set(route_state.query.clone());
             submitted_query.set(route_state.query);
-            sort.set(route_state.sort);
-            asc.set(route_state.asc);
-            filters_signal.set(route_state.filters);
-            from.set(route_state.from);
-            page_size.set(route_state.page_size);
-            show.set(route_state.show);
+            sort_val.set(route_state.sort);
+            asc_val.set(route_state.asc);
+            filters_signal_val.set(route_state.filters);
+            from_val.set(route_state.from);
+            page_size_val.set(route_state.page_size);
+            show_val.set(route_state.show);
             last_request_key.set(route_request_key);
             if let Some(resource) = torrents_data.as_mut() {
                 resource.restart();

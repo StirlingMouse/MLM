@@ -593,7 +593,7 @@ pub async fn apply_match_metadata_action(
 
     // Convert SerializedTorrentMeta back to TorrentMeta
     let media_type = MediaType::from_str(&merged_meta.media_type)
-        .map_err(|e| ServerFnError::new(&format!("invalid media_type: {}", e)))?;
+        .map_err(|e| ServerFnError::new(format!("invalid media_type: {}", e)))?;
 
     // Parse source string to MetadataSource enum
     let source = match merged_meta.source.as_str() {
@@ -602,7 +602,7 @@ pub async fn apply_match_metadata_action(
         "File" => MetadataSource::File,
         "Match" => MetadataSource::Match,
         _ => {
-            return Err(ServerFnError::new(&format!(
+            return Err(ServerFnError::new(format!(
                 "invalid source: {}",
                 merged_meta.source
             )));
@@ -612,13 +612,13 @@ pub async fn apply_match_metadata_action(
     let language: Option<Language> = match &merged_meta.language {
         Some(l) => Some(
             Language::from_str(l)
-                .map_err(|e| ServerFnError::new(&format!("invalid language: {}", e)))?,
+                .map_err(|e| ServerFnError::new(format!("invalid language: {}", e)))?,
         ),
         None => None,
     };
 
     // For FlagBits, use FlagBits::new with the stored u8 value
-    let flags: Option<FlagBits> = merged_meta.flags.map(|f| FlagBits::new(f));
+    let flags: Option<FlagBits> = merged_meta.flags.map(FlagBits::new);
 
     let categories: Vec<Category> = merged_meta
         .categories
@@ -639,8 +639,8 @@ pub async fn apply_match_metadata_action(
     // Preserve these fields from the original torrent before we clone
     let vip_status = torrent.meta.vip_status.clone();
     let cat = torrent.meta.cat.clone();
-    let main_cat = torrent.meta.main_cat.clone();
-    let uploaded_at = torrent.meta.uploaded_at.clone();
+    let main_cat = torrent.meta.main_cat;
+    let uploaded_at = torrent.meta.uploaded_at;
 
     let meta = TorrentMeta {
         ids: merged_meta.ids.clone(),

@@ -315,8 +315,6 @@ pub async fn get_search_data(
     let search_config = context.config().await.search.clone();
     let r = context.db().r_transaction().server_err()?;
 
-    let page_len = result.data.len();
-
     let mut torrents = result
         .data
         .into_iter()
@@ -357,10 +355,7 @@ pub async fn get_search_data(
 
     Ok(SearchData {
         torrents,
-        total: result
-            .found
-            .max(result.total)
-            .max(from.saturating_add(page_len)),
+        total: result.found.max(result.total),
     })
 }
 

@@ -483,6 +483,7 @@ fn TorrentDetailContent(
                     TorrentActions {
                         torrent_id: torrent.id.clone(),
                         providers,
+                        mam_id: torrent.mam_id,
                         has_replacement: torrent.replaced_with.is_some(),
                         library_path,
                         abs_item_url,
@@ -746,6 +747,7 @@ fn OtherTorrentsSection(
 fn TorrentActions(
     torrent_id: String,
     providers: Vec<String>,
+    mam_id: Option<u64>,
     has_replacement: bool,
     library_path: Option<String>,
     abs_item_url: Option<String>,
@@ -943,6 +945,7 @@ fn TorrentActions(
             MatchDialog {
                 torrent_id: torrent_id.clone(),
                 providers: providers.clone(),
+                mam_id,
                 status_msg,
                 on_close: move |_| dialog_open.set(false),
                 on_refresh,

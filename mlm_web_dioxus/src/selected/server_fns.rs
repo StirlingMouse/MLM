@@ -18,7 +18,6 @@ use super::types::{
     SelectedUserInfo,
 };
 #[cfg(feature = "server")]
-#[allow(unused_imports)]
 use super::types::{SelectedMeta, SelectedRow};
 
 #[server]

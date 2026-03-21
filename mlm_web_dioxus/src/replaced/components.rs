@@ -484,7 +484,7 @@ pub fn ReplacedPage() -> Element {
                                         }
                                         if show.read().authors {
                                             div {
-                                                for (i, author) in pair.torrent.meta.authors.clone().into_iter().enumerate() {
+                                                for (i, author) in pair.torrent.meta.authors.iter().enumerate() {
                                                     if i > 0 {
                                                         ", "
                                                     }
@@ -499,7 +499,7 @@ pub fn ReplacedPage() -> Element {
                                         }
                                         if show.read().narrators {
                                             div {
-                                                for (i, narrator) in pair.torrent.meta.narrators.clone().into_iter().enumerate() {
+                                                for (i, narrator) in pair.torrent.meta.narrators.iter().enumerate() {
                                                     if i > 0 {
                                                         ", "
                                                     }
@@ -514,7 +514,7 @@ pub fn ReplacedPage() -> Element {
                                         }
                                         if show.read().series {
                                             div {
-                                                for (i, series) in pair.torrent.meta.series.clone().into_iter().enumerate() {
+                                                for (i, series) in pair.torrent.meta.series.iter().enumerate() {
                                                     if i > 0 {
                                                         ", "
                                                     }
@@ -567,7 +567,7 @@ pub fn ReplacedPage() -> Element {
                                         div { "{pair.replacement.meta.title}" }
                                         if show.read().authors {
                                             div {
-                                                for (i, author) in pair.replacement.meta.authors.clone().into_iter().enumerate() {
+                                                for (i, author) in pair.replacement.meta.authors.iter().enumerate() {
                                                     if i > 0 {
                                                         ", "
                                                     }
@@ -577,7 +577,7 @@ pub fn ReplacedPage() -> Element {
                                         }
                                         if show.read().narrators {
                                             div {
-                                                for (i, narrator) in pair.replacement.meta.narrators.clone().into_iter().enumerate() {
+                                                for (i, narrator) in pair.replacement.meta.narrators.iter().enumerate() {
                                                     if i > 0 {
                                                         ", "
                                                     }
@@ -587,7 +587,7 @@ pub fn ReplacedPage() -> Element {
                                         }
                                         if show.read().series {
                                             div {
-                                                for (i, series) in pair.replacement.meta.series.clone().into_iter().enumerate() {
+                                                for (i, series) in pair.replacement.meta.series.iter().enumerate() {
                                                     if i > 0 {
                                                         ", "
                                                     }

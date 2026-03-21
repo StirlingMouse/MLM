@@ -47,7 +47,7 @@ test.describe('Torrent detail page', () => {
                 const torrentIndex = 11 + browserOffset(testInfo.project.name);
                 const torrentId = torrentIdFor(torrentIndex);
                 const updatedDescription =
-                        `Description updated by Playwright for ${testInfo.project.name}.`;
+                        `Description updated by Playwright for ${testInfo.project.name} at ${Date.now()}.`;
 
                 await page.goto(`/torrent-edit/${torrentId}`);
                 await expect(

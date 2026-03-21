@@ -271,6 +271,12 @@ async fn test_mam_provider_fetch_with_mock_server() -> Result<()> {
         "MaM fetch by ID should succeed: {:?}",
         result.err()
     );
+    let meta = result.unwrap();
+    // Verify the result came from the direct-ID lookup (mock returns "Updated Mock Search Result Title")
+    assert_eq!(
+        meta.title, "Updated Mock Search Result Title",
+        "MaM direct ID lookup should return the mock torrent title for ID 12345"
+    );
 
     // Cleanup
     let _ = mock_server.kill();

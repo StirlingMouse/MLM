@@ -262,8 +262,8 @@ pub fn ListPage(id: String) -> Element {
     let mut show = use_signal(|| None::<String>);
 
     let list_id_clone = list_id.clone();
-    let from_clone = from.clone();
-    let show_clone = show.clone();
+    let from_clone = from;
+    let show_clone = show;
 
     let mut list_data = match use_server_future(move || {
         let list_id = list_id_clone.clone();
@@ -318,6 +318,7 @@ pub fn ListPage(id: String) -> Element {
             ListPageContent {
                 list_id: id,
                 data,
+                show: show.read().clone(),
                 on_refresh: move |_| list_data.restart(),
                 on_page_change,
                 on_filter_change,
@@ -332,6 +333,7 @@ pub fn ListPage(id: String) -> Element {
 struct ListPageContentProps {
     list_id: String,
     data: ListPageData,
+    show: Option<String>,
     on_refresh: EventHandler<()>,
     on_page_change: Callback<usize>,
     on_filter_change: Callback<Option<String>>,
@@ -341,6 +343,7 @@ struct ListPageContentProps {
 fn ListPageContent(props: ListPageContentProps) -> Element {
     let list_id = props.list_id.clone();
 
+    let show = props.show.as_deref();
     rsx! {
         div { class: "list-page",
             div { class: "row",
@@ -352,7 +355,7 @@ fn ListPageContent(props: ListPageContentProps) -> Element {
                         input {
                             r#type: "radio",
                             name: "show",
-                            checked: true,
+                            checked: show.is_none(),
                             onclick: move |_| {
                                 props.on_filter_change.call(None);
                             },
@@ -364,6 +367,7 @@ fn ListPageContent(props: ListPageContentProps) -> Element {
                             r#type: "radio",
                             name: "show",
                             value: "any",
+                            checked: show == Some("any"),
                             onclick: move |_| {
                                 props.on_filter_change.call(Some("any".to_string()));
                             },
@@ -375,6 +379,7 @@ fn ListPageContent(props: ListPageContentProps) -> Element {
                             r#type: "radio",
                             name: "show",
                             value: "audio",
+                            checked: show == Some("audio"),
                             onclick: move |_| {
                                 props.on_filter_change.call(Some("audio".to_string()));
                             },
@@ -386,6 +391,7 @@ fn ListPageContent(props: ListPageContentProps) -> Element {
                             r#type: "radio",
                             name: "show",
                             value: "ebook",
+                            checked: show == Some("ebook"),
                             onclick: move |_| {
                                 props.on_filter_change.call(Some("ebook".to_string()));
                             },
