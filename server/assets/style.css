@@ -7,7 +7,7 @@ body {
 
 	--background: var(--color-1);
 	--above: var(--color-2);
-	--text-faint: var(--color-3);
+	--text-faint: #b3adcc;
 	--text: var(--color-4);
 	--accent: hsl(331.8, 91.3%, 45%);
 	--accent-above: hsl(331.8, 91.3%, 55%);
@@ -20,6 +20,7 @@ body {
 #main>nav,
 .links.links {
 	display: flex;
+	flex-wrap: wrap;
 	gap: 4px;
 }
 
@@ -629,6 +630,10 @@ details[open] {
 	border-radius: 2px;
 }
 
+.torrent-detail-page {
+	margin-top: 24px;
+}
+
 .torrent-detail-grid {
 	display: grid;
 	grid-template-columns: minmax(280px, 400px) minmax(0, 1fr);
@@ -889,7 +894,6 @@ details[open] {
 	}
 
 	.detail-library-card {
-		padding: 16px;
 		display: flex;
 		flex-direction: column;
 		gap: 12px;

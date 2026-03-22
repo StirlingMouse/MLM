@@ -1,5 +1,5 @@
 use super::{
-    CategoryPills, DownloadButtonMode, SimpleDownloadButtons, TorrentIcons, media_icon_src,
+    media_icon_src, CategoryPills, DownloadButtonMode, SimpleDownloadButtons, TorrentIcons,
 };
 use crate::app::Route;
 use crate::search::SearchTorrent;
@@ -68,11 +68,13 @@ pub fn SearchMetadataFilterRow(
                     },
                 }
             }
-            for (i , item) in items.iter().enumerate() {
-                if i > 0 {
-                    ", "
+            div {
+                for (i , item) in items.iter().enumerate() {
+                    if i > 0 {
+                        ", "
+                    }
+                    Link { class: "filter-link", to: item.href.clone(), "{item.label}" }
                 }
-                Link { class: "filter-link", to: item.href.clone(), "{item.label}" }
             }
         }
     }
