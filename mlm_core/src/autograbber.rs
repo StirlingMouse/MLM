@@ -96,6 +96,7 @@ pub async fn run_autograbber(
             &autograb_config,
             SearchFields {
                 dl_link: true,
+                description: true,
                 ..Default::default()
             },
             &mam,
@@ -1045,6 +1046,12 @@ async fn update_selected_torrent_meta(
     let hash = get_mam_torrent_hash(mam, &torrent.dl_link).await.ok();
     let mut torrent = torrent;
     let source = meta.source.clone();
+    if meta.description.is_empty() {
+        meta.description = torrent.meta.description.clone();
+    }
+    if meta.tags.is_empty() {
+        meta.tags = torrent.meta.tags.clone();
+    }
     torrent.meta = meta;
     rw.upsert(torrent)?;
     rw.commit()?;
