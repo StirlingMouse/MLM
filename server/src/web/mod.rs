@@ -44,6 +44,7 @@ use time::{
 };
 use tokio::sync::watch::error::SendError;
 use tower::ServiceBuilder;
+use tracing::warn;
 #[allow(unused)]
 use tower_http::services::{ServeDir, ServeFile};
 
@@ -66,6 +67,10 @@ pub type MaMState = Arc<Result<Arc<MaM<'static>>>>;
 
 pub async fn start_webserver(context: Context) -> Result<()> {
     let config = context.config().await;
+    let assets_dir = resolve_assets_dir();
+    if !assets_dir.exists() {
+        warn!("Static assets directory does not exist: {}", assets_dir.display());
+    }
 
     let app = Router::new()
         .route("/", get(index_page).with_state(context.clone()))
@@ -161,9 +166,7 @@ pub async fn start_webserver(context: Context) -> Result<()> {
             "/assets",
             ServiceBuilder::new()
                 .layer(middleware::from_fn(set_static_cache_control))
-                .service(ServeDir::new(
-                    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("server/assets"),
-                )),
+                .service(ServeDir::new(&assets_dir)),
         );
 
     #[cfg(debug_assertions)]
@@ -181,6 +184,36 @@ pub async fn start_webserver(context: Context) -> Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+fn resolve_assets_dir() -> PathBuf {
+    if let Ok(path) = std::env::var("MLM_ASSETS_DIR")
+        && !path.is_empty()
+    {
+        return PathBuf::from(path);
+    }
+
+    if let Some(data_dir) = dirs::data_local_dir() {
+        let packaged = data_dir.join("Myanonamouse Library Manager").join("assets");
+        if packaged.exists() {
+            return packaged;
+        }
+        let legacy = data_dir.join("MLM").join("assets");
+        if legacy.exists() {
+            return legacy;
+        }
+    }
+
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(exe_dir) = exe.parent()
+    {
+        let alongside_exe = exe_dir.join("assets");
+        if alongside_exe.exists() {
+            return alongside_exe;
+        }
+    }
+
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("server/assets")
 }
 
 pub trait Page {
