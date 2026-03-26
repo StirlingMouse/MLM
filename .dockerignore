@@ -8,6 +8,9 @@ test-results
 
 data.db
 *.db
+*.bak
+*.backup
+*.db.bak.*
 *.sqlite
 *.sqlite3
 

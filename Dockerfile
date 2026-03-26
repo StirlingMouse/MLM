@@ -20,14 +20,16 @@ COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/app/target \
-    cargo build --release
+    cargo build --release && \
+    cp /app/target/release/mlm /app/mlm
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     cargo install dioxus-cli --version 0.7.3 --locked
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/app/target \
-    cd /app/mlm_web_dioxus && dx build --release --fullstack --skip-assets
+    cd /app/mlm_web_dioxus && /usr/local/cargo/bin/dx build --release --fullstack --skip-assets && \
+    mkdir -p /app/dx_output && cp -r /app/target/dx/mlm_web_dioxus /app/dx_output/
 
 FROM debian:trixie-slim AS app
 RUN apt update && apt install -y ca-certificates && apt clean \
@@ -37,8 +39,9 @@ RUN apt update && apt install -y ca-certificates && apt clean \
     && chown -R mlm:mlm /data /config /dioxus-public
 COPY --chown=mlm:mlm ./server/assets /server/assets
 COPY --chown=mlm:mlm entrypoint.sh /entrypoint.sh
-COPY --from=builder /app/target/release/mlm /mlm
-COPY --from=builder /app/target/dx/mlm_web_dioxus/release/web/public /dioxus-public
+COPY ./server/assets /server/assets
+COPY --from=builder /app/mlm /mlm
+COPY --from=builder /app/dx_output/mlm_web_dioxus/release/web/public /dioxus-public
 ENV MLM_LOG_DIR=""
 ENV MLM_CONFIG_FILE="/config/config.toml"
 ENV MLM_DB_FILE="/data/data.db"
