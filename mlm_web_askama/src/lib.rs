@@ -35,12 +35,20 @@ use pages::{
     torrents::{torrents_page, torrents_page_post},
 };
 use serde::Serialize;
+use std::{
+    collections::hash_map::DefaultHasher,
+    fs,
+    hash::{Hash, Hasher},
+    path::{Path, PathBuf},
+};
 use tables::{ItemFilter, ItemFilters, Key};
 use time::{
     Date, UtcDateTime, UtcOffset,
     format_description::{self, OwnedFormatItem},
 };
 use tokio::sync::watch::error::SendError;
+
+const ASSET_FILES: [&str; 3] = ["style.css", "elements.js", "index.js"];
 
 pub fn router(context: Context) -> Router {
     Router::new()
@@ -132,9 +140,52 @@ async fn config_redirect(uri: OriginalUri) -> Redirect {
     Redirect::to(&target)
 }
 
+pub static ASSET_VERSION: Lazy<String> = Lazy::new(compute_asset_version);
+
+fn compute_asset_version() -> String {
+    let Some(asset_dir) = asset_dir() else {
+        return env!("CARGO_PKG_VERSION").to_string();
+    };
+
+    match hash_asset_files(&asset_dir) {
+        Ok(hash) => hash,
+        Err(error) => {
+            eprintln!(
+                "failed to hash Askama assets in {}: {error}",
+                asset_dir.display()
+            );
+            env!("CARGO_PKG_VERSION").to_string()
+        }
+    }
+}
+
+fn asset_dir() -> Option<PathBuf> {
+    let mut candidates = vec![PathBuf::from("/server/assets")];
+    if let Ok(current_dir) = std::env::current_dir() {
+        candidates.push(current_dir.join("server/assets"));
+    }
+
+    candidates.into_iter().find(|candidate| {
+        ASSET_FILES
+            .iter()
+            .all(|asset_file| candidate.join(asset_file).is_file())
+    })
+}
+
+fn hash_asset_files(asset_dir: &Path) -> std::io::Result<String> {
+    let mut hasher = DefaultHasher::new();
+
+    for asset_file in ASSET_FILES {
+        asset_file.hash(&mut hasher);
+        fs::read(asset_dir.join(asset_file))?.hash(&mut hasher);
+    }
+
+    Ok(format!("{:016x}", hasher.finish()))
+}
+
 pub trait Page {
     fn build_date(&self) -> &'static str {
-        env!("DATE")
+        ASSET_VERSION.as_str()
     }
 
     fn item_path(&self) -> &'static str {
