@@ -77,6 +77,10 @@ use crate::{
 pub static DISK_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?:CD|Disc|Disk)\s*(\d+)").unwrap());
 
+fn resolved_mam_id(torrent: &Torrent) -> Option<u64> {
+    torrent.mam_id.or_else(|| torrent.meta.mam_id())
+}
+
 /// Calculates the relative path for a file within the library book directory.
 /// Handles `Disc X` subdirectories.
 pub fn calculate_library_file_path(torrent_file_path: &str) -> PathBuf {
@@ -474,7 +478,7 @@ where
     let Some(mut torrent): Option<Torrent> = db.r_transaction()?.get().primary(id)? else {
         bail!("Could not find torrent id");
     };
-    let Some(mam_id) = torrent.meta.mam_id() else {
+    let Some(mam_id) = resolved_mam_id(&torrent) else {
         bail!("Could not find mam id");
     };
     debug!("refreshing metadata for torrent {}", mam_id);
@@ -525,7 +529,7 @@ where
         .primary(id)?
         .ok_or_else(|| anyhow::anyhow!("Could not find torrent id"))?;
 
-    let Some(mam_id) = torrent.meta.mam_id() else {
+    let Some(mam_id) = resolved_mam_id(&torrent) else {
         bail!("Could not find mam id");
     };
 
@@ -945,6 +949,8 @@ mod tests {
             search_interval: 0,
             link_interval: 0,
             import_interval: 0,
+            mam_metadata_refresh_interval: 0,
+            mam_metadata_refresh_limit: 0,
             ignore_torrents: vec![],
             audio_types: vec![],
             ebook_types: vec![],
@@ -1002,6 +1008,8 @@ mod tests {
             search_interval: 0,
             link_interval: 0,
             import_interval: 0,
+            mam_metadata_refresh_interval: 0,
+            mam_metadata_refresh_limit: 0,
             ignore_torrents: vec![],
             audio_types: vec![],
             ebook_types: vec![],
@@ -1059,6 +1067,8 @@ mod tests {
             search_interval: 0,
             link_interval: 0,
             import_interval: 0,
+            mam_metadata_refresh_interval: 0,
+            mam_metadata_refresh_limit: 0,
             ignore_torrents: vec![],
             audio_types: vec![],
             ebook_types: vec![],
@@ -1247,6 +1257,8 @@ mod tests {
             search_interval: 0,
             link_interval: 0,
             import_interval: 0,
+            mam_metadata_refresh_interval: 0,
+            mam_metadata_refresh_limit: 0,
             ignore_torrents: vec![],
             audio_types: vec![],
             ebook_types: vec![],
@@ -1558,6 +1570,8 @@ mod tests {
             search_interval: 0,
             link_interval: 0,
             import_interval: 0,
+            mam_metadata_refresh_interval: 0,
+            mam_metadata_refresh_limit: 0,
             ignore_torrents: vec![],
             audio_types: vec![],
             ebook_types: vec![],

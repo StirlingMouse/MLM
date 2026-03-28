@@ -21,6 +21,7 @@ use crate::{
     config::Config,
     linker::{folder::link_folders_to_library, torrent::link_torrents_to_library},
     lists::{get_lists, run_list_import},
+    metadata_refresh::refresh_missing_mam_descriptions,
     snatchlist::run_snatchlist_search,
     stats::Events,
     torrent_downloader::grab_selected_torrents,
@@ -39,6 +40,7 @@ pub fn spawn_tasks(
     let (torrent_linker_tx, torrent_linker_rx) = watch::channel(());
     let (folder_linker_tx, folder_linker_rx) = watch::channel(());
     let (downloader_tx, mut downloader_rx) = watch::channel(());
+    let (mam_metadata_refresh_tx, mut mam_metadata_refresh_rx) = watch::channel(());
     let (audiobookshelf_tx, mut audiobookshelf_rx) = watch::channel(());
 
     for (i, _) in config.autograbs.iter().enumerate() {
@@ -525,6 +527,75 @@ pub fn spawn_tasks(
         });
     }
 
+    // MaM metadata refresh task
+    {
+        let config = config.clone();
+        let db = db.clone();
+        let mam = mam.clone();
+        let stats = stats.clone();
+        let events = events.clone();
+        tokio::spawn(async move {
+            loop {
+                if config.mam_metadata_refresh_interval > 0 {
+                    select! {
+                        _ = sleep(Duration::from_secs(60 * config.mam_metadata_refresh_interval)) => {},
+                        result = mam_metadata_refresh_rx.changed() => {
+                            if let Err(err) = result {
+                                error!("Error listening on mam_metadata_refresh_rx: {err:?}");
+                                stats
+                                    .update(|stats| {
+                                        stats.mam_metadata_refresh_result = Some(Err(err.into()));
+                                    })
+                                    .await;
+                                break;
+                            }
+                        },
+                    }
+                } else if let Err(err) = mam_metadata_refresh_rx.changed().await {
+                    error!("Error listening on mam_metadata_refresh_rx: {err:?}");
+                    stats
+                        .update(|stats| {
+                            stats.mam_metadata_refresh_result = Some(Err(err.into()));
+                        })
+                        .await;
+                    break;
+                }
+
+                stats
+                    .update(|stats| {
+                        stats.mam_metadata_refresh_run_at = Some(OffsetDateTime::now_utc());
+                        stats.mam_metadata_refresh_result = None;
+                    })
+                    .await;
+
+                let result = match mam.as_ref() {
+                    Ok(mam_api) => {
+                        refresh_missing_mam_descriptions(
+                            config.as_ref(),
+                            db.as_ref(),
+                            mam_api.as_ref(),
+                            config.mam_metadata_refresh_limit,
+                            &events,
+                        )
+                        .await
+                    }
+                    Err(err) => Err(anyhow::anyhow!("MaM API is unavailable: {err}")),
+                }
+                .context("mam_metadata_refresh");
+
+                if let Err(err) = &result {
+                    error!("Error refreshing MaM metadata: {err:?}");
+                }
+
+                stats
+                    .update(|stats| {
+                        stats.mam_metadata_refresh_result = Some(result);
+                    })
+                    .await;
+            }
+        });
+    }
+
     // Audiobookshelf task
     if let Some(abs_config) = &config.audiobookshelf {
         let abs_config = abs_config.clone();
@@ -588,6 +659,7 @@ pub fn spawn_tasks(
             torrent_linker_tx: Some(torrent_linker_tx),
             folder_linker_tx: Some(folder_linker_tx),
             downloader_tx: Some(downloader_tx),
+            mam_metadata_refresh_tx: Some(mam_metadata_refresh_tx),
             audiobookshelf_tx: Some(audiobookshelf_tx),
         },
     }

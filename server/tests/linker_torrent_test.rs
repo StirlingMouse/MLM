@@ -5,7 +5,7 @@ use common::{MockFs, TestDb, mock_config};
 use mlm_core::config::{
     Library, LibraryByDownloadDir, LibraryLinkMethod, LibraryOptions, LibraryTagFilters, QbitConfig,
 };
-use mlm_core::linker::torrent::{MaMApi, link_torrents_to_library};
+use mlm_core::linker::torrent::{MaMApi, link_torrents_to_library, refresh_mam_metadata};
 use mlm_core::qbittorrent::QbitApi;
 use mlm_db::DatabaseExt as _;
 use mlm_mam::search::MaMTorrent;
@@ -648,6 +648,83 @@ async fn test_refresh_metadata_relink() -> anyhow::Result<()> {
     let torrent: mlm_db::Torrent = r.get().primary(torrent_hash.to_string())?.unwrap();
     assert_eq!(torrent.meta.authors, vec!["Refreshed Author"]);
     assert_eq!(torrent.library_path, Some(new_library_path));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_refresh_mam_metadata_uses_torrent_mam_id_fallback() -> anyhow::Result<()> {
+    let db = TestDb::new()?;
+    let fs = MockFs::new()?;
+
+    let torrent_hash = "refresh_mam_id_fallback";
+    let mut config = mock_config(fs.rip_dir.clone(), fs.library_dir.clone());
+    config.qbittorrent.push(QbitConfig {
+        url: "".to_string(),
+        username: "".to_string(),
+        password: "".to_string(),
+        path_mapping: BTreeMap::new(),
+        on_cleaned: None,
+        on_invalid_torrent: None,
+    });
+    let config = Arc::new(config);
+    let events = mlm_core::Events::new();
+
+    {
+        let (_guard, rw) = db.db.rw_async().await?;
+        rw.insert(mlm_db::Torrent {
+            id: torrent_hash.to_string(),
+            id_is_hash: true,
+            mam_id: Some(7),
+            library_path: None,
+            library_files: vec![],
+            linker: None,
+            category: None,
+            selected_audio_format: None,
+            selected_ebook_format: None,
+            title_search: "title".to_string(),
+            meta: mlm_db::TorrentMeta {
+                title: "Title".to_string(),
+                authors: vec!["Old Author".to_string()],
+                media_type: mlm_db::MediaType::Audiobook,
+                source: mlm_db::MetadataSource::Mam,
+                uploaded_at: Some(mlm_db::Timestamp::now()),
+                description: "".to_string(),
+                ..Default::default()
+            },
+            created_at: mlm_db::Timestamp::now(),
+            replaced_with: None,
+            library_mismatch: None,
+            client_status: None,
+        })?;
+        rw.commit()?;
+    }
+
+    let mut mam_torrent =
+        make_mam_torrent(7, "Title", 1, 1, 42, "General Fiction", 1, "en", 1, "m4b");
+    mam_torrent
+        .author_info
+        .insert(7, "Refreshed Author".to_string());
+    mam_torrent.description = Some("Fresh description".to_string());
+
+    let mock_mam = MockMaM {
+        torrents: HashMap::from([(torrent_hash.to_string(), mam_torrent)]),
+    };
+
+    refresh_mam_metadata(
+        &config,
+        &db.db,
+        &mock_mam,
+        torrent_hash.to_string(),
+        &events,
+    )
+    .await?;
+
+    let r = db.db.r_transaction()?;
+    let torrent: mlm_db::Torrent = r.get().primary(torrent_hash.to_string())?.unwrap();
+    assert_eq!(torrent.meta.authors, vec!["Refreshed Author"]);
+    assert_eq!(torrent.meta.description, "Fresh description");
+    assert_eq!(torrent.meta.mam_id(), Some(7));
 
     Ok(())
 }

@@ -2,8 +2,8 @@ use crate::ids;
 
 use super::{v01, v03, v04, v05, v06, v08, v09, v10, v11, v12, v13, v15, v16, v17};
 use mlm_parse::normalize_title;
-use native_db::{native_db, ToKey};
-use native_model::{native_model, Model};
+use native_db::{ToKey, native_db};
+use native_model::{Model, native_model};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 

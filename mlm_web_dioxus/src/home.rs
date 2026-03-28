@@ -19,6 +19,7 @@ pub struct HomeData {
     pub folder_linker: Option<TaskInfo>,
     pub cleaner: Option<TaskInfo>,
     pub downloader: Option<TaskInfo>,
+    pub mam_metadata_refresh: TaskInfo,
     pub audiobookshelf: Option<TaskInfo>,
 }
 
@@ -110,6 +111,14 @@ pub async fn get_home_data() -> Result<HomeData, ServerFnError> {
         })
     };
 
+    let always_visible_task_info =
+        |run_at: Option<&time::OffsetDateTime>, result: Option<&Result<(), anyhow::Error>>| {
+            TaskInfo {
+                last_run: run_at.map(format_datetime),
+                result: result.map(|r| r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}"))),
+            }
+        };
+
     Ok(HomeData {
         username,
         mam_error: context.mam().err().map(|e| format!("{e}")),
@@ -129,6 +138,10 @@ pub async fn get_home_data() -> Result<HomeData, ServerFnError> {
         downloader: task_info(
             stats.downloader_run_at.as_ref(),
             stats.downloader_result.as_ref(),
+        ),
+        mam_metadata_refresh: always_visible_task_info(
+            stats.mam_metadata_refresh_run_at.as_ref(),
+            stats.mam_metadata_refresh_result.as_ref(),
         ),
         audiobookshelf: task_info(
             stats.audiobookshelf_run_at.as_ref(),
@@ -191,6 +204,18 @@ pub async fn run_downloader() -> Result<(), ServerFnError> {
         .downloader_tx
         .as_ref()
         .ok_or_else(|| ServerFnError::new("Downloader trigger is not configured"))?;
+    tx.send(()).server_err()?;
+    Ok(())
+}
+
+#[server]
+pub async fn run_mam_metadata_refresh() -> Result<(), ServerFnError> {
+    let context = crate::error::get_context()?;
+    let tx = context
+        .triggers
+        .mam_metadata_refresh_tx
+        .as_ref()
+        .ok_or_else(|| ServerFnError::new("MaM metadata refresh trigger is not configured"))?;
     tx.send(()).server_err()?;
     Ok(())
 }
@@ -351,6 +376,14 @@ fn HomePageContent(data: HomeData) -> Element {
                             spawn(async move { let _ = run_downloader().await; });
                         })),
                     }
+                }
+                InfoTaskBox {
+                    title: "MaM Metadata Refresh".to_string(),
+                    last_run: data.mam_metadata_refresh.last_run.clone(),
+                    result: data.mam_metadata_refresh.result.clone(),
+                    on_run: Some(EventHandler::new(move |_| {
+                        spawn(async move { let _ = run_mam_metadata_refresh().await; });
+                    })),
                 }
                 if let Some(info) = &data.audiobookshelf {
                     InfoTaskBox {

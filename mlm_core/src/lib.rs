@@ -9,6 +9,7 @@ pub mod linker;
 pub mod lists;
 pub mod logging;
 pub mod metadata;
+pub mod metadata_refresh;
 pub mod qbittorrent;
 pub mod runner;
 pub mod snatchlist;

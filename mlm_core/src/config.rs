@@ -100,6 +100,10 @@ pub struct Config {
     pub link_interval: u64,
     #[serde(default = "default_import_interval", alias = "goodreads_interval")]
     pub import_interval: u64,
+    #[serde(default = "default_mam_metadata_refresh_interval")]
+    pub mam_metadata_refresh_interval: u64,
+    #[serde(default = "default_mam_metadata_refresh_limit")]
+    pub mam_metadata_refresh_limit: usize,
     #[serde(default)]
     pub ignore_torrents: Vec<u64>,
 
@@ -455,6 +459,14 @@ fn default_abs_interval() -> u64 {
     10
 }
 
+fn default_mam_metadata_refresh_interval() -> u64 {
+    10
+}
+
+fn default_mam_metadata_refresh_limit() -> usize {
+    100
+}
+
 fn default_audio_types() -> Vec<String> {
     ["m4b", "m4a", "mp4", "mp3", "ogg"]
         .iter()
@@ -491,6 +503,8 @@ impl Default for Config {
             search_interval: default_search_interval(),
             link_interval: default_link_interval(),
             import_interval: default_import_interval(),
+            mam_metadata_refresh_interval: default_mam_metadata_refresh_interval(),
+            mam_metadata_refresh_limit: default_mam_metadata_refresh_limit(),
             ignore_torrents: vec![],
 
             audio_types: default_audio_types(),

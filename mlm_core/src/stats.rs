@@ -20,6 +20,8 @@ pub struct StatsValues {
     pub cleaner_result: Option<Result<()>>,
     pub downloader_run_at: Option<OffsetDateTime>,
     pub downloader_result: Option<Result<()>>,
+    pub mam_metadata_refresh_run_at: Option<OffsetDateTime>,
+    pub mam_metadata_refresh_result: Option<Result<()>>,
     pub audiobookshelf_run_at: Option<OffsetDateTime>,
     pub audiobookshelf_result: Option<Result<()>>,
 }
