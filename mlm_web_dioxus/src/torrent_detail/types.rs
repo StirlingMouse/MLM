@@ -1,5 +1,5 @@
 use crate::{
-    dto::{Event, Series, TorrentMetaDiff},
+    dto::{Event, Series},
     search::SearchTorrent,
 };
 use serde::{Deserialize, Serialize};
@@ -13,8 +13,6 @@ pub struct TorrentDetailData {
     pub replacement_missing: bool,
     pub abs_item_url: Option<String>,
     pub abs_cover_url: Option<String>,
-    pub mam_torrent: Option<SearchTorrent>,
-    pub mam_meta_diff: Vec<TorrentMetaDiff>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

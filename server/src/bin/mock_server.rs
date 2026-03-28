@@ -188,88 +188,153 @@ async fn mam_user_info() -> impl IntoResponse {
     }))
 }
 
-async fn mam_search() -> impl IntoResponse {
+#[derive(Debug, Deserialize)]
+struct MockMaMSearchRequest {
+    #[serde(default)]
+    perpage: Option<usize>,
+    #[serde(default)]
+    tor: MockMaMSearchTor,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct MockMaMSearchTor {
+    #[serde(default)]
+    id: u64,
+    #[serde(default)]
+    text: String,
+    #[serde(rename = "startNumber", default)]
+    start_number: usize,
+}
+
+fn mock_search_result(id: u64, index: usize) -> serde_json::Value {
+    let month = (index % 12) + 1;
+    let day = (index % 28) + 1;
+    let seeders = 15u64 + (index % 10) as u64;
+    let leechers = (index % 4) as u64;
+    let comments = (index % 6) as u64;
+    let snatches = 100u64 + index as u64;
+    let size_mib = 300.0 + index as f64;
+
+    json!({
+        "id": id,
+        "added": format!("2024-{month:02}-{day:02} 10:00:00"),
+        "author_info": format!(r#"{{"{index}":"Test Author {index:03}"}}"#),
+        "browseflags": 0u8,
+        "main_cat": 13u8,
+        "category": 39u64,
+        "mediatype": 1u8,
+        "maincat": 1u8,
+        "categories": "[]",
+        "catname": "Audiobook - Fantasy",
+        "cat": "audiobook",
+        "comments": comments,
+        "filetype": if index.is_multiple_of(2) { "m4b" } else { "mp3" },
+        "fl_vip": 0,
+        "free": if index.is_multiple_of(5) { 1 } else { 0 },
+        "lang_code": "en",
+        "language": 1u8,
+        "leechers": leechers,
+        "my_snatched": 0,
+        "narrator_info": format!(r#"{{"{index}":"Test Narrator {index:03}"}}"#),
+        "numfiles": 1u64,
+        "owner": 12345u64,
+        "owner_name": "uploader",
+        "ownership": "[]",
+        "personal_freeleech": 0,
+        "seeders": seeders,
+        "series_info": "{}",
+        "size": format!("{size_mib:.2} MiB"),
+        "tags": "fantasy test",
+        "times_completed": snatches,
+        "thumbnail": null,
+        "title": format!("Mock Search Result {index:03}"),
+        "vip": 0,
+        "vip_expire": 0u64,
+        "w": 0u64
+    })
+}
+
+/// Returns a mock torrent with metadata that differs from the base "Test Book" to show a diff
+fn mock_mam_torrent_result(id: u64) -> serde_json::Value {
+    json!({
+        "id": id,
+        "added": "2024-03-15 14:30:00",
+        "author_info": r#"{"1":"Updated Author Name"}"#,
+        "browseflags": 0u8,
+        "main_cat": 13u8,
+        "category": 39u64,
+        "mediatype": 1u8,
+        "maincat": 1u8,
+        "categories": "[]",
+        "catname": "Audiobook - Fantasy",
+        "cat": "audiobook",
+        "comments": 5u64,
+        "filetype": "m4b",
+        "fl_vip": 0,
+        "free": 0,
+        "lang_code": "en",
+        "language": 1u8,
+        "leechers": 2u64,
+        "my_snatched": 0,
+        "narrator_info": r#"{"1":"Updated Narrator Name"}"#,
+        "numfiles": 1u64,
+        "owner": 12345u64,
+        "owner_name": "uploader",
+        "ownership": "[]",
+        "personal_freeleech": 0,
+        "seeders": 25u64,
+        "series_info": r#"{"1":{"name":"Updated Series","position":"3"}}"#,
+        "size": "350.50 MiB",
+        "tags": "updated fantasy epic",
+        "times_completed": 150u64,
+        "thumbnail": null,
+        "title": "Updated Mock Search Result Title",
+        "vip": 0,
+        "vip_expire": 0u64,
+        "w": 0u64
+    })
+}
+
+async fn mam_search(payload: Option<Json<MockMaMSearchRequest>>) -> impl IntoResponse {
+    let payload = payload
+        .map(|Json(payload)| payload)
+        .unwrap_or(MockMaMSearchRequest {
+            perpage: Some(100),
+            tor: MockMaMSearchTor::default(),
+        });
+
+    // If tor.id is non-zero, return a mock torrent with that specific ID (for preview/diff)
+    if payload.tor.id != 0 {
+        return Json(json!({
+            "total": 1,
+            "perpage": 1,
+            "start": 0,
+            "found": 1,
+            "data": [mock_mam_torrent_result(payload.tor.id)]
+        }));
+    }
+
+    let query = payload.tor.text.trim().to_lowercase();
+    let total = if query.is_empty() {
+        0
+    } else if query.contains("test book") || query.contains("mock search") {
+        205usize
+    } else {
+        2usize
+    };
+    let perpage = payload.perpage.unwrap_or(100).clamp(1, 100);
+    let start = payload.tor.start_number.min(total);
+    let end = (start + perpage).min(total);
+    let data = (start + 1..=end)
+        .map(|i| mock_search_result(99_000u64 + i as u64, i))
+        .collect::<Vec<_>>();
+
     Json(json!({
-        "total": 2usize,
-        "perpage": 25usize,
-        "start": 0usize,
-        "found": 2usize,
-        "data": [
-            {
-                "id": 99001u64,
-                "added": "2024-01-15 10:00:00",
-                "author_info": r#"{"1":"Brandon Sanderson"}"#,
-                "browseflags": 0u8,
-                "main_cat": 13u8,
-                "category": 39u64,
-                "mediatype": 1u8,
-                "maincat": 1u8,
-                "categories": "[]",
-                "catname": "Audiobook - Fantasy",
-                "cat": "audiobook",
-                "comments": 5u64,
-                "filetype": "m4b",
-                "fl_vip": 0,
-                "free": 0,
-                "lang_code": "en",
-                "language": 1u8,
-                "leechers": 2u64,
-                "my_snatched": 0,
-                "narrator_info": r#"{"2":"Michael Kramer"}"#,
-                "numfiles": 1u64,
-                "owner": 12345u64,
-                "owner_name": "uploader",
-                "ownership": "[]",
-                "personal_freeleech": 0,
-                "seeders": 15u64,
-                "series_info": "{}",
-                "size": "476.84 MiB",
-                "tags": "fantasy epic",
-                "times_completed": 100u64,
-                "thumbnail": null,
-                "title": "Mock Search: Way of Kings",
-                "vip": 0,
-                "vip_expire": 0u64,
-                "w": 0u64
-            },
-            {
-                "id": 99002u64,
-                "added": "2024-02-10 12:00:00",
-                "author_info": r#"{"3":"Patrick Rothfuss"}"#,
-                "browseflags": 0u8,
-                "main_cat": 13u8,
-                "category": 41u64,
-                "mediatype": 1u8,
-                "maincat": 1u8,
-                "categories": "[]",
-                "catname": "Audiobook - Fantasy",
-                "cat": "audiobook",
-                "comments": 3u64,
-                "filetype": "mp3",
-                "fl_vip": 0,
-                "free": 1,
-                "lang_code": "en",
-                "language": 1u8,
-                "leechers": 0u64,
-                "my_snatched": 1,
-                "narrator_info": r#"{"4":"Nick Podehl"}"#,
-                "numfiles": 1u64,
-                "owner": 12345u64,
-                "owner_name": "uploader",
-                "ownership": "[]",
-                "personal_freeleech": 0,
-                "seeders": 8u64,
-                "series_info": "{}",
-                "size": "333.92 MiB",
-                "tags": "fantasy",
-                "times_completed": 80u64,
-                "thumbnail": null,
-                "title": "Mock Search: Name of the Wind",
-                "vip": 0,
-                "vip_expire": 0u64,
-                "w": 0u64
-            }
-        ]
+        "total": total,
+        "perpage": perpage,
+        "start": start,
+        "found": total,
+        "data": data
     }))
 }
 

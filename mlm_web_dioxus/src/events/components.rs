@@ -119,7 +119,7 @@ fn EventsHeader(
 ) -> Element {
     rsx! {
         div { class: "row",
-            h1 { "Events (Dioxus)" }
+            h1 { "Events" }
             div { class: "option_group query",
                 "Show: "
                 button {
@@ -258,13 +258,15 @@ fn EventsTable(data: EventData, mut from: Signal<usize>, loading: bool) -> Eleme
             if data.events.is_empty() {
                 p { i { "No events yet" } }
             } else {
-                div { id: "events-list", class: "EventsTable table",
+                div { id: "events-list", class: "events-list",
                     for item in data.events.clone() {
-                        EventListItem {
-                            event: item.event,
-                            torrent: item.torrent,
-                            replacement: item.replacement,
-                            show_created_at: true,
+                        div { class: "events-row",
+                            EventListItem {
+                                event: item.event,
+                                torrent: item.torrent,
+                                replacement: item.replacement,
+                                show_created_at: true,
+                            }
                         }
                     }
                 }
@@ -290,7 +292,7 @@ pub fn EventListItem(
 ) -> Element {
     rsx! {
         if show_created_at {
-            div { "{event.created_at}" }
+            div { class: "events-row-time", "{event.created_at}" }
         }
         div {
             EventContent {

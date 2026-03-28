@@ -77,6 +77,10 @@ use crate::{
 pub static DISK_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?:CD|Disc|Disk)\s*(\d+)").unwrap());
 
+fn resolved_mam_id(torrent: &Torrent) -> Option<u64> {
+    torrent.mam_id.or_else(|| torrent.meta.mam_id())
+}
+
 /// Calculates the relative path for a file within the library book directory.
 /// Handles `Disc X` subdirectories.
 pub fn calculate_library_file_path(torrent_file_path: &str) -> PathBuf {
@@ -474,7 +478,7 @@ where
     let Some(mut torrent): Option<Torrent> = db.r_transaction()?.get().primary(id)? else {
         bail!("Could not find torrent id");
     };
-    let Some(mam_id) = torrent.meta.mam_id() else {
+    let Some(mam_id) = resolved_mam_id(&torrent) else {
         bail!("Could not find mam id");
     };
     debug!("refreshing metadata for torrent {}", mam_id);
@@ -506,6 +510,43 @@ where
         torrent.meta = meta;
     }
     Ok((torrent, mam_torrent))
+}
+
+/// Read-only preview of MaM metadata merge. Fetches from MaM API and computes
+/// the merged metadata and diff, but does NOT persist anything to the database.
+#[instrument(skip_all)]
+pub async fn get_mam_metadata_preview<M>(
+    db: &Database<'_>,
+    mam: &M,
+    id: String,
+) -> Result<(TorrentMeta, MaMTorrent)>
+where
+    M: MaMApi + ?Sized,
+{
+    let torrent: Torrent = db
+        .r_transaction()?
+        .get()
+        .primary(id)?
+        .ok_or_else(|| anyhow::anyhow!("Could not find torrent id"))?;
+
+    let Some(mam_id) = resolved_mam_id(&torrent) else {
+        bail!("Could not find mam id");
+    };
+
+    let mam_torrent = mam
+        .get_torrent_info_by_id(mam_id)
+        .await
+        .context("get_mam_info")?
+        .ok_or_else(|| anyhow::anyhow!("Could not find torrent on mam"))?;
+
+    let mut meta = mam_torrent.as_meta().context("as_meta")?;
+
+    // Merge ids from original torrent (same as refresh_mam_metadata)
+    let mut ids = torrent.meta.ids.clone();
+    ids.append(&mut meta.ids);
+    meta.ids = ids;
+
+    Ok((meta, mam_torrent))
 }
 
 #[instrument(skip_all)]
@@ -908,6 +949,8 @@ mod tests {
             search_interval: 0,
             link_interval: 0,
             import_interval: 0,
+            mam_metadata_refresh_interval: 0,
+            mam_metadata_refresh_limit: 0,
             ignore_torrents: vec![],
             audio_types: vec![],
             ebook_types: vec![],
@@ -965,6 +1008,8 @@ mod tests {
             search_interval: 0,
             link_interval: 0,
             import_interval: 0,
+            mam_metadata_refresh_interval: 0,
+            mam_metadata_refresh_limit: 0,
             ignore_torrents: vec![],
             audio_types: vec![],
             ebook_types: vec![],
@@ -1022,6 +1067,8 @@ mod tests {
             search_interval: 0,
             link_interval: 0,
             import_interval: 0,
+            mam_metadata_refresh_interval: 0,
+            mam_metadata_refresh_limit: 0,
             ignore_torrents: vec![],
             audio_types: vec![],
             ebook_types: vec![],
@@ -1210,6 +1257,8 @@ mod tests {
             search_interval: 0,
             link_interval: 0,
             import_interval: 0,
+            mam_metadata_refresh_interval: 0,
+            mam_metadata_refresh_limit: 0,
             ignore_torrents: vec![],
             audio_types: vec![],
             ebook_types: vec![],
@@ -1521,6 +1570,8 @@ mod tests {
             search_interval: 0,
             link_interval: 0,
             import_interval: 0,
+            mam_metadata_refresh_interval: 0,
+            mam_metadata_refresh_limit: 0,
             ignore_torrents: vec![],
             audio_types: vec![],
             ebook_types: vec![],

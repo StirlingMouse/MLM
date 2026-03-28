@@ -38,9 +38,7 @@ use mlm_core::{
     Context, ContextExt,
     audiobookshelf::{Abs, LibraryItemMinified},
     cleaner::clean_torrent,
-    linker::{
-        find_library, library_dir, refresh_mam_metadata, refresh_metadata_relink, relink,
-    },
+    linker::{find_library, library_dir, refresh_mam_metadata, refresh_metadata_relink, relink},
     qbittorrent::{self, ensure_category_exists},
 };
 use mlm_db::MetadataSource;
@@ -223,7 +221,7 @@ async fn torrent_page_id(
         wanted_path,
         qbit_files,
         other_torrents,
-        metadata_providers: context.metadata().enabled_providers(),
+        metadata_providers: context.metadata().lock().await.enabled_providers(),
     };
     Ok::<_, AppError>(Html(template.to_string()))
 }

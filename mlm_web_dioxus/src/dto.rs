@@ -14,6 +14,36 @@ pub struct TorrentMetaDiff {
     pub to: String,
 }
 
+/// Full serialized TorrentMeta for match metadata preview/accept flow.
+/// Uses simple types (String, Vec, u64) that are serde-friendly.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SerializedTorrentMeta {
+    pub ids: std::collections::BTreeMap<String, String>,
+    pub media_type: String,
+    pub title: String,
+    pub description: String,
+    pub authors: Vec<String>,
+    pub narrators: Vec<String>,
+    pub series: Vec<Series>,
+    pub categories: Vec<String>,
+    pub tags: Vec<String>,
+    pub language: Option<String>,
+    pub flags: Option<u8>, // FlagBits is u8 internally
+    pub filetypes: Vec<String>,
+    pub num_files: u64,
+    pub size: u64,
+    pub edition: Option<(String, u64)>,
+    pub source: String,
+}
+
+/// Result of a match metadata preview - contains both the merged metadata
+/// and the field-by-field diff for display.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct MergedMetaResult {
+    pub merged_meta: SerializedTorrentMeta,
+    pub diffs: Vec<TorrentMetaDiff>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum TorrentCost {
     GlobalFreeleech,
@@ -112,6 +142,37 @@ impl From<&mlm_core::MetadataSource> for MetadataSource {
             mlm_core::MetadataSource::Manual => MetadataSource::Manual,
             mlm_core::MetadataSource::File => MetadataSource::File,
             mlm_core::MetadataSource::Match => MetadataSource::Match,
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl From<&mlm_db::TorrentMeta> for SerializedTorrentMeta {
+    fn from(meta: &mlm_db::TorrentMeta) -> Self {
+        SerializedTorrentMeta {
+            ids: meta.ids.clone(),
+            media_type: meta.media_type.as_str().to_string(),
+            title: meta.title.clone(),
+            description: meta.description.clone(),
+            authors: meta.authors.clone(),
+            narrators: meta.narrators.clone(),
+            series: meta
+                .series
+                .iter()
+                .map(|s| Series {
+                    name: s.name.clone(),
+                    entries: s.entries.to_string(),
+                })
+                .collect(),
+            categories: meta.categories.iter().map(|c| c.to_string()).collect(),
+            tags: meta.tags.clone(),
+            language: meta.language.as_ref().map(|l| l.to_string()),
+            flags: meta.flags.map(|f| f.0), // FlagBits(pub u8)
+            filetypes: meta.filetypes.clone(),
+            num_files: meta.num_files,
+            size: meta.size.bytes(),
+            edition: meta.edition.clone(),
+            source: meta.source.to_string(),
         }
     }
 }

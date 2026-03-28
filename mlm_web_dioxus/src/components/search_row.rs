@@ -68,11 +68,13 @@ pub fn SearchMetadataFilterRow(
                     },
                 }
             }
-            for (i , item) in items.iter().enumerate() {
-                if i > 0 {
-                    ", "
+            div {
+                for (i , item) in items.iter().enumerate() {
+                    if i > 0 {
+                        ", "
+                    }
+                    Link { class: "filter-link", to: item.href.clone(), "{item.label}" }
                 }
-                Link { class: "filter-link", to: item.href.clone(), "{item.label}" }
             }
         }
     }
@@ -182,9 +184,18 @@ pub fn SearchTorrentRow(
             }
             div { class: "download", grid_area: "download",
                 if torrent.is_selected {
-                    span { class: "pill", "Queued" }
+                    img {
+                        src: "/assets/icons/greenCheck2.png",
+                        alt: "Torrent is downloading",
+                        title: "Torrent is downloading",
+                        style: "filter:hue-rotate(130deg)",
+                    }
                 } else if torrent.is_downloaded {
-                    span { class: "pill", "Downloaded" }
+                    img {
+                        src: "/assets/icons/greenCheck2.png",
+                        alt: "Torrent is downloaded",
+                        title: "Torrent is downloaded",
+                    }
                 } else {
                     SimpleDownloadButtons {
                         mam_id,

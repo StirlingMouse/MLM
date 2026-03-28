@@ -58,3 +58,5 @@ async-trait = "0.1"
 url = "2.4"
 mlm_parse = { path = "../mlm_parse" }
 mlm_meta = { path = "../mlm_meta" }
+dioxus = { version = "0.7", features = ["macro"] }
+dioxus-ssr = "0.7"

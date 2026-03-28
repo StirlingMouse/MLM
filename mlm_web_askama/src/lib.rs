@@ -1,6 +1,10 @@
 mod pages;
 mod tables;
 
+use crate::pages::{
+    index::stats_updates,
+    search::{search_page, search_page_post},
+};
 use askama::{Template, filters::HtmlSafe};
 use axum::{
     Router,
@@ -10,6 +14,8 @@ use axum::{
     routing::{get, post},
 };
 use itertools::Itertools;
+use mlm_core::config::{SearchConfig, TorrentFilter};
+use mlm_core::{Context, ContextExt};
 use mlm_db::{
     AudiobookCategory, EbookCategory, Flags, SelectedTorrent, Series, Timestamp, Torrent,
     TorrentMeta,
@@ -29,18 +35,20 @@ use pages::{
     torrents::{torrents_page, torrents_page_post},
 };
 use serde::Serialize;
+use std::{
+    collections::hash_map::DefaultHasher,
+    fs,
+    hash::{Hash, Hasher},
+    path::{Path, PathBuf},
+};
 use tables::{ItemFilter, ItemFilters, Key};
 use time::{
     Date, UtcDateTime, UtcOffset,
     format_description::{self, OwnedFormatItem},
 };
 use tokio::sync::watch::error::SendError;
-use crate::pages::{
-    index::stats_updates,
-    search::{search_page, search_page_post},
-};
-use mlm_core::config::{SearchConfig, TorrentFilter};
-use mlm_core::{Context, ContextExt};
+
+const ASSET_FILES: [&str; 3] = ["style.css", "elements.js", "index.js"];
 
 pub fn router(context: Context) -> Router {
     Router::new()
@@ -48,7 +56,10 @@ pub fn router(context: Context) -> Router {
             "/old/stats-updates",
             get(stats_updates).with_state(context.clone()),
         )
-        .route("/old/torrents", get(torrents_page).with_state(context.clone()))
+        .route(
+            "/old/torrents",
+            get(torrents_page).with_state(context.clone()),
+        )
         .route(
             "/old/torrents",
             post(torrents_page_post).with_state(context.clone()),
@@ -69,7 +80,10 @@ pub fn router(context: Context) -> Router {
             "/old/torrents/{id}/edit",
             post(torrent_edit_page_post).with_state(context.clone()),
         )
-        .route("/old/events", get(event_page).with_state(context.db().clone()))
+        .route(
+            "/old/events",
+            get(event_page).with_state(context.db().clone()),
+        )
         .route("/old/search", get(search_page).with_state(context.clone()))
         .route(
             "/old/search",
@@ -84,12 +98,18 @@ pub fn router(context: Context) -> Router {
             "/old/lists/{list_id}",
             post(list_page_post).with_state(context.db().clone()),
         )
-        .route("/old/errors", get(errors_page).with_state(context.db().clone()))
+        .route(
+            "/old/errors",
+            get(errors_page).with_state(context.db().clone()),
+        )
         .route(
             "/old/errors",
             post(errors_page_post).with_state(context.db().clone()),
         )
-        .route("/old/selected", get(selected_page).with_state(context.clone()))
+        .route(
+            "/old/selected",
+            get(selected_page).with_state(context.clone()),
+        )
         .route(
             "/old/selected",
             post(selected_torrents_page_post).with_state(context.db().clone()),
@@ -120,9 +140,52 @@ async fn config_redirect(uri: OriginalUri) -> Redirect {
     Redirect::to(&target)
 }
 
+pub static ASSET_VERSION: Lazy<String> = Lazy::new(compute_asset_version);
+
+fn compute_asset_version() -> String {
+    let Some(asset_dir) = asset_dir() else {
+        return env!("CARGO_PKG_VERSION").to_string();
+    };
+
+    match hash_asset_files(&asset_dir) {
+        Ok(hash) => hash,
+        Err(error) => {
+            eprintln!(
+                "failed to hash Askama assets in {}: {error}",
+                asset_dir.display()
+            );
+            env!("CARGO_PKG_VERSION").to_string()
+        }
+    }
+}
+
+fn asset_dir() -> Option<PathBuf> {
+    let mut candidates = vec![PathBuf::from("/server/assets")];
+    if let Ok(current_dir) = std::env::current_dir() {
+        candidates.push(current_dir.join("server/assets"));
+    }
+
+    candidates.into_iter().find(|candidate| {
+        ASSET_FILES
+            .iter()
+            .all(|asset_file| candidate.join(asset_file).is_file())
+    })
+}
+
+fn hash_asset_files(asset_dir: &Path) -> std::io::Result<String> {
+    let mut hasher = DefaultHasher::new();
+
+    for asset_file in ASSET_FILES {
+        asset_file.hash(&mut hasher);
+        fs::read(asset_dir.join(asset_file))?.hash(&mut hasher);
+    }
+
+    Ok(format!("{:016x}", hasher.finish()))
+}
+
 pub trait Page {
     fn build_date(&self) -> &'static str {
-        env!("DATE")
+        ASSET_VERSION.as_str()
     }
 
     fn item_path(&self) -> &'static str {

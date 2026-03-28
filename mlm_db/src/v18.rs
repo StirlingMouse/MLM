@@ -536,7 +536,7 @@ impl From<v17::SelectedTorrent> for SelectedTorrent {
             hash: t.hash,
             dl_link: t.dl_link,
             unsat_buffer: t.unsat_buffer,
-            wedge_buffer: None,
+            wedge_buffer: t.wedge_buffer,
             cost: t.cost,
             category: t.category,
             tags: t.tags,

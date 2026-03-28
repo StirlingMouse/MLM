@@ -23,6 +23,7 @@ pub struct Triggers {
     pub torrent_linker_tx: Option<tokio::sync::watch::Sender<()>>,
     pub folder_linker_tx: Option<tokio::sync::watch::Sender<()>>,
     pub downloader_tx: Option<tokio::sync::watch::Sender<()>>,
+    pub mam_metadata_refresh_tx: Option<tokio::sync::watch::Sender<()>>,
     pub audiobookshelf_tx: Option<tokio::sync::watch::Sender<()>>,
 }
 

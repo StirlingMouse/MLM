@@ -1,5 +1,5 @@
 #[cfg(feature = "server")]
-use crate::dto::{Event as DbEventDto, Series, TorrentMetaDiff, convert_event_type};
+use crate::dto::{Event as DbEventDto, Series, convert_event_type};
 #[cfg(feature = "server")]
 use crate::error::{IntoServerFnError, OptionIntoServerFnError};
 use crate::search::SearchTorrent;
@@ -200,7 +200,13 @@ async fn read_library_files(
     let mut entries = match fs::read_dir(path).await {
         Ok(entries) => entries,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(err) => return Err(ServerFnError::new(err.to_string())),
+        Err(err) => {
+            tracing::error!(
+                "failed to read library directory '{}': {err}",
+                path.display()
+            );
+            return Err(ServerFnError::new(err.to_string()));
+        }
     };
 
     let mut files = Vec::new();
@@ -215,12 +221,9 @@ async fn get_downloaded_torrent_detail(
     context: &Context,
     torrent_id: String,
 ) -> Result<super::types::TorrentDetailData, ServerFnError> {
-    use mlm_core::audiobookshelf::Abs;
-    use time::UtcDateTime;
-
     let config = context.config().await;
     let db = context.db();
-    let mut torrent = db
+    let torrent = db
         .r_transaction()
         .server_err()?
         .get()
@@ -241,43 +244,6 @@ async fn get_downloaded_torrent_detail(
         .transpose()?
         .flatten();
     let replacement_missing = replacement_torrent.is_none() && torrent.replaced_with.is_some();
-
-    let mut mam_torrent = None;
-    let mut mam_meta_diff = vec![];
-    if let Some(mam_id) = torrent.mam_id
-        && let Ok(mam) = context.mam()
-    {
-        mam_torrent = mam.get_torrent_info_by_id(mam_id).await.server_err()?;
-        if let Some(ref mam_torrent_data) = mam_torrent {
-            let mut mam_meta = mam_torrent_data.as_meta().server_err()?;
-            let mut ids = torrent.meta.ids.clone();
-            ids.append(&mut mam_meta.ids);
-            mam_meta.ids = ids;
-
-            if match torrent.meta.uploaded_at.as_ref() {
-                None => true,
-                Some(uploaded_at) => uploaded_at.0 == UtcDateTime::UNIX_EPOCH,
-            } {
-                let (_guard, rw) = db.rw_async().await.server_err()?;
-                torrent.meta.uploaded_at = mam_meta.uploaded_at;
-                rw.upsert(torrent.clone()).server_err()?;
-                rw.commit().server_err()?;
-            }
-
-            if torrent.meta != mam_meta {
-                mam_meta_diff = torrent
-                    .meta
-                    .diff(&mam_meta)
-                    .into_iter()
-                    .map(|f| TorrentMetaDiff {
-                        field: f.field.to_string(),
-                        from: f.from,
-                        to: f.to,
-                    })
-                    .collect();
-            }
-        }
-    }
 
     let library_files = read_library_files(torrent.library_path.as_deref()).await?;
 
@@ -306,24 +272,26 @@ async fn get_downloaded_torrent_detail(
         .server_err()?;
     events_data.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
-    let (abs_item_url, abs_cover_url) = if let Some(abs_cfg) = config.audiobookshelf.as_ref() {
-        let abs = Abs::new(abs_cfg).server_err()?;
-        if let Some(book) = abs.get_book(&torrent).await.server_err()? {
-            (
-                Some(format!("{}/audiobookshelf/item/{}", abs_cfg.url, book.id)),
-                Some(format!(
-                    "{}/audiobookshelf/api/items/{}/cover",
-                    abs_cfg.url, book.id
-                )),
-            )
-        } else {
-            (None, None)
-        }
-    } else {
-        (None, None)
-    };
+    // ABS ID is stored in DB - construct URLs directly without API call
+    let abs_item_url = torrent.meta.ids.get(ids::ABS).map(|id| {
+        format!(
+            "{}/audiobookshelf/item/{}",
+            config
+                .audiobookshelf
+                .as_ref()
+                .map(|c| &c.url)
+                .unwrap_or(&"".to_string()),
+            id
+        )
+    });
 
-    let r = db.r_transaction().server_err()?;
+    // Cover fetched via /torrents/{id}/cover endpoint (redirects to ABS)
+    let abs_cover_url = torrent
+        .meta
+        .ids
+        .get(ids::ABS)
+        .map(|_| format!("/torrents/{}/cover", torrent.id));
+
     Ok(super::types::TorrentDetailData {
         torrent: torrent_info,
         events: events_data,
@@ -339,22 +307,6 @@ async fn get_downloaded_torrent_detail(
         replacement_missing,
         abs_item_url,
         abs_cover_url,
-        mam_torrent: mam_torrent.as_ref().and_then(|mam_torrent| {
-            let meta = mam_torrent.as_meta().ok()?;
-            Some(map_mam_torrent(
-                mam_torrent.clone(),
-                &meta,
-                config.search.clone(),
-                true, // it's downloaded
-                r.get()
-                    .primary::<mlm_db::SelectedTorrent>(mam_torrent.id)
-                    .server_err()
-                    .ok()
-                    .flatten()
-                    .is_some(),
-            ))
-        }),
-        mam_meta_diff,
     })
 }
 
@@ -580,6 +532,9 @@ pub async fn match_metadata_action(id: String, provider: String) -> Result<(), S
     let (new_meta, pid, fields) = match_meta(&context, &torrent.meta, &provider)
         .await
         .server_err()?;
+    if fields.is_empty() {
+        return Ok(());
+    }
 
     let (_guard, rw) = context.db().rw_async().await.server_err()?;
 
@@ -609,6 +564,202 @@ pub async fn match_metadata_action(id: String, provider: String) -> Result<(), S
     Ok(())
 }
 
+/// Apply pre-computed merged metadata without re-fetching from the provider.
+/// This is called after a successful preview - the merged metadata was already
+/// computed and stored in the client.
+#[server]
+pub async fn apply_match_metadata_action(
+    id: String,
+    merged_meta: crate::dto::SerializedTorrentMeta,
+    diffs: Vec<crate::dto::TorrentMetaDiff>,
+) -> Result<(), ServerFnError> {
+    use mlm_db::{
+        Category, Event as DbEvent, FlagBits, Language, MediaType, MetadataSource, Series,
+        SeriesEntries, Size, TorrentMeta, TorrentMetaDiff, TorrentMetaField,
+    };
+    use std::str::FromStr;
+
+    let context = crate::error::get_context()?;
+    let Some(torrent) = context
+        .db()
+        .r_transaction()
+        .server_err()?
+        .get()
+        .primary::<DbTorrent>(id.clone())
+        .server_err()?
+    else {
+        return Err(ServerFnError::new("Could not find torrent"));
+    };
+
+    // Convert SerializedTorrentMeta back to TorrentMeta
+    let media_type = MediaType::from_str(&merged_meta.media_type)
+        .map_err(|e| ServerFnError::new(format!("invalid media_type: {}", e)))?;
+
+    // Parse source string to MetadataSource enum
+    let source = match merged_meta.source.as_str() {
+        "MaM" => MetadataSource::Mam,
+        "Manual" => MetadataSource::Manual,
+        "File" => MetadataSource::File,
+        "Match" => MetadataSource::Match,
+        _ => {
+            return Err(ServerFnError::new(format!(
+                "invalid source: {}",
+                merged_meta.source
+            )));
+        }
+    };
+
+    let language: Option<Language> = match &merged_meta.language {
+        Some(l) => Some(
+            Language::from_str(l)
+                .map_err(|e| ServerFnError::new(format!("invalid language: {}", e)))?,
+        ),
+        None => None,
+    };
+
+    // For FlagBits, use FlagBits::new with the stored u8 value
+    let flags: Option<FlagBits> = merged_meta.flags.map(FlagBits::new);
+
+    let categories: Vec<Category> = merged_meta
+        .categories
+        .iter()
+        .filter_map(|c| Category::from_str(c).ok())
+        .collect();
+
+    // Parse series - use empty entries for now if parsing fails
+    let series: Vec<Series> = merged_meta
+        .series
+        .iter()
+        .map(|s| Series {
+            name: s.name.clone(),
+            entries: SeriesEntries::new(vec![]),
+        })
+        .collect();
+
+    // Preserve these fields from the original torrent before we clone
+    let vip_status = torrent.meta.vip_status.clone();
+    let cat = torrent.meta.cat.clone();
+    let main_cat = torrent.meta.main_cat;
+    let uploaded_at = torrent.meta.uploaded_at;
+
+    let meta = TorrentMeta {
+        ids: merged_meta.ids.clone(),
+        vip_status, // Preserve from original
+        cat,        // Preserve from original
+        media_type,
+        main_cat, // Preserve from original
+        categories,
+        tags: merged_meta.tags.clone(),
+        language,
+        flags,
+        filetypes: merged_meta.filetypes.clone(),
+        num_files: merged_meta.num_files,
+        size: Size::from_bytes(merged_meta.size),
+        title: merged_meta.title.clone(),
+        edition: merged_meta.edition.clone(),
+        description: merged_meta.description.clone(),
+        authors: merged_meta.authors.clone(),
+        narrators: merged_meta.narrators.clone(),
+        series,
+        source,
+        uploaded_at, // Preserve from original
+    };
+
+    let (_guard, rw) = context.db().rw_async().await.server_err()?;
+
+    let mut updated_torrent = torrent.clone();
+    updated_torrent.meta = meta;
+    updated_torrent.title_search = mlm_parse::normalize_title(&updated_torrent.meta.title);
+
+    rw.upsert(updated_torrent.clone()).server_err()?;
+    rw.commit().server_err()?;
+    drop(_guard);
+
+    // Convert diffs back to TorrentMetaDiff for logging
+    let fields = diffs
+        .into_iter()
+        .map(|d| TorrentMetaDiff {
+            field: match d.field.as_str() {
+                "ids" => TorrentMetaField::Ids,
+                "vip" => TorrentMetaField::Vip,
+                "cat" => TorrentMetaField::Cat,
+                "media_type" => TorrentMetaField::MediaType,
+                "main_cat" => TorrentMetaField::MainCat,
+                "categories" => TorrentMetaField::Categories,
+                "tags" => TorrentMetaField::Tags,
+                "language" => TorrentMetaField::Language,
+                "flags" => TorrentMetaField::Flags,
+                "filetypes" => TorrentMetaField::Filetypes,
+                "size" => TorrentMetaField::Size,
+                "title" => TorrentMetaField::Title,
+                "edition" => TorrentMetaField::Edition,
+                "authors" => TorrentMetaField::Authors,
+                "narrators" => TorrentMetaField::Narrators,
+                "series" => TorrentMetaField::Series,
+                "source" => TorrentMetaField::Source,
+                _ => TorrentMetaField::Title,
+            },
+            from: d.from,
+            to: d.to,
+        })
+        .collect();
+
+    mlm_core::logging::write_event(
+        context.db(),
+        &context.events,
+        DbEvent::new(
+            Some(torrent.id.clone()),
+            torrent.mam_id,
+            mlm_core::EventType::Updated {
+                fields,
+                source: (mlm_core::MetadataSource::Match, "preview".to_string()),
+            },
+        ),
+    )
+    .await;
+
+    Ok(())
+}
+
+#[server]
+pub async fn preview_mam_metadata(
+    id: String,
+) -> Result<crate::dto::MergedMetaResult, ServerFnError> {
+    use mlm_core::ContextExt;
+    use mlm_core::linker::get_mam_metadata_preview;
+
+    let context = crate::error::get_context()?;
+    let db = context.db();
+    let mam = context.mam().server_err()?;
+
+    let torrent = db
+        .r_transaction()
+        .server_err()?
+        .get()
+        .primary::<DbTorrent>(id.clone())
+        .server_err()?
+        .ok_or_server_err("Torrent not found")?;
+
+    // Use read-only preview function (no DB persistence)
+    let (merged_meta, _mam_torrent) = get_mam_metadata_preview(db, &mam, id).await.server_err()?;
+
+    // Compute diff using existing diff feature
+    let diff = torrent.meta.diff(&merged_meta);
+    let diffs = diff
+        .into_iter()
+        .map(|f| crate::dto::TorrentMetaDiff {
+            field: f.field.to_string(),
+            from: f.from,
+            to: f.to,
+        })
+        .collect();
+
+    Ok(crate::dto::MergedMetaResult {
+        merged_meta: crate::dto::SerializedTorrentMeta::from(&merged_meta),
+        diffs,
+    })
+}
+
 #[server]
 pub async fn clear_replacement_action(id: String) -> Result<(), ServerFnError> {
     let context = crate::error::get_context()?;
@@ -625,7 +776,7 @@ pub async fn clear_replacement_action(id: String) -> Result<(), ServerFnError> {
 #[server]
 pub async fn get_metadata_providers() -> Result<Vec<String>, ServerFnError> {
     let context = crate::error::get_context()?;
-    Ok(context.metadata().enabled_providers())
+    Ok(context.metadata().lock().await.enabled_providers())
 }
 
 #[server]
@@ -669,7 +820,7 @@ pub async fn get_other_torrents(id: String) -> Result<Vec<SearchTorrent>, Server
 pub async fn preview_match_metadata(
     id: String,
     provider: String,
-) -> Result<Vec<crate::dto::TorrentMetaDiff>, ServerFnError> {
+) -> Result<crate::dto::MergedMetaResult, ServerFnError> {
     let context = crate::error::get_context()?;
     let Some(torrent) = context
         .db()
@@ -682,18 +833,23 @@ pub async fn preview_match_metadata(
         return Err(ServerFnError::new("Could not find torrent"));
     };
 
-    let (_, _, fields) = match_meta(&context, &torrent.meta, &provider)
+    let (merged_meta, _, fields) = match_meta(&context, &torrent.meta, &provider)
         .await
         .server_err()?;
 
-    Ok(fields
+    let diffs = fields
         .into_iter()
         .map(|f| crate::dto::TorrentMetaDiff {
             field: f.field.to_string(),
             from: f.from,
             to: f.to,
         })
-        .collect())
+        .collect();
+
+    Ok(crate::dto::MergedMetaResult {
+        merged_meta: crate::dto::SerializedTorrentMeta::from(&merged_meta),
+        diffs,
+    })
 }
 
 #[server]

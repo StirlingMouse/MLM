@@ -13,6 +13,7 @@ serde_json = "1.0"
 scraper = "0.14"
 mlm_db = { path = "../mlm_db", default-features = false }
 mlm_parse = { path = "../mlm_parse" }
+mlm_mam = { path = "../mlm_mam" }
 strsim = "0.11"
 tracing = "0.1"
 urlencoding = "2.1"

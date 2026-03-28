@@ -1,3 +1,6 @@
+use crate::components::Pagination;
+#[cfg(feature = "server")]
+use crate::error::{IntoServerFnError, OptionIntoServerFnError};
 use crate::sse::STATS_UPDATE_TRIGGER;
 #[cfg(feature = "server")]
 use crate::utils::format_timestamp_db;
@@ -37,6 +40,9 @@ pub struct ListDto {
 pub struct ListPageData {
     pub list: ListDto,
     pub items: Vec<ListItemDto>,
+    pub total: usize,
+    pub from: usize,
+    pub page_size: usize,
 }
 
 #[cfg(feature = "server")]
@@ -60,18 +66,16 @@ fn item_wants_ebook(item: &mlm_db::ListItem) -> bool {
     item.want_ebook()
 }
 
-fn matches_show_filter(item: &ListItemDto, show: Option<&str>) -> bool {
-    match show {
-        Some("any") => item.want_audio || item.want_ebook,
-        Some("audio") => item.want_audio,
-        Some("ebook") => item.want_ebook,
-        _ => true,
-    }
-}
-
 fn render_list_torrent_link(torrent: &ListItemTorrentDto) -> Element {
     if let Some(id) = &torrent.id {
-        rsx! { a { href: "/torrents/{id}", target: "_blank", rel: "noopener noreferrer", "torrent" } }
+        rsx! {
+            a {
+                href: "/torrents/{id}",
+                target: "_blank",
+                rel: "noopener noreferrer",
+                "torrent"
+            }
+        }
     } else {
         rsx! { "torrent" }
     }
@@ -112,7 +116,12 @@ fn render_list_torrent_status(
 }
 
 #[server]
-pub async fn get_list_data(list_id: String) -> Result<ListPageData, ServerFnError> {
+pub async fn get_list_data(
+    list_id: String,
+    from: Option<usize>,
+    page_size: Option<usize>,
+    show: Option<String>,
+) -> Result<ListPageData, ServerFnError> {
     use mlm_core::ContextExt;
     use mlm_db::{List, ListItem, ListItemKey};
 
@@ -120,26 +129,63 @@ pub async fn get_list_data(list_id: String) -> Result<ListPageData, ServerFnErro
     let r = context
         .db()
         .r_transaction()
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .server_err_ctx("opening read transaction for list page")?;
 
     let list = r
         .get()
         .primary::<List>(list_id.as_str())
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .ok_or_else(|| ServerFnError::new("List not found"))?;
+        .server_err_ctx("loading list")?
+        .ok_or_server_err("List not found")?;
 
-    let mut items = r
+    let all_items = r
         .scan()
         .secondary::<ListItem>(ListItemKey::list_id)
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .range(Some(list.id.clone())..=Some(list.id.clone()))
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .server_err_ctx("scanning list items")?
+        .range(list.id.clone()..=list.id.clone())
+        .server_err_ctx("scoping list items to list id")?
+        .filter_map(|result| match result {
+            Ok(item) => Some(item),
+            Err(err) => {
+                tracing::error!("skipping list item row after scan error: {err}");
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    // Sort newest-first
+    let mut items = all_items;
     items.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
-    let items_dto = items
+    // Apply show filter server-side
+    let filtered_items: Vec<ListItem> = items
         .into_iter()
+        .filter(|item| {
+            let want_audio = item_wants_audio(item);
+            let want_ebook = item_wants_ebook(item);
+            match show.as_deref() {
+                Some("any") => want_audio || want_ebook,
+                Some("audio") => want_audio,
+                Some("ebook") => want_ebook,
+                _ => true,
+            }
+        })
+        .collect();
+
+    let total = filtered_items.len();
+    let from_val = from.unwrap_or(0);
+    let page_size_val = page_size.unwrap_or(500);
+
+    // Clamp from_val to valid range
+    let from_val = if page_size_val > 0 && from_val >= total && total > 0 {
+        ((total - 1) / page_size_val) * page_size_val
+    } else {
+        from_val
+    };
+
+    let items_dto = filtered_items
+        .into_iter()
+        .skip(from_val)
+        .take(page_size_val)
         .map(|item| {
             let want_audio = item_wants_audio(&item);
             let want_ebook = item_wants_ebook(&item);
@@ -175,6 +221,9 @@ pub async fn get_list_data(list_id: String) -> Result<ListPageData, ServerFnErro
             title: list.title,
         },
         items: items_dto,
+        total,
+        from: from_val,
+        page_size: page_size_val,
     })
 }
 
@@ -189,16 +238,17 @@ pub async fn mark_list_item_done(list_id: String, item_id: String) -> Result<(),
     let (_guard, rw) = db
         .rw_async()
         .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        .server_err_ctx("opening write transaction for marking list item done")?;
     let mut item = rw
         .get()
         .primary::<ListItem>((list_id.as_str(), item_id.as_str()))
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .ok_or_else(|| ServerFnError::new("Could not find item"))?;
+        .server_err_ctx("loading list item")?
+        .ok_or_server_err("Could not find item")?;
     item.marked_done_at = Some(Timestamp::now());
     rw.upsert(item)
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
-    rw.commit().map_err(|e| ServerFnError::new(e.to_string()))?;
+        .server_err_ctx("upserting completed list item")?;
+    rw.commit()
+        .server_err_ctx("committing list item completion")?;
 
     Ok(())
 }
@@ -208,9 +258,18 @@ pub fn ListPage(id: String) -> Element {
     let list_id = id.clone();
     let mut cached_data = use_signal(|| None::<ListPageData>);
 
+    let mut from = use_signal(|| 0usize);
+    let mut show = use_signal(|| None::<String>);
+
+    let list_id_clone = list_id.clone();
+    let from_clone = from;
+    let show_clone = show;
+
     let mut list_data = match use_server_future(move || {
-        let list_id = list_id.clone();
-        async move { get_list_data(list_id).await }
+        let list_id = list_id_clone.clone();
+        let from = *from_clone.read();
+        let show = show_clone.read().clone();
+        async move { get_list_data(list_id, Some(from), Some(500), show).await }
     }) {
         Ok(resource) => resource,
         Err(_) => {
@@ -242,12 +301,27 @@ pub fn ListPage(id: String) -> Element {
         }
     };
 
+    let data = data_to_show.clone();
+    let on_page_change = move |new_from: usize| {
+        from.set(new_from);
+        list_data.restart();
+    };
+
+    let on_filter_change = move |new_show: Option<String>| {
+        show.set(new_show);
+        from.set(0);
+        list_data.restart();
+    };
+
     rsx! {
-        if let Some(data) = data_to_show {
+        if let Some(data) = data {
             ListPageContent {
                 list_id: id,
                 data,
+                show: show.read().clone(),
                 on_refresh: move |_| list_data.restart(),
+                on_page_change,
+                on_filter_change,
             }
         } else {
             p { "Loading..." }
@@ -259,22 +333,17 @@ pub fn ListPage(id: String) -> Element {
 struct ListPageContentProps {
     list_id: String,
     data: ListPageData,
+    show: Option<String>,
     on_refresh: EventHandler<()>,
+    on_page_change: Callback<usize>,
+    on_filter_change: Callback<Option<String>>,
 }
 
 #[component]
 fn ListPageContent(props: ListPageContentProps) -> Element {
     let list_id = props.list_id.clone();
-    let mut show = use_signal(|| None::<String>);
 
-    let items: Vec<ListItemDto> = props
-        .data
-        .items
-        .iter()
-        .filter(|item| matches_show_filter(item, show.read().as_deref()))
-        .cloned()
-        .collect();
-
+    let show = props.show.as_deref();
     rsx! {
         div { class: "list-page",
             div { class: "row",
@@ -286,9 +355,9 @@ fn ListPageContent(props: ListPageContentProps) -> Element {
                         input {
                             r#type: "radio",
                             name: "show",
-                            checked: show.read().is_none(),
+                            checked: show.is_none(),
                             onclick: move |_| {
-                                show.set(None);
+                                props.on_filter_change.call(None);
                             },
                         }
                     }
@@ -297,10 +366,10 @@ fn ListPageContent(props: ListPageContentProps) -> Element {
                         input {
                             r#type: "radio",
                             name: "show",
-                            checked: show.read().as_deref() == Some("any"),
                             value: "any",
+                            checked: show == Some("any"),
                             onclick: move |_| {
-                                show.set(Some("any".to_string()));
+                                props.on_filter_change.call(Some("any".to_string()));
                             },
                         }
                     }
@@ -309,10 +378,10 @@ fn ListPageContent(props: ListPageContentProps) -> Element {
                         input {
                             r#type: "radio",
                             name: "show",
-                            checked: show.read().as_deref() == Some("audio"),
                             value: "audio",
+                            checked: show == Some("audio"),
                             onclick: move |_| {
-                                show.set(Some("audio".to_string()));
+                                props.on_filter_change.call(Some("audio".to_string()));
                             },
                         }
                     }
@@ -321,17 +390,17 @@ fn ListPageContent(props: ListPageContentProps) -> Element {
                         input {
                             r#type: "radio",
                             name: "show",
-                            checked: show.read().as_deref() == Some("ebook"),
                             value: "ebook",
+                            checked: show == Some("ebook"),
                             onclick: move |_| {
-                                show.set(Some("ebook".to_string()));
+                                props.on_filter_change.call(Some("ebook".to_string()));
                             },
                         }
                     }
                 }
             }
 
-            for item in &items {
+            for item in &props.data.items {
                 ListItemComponent {
                     list_id: list_id.clone(),
                     item: item.clone(),
@@ -339,9 +408,20 @@ fn ListPageContent(props: ListPageContentProps) -> Element {
                 }
             }
 
-            if items.is_empty() {
+            if props.data.items.is_empty() {
                 p {
                     i { "The list is empty" }
+                }
+            }
+
+            if props.data.total > props.data.page_size {
+                Pagination {
+                    total: props.data.total,
+                    from: props.data.from,
+                    page_size: props.data.page_size,
+                    on_change: move |new_from| {
+                        props.on_page_change.call(new_from);
+                    },
                 }
             }
         }
@@ -375,9 +455,19 @@ fn ListItemComponent(props: ListItemComponentProps) -> Element {
                 div { class: "row",
                     h3 { "{item.title}" }
                     div {
-                        a { href: "{mam_search_url(&item)}", target: "_blank", rel: "noopener noreferrer", "search on MaM" }
+                        a {
+                            href: "{mam_search_url(&item)}",
+                            target: "_blank",
+                            rel: "noopener noreferrer",
+                            "search on MaM"
+                        }
                         if let Some(url) = &item.book_url {
-                            a { href: "{url}", target: "_blank", rel: "noopener noreferrer", "goodreads" }
+                            a {
+                                href: "{url}",
+                                target: "_blank",
+                                rel: "noopener noreferrer",
+                                "goodreads"
+                            }
                         }
                     }
                 }

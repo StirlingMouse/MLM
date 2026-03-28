@@ -17,6 +17,7 @@ dioxus = { version = "0.7", features = ["fullstack", "router"] }
 dioxus-fullstack = "0.7"
 lucide-dioxus = { version = "2.562.0", features = [
   "account",
+  "arrows",
   "multimedia",
   "text",
 ] }
@@ -25,7 +26,7 @@ serde_json = "1.0"
 anyhow = "1.0"
 tracing = "0.1"
 wasm-bindgen = "0.2"
-web-sys = { version = "0.3", features = ["EventSource", "MessageEvent"] }
+web-sys = { version = "0.3", features = ["EventSource", "MessageEvent", "Performance"] }
 urlencoding = "2.1"
 time = { version = "0.3.41", features = [
   "formatting",
@@ -49,6 +50,10 @@ sublime_fuzzy = { version = "0.7", optional = true }
 qbit = { git = "https://github.com/StirlingMouse/qbittorrent-webui-api.git", optional = true }
 figment = { version = "0.10", features = ["toml", "env"], optional = true }
 tracing-subscriber = { version = "0.3", optional = true }
+
+[dev-dependencies]
+dioxus-ssr = "0.7"
+pretty_assertions = "1.4"
 
 [features]
 server = [

@@ -1,8 +1,8 @@
 /// Creates a test database with fake data for e2e Playwright tests.
 /// Usage: create_test_db <output_path>
 use mlm_db::{
-    DuplicateTorrent, ErroredTorrent, ErroredTorrentId, Event, EventType, MODELS, MainCat,
-    MediaType, MetadataSource, SelectedTorrent, Series, SeriesEntries, SeriesEntry, Size,
+    DuplicateTorrent, ErroredTorrent, ErroredTorrentId, Event, EventType, List, ListItem, MODELS,
+    MainCat, MediaType, MetadataSource, SelectedTorrent, Series, SeriesEntries, SeriesEntry, Size,
     Timestamp, Torrent, TorrentCost, TorrentMeta, Uuid, migrate,
 };
 use native_db::Builder;
@@ -180,6 +180,34 @@ fn main() -> anyhow::Result<()> {
             created_at: timestamp_with_offset(10_000 + i as i64 * 60 + 30),
             started_at: None,
             removed_at: None,
+        })?;
+    }
+
+    // List for pagination testing (15 items)
+    rw.insert(List {
+        id: "test-list-001".to_string(),
+        title: "Test List".to_string(),
+        updated_at: None,
+        build_date: None,
+    })?;
+    for i in 1u64..=15 {
+        let guid = (format!("guid-{i:03}"), format!("item-{i:03}"));
+        rw.insert(ListItem {
+            list_id: "test-list-001".to_string(),
+            guid,
+            title: format!("List Book {i:03}"),
+            authors: vec!["Test Author".to_string()],
+            series: vec![],
+            cover_url: format!("https://example.com/cover/{i}.jpg"),
+            book_url: None,
+            isbn: None,
+            prefer_format: None,
+            allow_audio: i % 3 != 0,
+            allow_ebook: i % 2 == 0,
+            audio_torrent: None,
+            ebook_torrent: None,
+            created_at: timestamp_with_offset(50_000 + i as i64 * 60),
+            marked_done_at: None,
         })?;
     }
 

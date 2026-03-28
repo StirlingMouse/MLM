@@ -100,16 +100,24 @@ async fn server_main() {
             }
         })
         .collect();
-    let metadata = Arc::new(MetadataService::from_settings(
+    let metadata = Arc::new(tokio::sync::Mutex::new(MetadataService::from_settings(
         &provider_settings,
         default_timeout,
-    ));
+    )));
 
     let backend = Arc::new(SsrBackend {
         db: db.clone(),
         mam: mam.clone(),
         metadata: metadata.clone(),
     });
+
+    // Register MaM provider if available
+    if let Ok(mam_api) = mam.as_ref() {
+        metadata
+            .lock()
+            .await
+            .register_mam(mam_api.clone(), default_timeout);
+    }
 
     let ctx = Context {
         config: Arc::new(Mutex::new(config)),

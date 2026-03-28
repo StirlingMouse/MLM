@@ -48,6 +48,18 @@ test.describe('Selected torrents page', () => {
                 await noLoading(page);
                 await expect(page.locator('body')).toContainText('Selected Book');
         });
+
+        test('shows the selected torrent stats above the table', async ({ page }) => {
+                await page.goto('/selected');
+                await noError(page);
+                await noLoading(page);
+                await expect(page.locator('body')).toContainText('Buffer:');
+                await expect(page.locator('body')).toContainText('Unsats: 2 / 10');
+                await expect(page.locator('body')).toContainText('Wedges: 3');
+                await expect(page.locator('body')).toContainText('Bonus: 50000');
+                await expect(page.locator('body')).toContainText('Queued Torrents: 5');
+                await expect(page.locator('body')).toContainText('Downloading Torrents: 0');
+        });
 });
 
 test.describe('Replaced torrents page', () => {
@@ -82,15 +94,46 @@ test.describe('Search page', () => {
                 await expect(page.locator('form')).toBeVisible();
 
                 const input = page.locator('input[type="text"], input[type="search"]').first();
+                const submit = page.getByRole('button', { name: 'Search' });
                 await expect(input).toHaveCount(1);
                 await input.fill('Test Book');
                 await Promise.all([
                         page.waitForURL(url => url.toString().includes('/search?'), {
                                 timeout: 5_000,
                         }),
-                        input.press('Enter'),
+                        submit.click(),
                 ]);
                 await expect(page.locator('form')).toBeVisible();
+                await noLoading(page);
+                await expect(page.locator('body')).toContainText('Found 205 torrents');
+                await expect(page.locator('body')).toContainText('Mock Search Result 001');
+                await expect(page.locator('body')).not.toContainText('Mock Search Result 101');
+        });
+
+        test('server renders paged search results into html', async ({ request }) => {
+                const response = await request.get('/search?q=Test%20Book&page=2');
+                expect(response.ok()).toBeTruthy();
+
+                const html = await response.text();
+                expect(html).toContain('Found 205 torrents');
+                expect(html).toContain('Mock Search Result 101');
+                expect(html).not.toContain('Loading search results...');
+        });
+
+        test('pagination click updates the visible result page', async ({ page }) => {
+                await page.goto('/search?q=Test%20Book');
+                await noLoading(page);
+                await expect(page.locator('body')).toContainText('Mock Search Result 001');
+                await expect(page.locator('body')).not.toContainText('Mock Search Result 101');
+
+                await Promise.all([
+                        page.waitForURL(url => url.toString().includes('page=2'), { timeout: 5_000 }),
+                        page.getByRole('button', { name: '2' }).first().click(),
+                ]);
+
+                await noLoading(page);
+                await expect(page.locator('body')).toContainText('Mock Search Result 101');
+                await expect(page.locator('body')).not.toContainText('Mock Search Result 001');
         });
 });
 
@@ -99,6 +142,24 @@ test.describe('Lists page', () => {
                 await page.goto('/lists');
                 await noError(page);
                 await noLoading(page);
+        });
+});
+
+test.describe('List page', () => {
+        test('loads list items', async ({ page }) => {
+                await page.goto('/lists/test-list-001');
+                await noError(page);
+                await noLoading(page);
+                // Verify list items are displayed
+                await expect(page.locator('body')).toContainText('List Book');
+        });
+
+        test('show filter UI is present', async ({ page }) => {
+                await page.goto('/lists/test-list-001');
+                await noError(page);
+                await noLoading(page);
+                // Verify filter UI is present
+                await expect(page.locator('input[type="radio"][name="show"]')).toHaveCount(4);
         });
 });
 

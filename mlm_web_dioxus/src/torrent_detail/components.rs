@@ -1,11 +1,13 @@
 use super::server_fns::{
-    clean_torrent_action, clear_replacement_action, get_metadata_providers, get_other_torrents,
-    get_qbit_data, get_torrent_detail, match_metadata_action, preview_match_metadata,
-    refresh_and_relink_action, refresh_metadata_action, relink_torrent_action,
-    remove_seeding_files_action, remove_torrent_action, set_qbit_category_tags_action,
-    torrent_start_action, torrent_stop_action,
+    apply_match_metadata_action, clean_torrent_action, clear_replacement_action,
+    get_metadata_providers, get_other_torrents, get_qbit_data, get_torrent_detail,
+    match_metadata_action, preview_mam_metadata, preview_match_metadata, refresh_and_relink_action,
+    refresh_metadata_action, relink_torrent_action, remove_seeding_files_action,
+    remove_torrent_action, set_qbit_category_tags_action, torrent_start_action,
+    torrent_stop_action,
 };
 use super::types::*;
+use crate::app::Route;
 use crate::components::{
     CategoryPills, Details, DownloadButtonMode, DownloadButtons, SearchMetadataFilterItem,
     SearchMetadataFilterRow, SearchMetadataKind, SearchTorrentRow, StatusMessage, TorrentIcons,
@@ -14,7 +16,7 @@ use crate::components::{
 use crate::events::EventListItem;
 use crate::search::SearchTorrent;
 use dioxus::prelude::*;
-use lucide_dioxus::Tag;
+use std::pin::Pin;
 
 fn spawn_action(
     name: String,
@@ -45,6 +47,144 @@ fn series_label(name: &str, entries: &str) -> String {
         name.to_string()
     } else {
         format!("{name} {entries}")
+    }
+}
+
+#[component]
+fn DetailSidebarStrip(
+    media_type: String,
+    mediatype_id: u8,
+    main_cat_id: u8,
+    categories: Vec<String>,
+    old_category: Option<String>,
+    vip: bool,
+    personal_freeleech: bool,
+    free: bool,
+    flags: Vec<String>,
+) -> Element {
+    rsx! {
+        div { class: "detail-side-strip",
+            div { class: "detail-side-copy",
+                if let Some(src) = media_icon_src(mediatype_id, main_cat_id) {
+                    img {
+                        class: "media-icon",
+                        src: "{src}",
+                        alt: "{media_type}",
+                        title: "{media_type}",
+                    }
+                } else {
+                    span { class: "faint", "{media_type}" }
+                }
+                div { class: "detail-side-copy-body",
+                    span { class: "detail-media-pill", "{media_type}" }
+                    CategoryPills {
+                        categories,
+                        old_category,
+                    }
+                }
+            }
+            div { class: "detail-side-icons",
+                TorrentIcons {
+                    vip,
+                    personal_freeleech,
+                    free,
+                    flags,
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn DetailMetadataRows(
+    author_filters: Vec<SearchMetadataFilterItem>,
+    narrator_filters: Vec<SearchMetadataFilterItem>,
+    series_filters: Vec<SearchMetadataFilterItem>,
+    local_tags: Vec<String>,
+) -> Element {
+    rsx! {
+        div { class: "detail-meta-stack",
+            if !author_filters.is_empty() {
+                div { class: "detail-meta-row",
+                    SearchMetadataFilterRow {
+                        kind: SearchMetadataKind::Authors,
+                        items: author_filters,
+                    }
+                }
+            }
+            if !narrator_filters.is_empty() {
+                div { class: "detail-meta-row",
+                    SearchMetadataFilterRow {
+                        kind: SearchMetadataKind::Narrators,
+                        items: narrator_filters,
+                    }
+                }
+            }
+            if !series_filters.is_empty() {
+                div { class: "detail-meta-row",
+                    SearchMetadataFilterRow {
+                        kind: SearchMetadataKind::Series,
+                        items: series_filters,
+                    }
+                }
+            }
+            if !local_tags.is_empty() {
+                div { class: "detail-local-tags",
+                    strong { "MLM Tags" }
+                    div { class: "detail-tag-pills",
+                        for tag in local_tags {
+                            span { class: "pill", "{tag}" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn DescriptionSection(description_html: String) -> Element {
+    rsx! {
+        div { class: "torrent-description detail-section",
+            Details {
+                label: "Description".to_string(),
+                open: Some(true),
+                div { class: "detail-description-body",
+                    div { class: "detail-description-block",
+                        div { dangerous_inner_html: "{description_html}" }
+                    }
+
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn EventHistorySection(events: Vec<crate::dto::Event>) -> Element {
+    if events.is_empty() {
+        return rsx! {};
+    }
+
+    rsx! {
+        div { class: "detail-section",
+            Details {
+                label: "Event History".to_string(),
+                open: Some(false),
+                div { class: "detail-event-history",
+                    for event in events {
+                        div { class: "event-item",
+                            EventListItem {
+                                event,
+                                torrent: None,
+                                replacement: None,
+                                show_created_at: true,
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -155,8 +295,6 @@ fn TorrentDetailContent(
         replacement_missing,
         abs_item_url,
         abs_cover_url,
-        mam_torrent,
-        mam_meta_diff,
     } = data;
 
     let library_files = torrent
@@ -194,11 +332,45 @@ fn TorrentDetailContent(
             href: search_filter_href("series", &series.name, "series"),
         })
         .collect::<Vec<_>>();
+    let library_path = torrent
+        .library_path
+        .as_ref()
+        .map(|path| path.display().to_string());
+    let mam_url = torrent
+        .mam_id
+        .map(|mam_id| format!("https://www.myanonamouse.net/t/{mam_id}"));
+    let goodreads_url = torrent
+        .goodreads_id
+        .as_ref()
+        .map(|goodreads_id| format!("https://www.goodreads.com/book/show/{goodreads_id}"));
+    let mut qbit_refresh = use_signal(|| 0u32);
+    let torrent_id = torrent.id.clone();
+    let qbit_data = use_resource(move || {
+        let _ = *qbit_refresh.read();
+        let torrent_id = torrent_id.clone();
+        async move { get_qbit_data(torrent_id).await }
+    });
+    let qbit_result = qbit_data.read().clone();
+    let qbit_wanted_path = qbit_result
+        .as_ref()
+        .and_then(|result| result.as_ref().ok())
+        .and_then(|maybe_qbit| maybe_qbit.as_ref())
+        .and_then(|qbit| qbit.wanted_path.as_ref())
+        .map(|path| path.display().to_string());
+    let qbit_no_longer_wanted = qbit_result
+        .as_ref()
+        .and_then(|result| result.as_ref().ok())
+        .and_then(|maybe_qbit| maybe_qbit.as_ref())
+        .is_some_and(|qbit| qbit.no_longer_wanted);
+    let on_qbit_refresh = EventHandler::new(move |_| {
+        *qbit_refresh.write() += 1;
+        on_refresh.call(());
+    });
 
     rsx! {
         div { class: "torrent-detail-grid",
             div { class: "torrent-side",
-                if let Some(abs_cover_url) = abs_cover_url {
+                if let Some(abs_cover_url) = abs_cover_url.as_ref() {
                     div { class: "abs-cover",
                         img {
                             src: "{abs_cover_url}",
@@ -207,211 +379,144 @@ fn TorrentDetailContent(
                         }
                     }
                 }
-                div { class: "pill", "{torrent.media_type}" }
-
-                div { class: "category-row",
-                    if let Some(src) = media_icon_src(torrent.mediatype_id, torrent.main_cat_id) {
-                        img {
-                            class: "media-icon",
-                            src: "{src}",
-                            alt: "{torrent.media_type}",
-                            title: "{torrent.media_type}",
-                        }
-                    } else {
-                        span { class: "faint", "{torrent.media_type}" }
-                    }
-                    CategoryPills {
+                div {
+                    DetailSidebarStrip {
+                        media_type: torrent.media_type.clone(),
+                        mediatype_id: torrent.mediatype_id,
+                        main_cat_id: torrent.main_cat_id,
                         categories: torrent.categories.clone(),
                         old_category: torrent.old_category.clone(),
-                    }
-                    TorrentIcons {
-                        vip: mam_torrent.as_ref().is_some_and(|m| m.vip),
-                        personal_freeleech: mam_torrent.as_ref().is_some_and(|m| m.personal_freeleech),
-                        free: mam_torrent.as_ref().is_some_and(|m| m.free),
+                        vip: false,
+                        personal_freeleech: false,
+                        free: false,
                         flags: torrent.flags.clone(),
                     }
-                }
 
-                h3 { "Metadata" }
-                dl { class: "metadata-table",
-                    if let Some(lang) = &torrent.language {
-                        dt { "Language" }
-                        dd { "{lang}" }
-                    }
-                    if let Some(ed) = &torrent.edition {
-                        dt { "Edition" }
-                        dd { "{ed}" }
-                    }
-                    if let Some(mam_id) = torrent.mam_id {
-                        dt { "MaM ID" }
-                        dd {
-                            a {
-                                href: "https://www.myanonamouse.net/t/{mam_id}",
-                                target: "_blank",
-                                "{mam_id}"
+                    h3 { class: "detail-section-title", "Metadata" }
+                    dl { class: "metadata-table detail-metadata-table",
+                        if let Some(lang) = &torrent.language {
+                            dt { "Language" }
+                            dd { "{lang}" }
+                        }
+                        if let Some(ed) = &torrent.edition {
+                            dt { "Edition" }
+                            dd { "{ed}" }
+                        }
+                        if let Some(mam_id) = torrent.mam_id {
+                            dt { "MaM ID" }
+                            dd {
+                                a {
+                                    href: "https://www.myanonamouse.net/t/{mam_id}",
+                                    target: "_blank",
+                                    "{mam_id}"
+                                }
                             }
                         }
+                        dt { "Size" }
+                        dd { "{torrent.size}" }
+                        dt { "Files" }
+                        dd { "{torrent.num_files}" }
+                        if !torrent.filetypes.is_empty() {
+                            dt { "File Types" }
+                            dd { "{filetypes_text}" }
+                        }
+                        dt { "Uploaded" }
+                        dd { "{torrent.uploaded_at}" }
+                        dt { "Source" }
+                        dd { "{torrent.source}" }
+                        if let Some(vip) = &torrent.vip_status {
+                            dt { "VIP" }
+                            dd { "{vip}" }
+                        }
+                        if let Some(linker) = &torrent.linker {
+                            dt { "Linker" }
+                            dd { "{linker}" }
+                        }
+                        if let Some(cat) = &torrent.category {
+                            dt { "Category" }
+                            dd { "{cat}" }
+                        }
+                        if let Some(status) = &torrent.client_status {
+                            dt { "Client Status" }
+                            dd { "{status}" }
+                        }
                     }
-                    dt { "Size" }
-                    dd { "{torrent.size}" }
-                    dt { "Files" }
-                    dd { "{torrent.num_files}" }
-                    if !torrent.filetypes.is_empty() {
-                        dt { "File Types" }
-                        dd { "{filetypes_text}" }
-                    }
-                    dt { "Uploaded" }
-                    dd { "{torrent.uploaded_at}" }
-                    dt { "Source" }
-                    dd { "{torrent.source}" }
-                    if let Some(vip) = &torrent.vip_status {
-                        dt { "VIP" }
-                        dd { "{vip}" }
-                    }
-                    if let Some(path) = &torrent.library_path {
-                        dt { "Library Path" }
-                        dd { "{path.display()}" }
-                    }
-                    if let Some(linker) = &torrent.linker {
-                        dt { "Linker" }
-                        dd { "{linker}" }
-                    }
-                    if let Some(cat) = &torrent.category {
-                        dt { "Category" }
-                        dd { "{cat}" }
-                    }
-                    if let Some(status) = &torrent.client_status {
-                        dt { "Client Status" }
-                        dd { "{status}" }
-                    }
+                }
+                match qbit_result {
+                    None => rsx! {
+                        p { class: "loading-indicator", "Loading qBittorrent data..." }
+                    },
+                    Some(Err(_)) | Some(Ok(None)) => rsx! {},
+                    Some(Ok(Some(qbit))) => rsx! {
+                        QbitControls {
+                            torrent_id: torrent.id.clone(),
+                            qbit,
+                            status_msg,
+                            on_refresh: on_qbit_refresh,
+                        }
+                    },
                 }
             }
 
             div { class: "torrent-main",
-                h1 { "{torrent.title}" }
-                if let Some(replacement) = replacement_torrent {
-                    div { class: "warn",
-                        strong { "Replaced with: " }
-                        a { href: "/torrents/{replacement.id}", "{replacement.title}" }
+                div { class: "detail-hero",
+                    h1 { "{torrent.title}" }
+                    if let Some(replacement) = replacement_torrent {
+                        div { class: "warn detail-alert",
+                            strong { "Replaced with: " }
+                            a { href: "/torrents/{replacement.id}", "{replacement.title}" }
+                        }
                     }
-                }
-                if replacement_missing {
-                    div { class: "warn",
-                        "This torrent had a stale replacement link and it was cleared."
+                    if replacement_missing {
+                        div { class: "warn detail-alert",
+                            "This torrent had a stale replacement link and it was cleared."
+                        }
                     }
-                }
 
-                SearchMetadataFilterRow { kind: SearchMetadataKind::Authors, items: author_filters }
-                SearchMetadataFilterRow {
-                    kind: SearchMetadataKind::Narrators,
-                    items: narrator_filters,
-                }
-                SearchMetadataFilterRow { kind: SearchMetadataKind::Series, items: series_filters }
-                if let Some(mam) = mam_torrent.clone() {
-                    if !mam.tags.is_empty() {
-                        p { class: "icon-row",
-                            span { title: "Tags", Tag {} }
-                            "{mam.tags}"
-                        }
+                    DetailMetadataRows {
+                        author_filters,
+                        narrator_filters,
+                        series_filters,
+                        local_tags: torrent.tags.clone(),
                     }
-                }
-                if !torrent.tags.is_empty() {
-                    div {
-                        strong { "Tags: " }
-                        for tag in &torrent.tags {
-                            span { class: "pill", "{tag}" }
-                        }
-                    }
-                }
-                div { style: "display:flex; flex-wrap:wrap; gap:0.5em; margin:0.6em 0;",
-                    a {
-                        class: "btn",
-                        href: "/torrents/{torrent.id}/edit",
-                        "Edit Metadata"
-                    }
-                    if let Some(abs_url) = abs_item_url {
-                        a {
-                            class: "btn",
-                            href: "{abs_url}",
-                            target: "_blank",
-                            "Open in ABS"
-                        }
-                    }
-                    if let Some(mam_id) = torrent.mam_id {
-                        a {
-                            class: "btn",
-                            href: "https://www.myanonamouse.net/t/{mam_id}",
-                            target: "_blank",
-                            "Open in MaM"
-                        }
-                    }
-                    if let Some(goodreads_id) = &torrent.goodreads_id {
-                        a {
-                            class: "btn",
-                            href: "https://www.goodreads.com/book/show/{goodreads_id}",
-                            target: "_blank",
-                            "Open in Goodreads"
-                        }
-                    }
-                }
 
-                TorrentActions {
-                    torrent_id: torrent.id.clone(),
-                    providers,
-                    has_replacement: torrent.replaced_with.is_some(),
-                    status_msg,
-                    on_refresh,
-                }
-            }
-
-            div { class: "torrent-description",
-                h3 { "Description" }
-                div { dangerous_inner_html: "{torrent.description_html}" }
-
-                if let Some(mam) = mam_torrent.clone() {
-                    if let Some(description_html) = mam.description_html {
-                        Details { label: "MaM Description",
-                            div { dangerous_inner_html: "{description_html}" }
-                        }
+                    TorrentActions {
+                        torrent_id: torrent.id.clone(),
+                        providers,
+                        mam_id: torrent.mam_id,
+                        has_replacement: torrent.replaced_with.is_some(),
+                        library_path,
+                        abs_item_url,
+                        mam_url,
+                        goodreads_url,
+                        qbit_wanted_path,
+                        qbit_no_longer_wanted,
+                        status_msg,
+                        on_refresh,
                     }
-                }
 
-                if !mam_meta_diff.is_empty() {
-                    h3 { "MaM Metadata Differences" }
-                    ul {
-                        for field in mam_meta_diff {
-                            li {
-                                strong { "{field.field}" }
-                                ": {field.to}"
-                            }
-                        }
+                    DescriptionSection {
+                        description_html: torrent.description_html.clone(),
                     }
-                }
 
-                Details { label: "Event History",
-                    for event in events {
-                        div { class: "event-item",
-                            EventListItem {
-                                event,
-                                torrent: None,
-                                replacement: None,
-                                show_created_at: true,
-                            }
-                        }
-                    }
+                    EventHistorySection { events }
                 }
             }
 
             div { class: "torrent-below",
                 if !library_files.is_empty() {
-                    Details { label: "Library Files ({library_files.len()})",
-                        ul {
-                            for file in &library_files {
-                                li {
-                                    a {
-                                        href: "/torrents/{torrent.id}/{file.1}",
-                                        target: "_blank",
-                                        "{file.0}"
+                    div { class: "detail-section",
+                        Details {
+                            label: format!("Library Files ({})", library_files.len()),
+                            open: Some(false),
+                            ul {
+                                for file in &library_files {
+                                    li {
+                                        a {
+                                            href: "/torrents/{torrent.id}/files/{file.1}",
+                                            target: "_blank",
+                                            "{file.0}"
+                                        }
                                     }
                                 }
                             }
@@ -419,11 +524,6 @@ fn TorrentDetailContent(
                     }
                 }
 
-                QbitSection {
-                    torrent_id: torrent.id.clone(),
-                    status_msg,
-                    on_refresh,
-                }
                 OtherTorrentsSection { id: torrent.id.clone(), status_msg, on_refresh }
             }
         }
@@ -464,121 +564,126 @@ fn TorrentMamContent(
             href: search_filter_href("series", &series.name, "series"),
         })
         .collect::<Vec<_>>();
+    let goodreads_url = torrent
+        .goodreads_id
+        .as_ref()
+        .map(|goodreads_id| format!("https://www.goodreads.com/book/show/{goodreads_id}"));
+    let description_html = mam
+        .description_html
+        .clone()
+        .unwrap_or_else(|| torrent.description_html.clone());
 
     rsx! {
         div { class: "torrent-detail-grid",
             div { class: "torrent-side",
-                div { class: "category-row",
-                    if let Some(src) = media_icon_src(torrent.mediatype_id, torrent.main_cat_id) {
-                        img {
-                            class: "media-icon",
-                            src: "{src}",
-                            alt: "{torrent.media_type}",
-                            title: "{torrent.media_type}",
-                        }
-                    } else {
-                        span { class: "faint", "{torrent.media_type}" }
-                    }
-                    CategoryPills {
+                div {
+                    DetailSidebarStrip {
+                        media_type: torrent.media_type.clone(),
+                        mediatype_id: torrent.mediatype_id,
+                        main_cat_id: torrent.main_cat_id,
                         categories: torrent.categories.clone(),
                         old_category: torrent.old_category.clone(),
-                    }
-                    TorrentIcons {
                         vip: mam.vip,
                         personal_freeleech: mam.personal_freeleech,
                         free: mam.free,
                         flags: torrent.flags.clone(),
                     }
-                }
-                dl { class: "metadata-table",
-                    if !torrent.flags.is_empty() {
-                        dt { "Flags" }
-                        dd {
-                            for flag in &torrent.flags {
-                                if let Some((src, title)) = flag_icon(flag) {
-                                    img {
-                                        class: "flag",
-                                        src: "{src}",
-                                        alt: "{title}",
-                                        title: "{title}",
+                    h3 { class: "detail-section-title", "Metadata" }
+                    dl { class: "metadata-table detail-metadata-table",
+                        if !torrent.flags.is_empty() {
+                            dt { "Flags" }
+                            dd {
+                                for flag in &torrent.flags {
+                                    if let Some((src, title)) = flag_icon(flag) {
+                                        img {
+                                            class: "flag",
+                                            src: "{src}",
+                                            alt: "{title}",
+                                            title: "{title}",
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                    dt { "MaM ID" }
-                    dd {
-                        a {
-                            href: "https://www.myanonamouse.net/t/{mam.mam_id}",
-                            target: "_blank",
-                            "{mam.mam_id}"
+                        dt { "MaM ID" }
+                        dd {
+                            a {
+                                href: "https://www.myanonamouse.net/t/{mam.mam_id}",
+                                target: "_blank",
+                                "{mam.mam_id}"
+                            }
                         }
+                        dt { "Uploader" }
+                        dd { "{mam.owner_name}" }
+                        dt { "Size" }
+                        dd { "{torrent.size}" }
+                        dt { "Files" }
+                        dd { "{torrent.num_files}" }
+                        if !torrent.filetypes.is_empty() {
+                            dt { "File Types" }
+                            dd { "{filetypes_text}" }
+                        }
+                        dt { "Uploaded" }
+                        dd { "{torrent.uploaded_at}" }
                     }
-                    dt { "Uploader" }
-                    dd { "{mam.owner_name}" }
-                    dt { "Size" }
-                    dd { "{torrent.size}" }
-                    dt { "Files" }
-                    dd { "{torrent.num_files}" }
-                    if !torrent.filetypes.is_empty() {
-                        dt { "File Types" }
-                        dd { "{filetypes_text}" }
-                    }
-                    dt { "Uploaded" }
-                    dd { "{torrent.uploaded_at}" }
                 }
             }
             div { class: "torrent-main",
-                h1 { "{torrent.title}" }
-                if let Some(ed) = &torrent.edition {
-                    p { "{ed}" }
-                }
-                SearchMetadataFilterRow { kind: SearchMetadataKind::Authors, items: author_filters }
-                SearchMetadataFilterRow {
-                    kind: SearchMetadataKind::Narrators,
-                    items: narrator_filters,
-                }
-                SearchMetadataFilterRow { kind: SearchMetadataKind::Series, items: series_filters }
-                if !mam.tags.is_empty() {
-                    p { class: "icon-row",
-                        span { title: "Tags", Tag {} }
-                        "{mam.tags}"
+                div { class: "detail-hero",
+                    h1 { "{torrent.title}" }
+                    if let Some(ed) = &torrent.edition {
+                        p { class: "detail-edition", "{ed}" }
                     }
-                }
-                div {
-                    class: "row",
-                    style: "display:flex; flex-wrap:wrap; gap:0.5em; margin:0.6em 0;",
-                    if let Some(goodreads_id) = &torrent.goodreads_id {
-                        a {
-                            class: "btn",
-                            href: "https://www.goodreads.com/book/show/{goodreads_id}",
-                            target: "_blank",
-                            "Open in Goodreads"
+                    DetailMetadataRows {
+                        author_filters,
+                        narrator_filters,
+                        series_filters,
+                        local_tags: torrent.tags.clone(),
+                    }
+                    div { class: "detail-action-stack",
+                        div { class: "detail-action-group",
+                            p { class: "detail-action-label", "External" }
+                            div { class: "detail-action-row",
+                                a {
+                                    class: "btn",
+                                    href: "https://www.myanonamouse.net/t/{mam.mam_id}",
+                                    target: "_blank",
+                                    "Open in MaM"
+                                }
+                                if let Some(goodreads_url) = goodreads_url {
+                                    a {
+                                        class: "btn",
+                                        href: "{goodreads_url}",
+                                        target: "_blank",
+                                        "Open in Goodreads"
+                                    }
+                                }
+                            }
+                        }
+                        div { class: "detail-action-group",
+                            p { class: "detail-action-label", "Download" }
+                            div { class: "detail-action-row",
+                                DownloadButtons {
+                                    mam_id: mam.mam_id,
+                                    is_vip: mam.vip,
+                                    is_free: mam.free,
+                                    is_personal_freeleech: mam.personal_freeleech,
+                                    can_wedge: true,
+                                    disabled: false,
+                                    mode: DownloadButtonMode::Full,
+                                    on_status: move |(msg, is_error)| {
+                                        status_msg.set(Some((msg, is_error)));
+                                    },
+                                    on_refresh: move |_| {
+                                        on_refresh.call(());
+                                    },
+                                }
+                            }
                         }
                     }
-                }
-                div { style: "margin-top:0.8em;",
-                    DownloadButtons {
-                        mam_id: mam.mam_id,
-                        is_vip: mam.vip,
-                        is_free: mam.free,
-                        is_personal_freeleech: mam.personal_freeleech,
-                        can_wedge: true,
-                        disabled: false,
-                        mode: DownloadButtonMode::Full,
-                        on_status: move |(msg, is_error)| {
-                            status_msg.set(Some((msg, is_error)));
-                        },
-                        on_refresh: move |_| {
-                            on_refresh.call(());
-                        },
+                    DescriptionSection {
+                        description_html,
                     }
-                }
-            }
-            div { class: "torrent-description",
-                if let Some(description_html) = mam.description_html {
-                    h3 { "Description" }
-                    div { dangerous_inner_html: "{description_html}" }
                 }
             }
             div { class: "torrent-below",
@@ -612,8 +717,8 @@ fn OtherTorrentsSection(
     };
 
     rsx! {
-        div { style: "margin-top:1em;",
-            h3 { "Other Torrents" }
+        div { class: "detail-other-torrents",
+            h3 { class: "detail-section-title", "Other Torrents" }
             match data.read().clone() {
                 None => rsx! {
                     p { class: "loading-indicator", "Loading other torrents..." }
@@ -642,7 +747,14 @@ fn OtherTorrentsSection(
 fn TorrentActions(
     torrent_id: String,
     providers: Vec<String>,
+    mam_id: Option<u64>,
     has_replacement: bool,
+    library_path: Option<String>,
+    abs_item_url: Option<String>,
+    mam_url: Option<String>,
+    goodreads_url: Option<String>,
+    qbit_wanted_path: Option<String>,
+    qbit_no_longer_wanted: bool,
     mut status_msg: Signal<Option<(String, bool)>>,
     on_refresh: EventHandler<()>,
 ) -> Element {
@@ -657,95 +769,174 @@ fn TorrentActions(
     };
 
     rsx! {
-        div { class: "torrent-actions-widget",
-            h3 { "Actions" }
-
-            div { class: "torrent-actions-row",
-                button {
-                    class: "btn",
-                    disabled: *loading.read(),
-                    onclick: move |_| dialog_open.set(true),
-                    "Match Metadata"
-                }
-                button {
-                    class: "btn",
-                    disabled: *loading.read(),
-                    onclick: {
-                        let torrent_id = torrent_id.clone();
-                        move |_| {
-                            let id = torrent_id.clone();
-                            handle_action("Clean".to_string(), Box::pin(clean_torrent_action(id)));
-                        }
-                    },
-                    "Clean"
-                }
-                button {
-                    class: "btn",
-                    disabled: *loading.read(),
-                    onclick: {
-                        let torrent_id = torrent_id.clone();
-                        move |_| {
-                            let id = torrent_id.clone();
-                            handle_action("Refresh".to_string(), Box::pin(refresh_metadata_action(id)));
-                        }
-                    },
-                    "Refresh"
-                }
-                button {
-                    class: "btn",
-                    disabled: *loading.read(),
-                    onclick: {
-                        let torrent_id = torrent_id.clone();
-                        move |_| {
-                            let id = torrent_id.clone();
-                            handle_action("Relink".to_string(), Box::pin(relink_torrent_action(id)));
-                        }
-                    },
-                    "Relink"
-                }
-                button {
-                    class: "btn",
-                    disabled: *loading.read(),
-                    onclick: {
-                        let torrent_id = torrent_id.clone();
-                        move |_| {
-                            let id = torrent_id.clone();
-                            handle_action(
-                                "Refresh & Relink".to_string(),
-                                Box::pin(refresh_and_relink_action(id)),
-                            );
-                        }
-                    },
-                    "Refresh & Relink"
-                }
-                if has_replacement {
+        div { class: "detail-action-stack",
+            div { class: "detail-action-group",
+                p { class: "detail-action-label", "Metadata" }
+                div { class: "detail-action-row",
+                    Link {
+                        class: "btn",
+                        to: Route::TorrentEditPage {
+                            id: torrent_id.clone(),
+                        },
+                        "Edit Metadata"
+                    }
                     button {
                         class: "btn",
                         disabled: *loading.read(),
-                        onclick: {
-                            let torrent_id = torrent_id.clone();
-                            move |_| {
-                                let id = torrent_id.clone();
-                                handle_action(
-                                    "Clear Replacement".to_string(),
-                                    Box::pin(clear_replacement_action(id)),
-                                );
-                            }
-                        },
-                        "Clear Replacement"
+                        onclick: move |_| dialog_open.set(true),
+                        "Match Metadata"
                     }
                 }
-                button {
-                    class: "btn danger",
-                    disabled: *loading.read(),
-                    onclick: {
-                        let torrent_id = torrent_id.clone();
-                        move |_| {
-                            let id = torrent_id.clone();
-                            handle_action("Remove".to_string(), Box::pin(remove_torrent_action(id)));
+            }
+
+            if abs_item_url.is_some() || mam_url.is_some() || goodreads_url.is_some() {
+                div { class: "detail-action-group",
+                    p { class: "detail-action-label", "External" }
+                    div { class: "detail-action-row",
+                        if let Some(abs_item_url) = abs_item_url {
+                            a {
+                                class: "btn",
+                                href: "{abs_item_url}",
+                                target: "_blank",
+                                "Open in ABS"
+                            }
                         }
-                    },
-                    "Remove"
+                        if let Some(mam_url) = mam_url {
+                            a {
+                                class: "btn",
+                                href: "{mam_url}",
+                                target: "_blank",
+                                "Open in MaM"
+                            }
+                        }
+                        if let Some(goodreads_url) = goodreads_url {
+                            a {
+                                class: "btn",
+                                href: "{goodreads_url}",
+                                target: "_blank",
+                                "Open in Goodreads"
+                            }
+                        }
+                    }
+                }
+            }
+
+            div { class: "detail-library-section detail-section",
+                Details {
+                    label: "Library".to_string(),
+                    open: Some(qbit_wanted_path.is_some()),
+                    div { class: "detail-library-header",
+                        div {
+                            if let Some(library_path) = library_path {
+                                p { class: "detail-library-path", "{library_path}" }
+                            } else {
+                                p { class: "faint detail-library-path", "Not linked into the library." }
+                            }
+                            if let Some(qbit_wanted_path) = qbit_wanted_path.as_ref() {
+                                p { class: "detail-library-note",
+                                    strong { "Torrent should be in: " }
+                                    "{qbit_wanted_path}"
+                                }
+                            }
+                            if qbit_no_longer_wanted {
+                                p { class: "warn detail-library-note",
+                                    strong { "Warning: " }
+                                    "No longer wanted in library"
+                                }
+                            }
+                        }
+                    }
+
+                    div { class: "detail-action-row",
+                        if qbit_wanted_path.is_some() {
+                            button {
+                                class: "btn",
+                                disabled: *loading.read(),
+                                onclick: {
+                                    let torrent_id = torrent_id.clone();
+                                    move |_| {
+                                        let id = torrent_id.clone();
+                                        handle_action(
+                                            "Relink to Correct Path".to_string(),
+                                            Box::pin(relink_torrent_action(id)),
+                                        );
+                                    }
+                                },
+                                "Relink to Correct Path"
+                            }
+                        }
+                        button {
+                            class: "btn",
+                            disabled: *loading.read(),
+                            onclick: {
+                                let torrent_id = torrent_id.clone();
+                                move |_| {
+                                    let id = torrent_id.clone();
+                                    handle_action("Relink".to_string(), Box::pin(relink_torrent_action(id)));
+                                }
+                            },
+                            "Relink"
+                        }
+                        button {
+                            class: "btn",
+                            disabled: *loading.read(),
+                            onclick: {
+                                let torrent_id = torrent_id.clone();
+                                move |_| {
+                                    let id = torrent_id.clone();
+                                    handle_action(
+                                        "Refresh & Relink".to_string(),
+                                        Box::pin(refresh_and_relink_action(id)),
+                                    );
+                                }
+                            },
+                            "Refresh & Relink"
+                        }
+                        button {
+                            class: "btn",
+                            disabled: *loading.read(),
+                            onclick: {
+                                let torrent_id = torrent_id.clone();
+                                move |_| {
+                                    let id = torrent_id.clone();
+                                    handle_action("Clean".to_string(), Box::pin(clean_torrent_action(id)));
+                                }
+                            },
+                            "Clean"
+                        }
+                        button {
+                            class: "btn danger",
+                            disabled: *loading.read(),
+                            onclick: {
+                                let torrent_id = torrent_id.clone();
+                                move |_| {
+                                    let id = torrent_id.clone();
+                                    handle_action("Remove".to_string(), Box::pin(remove_torrent_action(id)));
+                                }
+                            },
+                            "Remove"
+                        }
+                    }
+
+                    if has_replacement {
+                        div { class: "detail-action-row detail-action-row-secondary",
+                            button {
+                                class: "btn",
+                                disabled: *loading.read(),
+                                onclick: {
+                                    let torrent_id = torrent_id.clone();
+                                    move |_| {
+                                        let id = torrent_id.clone();
+                                        handle_action(
+                                            "Clear Replacement".to_string(),
+                                            Box::pin(clear_replacement_action(id)),
+                                        );
+                                    }
+                                },
+                                "Clear Replacement"
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -754,6 +945,7 @@ fn TorrentActions(
             MatchDialog {
                 torrent_id: torrent_id.clone(),
                 providers: providers.clone(),
+                mam_id,
                 status_msg,
                 on_close: move |_| dialog_open.set(false),
                 on_refresh,
@@ -766,18 +958,34 @@ fn TorrentActions(
 fn MatchDialog(
     torrent_id: String,
     providers: Vec<String>,
+    mam_id: Option<u64>,
     mut status_msg: Signal<Option<(String, bool)>>,
     on_close: EventHandler<()>,
     on_refresh: EventHandler<()>,
 ) -> Element {
-    let mut selected_provider = use_signal(|| providers.first().cloned().unwrap_or_default());
+    // Add MaM as first option if mam_id is Some
+    let available_providers = if mam_id.is_some() {
+        let mut p = vec!["MaM".to_string()];
+        p.extend(providers.clone());
+        p
+    } else {
+        providers.clone()
+    };
+    let default_provider = available_providers.first().cloned().unwrap_or_default();
+    let mut selected_provider = use_signal(|| default_provider);
     let loading = use_signal(|| false);
 
     let preview_id = torrent_id.clone();
     let preview = use_resource(move || {
         let id = preview_id.clone();
         let provider = selected_provider.read().clone();
-        async move { preview_match_metadata(id, provider).await }
+        async move {
+            if provider == "MaM" {
+                preview_mam_metadata(id).await
+            } else {
+                preview_match_metadata(id, provider).await
+            }
+        }
     });
 
     let do_match = {
@@ -785,6 +993,24 @@ fn MatchDialog(
         move |_| {
             let id = torrent_id.clone();
             let provider = selected_provider.read().clone();
+
+            // Try to get preview data first - if available, use apply_match_metadata_action
+            // Otherwise fall back to the legacy re-fetch approach
+            let preview_result = preview.read();
+            let action: Pin<Box<dyn Future<Output = Result<(), ServerFnError>>>> =
+                if let Some(Ok(result)) = preview_result.as_ref() {
+                    // Use pre-computed metadata from preview - no re-fetch needed
+                    let merged_meta = result.merged_meta.clone();
+                    let diffs = result.diffs.clone();
+                    Box::pin(apply_match_metadata_action(id, merged_meta, diffs))
+                } else {
+                    // Fall back to legacy behavior - re-fetches from provider
+                    if provider == "MaM" {
+                        Box::pin(refresh_metadata_action(id))
+                    } else {
+                        Box::pin(match_metadata_action(id, provider))
+                    }
+                };
             spawn_action(
                 "Match Metadata".to_string(),
                 loading,
@@ -793,7 +1019,7 @@ fn MatchDialog(
                     on_close.call(());
                     on_refresh.call(());
                 }),
-                Box::pin(match_metadata_action(id, provider)),
+                action,
             );
         }
     };
@@ -815,8 +1041,8 @@ fn MatchDialog(
                 select {
                     disabled: *loading.read(),
                     onchange: move |ev| selected_provider.set(ev.value()),
-                    for p in providers {
-                        option { value: "{p}", "{p}" }
+                    for p in available_providers {
+                        option { value: "{p}", selected: p == *selected_provider.read(), "{p}" }
                     }
                 }
             }
@@ -829,12 +1055,12 @@ fn MatchDialog(
                     Some(Err(e)) => rsx! {
                         p { class: "error", "Preview failed: {e}" }
                     },
-                    Some(Ok(diffs)) if diffs.is_empty() => rsx! {
+                    Some(Ok(result)) if result.diffs.is_empty() => rsx! {
                         p {
                             i { "No changes would be made." }
                         }
                     },
-                    Some(Ok(diffs)) => rsx! {
+                    Some(Ok(result)) => rsx! {
                         table { class: "match-diff-table",
                             thead {
                                 tr {
@@ -844,7 +1070,7 @@ fn MatchDialog(
                                 }
                             }
                             tbody {
-                                for diff in diffs.clone() {
+                                for diff in result.diffs.clone() {
                                     tr {
                                         td { "{diff.field}" }
                                         td { class: "diff-from", "{diff.from}" }
@@ -880,46 +1106,6 @@ fn MatchDialog(
 }
 
 #[component]
-fn QbitSection(
-    torrent_id: String,
-    mut status_msg: Signal<Option<(String, bool)>>,
-    on_refresh: EventHandler<()>,
-) -> Element {
-    let mut data: Signal<Option<Result<Option<QbitData>, ServerFnError>>> = use_signal(|| None);
-    let mut refresh_trigger = use_signal(|| 0u32);
-    let id_for_effect = torrent_id.clone();
-
-    use_effect(move || {
-        let _ = *refresh_trigger.read();
-        let id = id_for_effect.clone();
-        data.set(None);
-        spawn(async move {
-            data.set(Some(get_qbit_data(id).await));
-        });
-    });
-
-    let on_qbit_refresh = move |_| {
-        *refresh_trigger.write() += 1;
-        on_refresh.call(());
-    };
-
-    match data.read().clone() {
-        None => rsx! {
-            p { class: "loading-indicator", "Loading qBittorrent data..." }
-        },
-        Some(Err(_)) | Some(Ok(None)) => rsx! {},
-        Some(Ok(Some(qbit))) => rsx! {
-            QbitControls {
-                torrent_id,
-                qbit,
-                status_msg,
-                on_refresh: on_qbit_refresh,
-            }
-        },
-    }
-}
-
-#[component]
 fn QbitControls(
     torrent_id: String,
     qbit: QbitData,
@@ -948,21 +1134,53 @@ fn QbitControls(
     };
 
     rsx! {
-        div { style: "margin-top: 1em; padding: 1em; background: var(--above); border-radius: 4px;",
-            h3 { "qBittorrent" }
+        div { class: "detail-qbit-section",
+            h3 { class: "detail-section-title", "qBittorrent" }
 
-            dl { class: "metadata-table",
+            dl { class: "metadata-table detail-metadata-table",
                 dt { "State" }
                 dd { "{qbit.torrent_state}" }
                 dt { "Uploaded" }
                 dd { "{qbit.uploaded}" }
             }
-
-            if let Some(path) = qbit.wanted_path {
-                div { style: "margin: 1em 0; padding: 0.5em; background: var(--bg); border-radius: 4px;",
+            if qbit.no_longer_wanted {
+                div { class: "detail-warning-block",
                     p {
-                        strong { "⚠️ Torrent should be in: " }
-                        "{path.display()}"
+                        strong { "Warning: " }
+                        "No longer wanted in library"
+                    }
+                }
+            }
+
+            div { class: "detail-action-group",
+                p { class: "detail-action-label", "Actions" }
+                div { class: "detail-action-row",
+                    if is_paused {
+                        button {
+                            class: "btn",
+                            disabled: *loading.read(),
+                            onclick: {
+                                let torrent_id = torrent_id.clone();
+                                move |_| {
+                                    let id = torrent_id.clone();
+                                    handle_qbit_action("Start".to_string(), Box::pin(torrent_start_action(id)));
+                                }
+                            },
+                            "Start"
+                        }
+                    } else {
+                        button {
+                            class: "btn",
+                            disabled: *loading.read(),
+                            onclick: {
+                                let torrent_id = torrent_id.clone();
+                                move |_| {
+                                    let id = torrent_id.clone();
+                                    handle_qbit_action("Stop".to_string(), Box::pin(torrent_stop_action(id)));
+                                }
+                            },
+                            "Stop"
+                        }
                     }
                     button {
                         class: "btn",
@@ -972,138 +1190,101 @@ fn QbitControls(
                             move |_| {
                                 let id = torrent_id.clone();
                                 handle_qbit_action(
-                                    "Relink to Correct Path".to_string(),
-                                    Box::pin(relink_torrent_action(id)),
+                                    "Remove Seeding-only Files".to_string(),
+                                    Box::pin(remove_seeding_files_action(id)),
                                 );
                             }
                         },
-                        "Relink to Correct Path"
-                    }
-                }
-            }
-            if qbit.no_longer_wanted {
-                div { style: "margin: 1em 0; padding: 0.5em; background: var(--bg); border-radius: 4px;",
-                    p {
-                        strong { "⚠️ " }
-                        "No longer wanted in library"
+                        "Remove Seeding-only Files"
                     }
                 }
             }
 
-            div { style: "display: flex; gap: 0.5em; margin: 1em 0;",
-                if is_paused {
-                    button {
-                        class: "btn",
+            div { class: "detail-action-group",
+                p { class: "detail-action-label", "Category" }
+                div { class: "detail-action-row",
+                    select {
                         disabled: *loading.read(),
-                        onclick: {
+                        onchange: {
                             let torrent_id = torrent_id.clone();
-                            move |_| {
-                                let id = torrent_id.clone();
-                                handle_qbit_action("Start".to_string(), Box::pin(torrent_start_action(id)));
+                            move |ev| {
+                                let category = ev.value();
+                                selected_category.set(category.clone());
+                                let tags = selected_tags.read().clone();
+                                handle_qbit_action(
+                                    "Save Category & Tags".to_string(),
+                                    Box::pin(set_qbit_category_tags_action(
+                                        torrent_id.clone(),
+                                        category,
+                                        tags,
+                                    )),
+                                );
                             }
                         },
-                        "Start"
-                    }
-                } else {
-                    button {
-                        class: "btn",
-                        disabled: *loading.read(),
-                        onclick: {
-                            let torrent_id = torrent_id.clone();
-                            move |_| {
-                                let id = torrent_id.clone();
-                                handle_qbit_action("Stop".to_string(), Box::pin(torrent_stop_action(id)));
+                        for cat in &qbit.categories {
+                            option {
+                                value: "{cat.name}",
+                                selected: cat.name == qbit.torrent_category,
+                                "{cat.name}"
                             }
-                        },
-                        "Stop"
-                    }
-                }
-                button {
-                    class: "btn",
-                    disabled: *loading.read(),
-                    onclick: {
-                        let torrent_id = torrent_id.clone();
-                        move |_| {
-                            let id = torrent_id.clone();
-                            handle_qbit_action(
-                                "Remove Seeding-only Files".to_string(),
-                                Box::pin(remove_seeding_files_action(id)),
-                            );
-                        }
-                    },
-                    "Remove Seeding-only Files"
-                }
-            }
-
-            div { class: "option_group",
-                "Category: "
-                select {
-                    disabled: *loading.read(),
-                    onchange: move |ev| selected_category.set(ev.value()),
-                    for cat in &qbit.categories {
-                        option {
-                            value: "{cat.name}",
-                            selected: cat.name == qbit.torrent_category,
-                            "{cat.name}"
                         }
                     }
                 }
             }
 
-            div { class: "option_group", style: "margin-top: 0.5em;",
-                "Tags: "
-                for tag in &qbit.tags {
-                    label {
-                        input {
-                            r#type: "checkbox",
-                            disabled: *loading.read(),
-                            checked: selected_tags.read().contains(tag),
-                            onchange: {
-                                let tag = tag.clone();
-                                move |ev| {
-                                    if ev.value() == "true" {
-                                        if !selected_tags.read().contains(&tag) {
-                                            selected_tags.write().push(tag.clone());
+            div { class: "detail-action-group",
+                p { class: "detail-action-label", "Tags" }
+                div { class: "option_group",
+                    for tag in &qbit.tags {
+                        label {
+                            input {
+                                r#type: "checkbox",
+                                disabled: *loading.read(),
+                                checked: selected_tags.read().contains(tag),
+                                onchange: {
+                                    let torrent_id = torrent_id.clone();
+                                    let tag = tag.clone();
+                                    move |ev| {
+                                        let mut next_tags = selected_tags.read().clone();
+                                        if ev.value() == "true" {
+                                            if !next_tags.contains(&tag) {
+                                                next_tags.push(tag.clone());
+                                            }
+                                        } else {
+                                            next_tags.retain(|t| t != &tag);
                                         }
-                                    } else {
-                                        selected_tags.write().retain(|t| t != &tag);
+                                        selected_tags.set(next_tags.clone());
+                                        let category = selected_category.read().clone();
+                                        handle_qbit_action(
+                                            "Save Category & Tags".to_string(),
+                                            Box::pin(set_qbit_category_tags_action(
+                                                torrent_id.clone(),
+                                                category,
+                                                next_tags,
+                                            )),
+                                        );
                                     }
-                                }
-                            },
+                                },
+                            }
+                            "{tag}"
                         }
-                        "{tag}"
                     }
                 }
-            }
-
-            button {
-                class: "btn",
-                style: "margin-top: 1em;",
-                disabled: *loading.read(),
-                onclick: {
-                    let torrent_id = torrent_id.clone();
-                    move |_| {
-                        let id = torrent_id.clone();
-                        let cat = selected_category.read().clone();
-                        let tags = selected_tags.read().clone();
-                        handle_qbit_action(
-                            "Save Category & Tags".to_string(),
-                            Box::pin(set_qbit_category_tags_action(id, cat, tags)),
-                        );
-                    }
-                },
-                "Save Category & Tags"
             }
 
             if !qbit_files.is_empty() {
-                Details { label: "qBittorrent Files ({qbit_files.len()})",
-                    ul {
-                        for file in &qbit_files {
-                            li {
-                                a {
-                                    href: "/torrents/{torrent_id}/{file.1}",
-                                    target: "_blank",
-                                    "{file.0}"
+                div { class: "detail-section",
+                    Details {
+                        label: format!("qBittorrent Files ({})", qbit_files.len()),
+                        open: Some(false),
+                        ul {
+                            for file in &qbit_files {
+                                li {
+                                    a {
+                                        href: "/torrents/{torrent_id}/files/{file.1}",
+                                        target: "_blank",
+                                        "{file.0}"
+                                    }
                                 }
                             }
                         }

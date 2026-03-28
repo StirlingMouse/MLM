@@ -1,10 +1,12 @@
 pub mod fake;
 pub mod hardcover;
+pub mod mam;
 pub mod openlibrary;
 pub mod romanceio;
 
 pub use fake::FakeProvider;
 pub use hardcover::Hardcover;
+pub use mam::MamProvider;
 pub use openlibrary::OpenLibrary;
 pub use romanceio::RomanceIo;
 
