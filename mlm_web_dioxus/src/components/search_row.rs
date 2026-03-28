@@ -1,5 +1,5 @@
 use super::{
-    media_icon_src, CategoryPills, DownloadButtonMode, SimpleDownloadButtons, TorrentIcons,
+    CategoryPills, DownloadButtonMode, SimpleDownloadButtons, TorrentIcons, media_icon_src,
 };
 use crate::app::Route;
 use crate::search::SearchTorrent;
