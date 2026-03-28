@@ -21,7 +21,12 @@ body {
 .links.links {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 4px;
+	gap: 6px;
+}
+
+#main>nav {
+	padding: 8px 16px;
+	border-bottom: 1px solid color-mix(in srgb, var(--color-3) 40%, transparent);
 }
 
 a {
@@ -40,8 +45,13 @@ ul {
 }
 
 nav>a {
-	padding: 4px;
+	padding: 5px 10px;
 	background: var(--above);
+	border-radius: 4px;
+}
+
+#main>main {
+	padding: 0 16px 32px;
 }
 
 .row {
@@ -686,18 +696,6 @@ details[open] {
 }
 
 .torrent-detail-page {
-	.detail-card {
-		background: transparent;
-		border: none;
-		box-shadow: none;
-	}
-
-	.detail-sidebar-card {
-		padding: 16px;
-		display: flex;
-		flex-direction: column;
-		gap: 16px;
-	}
 
 	.detail-side-strip {
 		display: grid;
@@ -875,8 +873,9 @@ details[open] {
 
 	.detail-action-label {
 		margin: 0;
-		font-size: 0.78rem;
-		letter-spacing: 0.08em;
+		font-size: 0.72rem;
+		font-weight: 600;
+		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		color: var(--text-faint);
 	}
@@ -893,15 +892,14 @@ details[open] {
 		border-top: 1px solid color-mix(in srgb, var(--color-3) 75%, transparent);
 	}
 
-	.detail-library-card {
+	.detail-library-section {
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
 	}
 
-	.detail-related-card,
-	.qbit-card {
-		padding: 16px;
+	.detail-qbit-section,
+	.detail-other-torrents {
 		display: flex;
 		flex-direction: column;
 		gap: 14px;
@@ -926,21 +924,11 @@ details[open] {
 		overflow-wrap: anywhere;
 	}
 
-	.detail-inline-card {
-		padding: 12px 14px;
-		border: none;
-		background: transparent;
-
-		p {
-			margin: 0 0 10px;
-		}
+	.detail-warning-block p {
+		margin: 0 0 10px;
 	}
 
-	.detail-sync-card {
-		padding: 12px 14px;
-		border: none;
-		background: transparent;
-
+	.detail-sync-block {
 		ul {
 			margin: 8px 0 0 18px;
 			display: grid;
@@ -995,11 +983,30 @@ details[open] {
 		align-items: center;
 		justify-content: center;
 		gap: 6px;
-		padding: 8px 12px;
+		padding: 8px 14px;
 		border: 1px solid var(--color-3);
 		border-radius: 8px;
 		background: color-mix(in srgb, var(--above) 92%, transparent);
 		text-decoration: none;
+		transition: background 120ms ease, border-color 120ms ease;
+
+		&:hover,
+		&:focus-visible {
+			background: var(--color-3);
+			border-color: color-mix(in srgb, var(--text) 25%, transparent);
+		}
+
+		&.danger:hover,
+		&.danger:focus-visible {
+			background: color-mix(in srgb, var(--warn) 15%, var(--above));
+		}
+	}
+
+	select {
+		padding: 6px 10px;
+		border: 1px solid var(--color-3);
+		border-radius: 6px;
+		background: color-mix(in srgb, var(--above) 92%, transparent);
 	}
 
 	.option_group {
@@ -1044,10 +1051,12 @@ details[open] {
 
 .pill {
 	display: inline-block;
-	padding: 0.2em 0.5em;
+	padding: 0.25em 0.6em;
 	margin: 0.2em;
-	background: var(--above);
-	border-radius: 4px;
+	background: color-mix(in srgb, var(--color-3) 50%, transparent);
+	border: 1px solid color-mix(in srgb, var(--color-3) 40%, transparent);
+	border-radius: 6px;
+	font-size: 0.9em;
 }
 
 .sr-only {

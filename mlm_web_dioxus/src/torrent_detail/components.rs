@@ -371,7 +371,7 @@ fn TorrentDetailContent(
         div { class: "torrent-detail-grid",
             div { class: "torrent-side",
                 if let Some(abs_cover_url) = abs_cover_url.as_ref() {
-                    div { class: "abs-cover detail-card",
+                    div { class: "abs-cover",
                         img {
                             src: "{abs_cover_url}",
                             alt: "ABS cover for {torrent.title}",
@@ -379,7 +379,7 @@ fn TorrentDetailContent(
                         }
                     }
                 }
-                div { class: "detail-card detail-sidebar-card",
+                div {
                     DetailSidebarStrip {
                         media_type: torrent.media_type.clone(),
                         mediatype_id: torrent.mediatype_id,
@@ -576,7 +576,7 @@ fn TorrentMamContent(
     rsx! {
         div { class: "torrent-detail-grid",
             div { class: "torrent-side",
-                div { class: "detail-card detail-sidebar-card",
+                div {
                     DetailSidebarStrip {
                         media_type: torrent.media_type.clone(),
                         mediatype_id: torrent.mediatype_id,
@@ -717,7 +717,7 @@ fn OtherTorrentsSection(
     };
 
     rsx! {
-        div { class: "detail-card detail-related-card",
+        div { class: "detail-other-torrents",
             h3 { class: "detail-section-title", "Other Torrents" }
             match data.read().clone() {
                 None => rsx! {
@@ -821,7 +821,7 @@ fn TorrentActions(
                 }
             }
 
-            div { class: "detail-card detail-library-card detail-section",
+            div { class: "detail-library-section detail-section",
                 Details {
                     label: "Library".to_string(),
                     open: Some(qbit_wanted_path.is_some()),
@@ -1134,7 +1134,7 @@ fn QbitControls(
     };
 
     rsx! {
-        div { class: "detail-card qbit-card",
+        div { class: "detail-qbit-section",
             h3 { class: "detail-section-title", "qBittorrent" }
 
             dl { class: "metadata-table detail-metadata-table",
@@ -1144,7 +1144,7 @@ fn QbitControls(
                 dd { "{qbit.uploaded}" }
             }
             if qbit.no_longer_wanted {
-                div { class: "detail-inline-card",
+                div { class: "detail-warning-block",
                     p {
                         strong { "Warning: " }
                         "No longer wanted in library"
@@ -1152,115 +1152,122 @@ fn QbitControls(
                 }
             }
 
-            div { class: "detail-action-row",
-                if is_paused {
-                    button {
-                        class: "btn",
-                        disabled: *loading.read(),
-                        onclick: {
-                            let torrent_id = torrent_id.clone();
-                            move |_| {
-                                let id = torrent_id.clone();
-                                handle_qbit_action("Start".to_string(), Box::pin(torrent_start_action(id)));
-                            }
-                        },
-                        "Start"
-                    }
-                } else {
-                    button {
-                        class: "btn",
-                        disabled: *loading.read(),
-                        onclick: {
-                            let torrent_id = torrent_id.clone();
-                            move |_| {
-                                let id = torrent_id.clone();
-                                handle_qbit_action("Stop".to_string(), Box::pin(torrent_stop_action(id)));
-                            }
-                        },
-                        "Stop"
-                    }
-                }
-                button {
-                    class: "btn",
-                    disabled: *loading.read(),
-                    onclick: {
-                        let torrent_id = torrent_id.clone();
-                        move |_| {
-                            let id = torrent_id.clone();
-                            handle_qbit_action(
-                                "Remove Seeding-only Files".to_string(),
-                                Box::pin(remove_seeding_files_action(id)),
-                            );
-                        }
-                    },
-                    "Remove Seeding-only Files"
-                }
-            }
-
-            div { class: "option_group",
-                "Category: "
-                select {
-                    disabled: *loading.read(),
-                    onchange: {
-                        let torrent_id = torrent_id.clone();
-                        move |ev| {
-                            let category = ev.value();
-                            selected_category.set(category.clone());
-                            let tags = selected_tags.read().clone();
-                            handle_qbit_action(
-                                "Save Category & Tags".to_string(),
-                                Box::pin(set_qbit_category_tags_action(
-                                    torrent_id.clone(),
-                                    category,
-                                    tags,
-                                )),
-                            );
-                        }
-                    },
-                    for cat in &qbit.categories {
-                        option {
-                            value: "{cat.name}",
-                            selected: cat.name == qbit.torrent_category,
-                            "{cat.name}"
-                        }
-                    }
-                }
-            }
-
-            div { class: "option_group", style: "margin-top: 0.5em;",
-                "Tags: "
-                for tag in &qbit.tags {
-                    label {
-                        input {
-                            r#type: "checkbox",
+            div { class: "detail-action-group",
+                p { class: "detail-action-label", "Actions" }
+                div { class: "detail-action-row",
+                    if is_paused {
+                        button {
+                            class: "btn",
                             disabled: *loading.read(),
-                            checked: selected_tags.read().contains(tag),
-                            onchange: {
+                            onclick: {
                                 let torrent_id = torrent_id.clone();
-                                let tag = tag.clone();
-                                move |ev| {
-                                    let mut next_tags = selected_tags.read().clone();
-                                    if ev.value() == "true" {
-                                        if !next_tags.contains(&tag) {
-                                            next_tags.push(tag.clone());
-                                        }
-                                    } else {
-                                        next_tags.retain(|t| t != &tag);
-                                    }
-                                    selected_tags.set(next_tags.clone());
-                                    let category = selected_category.read().clone();
-                                    handle_qbit_action(
-                                        "Save Category & Tags".to_string(),
-                                        Box::pin(set_qbit_category_tags_action(
-                                            torrent_id.clone(),
-                                            category,
-                                            next_tags,
-                                        )),
-                                    );
+                                move |_| {
+                                    let id = torrent_id.clone();
+                                    handle_qbit_action("Start".to_string(), Box::pin(torrent_start_action(id)));
                                 }
                             },
+                            "Start"
                         }
-                        "{tag}"
+                    } else {
+                        button {
+                            class: "btn",
+                            disabled: *loading.read(),
+                            onclick: {
+                                let torrent_id = torrent_id.clone();
+                                move |_| {
+                                    let id = torrent_id.clone();
+                                    handle_qbit_action("Stop".to_string(), Box::pin(torrent_stop_action(id)));
+                                }
+                            },
+                            "Stop"
+                        }
+                    }
+                    button {
+                        class: "btn",
+                        disabled: *loading.read(),
+                        onclick: {
+                            let torrent_id = torrent_id.clone();
+                            move |_| {
+                                let id = torrent_id.clone();
+                                handle_qbit_action(
+                                    "Remove Seeding-only Files".to_string(),
+                                    Box::pin(remove_seeding_files_action(id)),
+                                );
+                            }
+                        },
+                        "Remove Seeding-only Files"
+                    }
+                }
+            }
+
+            div { class: "detail-action-group",
+                p { class: "detail-action-label", "Category" }
+                div { class: "detail-action-row",
+                    select {
+                        disabled: *loading.read(),
+                        onchange: {
+                            let torrent_id = torrent_id.clone();
+                            move |ev| {
+                                let category = ev.value();
+                                selected_category.set(category.clone());
+                                let tags = selected_tags.read().clone();
+                                handle_qbit_action(
+                                    "Save Category & Tags".to_string(),
+                                    Box::pin(set_qbit_category_tags_action(
+                                        torrent_id.clone(),
+                                        category,
+                                        tags,
+                                    )),
+                                );
+                            }
+                        },
+                        for cat in &qbit.categories {
+                            option {
+                                value: "{cat.name}",
+                                selected: cat.name == qbit.torrent_category,
+                                "{cat.name}"
+                            }
+                        }
+                    }
+                }
+            }
+
+            div { class: "detail-action-group",
+                p { class: "detail-action-label", "Tags" }
+                div { class: "option_group",
+                    for tag in &qbit.tags {
+                        label {
+                            input {
+                                r#type: "checkbox",
+                                disabled: *loading.read(),
+                                checked: selected_tags.read().contains(tag),
+                                onchange: {
+                                    let torrent_id = torrent_id.clone();
+                                    let tag = tag.clone();
+                                    move |ev| {
+                                        let mut next_tags = selected_tags.read().clone();
+                                        if ev.value() == "true" {
+                                            if !next_tags.contains(&tag) {
+                                                next_tags.push(tag.clone());
+                                            }
+                                        } else {
+                                            next_tags.retain(|t| t != &tag);
+                                        }
+                                        selected_tags.set(next_tags.clone());
+                                        let category = selected_category.read().clone();
+                                        handle_qbit_action(
+                                            "Save Category & Tags".to_string(),
+                                            Box::pin(set_qbit_category_tags_action(
+                                                torrent_id.clone(),
+                                                category,
+                                                next_tags,
+                                            )),
+                                        );
+                                    }
+                                },
+                            }
+                            "{tag}"
+                        }
                     }
                 }
             }
